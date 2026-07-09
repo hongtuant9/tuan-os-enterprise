@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { tasks as mockTasks, type Task, type TaskPriority, type TaskStatus } from "@/data/tasks";
+import type { Task, TaskPriority, TaskStatus } from "@/data/tasks";
 
 export async function getTasks(): Promise<Task[]> {
-  if (!isSupabaseConfigured()) {
-    return mockTasks;
-  }
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tasks")
@@ -14,7 +9,8 @@ export async function getTasks(): Promise<Task[]> {
     .order("created_at", { ascending: false });
 
   if (error || !data) {
-    return mockTasks;
+    console.error("getTasks failed:", error?.message);
+    return [];
   }
 
   return data.map((row) => ({

@@ -9,9 +9,37 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      profiles: {
+      business_units: {
         Row: {
           id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      users: {
+        Row: {
+          id: string;
+          business_unit_id: string | null;
           full_name: string | null;
           email: string | null;
           role: string;
@@ -21,6 +49,7 @@ export interface Database {
         };
         Insert: {
           id: string;
+          business_unit_id?: string | null;
           full_name?: string | null;
           email?: string | null;
           role?: string;
@@ -30,6 +59,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          business_unit_id?: string | null;
           full_name?: string | null;
           email?: string | null;
           role?: string;
@@ -39,9 +69,85 @@ export interface Database {
         };
         Relationships: [];
       };
+      properties: {
+        Row: {
+          id: string;
+          business_unit_id: string | null;
+          name: string;
+          status: string;
+          occupancy: number;
+          check_ins_today: number;
+          check_outs_today: number;
+          pending_guest_messages: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_unit_id?: string | null;
+          name: string;
+          status?: string;
+          occupancy?: number;
+          check_ins_today?: number;
+          check_outs_today?: number;
+          pending_guest_messages?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_unit_id?: string | null;
+          name?: string;
+          status?: string;
+          occupancy?: number;
+          check_ins_today?: number;
+          check_outs_today?: number;
+          pending_guest_messages?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agents: {
+        Row: {
+          id: string;
+          business_unit_id: string | null;
+          name: string;
+          unit: string;
+          status: string;
+          current_task: string | null;
+          last_active_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_unit_id?: string | null;
+          name: string;
+          unit?: string;
+          status?: string;
+          current_task?: string | null;
+          last_active_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_unit_id?: string | null;
+          name?: string;
+          unit?: string;
+          status?: string;
+          current_task?: string | null;
+          last_active_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       tasks: {
         Row: {
           id: string;
+          business_unit_id: string | null;
           title: string;
           unit: string;
           owner: string;
@@ -53,6 +159,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          business_unit_id?: string | null;
           title: string;
           unit?: string;
           owner?: string;
@@ -64,6 +171,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          business_unit_id?: string | null;
           title?: string;
           unit?: string;
           owner?: string;
@@ -78,6 +186,7 @@ export interface Database {
       approvals: {
         Row: {
           id: string;
+          business_unit_id: string | null;
           title: string;
           summary: string | null;
           unit: string;
@@ -89,6 +198,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          business_unit_id?: string | null;
           title: string;
           summary?: string | null;
           unit?: string;
@@ -100,81 +210,13 @@ export interface Database {
         };
         Update: {
           id?: string;
+          business_unit_id?: string | null;
           title?: string;
           summary?: string | null;
           unit?: string;
           requested_by?: string;
           approved_by?: string | null;
           status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      ai_agents: {
-        Row: {
-          id: string;
-          name: string;
-          unit: string;
-          status: string;
-          current_task: string | null;
-          last_active_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          unit?: string;
-          status?: string;
-          current_task?: string | null;
-          last_active_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          unit?: string;
-          status?: string;
-          current_task?: string | null;
-          last_active_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      hospitality_properties: {
-        Row: {
-          id: string;
-          name: string;
-          status: string;
-          occupancy: number;
-          check_ins_today: number;
-          check_outs_today: number;
-          pending_guest_messages: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          status?: string;
-          occupancy?: number;
-          check_ins_today?: number;
-          check_outs_today?: number;
-          pending_guest_messages?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          status?: string;
-          occupancy?: number;
-          check_ins_today?: number;
-          check_outs_today?: number;
-          pending_guest_messages?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -183,6 +225,7 @@ export interface Database {
       activity_logs: {
         Row: {
           id: string;
+          business_unit_id: string | null;
           agent: string;
           unit: string;
           message: string;
@@ -191,6 +234,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          business_unit_id?: string | null;
           agent: string;
           unit?: string;
           message: string;
@@ -199,44 +243,12 @@ export interface Database {
         };
         Update: {
           id?: string;
+          business_unit_id?: string | null;
           agent?: string;
           unit?: string;
           message?: string;
           type?: string;
           created_at?: string;
-        };
-        Relationships: [];
-      };
-      knowledge_sources: {
-        Row: {
-          id: string;
-          title: string;
-          source_type: string;
-          url: string | null;
-          status: string;
-          synced_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          title: string;
-          source_type?: string;
-          url?: string | null;
-          status?: string;
-          synced_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          title?: string;
-          source_type?: string;
-          url?: string | null;
-          status?: string;
-          synced_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: [];
       };

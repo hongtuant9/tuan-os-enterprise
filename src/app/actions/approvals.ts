@@ -2,17 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseAdminConfigured } from "@/lib/supabase/config";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 async function setApprovalStatus(id: string, status: "approved" | "rejected"): Promise<ActionResult> {
-  if (!isSupabaseAdminConfigured()) {
-    // No database connected yet — the UI falls back to local mock data,
-    // so there is nothing to persist server-side.
-    return { ok: true };
-  }
-
   const supabase = createAdminClient();
   const { error } = await supabase.from("approvals").update({ status }).eq("id", id);
 

@@ -1,4 +1,5 @@
 import { commandCenterModules } from "@/lib/modules";
+import { signOut } from "@/app/actions/auth";
 
 export default function Sidebar() {
   return (
@@ -29,7 +30,17 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto px-2 pt-6 text-xs text-[var(--ink-muted)]">v0.2.0</div>
+      <div className="mt-auto flex items-center justify-between px-2 pt-6 text-xs text-[var(--ink-muted)]">
+        <span>v1.0.0</span>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="text-[var(--ink-secondary)] transition-colors hover:text-[var(--ink-primary)]"
+          >
+            Sign out
+          </button>
+        </form>
+      </div>
     </aside>
   );
 }

@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { logs as mockLogs, type LogEntry, type LogType } from "@/data/logs";
+import type { LogEntry, LogType } from "@/data/logs";
 
 export async function getLogs(): Promise<LogEntry[]> {
-  if (!isSupabaseConfigured()) {
-    return mockLogs;
-  }
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("activity_logs")
@@ -15,7 +10,8 @@ export async function getLogs(): Promise<LogEntry[]> {
     .limit(20);
 
   if (error || !data) {
-    return mockLogs;
+    console.error("getLogs failed:", error?.message);
+    return [];
   }
 
   return data.map((row) => ({

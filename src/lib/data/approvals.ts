@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { approvals as mockApprovals, type Approval, type ApprovalStatus } from "@/data/approvals";
+import type { Approval, ApprovalStatus } from "@/data/approvals";
 
 export async function getApprovals(): Promise<Approval[]> {
-  if (!isSupabaseConfigured()) {
-    return mockApprovals;
-  }
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("approvals")
@@ -14,7 +9,8 @@ export async function getApprovals(): Promise<Approval[]> {
     .order("created_at", { ascending: false });
 
   if (error || !data) {
-    return mockApprovals;
+    console.error("getApprovals failed:", error?.message);
+    return [];
   }
 
   return data.map((row) => ({

@@ -44,7 +44,33 @@ Next.js's `output: "standalone"` mode, producing a minimal production image.
 3. Expose port **3000** (the container listens on `PORT=3000` by default).
 4. Deploy — Coolify builds the image and runs `node server.js`.
 
-No additional environment variables are required for v0.1 of the dashboard.
+### Supabase backend (v1)
+
+The dashboard is backed by Supabase (Postgres + Auth). Set these env vars
+(see `.env.example`) before running the app:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Set up a project's database:
+
+```bash
+# Apply schema — run each file in supabase/migrations/ in order via the
+# Supabase SQL editor, or `supabase db push` with the Supabase CLI.
+# Then load sample data:
+psql "$DATABASE_URL" -f supabase/seed.sql
+
+# Create demo Supabase Auth accounts (ceo@tuanos.dev / ops@tuanos.dev):
+npm run seed:users
+```
+
+Dashboard routes are protected by `src/proxy.ts` (Next.js's Proxy/Middleware
+convention) — unauthenticated requests are redirected to `/login`. Dashboard
+data is also available via `/api/dashboard`, `/api/tasks`, and
+`/api/approvals`.
 
 ### Project structure
 

@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { agents as mockAgents, type Agent, type AgentStatus } from "@/data/agents";
+import type { Agent, AgentStatus } from "@/data/agents";
 
 function formatLastActive(iso: string | null): string {
   if (!iso) return "Not yet deployed";
@@ -19,18 +18,15 @@ function formatLastActive(iso: string | null): string {
 }
 
 export async function getAgents(): Promise<Agent[]> {
-  if (!isSupabaseConfigured()) {
-    return mockAgents;
-  }
-
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("ai_agents")
+    .from("agents")
     .select("*")
     .order("created_at", { ascending: true });
 
   if (error || !data) {
-    return mockAgents;
+    console.error("getAgents failed:", error?.message);
+    return [];
   }
 
   return data.map((row) => ({

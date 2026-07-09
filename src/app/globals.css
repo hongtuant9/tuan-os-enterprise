@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-raised: #202020;
+  --ink-primary: #ffffff;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+  --border-hairline: rgba(255, 255, 255, 0.1);
+  --status-good: #0ca30c;
+  --accent: #3987e5;
+  --background: var(--page);
+  --foreground: var(--ink-primary);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.status-dot-pulse {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

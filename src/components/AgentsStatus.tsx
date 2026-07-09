@@ -1,7 +1,7 @@
 import StatusPill from "./StatusPill";
-import { agents } from "@/data/agents";
+import type { Agent } from "@/data/agents";
 
-export default function AgentsStatus() {
+export default function AgentsStatus({ agents }: { agents: Agent[] }) {
   const onlineCount = agents.filter((a) => a.status === "online").length;
 
   return (

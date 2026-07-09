@@ -1,9 +1,9 @@
 import SectionCard from "./SectionCard";
 import { sections } from "@/lib/sections";
-import { tasks } from "@/data/tasks";
-import { approvals } from "@/data/approvals";
-import { agents } from "@/data/agents";
-import { properties } from "@/data/hospitality";
+import type { Task } from "@/data/tasks";
+import type { Approval } from "@/data/approvals";
+import type { Agent } from "@/data/agents";
+import type { Property } from "@/data/hospitality";
 
 const TODAY = "2026-07-09";
 
@@ -17,7 +17,17 @@ function StatTile({ label, value, hint }: { label: string; value: string | numbe
   );
 }
 
-export default function CeoOverview() {
+export default function CeoOverview({
+  tasks,
+  approvals,
+  agents,
+  properties,
+}: {
+  tasks: Task[];
+  approvals: Approval[];
+  agents: Agent[];
+  properties: Property[];
+}) {
   const priorityTasksToday = tasks.filter((t) => t.priority === "high" && t.dueDate === TODAY && t.status !== "done");
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
   const onlineAgents = agents.filter((a) => a.status === "online");

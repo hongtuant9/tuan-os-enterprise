@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Badge from "./Badge";
-import { approvals as initialApprovals, type ApprovalStatus } from "@/data/approvals";
+import { approveRequest, rejectRequest } from "@/app/actions/approvals";
+import type { Approval, ApprovalStatus } from "@/data/approvals";
 
 const STATUS_BADGE: Record<ApprovalStatus, { label: string; tone: "warn" | "good" | "bad" }> = {
   pending: { label: "Pending", tone: "warn" },
@@ -19,11 +20,24 @@ function formatSubmittedAt(iso: string) {
   });
 }
 
-export default function ApprovalQueue() {
+export default function ApprovalQueue({ approvals: initialApprovals }: { approvals: Approval[] }) {
   const [approvals, setApprovals] = useState(initialApprovals);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  function setStatus(id: string, status: ApprovalStatus) {
+  function decide(id: string, status: ApprovalStatus) {
+    const previous = approvals;
     setApprovals((current) => current.map((a) => (a.id === id ? { ...a, status } : a)));
+    setPendingId(id);
+
+    startTransition(async () => {
+      const action = status === "approved" ? approveRequest : rejectRequest;
+      const result = await action(id);
+      if (!result.ok) {
+        setApprovals(previous);
+      }
+      setPendingId(null);
+    });
   }
 
   const pendingCount = approvals.filter((a) => a.status === "pending").length;
@@ -40,6 +54,7 @@ export default function ApprovalQueue() {
       <div className="flex flex-col gap-3">
         {approvals.map((approval) => {
           const badge = STATUS_BADGE[approval.status];
+          const busy = isPending && pendingId === approval.id;
           return (
             <div
               key={approval.id}
@@ -59,19 +74,19 @@ export default function ApprovalQueue() {
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  disabled={approval.status !== "pending"}
-                  onClick={() => setStatus(approval.id, "approved")}
+                  disabled={approval.status !== "pending" || busy}
+                  onClick={() => decide(approval.id, "approved")}
                   className="rounded-lg bg-[var(--status-good)] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Approve
+                  {busy ? "Saving..." : "Approve"}
                 </button>
                 <button
                   type="button"
-                  disabled={approval.status !== "pending"}
-                  onClick={() => setStatus(approval.id, "rejected")}
+                  disabled={approval.status !== "pending" || busy}
+                  onClick={() => decide(approval.id, "rejected")}
                   className="rounded-lg border border-[var(--border-hairline)] px-3 py-1.5 text-xs font-medium text-[var(--ink-secondary)] transition-colors hover:border-[var(--status-bad)]/50 hover:text-[var(--status-bad)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Reject
+                  {busy ? "Saving..." : "Reject"}
                 </button>
               </div>
             </div>

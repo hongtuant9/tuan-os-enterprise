@@ -1,5 +1,5 @@
 import Badge from "./Badge";
-import { tasks, type TaskPriority, type TaskStatus } from "@/data/tasks";
+import type { Task, TaskPriority, TaskStatus } from "@/data/tasks";
 
 const TODAY = "2026-07-09";
 
@@ -16,7 +16,7 @@ const PRIORITY_BADGE: Record<TaskPriority, { label: string; tone: "bad" | "warn"
   low: { label: "Low", tone: "muted" },
 };
 
-export default function TaskCenter() {
+export default function TaskCenter({ tasks }: { tasks: Task[] }) {
   const priorityToday = tasks.filter((t) => t.dueDate === TODAY && t.priority === "high" && t.status !== "done");
 
   return (

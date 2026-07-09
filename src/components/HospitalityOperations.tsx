@@ -1,7 +1,7 @@
 import StatusPill from "./StatusPill";
-import { properties } from "@/data/hospitality";
+import type { Property } from "@/data/hospitality";
 
-export default function HospitalityOperations() {
+export default function HospitalityOperations({ properties }: { properties: Property[] }) {
   return (
     <section id="hospitality-operations" className="mb-10 scroll-mt-6">
       <div className="mb-3 flex items-center justify-between">

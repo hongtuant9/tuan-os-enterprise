@@ -11,6 +11,8 @@
   --ink-muted: #898781;
   --border-hairline: rgba(255, 255, 255, 0.1);
   --status-good: #0ca30c;
+  --status-bad: #e5484d;
+  --status-warn: #e5a339;
   --accent: #3987e5;
   --background: var(--page);
   --foreground: var(--ink-primary);

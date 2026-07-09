@@ -1,4 +1,4 @@
-import { sections } from "@/lib/sections";
+import { commandCenterModules } from "@/lib/modules";
 
 export default function Sidebar() {
   return (
@@ -9,27 +9,27 @@ export default function Sidebar() {
         </div>
         <div>
           <p className="text-sm font-semibold text-[var(--ink-primary)]">TUAN OS</p>
-          <p className="text-xs text-[var(--ink-muted)]">Enterprise</p>
+          <p className="text-xs text-[var(--ink-muted)]">Command Center</p>
         </div>
       </div>
 
       <nav className="flex flex-col gap-1">
-        {sections.map((section, i) => (
+        {commandCenterModules.map((module, i) => (
           <a
-            key={section.id}
-            href={`#${section.id}`}
+            key={module.id}
+            href={`#${module.id}`}
             className={`rounded-lg px-3 py-2 text-sm transition-colors ${
               i === 0
                 ? "bg-[var(--surface-raised)] font-medium text-[var(--ink-primary)]"
                 : "text-[var(--ink-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--ink-primary)]"
             }`}
           >
-            {section.name}
+            {module.name}
           </a>
         ))}
       </nav>
 
-      <div className="mt-auto px-2 pt-6 text-xs text-[var(--ink-muted)]">v0.1.0</div>
+      <div className="mt-auto px-2 pt-6 text-xs text-[var(--ink-muted)]">v0.2.0</div>
     </aside>
   );
 }

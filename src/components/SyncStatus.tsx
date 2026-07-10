@@ -97,7 +97,15 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
           Sync Status
         </h2>
-        <span className="text-xs text-[var(--ink-muted)]">Google Sheets → Supabase</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--ink-muted)]">Google Sheets → Supabase</span>
+          <a
+            href="/api/integrations/google/oauth/start"
+            className="text-xs font-medium text-[var(--accent)] hover:underline"
+          >
+            Connect Google Account
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

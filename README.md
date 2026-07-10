@@ -115,20 +115,25 @@ accepting unauthenticated calls. See `.env.example` for all of these.
 
 ### Google Sheets sync framework (v1.1)
 
-Google Sheets is the source of truth for six sources; Supabase is the
-operational database they sync into. **Google OAuth is not wired up yet** —
-`src/server/sync/adapters/google-sheets.adapter.ts` is a stub that throws a
-clear "not configured" error, so every run today fails fast in a way that
-still exercises the rest of the framework end-to-end (a `sync_runs` row, an
-`import_logs` entry, and an `activity_logs` entry all get written).
+Google Sheets (and Docs) is the source of truth for six sources; Supabase is
+the operational database they sync into, via a real Google OAuth 2.0
+connection (see **Google OAuth setup** below). Until an account is
+connected, every run fails fast with a clear `GoogleNotConnectedError` in a
+way that still exercises the rest of the framework end-to-end (a `sync_runs`
+row, an `import_logs` entry, and an `activity_logs` entry all get written).
 
 ```
+src/server/integrations/google/  oauth-client.ts (auth URL + token exchange/refresh, server-only),
+                                 token-store.ts (reads/refreshes the connected account's
+                                 access token via the service-role client), drive-client.ts
+                                 (Drive files.get, Sheets values.get, Docs documents.get)
 src/server/sync/
   types.ts               SyncAdapter / SyncMapper interfaces, shared types
-  adapters/               google-sheets.adapter.ts (stub — real API access is later work)
+  adapters/               google-drive.adapter.ts — real adapter; branches on the file's
+                          Drive mimeType (spreadsheet -> Sheets values, doc -> paragraphs)
   mappers/                one per source: writes into a typed table (tasks, approvals)
                           or, for sources with no dedicated table yet, into sync_records
-  registry.ts             source key -> adapter + mapper
+  registry.ts             source key -> adapter (sheet_id/sheet_range from sync_sources) + mapper
   sync-runner.ts          orchestrates one run: fetch -> upsert -> log -> summarize
   sync-status.service.ts  read-only status for the dashboard
 ```
@@ -150,9 +155,10 @@ duplicating) *and*, for sources with no dedicated table, the operational
 record itself — until a real schema is warranted once the actual sheet
 columns are known.
 
-Incremental sync is supported via an opaque cursor stored on
-`sync_sources.last_cursor`, threaded through every adapter call; a full
-adapter just always returns `nextCursor: null`.
+Incremental sync compares the file's Drive `modifiedTime` against the cursor
+stored on `sync_sources.last_cursor` — unchanged files short-circuit with
+zero Sheets/Docs API calls; changed files are read in full and the cursor
+advances to the new `modifiedTime`.
 
 Triggering a sync:
 
@@ -168,6 +174,74 @@ Triggering a sync:
 
 `GET /api/sync` lists every source's status; `GET /api/sync/[source]/logs`
 returns a run's `import_logs` (latest by default, or `?runId=`).
+
+### Google OAuth setup
+
+The sync framework authenticates to Google as **your** Google account
+(delegated OAuth), not a service account — so that account needs at least
+Viewer access to every Sheet/Doc a source points at.
+
+**1. Google Cloud Console** (once per Google Cloud project):
+
+1. Create a project (or reuse one) at
+   [console.cloud.google.com](https://console.cloud.google.com).
+2. **APIs & Services > Library** — enable the **Google Drive API**, **Google
+   Sheets API**, and **Google Docs API**.
+3. **APIs & Services > OAuth consent screen** — configure it (Internal if
+   your Google Workspace supports it, otherwise External + Testing mode is
+   fine for a single connected account). Add these scopes:
+   - `drive.metadata.readonly`
+   - `spreadsheets.readonly`
+   - `documents.readonly`
+4. **APIs & Services > Credentials > Create Credentials > OAuth client ID**,
+   application type **Web application**. Add an **Authorized redirect URI**:
+   `https://<your-domain>/api/integrations/google/oauth/callback`
+   (use `http://localhost:3000/api/integrations/google/oauth/callback` for
+   local dev). Copy the generated **Client ID** and **Client secret**.
+
+**2. App configuration** — set in your environment (see `.env.example`):
+
+```
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/integrations/google/oauth/callback
+```
+
+`GOOGLE_OAUTH_CLIENT_SECRET` is read only by server-only modules under
+`src/server/integrations/google/` (guarded by the `server-only` package —
+the build fails if a client component ever imports one) and is never sent
+to the browser.
+
+**3. Connect the account** — as a signed-in `admin`/`owner` user, visit
+`/api/integrations/google/oauth/start` (or the **"Connect Google Account"**
+link on the Sync Status dashboard section). After granting consent you're
+redirected back with `?google_connected=1`; the refresh token is stored in
+`public.google_oauth_credentials` (service-role only — no RLS policy grants
+`anon`/`authenticated` any access to that table at all). Check
+`GET /api/integrations/google/status` for `{ "connected": true }` at any
+point.
+
+**4. Point each source at a real file** — `sheet_id` is the ID segment from
+the file's URL (`https://docs.google.com/spreadsheets/d/<sheet_id>/edit`),
+and `sheet_range` is an A1-notation range, e.g. `Sheet1!A1:Z1000`:
+
+```sql
+update public.sync_sources
+set sheet_id = '<your-spreadsheet-id>', sheet_range = 'Sheet1!A1:Z1000'
+where key = 'task-001';
+```
+
+`task-001` and `approval-001` map straight onto the `tasks`/`approvals`
+tables, so their sheet's header row must use these exact column names:
+
+| Source | Expected header row |
+| --- | --- |
+| `task-001` | `title`, `unit`, `owner`, `status`, `priority`, `due_date` |
+| `approval-001` | `title`, `summary`, `unit`, `requested_by`, `status` |
+
+The other four sources (`fin-001`, `business-portfolio`, `family`, `health`)
+have no fixed schema yet — any header row is accepted and stored as-is in
+`sync_records.data`.
 
 ### Project structure
 

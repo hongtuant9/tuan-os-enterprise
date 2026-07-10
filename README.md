@@ -55,30 +55,73 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Set up a project's database:
+Set up a project's database — either run each file in `supabase/migrations/`
+in order followed by `supabase/seed.sql` (via `supabase db push` + `psql`, or
+pasted into the Supabase SQL Editor), **or** paste the single consolidated
+`supabase/full_setup.sql` into the SQL Editor and run it once (same content,
+no CLI/`DATABASE_URL` required). Either path also seeds a demo admin account
+(`admin@tuanos.vn` / `12345678`, role `owner`).
+
+To create additional demo accounts via the Auth Admin API instead of SQL:
 
 ```bash
-# Apply schema — run each file in supabase/migrations/ in order via the
-# Supabase SQL editor, or `supabase db push` with the Supabase CLI.
-# Then load sample data:
-psql "$DATABASE_URL" -f supabase/seed.sql
-
-# Create demo Supabase Auth accounts (ceo@tuanos.dev / ops@tuanos.dev):
 npm run seed:users
 ```
 
 Dashboard routes are protected by `src/proxy.ts` (Next.js's Proxy/Middleware
-convention) — unauthenticated requests are redirected to `/login`. Dashboard
-data is also available via `/api/dashboard`, `/api/tasks`, and
-`/api/approvals`.
+convention) — unauthenticated requests are redirected to `/login`.
+
+### API & architecture (v1)
+
+Data access goes through a **Repository + Service** layer under `src/server/`:
+
+```
+src/server/
+  repositories/   thin Supabase query wrappers, one per table
+  services/       domain logic + row-to-domain-type mapping + activity logging
+  auth/           session/role resolution (roles.ts, session.ts, api-auth.ts)
+  api/            shared REST handler factories (business-unit-handlers.ts), webhook auth
+  container.ts    wires repositories -> services; getRequestContainer() (RLS-scoped,
+                  cookie session) vs getAdminContainer() (service-role, bypasses RLS)
+```
+
+Every mutation (approve/reject, task status change) goes through a service
+method, which writes the row *and* an `activity_logs` entry in the same call
+— logins, approvals, rejections, and task updates are recorded automatically.
+The dashboard UI applies these optimistically (approvals, tasks, and the
+Activity Logs feed all update immediately client-side, then reconcile with
+the server).
+
+Roles (`src/server/auth/roles.ts`): `owner` > `admin` > `manager` > `agent`.
+Approving/rejecting requests and creating records via the business-unit API
+namespaces require `manager` or above; everything else just requires being
+signed in.
+
+REST endpoints:
+
+| Route | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/dashboard` | session or `x-api-key` | aggregate stats |
+| `GET /api/tasks`, `GET /api/approvals` | session or `x-api-key` | full lists |
+| `GET/POST /api/hospitality`, `/marketing`, `/finance`, `/education` | session or `x-api-key` | per-business-unit data; `POST` (manager+) creates a task/approval/log scoped to that unit |
+| `POST /api/webhooks/google-drive`, `/telegram`, `/n8n`, `/agents` | per-source shared secret header | inbound integration events, logged to `activity_logs` |
+
+`x-api-key` (checked against `N8N_API_KEY`) lets automation (e.g. n8n) call
+the dashboard/business-unit endpoints without a browser session. Each webhook
+under `/api/webhooks/*` instead checks its own secret
+(`GOOGLE_DRIVE_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `N8N_WEBHOOK_SECRET`,
+`AI_AGENTS_WEBHOOK_SECRET`) — unset = the endpoint responds `501` rather than
+accepting unauthenticated calls. See `.env.example` for all of these.
 
 ### Project structure
 
 ```
 src/
-  app/            App Router pages, layout, and global styles
+  app/            App Router pages, layout, actions, and API routes
   components/     Dashboard UI components (Sidebar, cards, panels)
-  lib/            Static data (dashboard sections)
+  server/         Repository + Service architecture (see above)
+  lib/            Supabase clients (client/server/admin) and shared config
+  data/           Shared domain types (Task, Approval, Agent, ...)
 Dockerfile        Multi-stage production build for the dashboard app
 ```
 

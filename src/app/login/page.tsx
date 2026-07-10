@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { recordLogin } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,6 +28,7 @@ export default function LoginPage() {
       return;
     }
 
+    await recordLogin();
     window.location.href = "/";
   }
 

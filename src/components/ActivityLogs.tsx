@@ -1,5 +1,8 @@
+"use client";
+
 import Badge from "./Badge";
-import type { LogEntry, LogType } from "@/data/logs";
+import { useActivityFeed } from "./ActivityFeedContext";
+import type { LogType } from "@/data/logs";
 
 const TYPE_BADGE: Record<LogType, { label: string; tone: "muted" | "accent" | "warn" | "bad" }> = {
   info: { label: "Info", tone: "muted" },
@@ -17,7 +20,9 @@ function formatTimestamp(iso: string) {
   });
 }
 
-export default function ActivityLogs({ logs }: { logs: LogEntry[] }) {
+export default function ActivityLogs() {
+  const { logs } = useActivityFeed();
+
   return (
     <section id="activity-logs" className="mb-10 scroll-mt-6">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">

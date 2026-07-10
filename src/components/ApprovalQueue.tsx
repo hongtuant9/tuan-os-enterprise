@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Badge from "./Badge";
 import { approveRequest, rejectRequest } from "@/app/actions/approvals";
+import { useActivityFeed } from "./ActivityFeedContext";
 import type { Approval, ApprovalStatus } from "@/data/approvals";
 
 const STATUS_BADGE: Record<ApprovalStatus, { label: string; tone: "warn" | "good" | "bad" }> = {
@@ -24,17 +25,27 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
   const [approvals, setApprovals] = useState(initialApprovals);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { pushLog, removeLog } = useActivityFeed();
 
   function decide(id: string, status: ApprovalStatus) {
     const previous = approvals;
+    const approval = approvals.find((a) => a.id === id);
     setApprovals((current) => current.map((a) => (a.id === id ? { ...a, status } : a)));
     setPendingId(id);
+
+    const logId = pushLog({
+      agent: "You",
+      unit: approval?.unit ?? "General",
+      message: `${status === "approved" ? "Approved" : "Rejected"} request: "${approval?.title ?? id}".`,
+      type: "approval",
+    });
 
     startTransition(async () => {
       const action = status === "approved" ? approveRequest : rejectRequest;
       const result = await action(id);
       if (!result.ok) {
         setApprovals(previous);
+        removeLog(logId);
       }
       setPendingId(null);
     });

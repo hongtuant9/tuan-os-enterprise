@@ -6,6 +6,7 @@ import AgentsStatus from "@/components/AgentsStatus";
 import HospitalityOperations from "@/components/HospitalityOperations";
 import KnowledgeCenter from "@/components/KnowledgeCenter";
 import ActivityLogs from "@/components/ActivityLogs";
+import { ActivityFeedProvider } from "@/components/ActivityFeedContext";
 import { getRequestContainer } from "@/server/container";
 
 export default async function Home() {
@@ -34,19 +35,21 @@ export default async function Home() {
           </p>
         </header>
 
-        <CeoOverview
-          tasks={tasks}
-          approvals={approvals}
-          agents={agents}
-          properties={properties}
-          businessUnits={businessUnits}
-        />
-        <ApprovalQueue approvals={approvals} />
-        <TaskCenter tasks={tasks} />
-        <AgentsStatus agents={agents} />
-        <HospitalityOperations properties={properties} />
-        <KnowledgeCenter />
-        <ActivityLogs logs={logs} />
+        <ActivityFeedProvider initialLogs={logs}>
+          <CeoOverview
+            tasks={tasks}
+            approvals={approvals}
+            agents={agents}
+            properties={properties}
+            businessUnits={businessUnits}
+          />
+          <ApprovalQueue approvals={approvals} />
+          <TaskCenter tasks={tasks} />
+          <AgentsStatus agents={agents} />
+          <HospitalityOperations properties={properties} />
+          <KnowledgeCenter />
+          <ActivityLogs />
+        </ActivityFeedProvider>
       </main>
     </div>
   );

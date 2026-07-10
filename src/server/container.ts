@@ -9,6 +9,10 @@ import { AgentsRepository } from "@/server/repositories/agents.repository";
 import { TasksRepository } from "@/server/repositories/tasks.repository";
 import { ApprovalsRepository } from "@/server/repositories/approvals.repository";
 import { ActivityLogsRepository } from "@/server/repositories/activity-logs.repository";
+import { SyncSourcesRepository } from "@/server/repositories/sync-sources.repository";
+import { SyncRunsRepository } from "@/server/repositories/sync-runs.repository";
+import { ImportLogsRepository } from "@/server/repositories/import-logs.repository";
+import { SyncRecordsRepository } from "@/server/repositories/sync-records.repository";
 
 import { BusinessUnitsService } from "@/server/services/business-units.service";
 import { PropertiesService } from "@/server/services/properties.service";
@@ -17,6 +21,8 @@ import { TasksService } from "@/server/services/tasks.service";
 import { ApprovalsService } from "@/server/services/approvals.service";
 import { ActivityLogService } from "@/server/services/activity-log.service";
 import { DashboardService } from "@/server/services/dashboard.service";
+import { SyncRunner } from "@/server/sync/sync-runner";
+import { SyncStatusService } from "@/server/sync/sync-status.service";
 
 export type ServiceContainer = {
   db: SupabaseClient<Database>;
@@ -27,6 +33,10 @@ export type ServiceContainer = {
   approvals: ApprovalsService;
   activityLog: ActivityLogService;
   dashboard: DashboardService;
+  sync: SyncRunner;
+  syncStatus: SyncStatusService;
+  importLogs: ImportLogsRepository;
+  syncRuns: SyncRunsRepository;
 };
 
 export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
@@ -37,6 +47,11 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
   const approvals = new ApprovalsService(new ApprovalsRepository(db), activityLog);
   const businessUnits = new BusinessUnitsService(new BusinessUnitsRepository(db), new AgentsRepository(db));
 
+  const syncSources = new SyncSourcesRepository(db);
+  const syncRuns = new SyncRunsRepository(db);
+  const importLogs = new ImportLogsRepository(db);
+  const syncRecords = new SyncRecordsRepository(db);
+
   return {
     db,
     businessUnits,
@@ -46,6 +61,10 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
     approvals,
     activityLog,
     dashboard: new DashboardService(tasks, approvals, agents, properties),
+    sync: new SyncRunner(db, syncSources, syncRuns, importLogs, syncRecords, activityLog),
+    syncStatus: new SyncStatusService(syncSources, syncRuns),
+    importLogs,
+    syncRuns,
   };
 }
 

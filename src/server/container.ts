@@ -35,8 +35,9 @@ export type ServiceContainer = {
   dashboard: DashboardService;
   sync: SyncRunner;
   syncStatus: SyncStatusService;
-  importLogs: ImportLogsRepository;
+  syncSources: SyncSourcesRepository;
   syncRuns: SyncRunsRepository;
+  importLogs: ImportLogsRepository;
 };
 
 export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
@@ -63,8 +64,9 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
     dashboard: new DashboardService(tasks, approvals, agents, properties),
     sync: new SyncRunner(db, syncSources, syncRuns, importLogs, syncRecords, activityLog),
     syncStatus: new SyncStatusService(syncSources, syncRuns),
-    importLogs,
+    syncSources,
     syncRuns,
+    importLogs,
   };
 }
 

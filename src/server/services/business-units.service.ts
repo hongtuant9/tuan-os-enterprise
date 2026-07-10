@@ -35,4 +35,10 @@ export class BusinessUnitsService {
       };
     });
   }
+
+  async findBySlug(slug: string): Promise<{ id: string; slug: string; name: string; description: string } | null> {
+    const row = await this.businessUnits.findBySlug(slug);
+    if (!row) return null;
+    return { id: row.id, slug: row.slug, name: row.name, description: row.description ?? "" };
+  }
 }

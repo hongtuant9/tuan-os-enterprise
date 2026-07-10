@@ -4,7 +4,19 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const PUBLIC_PATHS = ["/login"];
 
+// API routes authenticate themselves (see src/server/auth/api-auth.ts) since
+// they accept either a dashboard session *or* an x-api-key service caller
+// (n8n, webhooks) — a caller with no cookies must not be redirected/401'd
+// here before the route gets a chance to check for an API key.
+function isApiPath(pathname: string) {
+  return pathname.startsWith("/api/");
+}
+
 export async function proxy(request: NextRequest) {
+  if (isApiPath(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   // Nothing to enforce until a Supabase project is actually wired up.
   if (!isSupabaseConfigured()) {
     return NextResponse.next();
@@ -36,13 +48,8 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
-  const isApiPath = request.nextUrl.pathname.startsWith("/api");
 
   if (!user && !isPublicPath) {
-    if (isApiPath) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);

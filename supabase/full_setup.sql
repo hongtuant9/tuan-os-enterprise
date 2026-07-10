@@ -1,13 +1,13 @@
 -- =============================================================================
--- TUAN OS Command Center — full Supabase setup (v1)
+-- TUAN OS Command Center — full Supabase setup (v1 + sync framework)
 -- Paste this entire file into the Supabase SQL Editor and run it once.
 -- Safe to re-run: every statement is idempotent (IF NOT EXISTS / ON CONFLICT).
 --
 -- Contents:
---   1. Migrations 0001-0008 (extensions, business_units, users, properties,
---      agents, tasks, approvals, activity_logs)
+--   1. Migrations 0001-0009 (extensions, business_units, users, properties,
+--      agents, tasks, approvals, activity_logs, sync framework)
 --   2. Seed data for business_units, properties, agents, tasks, approvals,
---      activity_logs
+--      activity_logs, sync_sources
 --   3. Demo admin account (admin@tuanos.vn / 12345678)
 -- =============================================================================
 
@@ -294,6 +294,163 @@ create policy "Authenticated users can insert activity logs"
   to authenticated
   with check (true);
 
+-- -----------------------------------------------------------------------------
+-- migrations/0009_sync_framework.sql
+-- -----------------------------------------------------------------------------
+-- Google Drive/Sheets <-> Supabase synchronization framework.
+-- Google Sheets remains the source of truth; Supabase is the operational
+-- database these sources sync into. Google OAuth/Sheets API access is not
+-- wired up yet (see src/server/sync/adapters/google-sheets.adapter.ts) —
+-- this schema supports building and exercising the rest of the framework
+-- (runs, logs, status, incremental cursors, scheduling, triggers) today.
+
+-- ---------------------------------------------------------------------------
+-- sync_sources: one row per Google Sheet/tab we import from.
+-- ---------------------------------------------------------------------------
+create table if not exists public.sync_sources (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  name text not null,
+  description text,
+  business_unit_id uuid references public.business_units (id) on delete set null,
+  sheet_id text,
+  sheet_range text,
+  supports_incremental boolean not null default true,
+  schedule_enabled boolean not null default false,
+  schedule_interval_minutes int,
+  status text not null default 'idle' check (status in ('idle', 'running', 'error')),
+  last_synced_at timestamptz,
+  last_cursor text,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.sync_sources enable row level security;
+
+drop policy if exists "Sync sources are viewable by everyone" on public.sync_sources;
+create policy "Sync sources are viewable by everyone"
+  on public.sync_sources for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can manage sync sources" on public.sync_sources;
+create policy "Authenticated users can manage sync sources"
+  on public.sync_sources for all
+  to authenticated
+  using (true)
+  with check (true);
+
+drop trigger if exists set_updated_at on public.sync_sources;
+create trigger set_updated_at before update on public.sync_sources
+  for each row execute procedure public.set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- sync_runs: one row per sync attempt (manual, scheduled, or n8n-triggered).
+-- ---------------------------------------------------------------------------
+create table if not exists public.sync_runs (
+  id uuid primary key default gen_random_uuid(),
+  source_id uuid not null references public.sync_sources (id) on delete cascade,
+  trigger text not null check (trigger in ('manual', 'scheduled', 'n8n')),
+  status text not null default 'running' check (status in ('running', 'success', 'failed', 'partial')),
+  triggered_by text,
+  records_seen int not null default 0,
+  records_created int not null default 0,
+  records_updated int not null default 0,
+  records_skipped int not null default 0,
+  records_failed int not null default 0,
+  error_message text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
+alter table public.sync_runs enable row level security;
+
+drop policy if exists "Sync runs are viewable by everyone" on public.sync_runs;
+create policy "Sync runs are viewable by everyone"
+  on public.sync_runs for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can manage sync runs" on public.sync_runs;
+create policy "Authenticated users can manage sync runs"
+  on public.sync_runs for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create index if not exists sync_runs_source_id_started_at_idx
+  on public.sync_runs (source_id, started_at desc);
+
+-- ---------------------------------------------------------------------------
+-- import_logs: per-row detail for a sync run (append-only).
+-- ---------------------------------------------------------------------------
+create table if not exists public.import_logs (
+  id uuid primary key default gen_random_uuid(),
+  sync_run_id uuid not null references public.sync_runs (id) on delete cascade,
+  level text not null default 'info' check (level in ('info', 'warn', 'error')),
+  message text not null,
+  context jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.import_logs enable row level security;
+
+drop policy if exists "Import logs are viewable by everyone" on public.import_logs;
+create policy "Import logs are viewable by everyone"
+  on public.import_logs for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can insert import logs" on public.import_logs;
+create policy "Authenticated users can insert import logs"
+  on public.import_logs for insert
+  to authenticated
+  with check (true);
+
+create index if not exists import_logs_sync_run_id_idx on public.import_logs (sync_run_id);
+
+-- ---------------------------------------------------------------------------
+-- sync_records: idempotency ledger mapping an external sheet row to the
+-- internal record it produced. For sources with a typed target table
+-- (tasks, approvals) target_table/target_id point at that row. For sources
+-- with no dedicated table yet (fin-001, business portfolio, family, health)
+-- `data` IS the operational record until a typed table is warranted.
+-- ---------------------------------------------------------------------------
+create table if not exists public.sync_records (
+  id uuid primary key default gen_random_uuid(),
+  source_key text not null,
+  external_id text not null,
+  target_table text,
+  target_id uuid,
+  data jsonb not null default '{}'::jsonb,
+  synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_key, external_id)
+);
+
+alter table public.sync_records enable row level security;
+
+drop policy if exists "Sync records are viewable by everyone" on public.sync_records;
+create policy "Sync records are viewable by everyone"
+  on public.sync_records for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can manage sync records" on public.sync_records;
+create policy "Authenticated users can manage sync records"
+  on public.sync_records for all
+  to authenticated
+  using (true)
+  with check (true);
+
+drop trigger if exists set_updated_at on public.sync_records;
+create trigger set_updated_at before update on public.sync_records
+  for each row execute procedure public.set_updated_at();
+
+create index if not exists sync_records_source_key_idx on public.sync_records (source_key);
+
 -- =============================================================================
 -- seed.sql — sample data
 -- =============================================================================
@@ -384,6 +541,24 @@ values
   ('50000000-0000-4000-8000-000000000008', '00000000-0000-4000-8000-000000000006', 'Knowledge AI', 'Knowledge Center', 'Google Drive sync skipped — integration not yet connected.', 'alert', now() - interval '20 hours'),
   ('50000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000002', 'Hospitality AI', 'Hospitality AI', 'Confirmed housekeeping schedule for weekend check-ins at Cozy Garden.', 'action', now() - interval '1 day'),
   ('50000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000003', 'Marketing AI', 'Marketing AI', 'Requested CEO approval for July ad spend increase.', 'approval', now() - interval '1 day 2 hours')
+on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- sync_sources (6) — Google Sheets sources the sync framework will import.
+-- Google OAuth isn't wired up yet, so these all start idle with no sheet_id;
+-- running one today fails fast with a clear "not configured" error, which is
+-- itself useful for exercising the sync_runs / import_logs / activity_logs
+-- plumbing end-to-end.
+-- ---------------------------------------------------------------------------
+insert into public.sync_sources
+  (id, key, name, description, business_unit_id, supports_incremental, schedule_enabled, schedule_interval_minutes)
+values
+  ('60000000-0000-4000-8000-000000000001', 'task-001', 'TASK-001', 'Task tracker sheet — imports into public.tasks.', null, true, false, 60),
+  ('60000000-0000-4000-8000-000000000002', 'approval-001', 'APPROVAL-001', 'Approval requests sheet — imports into public.approvals.', null, true, false, 60),
+  ('60000000-0000-4000-8000-000000000003', 'fin-001', 'FIN-001', 'Finance line items sheet.', '00000000-0000-4000-8000-000000000004', true, false, 240),
+  ('60000000-0000-4000-8000-000000000004', 'business-portfolio', 'Business Portfolio', 'Business unit / asset overview sheet.', '00000000-0000-4000-8000-000000000001', true, false, 1440),
+  ('60000000-0000-4000-8000-000000000005', 'family', 'Family', 'Family life-admin sheet.', null, true, false, 1440),
+  ('60000000-0000-4000-8000-000000000006', 'health', 'Health', 'Health tracking sheet.', null, true, false, 1440)
 on conflict (id) do nothing;
 
 -- =============================================================================

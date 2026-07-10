@@ -3,6 +3,7 @@ import type { Database } from "@/lib/supabase/types";
 
 type Row = Database["public"]["Tables"]["approvals"]["Row"];
 type Insert = Database["public"]["Tables"]["approvals"]["Insert"];
+type Update = Database["public"]["Tables"]["approvals"]["Update"];
 
 export class ApprovalsRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -45,6 +46,17 @@ export class ApprovalsRepository {
 
   async create(input: Insert): Promise<Row> {
     const { data, error } = await this.db.from("approvals").insert(input).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async update(id: string, patch: Update): Promise<Row> {
+    const { data, error } = await this.db
+      .from("approvals")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
     if (error) throw error;
     return data;
   }

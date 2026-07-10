@@ -85,3 +85,21 @@ values
   ('50000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000002', 'Hospitality AI', 'Hospitality AI', 'Confirmed housekeeping schedule for weekend check-ins at Cozy Garden.', 'action', now() - interval '1 day'),
   ('50000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000003', 'Marketing AI', 'Marketing AI', 'Requested CEO approval for July ad spend increase.', 'approval', now() - interval '1 day 2 hours')
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- sync_sources (6) — Google Sheets sources the sync framework will import.
+-- Google OAuth isn't wired up yet, so these all start idle with no sheet_id;
+-- running one today fails fast with a clear "not configured" error, which is
+-- itself useful for exercising the sync_runs / import_logs / activity_logs
+-- plumbing end-to-end.
+-- ---------------------------------------------------------------------------
+insert into public.sync_sources
+  (id, key, name, description, business_unit_id, supports_incremental, schedule_enabled, schedule_interval_minutes)
+values
+  ('60000000-0000-4000-8000-000000000001', 'task-001', 'TASK-001', 'Task tracker sheet — imports into public.tasks.', null, true, false, 60),
+  ('60000000-0000-4000-8000-000000000002', 'approval-001', 'APPROVAL-001', 'Approval requests sheet — imports into public.approvals.', null, true, false, 60),
+  ('60000000-0000-4000-8000-000000000003', 'fin-001', 'FIN-001', 'Finance line items sheet.', '00000000-0000-4000-8000-000000000004', true, false, 240),
+  ('60000000-0000-4000-8000-000000000004', 'business-portfolio', 'Business Portfolio', 'Business unit / asset overview sheet.', '00000000-0000-4000-8000-000000000001', true, false, 1440),
+  ('60000000-0000-4000-8000-000000000005', 'family', 'Family', 'Family life-admin sheet.', null, true, false, 1440),
+  ('60000000-0000-4000-8000-000000000006', 'health', 'Health', 'Health tracking sheet.', null, true, false, 1440)
+on conflict (id) do nothing;

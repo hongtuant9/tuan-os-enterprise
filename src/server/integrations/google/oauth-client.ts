@@ -3,6 +3,9 @@ import "server-only";
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
+/** Name of the short-lived CSRF-state cookie shared between /oauth/start and /oauth/callback. */
+export const GOOGLE_OAUTH_STATE_COOKIE = "google_oauth_state";
+
 /** Least-privilege, read-only scopes — enough for Drive metadata + Sheets + Docs. */
 export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",

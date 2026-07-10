@@ -420,6 +420,42 @@ export interface Database {
         };
         Relationships: [];
       };
+      google_oauth_credentials: {
+        Row: {
+          id: string;
+          label: string;
+          refresh_token: string;
+          access_token: string | null;
+          access_token_expires_at: string | null;
+          scope: string | null;
+          connected_by: string | null;
+          connected_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          label?: string;
+          refresh_token: string;
+          access_token?: string | null;
+          access_token_expires_at?: string | null;
+          scope?: string | null;
+          connected_by?: string | null;
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          label?: string;
+          refresh_token?: string;
+          access_token?: string | null;
+          access_token_expires_at?: string | null;
+          scope?: string | null;
+          connected_by?: string | null;
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

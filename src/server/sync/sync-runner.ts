@@ -36,7 +36,7 @@ export class SyncRunner {
     });
     await this.sources.markRunning(source.id);
 
-    const adapter = getAdapterForSource(sourceKey);
+    const adapter = getAdapterForSource(source);
     const mapper = getMapperForSource(sourceKey, this.db);
 
     let seen = 0;

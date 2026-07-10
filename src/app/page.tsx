@@ -5,6 +5,7 @@ import TaskCenter from "@/components/TaskCenter";
 import AgentsStatus from "@/components/AgentsStatus";
 import HospitalityOperations from "@/components/HospitalityOperations";
 import KnowledgeCenter from "@/components/KnowledgeCenter";
+import SyncStatus from "@/components/SyncStatus";
 import ActivityLogs from "@/components/ActivityLogs";
 import { ActivityFeedProvider } from "@/components/ActivityFeedContext";
 import { getRequestContainer } from "@/server/container";
@@ -12,13 +13,14 @@ import { getRequestContainer } from "@/server/container";
 export default async function Home() {
   const container = await getRequestContainer();
 
-  const [tasks, approvals, agents, properties, logs, businessUnits] = await Promise.all([
+  const [tasks, approvals, agents, properties, logs, businessUnits, syncSources] = await Promise.all([
     container.tasks.list(),
     container.approvals.list(),
     container.agents.list(),
     container.properties.list(),
     container.activityLog.list(20),
     container.businessUnits.list(),
+    container.syncStatus.list(),
   ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function Home() {
           <AgentsStatus agents={agents} />
           <HospitalityOperations properties={properties} />
           <KnowledgeCenter />
+          <SyncStatus sources={syncSources} />
           <ActivityLogs />
         </ActivityFeedProvider>
       </main>

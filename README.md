@@ -113,13 +113,69 @@ under `/api/webhooks/*` instead checks its own secret
 `AI_AGENTS_WEBHOOK_SECRET`) — unset = the endpoint responds `501` rather than
 accepting unauthenticated calls. See `.env.example` for all of these.
 
+### Google Sheets sync framework (v1.1)
+
+Google Sheets is the source of truth for six sources; Supabase is the
+operational database they sync into. **Google OAuth is not wired up yet** —
+`src/server/sync/adapters/google-sheets.adapter.ts` is a stub that throws a
+clear "not configured" error, so every run today fails fast in a way that
+still exercises the rest of the framework end-to-end (a `sync_runs` row, an
+`import_logs` entry, and an `activity_logs` entry all get written).
+
+```
+src/server/sync/
+  types.ts               SyncAdapter / SyncMapper interfaces, shared types
+  adapters/               google-sheets.adapter.ts (stub — real API access is later work)
+  mappers/                one per source: writes into a typed table (tasks, approvals)
+                          or, for sources with no dedicated table yet, into sync_records
+  registry.ts             source key -> adapter + mapper
+  sync-runner.ts          orchestrates one run: fetch -> upsert -> log -> summarize
+  sync-status.service.ts  read-only status for the dashboard
+```
+
+Sources (`sync_sources` table, seeded by migration `0009`):
+
+| Key | Target | Business unit |
+| --- | --- | --- |
+| `task-001` | `tasks` (typed) | — |
+| `approval-001` | `approvals` (typed) | — |
+| `fin-001` | `sync_records` (generic) | Finance AI |
+| `business-portfolio` | `sync_records` (generic) | CEO Overview |
+| `family` | `sync_records` (generic) | — |
+| `health` | `sync_records` (generic) | — |
+
+`sync_records` is both the idempotency ledger (mapping an external sheet row
+to the internal row it produced, so re-syncing updates instead of
+duplicating) *and*, for sources with no dedicated table, the operational
+record itself — until a real schema is warranted once the actual sheet
+columns are known.
+
+Incremental sync is supported via an opaque cursor stored on
+`sync_sources.last_cursor`, threaded through every adapter call; a full
+adapter just always returns `nextCursor: null`.
+
+Triggering a sync:
+
+- **Manual**: "Run now" on the Sync Status dashboard card, or
+  `POST /api/sync/[source]/run` (session, manager+, `trigger="manual"`).
+- **n8n**: same endpoint with `x-api-key: $N8N_API_KEY` (`trigger="n8n"`).
+- **Scheduled**: `POST /api/sync/scheduled` (session admin+, or `x-api-key`)
+  runs every source with `schedule_enabled = true` that's past its
+  `schedule_interval_minutes` since `last_synced_at`. Next.js has no
+  built-in scheduler — point an external one (Coolify scheduled task, n8n
+  Cron node, system cron) at this URL as often as you like; it no-ops for
+  sources that aren't due.
+
+`GET /api/sync` lists every source's status; `GET /api/sync/[source]/logs`
+returns a run's `import_logs` (latest by default, or `?runId=`).
+
 ### Project structure
 
 ```
 src/
   app/            App Router pages, layout, actions, and API routes
   components/     Dashboard UI components (Sidebar, cards, panels)
-  server/         Repository + Service architecture (see above)
+  server/         Repository + Service architecture, sync framework (see above)
   lib/            Supabase clients (client/server/admin) and shared config
   data/           Shared domain types (Task, Approval, Agent, ...)
 Dockerfile        Multi-stage production build for the dashboard app

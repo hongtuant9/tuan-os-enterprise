@@ -10,5 +10,6 @@ export const commandCenterModules: CommandCenterModule[] = [
   { id: "ai-agents", name: "AI Agents Status" },
   { id: "hospitality-operations", name: "Hospitality Operations" },
   { id: "knowledge-center", name: "Knowledge Center" },
+  { id: "sync-status", name: "Sync Status" },
   { id: "activity-logs", name: "Activity Logs" },
 ];

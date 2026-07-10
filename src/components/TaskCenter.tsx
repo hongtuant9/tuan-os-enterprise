@@ -1,7 +1,7 @@
 import Badge from "./Badge";
 import type { Task, TaskPriority, TaskStatus } from "@/data/tasks";
 
-const TODAY = "2026-07-09";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const STATUS_BADGE: Record<TaskStatus, { label: string; tone: "muted" | "accent" | "bad" | "good" }> = {
   todo: { label: "To do", tone: "muted" },

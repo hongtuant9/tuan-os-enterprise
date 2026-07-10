@@ -1,11 +1,11 @@
 import SectionCard from "./SectionCard";
-import { sections } from "@/lib/sections";
 import type { Task } from "@/data/tasks";
 import type { Approval } from "@/data/approvals";
 import type { Agent } from "@/data/agents";
 import type { Property } from "@/data/hospitality";
+import type { BusinessUnit } from "@/data/business-units";
 
-const TODAY = "2026-07-09";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function StatTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
@@ -22,11 +22,13 @@ export default function CeoOverview({
   approvals,
   agents,
   properties,
+  businessUnits,
 }: {
   tasks: Task[];
   approvals: Approval[];
   agents: Agent[];
   properties: Property[];
+  businessUnits: BusinessUnit[];
 }) {
   const priorityTasksToday = tasks.filter((t) => t.priority === "high" && t.dueDate === TODAY && t.status !== "done");
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
@@ -66,8 +68,8 @@ export default function CeoOverview({
         Business Units
       </h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {sections.map((section) => (
-          <SectionCard key={section.id} section={section} />
+        {businessUnits.map((unit) => (
+          <SectionCard key={unit.id} businessUnit={unit} />
         ))}
       </div>
     </section>

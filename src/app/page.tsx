@@ -6,19 +6,18 @@ import AgentsStatus from "@/components/AgentsStatus";
 import HospitalityOperations from "@/components/HospitalityOperations";
 import KnowledgeCenter from "@/components/KnowledgeCenter";
 import ActivityLogs from "@/components/ActivityLogs";
-import { getTasks } from "@/lib/data/tasks";
-import { getApprovals } from "@/lib/data/approvals";
-import { getAgents } from "@/lib/data/agents";
-import { getProperties } from "@/lib/data/hospitality";
-import { getLogs } from "@/lib/data/logs";
+import { getRequestContainer } from "@/server/container";
 
 export default async function Home() {
-  const [tasks, approvals, agents, properties, logs] = await Promise.all([
-    getTasks(),
-    getApprovals(),
-    getAgents(),
-    getProperties(),
-    getLogs(),
+  const container = await getRequestContainer();
+
+  const [tasks, approvals, agents, properties, logs, businessUnits] = await Promise.all([
+    container.tasks.list(),
+    container.approvals.list(),
+    container.agents.list(),
+    container.properties.list(),
+    container.activityLog.list(20),
+    container.businessUnits.list(),
   ]);
 
   return (
@@ -35,7 +34,13 @@ export default async function Home() {
           </p>
         </header>
 
-        <CeoOverview tasks={tasks} approvals={approvals} agents={agents} properties={properties} />
+        <CeoOverview
+          tasks={tasks}
+          approvals={approvals}
+          agents={agents}
+          properties={properties}
+          businessUnits={businessUnits}
+        />
         <ApprovalQueue approvals={approvals} />
         <TaskCenter tasks={tasks} />
         <AgentsStatus agents={agents} />

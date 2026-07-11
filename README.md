@@ -202,6 +202,7 @@ Viewer access to every Sheet/Doc a source points at.
 **2. App configuration** — set in your environment (see `.env.example`):
 
 ```
+APP_URL=https://<your-domain>
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/integrations/google/oauth/callback
@@ -211,6 +212,12 @@ GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/integrations/google/oauth/ca
 `src/server/integrations/google/` (guarded by the `server-only` package —
 the build fails if a client component ever imports one) and is never sent
 to the browser.
+
+`APP_URL` (or its client-exposed fallback `NEXT_PUBLIC_APP_URL`) is the
+public, browser-facing base URL used to build the OAuth callback's
+post-auth redirects. It's required behind a reverse proxy (e.g.
+Coolify/Traefik) — without it, redirects fall back to the internal
+container hostname, which the user's browser can't reach.
 
 **3. Connect the account** — as a signed-in `admin`/`owner` user, visit
 `/api/integrations/google/oauth/start` (or the **"Connect Google Account"**

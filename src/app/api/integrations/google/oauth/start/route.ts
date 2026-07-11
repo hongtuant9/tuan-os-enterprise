@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient as createRequestClient } from "@/lib/supabase/server";
 import { getCurrentSession } from "@/server/auth/session";
@@ -6,23 +6,24 @@ import { hasMinimumRole } from "@/server/auth/roles";
 import {
   buildGoogleAuthUrl,
   getGoogleOAuthRedirectUri,
+  getPublicAppUrl,
   GOOGLE_OAUTH_STATE_COOKIE,
 } from "@/server/integrations/google/oauth-client";
 
 /** Connecting a Google account is a sensitive, human, admin+ action — not automatable via x-api-key. */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
 
   if (!session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", getPublicAppUrl()));
   }
   if (!hasMinimumRole(session.role, "admin")) {
     return NextResponse.json({ error: "Forbidden — admin role or higher required" }, { status: 403 });
   }
 
   const state = randomUUID();
-  const redirectUri = getGoogleOAuthRedirectUri(new URL(request.url).origin);
+  const redirectUri = getGoogleOAuthRedirectUri();
 
   let authUrl: string;
   try {

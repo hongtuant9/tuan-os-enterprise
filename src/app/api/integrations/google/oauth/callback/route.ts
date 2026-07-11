@@ -6,6 +6,7 @@ import { hasMinimumRole } from "@/server/auth/roles";
 import {
   exchangeCodeForTokens,
   getGoogleOAuthRedirectUri,
+  getPublicAppUrl,
   GOOGLE_OAUTH_STATE_COOKIE,
 } from "@/server/integrations/google/oauth-client";
 import { GoogleOAuthCredentialsRepository } from "@/server/repositories/google-oauth-credentials.repository";
@@ -17,25 +18,32 @@ import { buildContainer } from "@/server/container";
  * state cookie already ties this to the browser that started the flow),
  * exchanges the code server-side (client secret never leaves the server),
  * and stores the resulting refresh token via the service-role client.
- * Every outcome — success or failure — redirects home with a query flag
- * rather than rendering raw error text, and nothing token-shaped is ever
- * logged or included in a redirect URL.
+ * Every outcome — success or failure — redirects the browser to the public
+ * app URL with a query flag rather than rendering raw error text, and
+ * nothing token-shaped is ever logged or included in a redirect URL.
+ *
+ * The redirect base always comes from getPublicAppUrl(), never from
+ * request.url / request.nextUrl.origin — behind Coolify/Traefik those
+ * resolve to the internal container hostname (0.0.0.0), which sent the
+ * user's browser to a dead address after a successful authorization.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const homeUrl = new URL("/", request.url);
+  const appUrl = getPublicAppUrl();
+  const errorUrl = new URL("/", appUrl);
+  const syncStatusUrl = new URL("/#sync-status", appUrl);
 
   const googleError = url.searchParams.get("error");
   if (googleError) {
-    homeUrl.searchParams.set("google_oauth_error", googleError);
-    return NextResponse.redirect(homeUrl);
+    errorUrl.searchParams.set("google_oauth_error", googleError);
+    return NextResponse.redirect(errorUrl);
   }
 
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
   if (!session || !hasMinimumRole(session.role, "admin")) {
-    homeUrl.searchParams.set("google_oauth_error", "forbidden");
-    return NextResponse.redirect(homeUrl);
+    errorUrl.searchParams.set("google_oauth_error", "forbidden");
+    return NextResponse.redirect(errorUrl);
   }
 
   const code = url.searchParams.get("code");
@@ -43,21 +51,21 @@ export async function GET(request: NextRequest) {
   const cookieState = request.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)?.value;
 
   if (!code || !state || !cookieState || state !== cookieState) {
-    homeUrl.searchParams.set("google_oauth_error", "invalid_state");
-    const response = NextResponse.redirect(homeUrl);
+    errorUrl.searchParams.set("google_oauth_error", "invalid_state");
+    const response = NextResponse.redirect(errorUrl);
     response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return response;
   }
 
   try {
-    const redirectUri = getGoogleOAuthRedirectUri(url.origin);
+    const redirectUri = getGoogleOAuthRedirectUri();
     const tokens = await exchangeCodeForTokens(code, redirectUri);
 
     if (!tokens.refresh_token) {
       // Only omitted if Google decides not to re-issue one; we always send
       // prompt=consent specifically to avoid this, so treat it as an error.
-      homeUrl.searchParams.set("google_oauth_error", "no_refresh_token");
-      const response = NextResponse.redirect(homeUrl);
+      errorUrl.searchParams.set("google_oauth_error", "no_refresh_token");
+      const response = NextResponse.redirect(errorUrl);
       response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
       return response;
     }
@@ -78,13 +86,13 @@ export async function GET(request: NextRequest) {
       type: "info",
     });
 
-    homeUrl.searchParams.set("google_connected", "1");
-    const response = NextResponse.redirect(homeUrl);
+    syncStatusUrl.searchParams.set("google_connected", "1");
+    const response = NextResponse.redirect(syncStatusUrl);
     response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return response;
   } catch {
-    homeUrl.searchParams.set("google_oauth_error", "token_exchange_failed");
-    const response = NextResponse.redirect(homeUrl);
+    errorUrl.searchParams.set("google_oauth_error", "token_exchange_failed");
+    const response = NextResponse.redirect(errorUrl);
     response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return response;
   }

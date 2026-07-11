@@ -33,9 +33,18 @@ function getClientCredentials(): { clientId: string; clientSecret: string } {
   return { clientId, clientSecret };
 }
 
-/** Prefers an explicit env var (exact match required by Google Cloud Console) over deriving one from the request. */
-export function getGoogleOAuthRedirectUri(requestOrigin: string): string {
-  return process.env.GOOGLE_OAUTH_REDIRECT_URI || `${requestOrigin}/api/integrations/google/oauth/callback`;
+/**
+ * The public, browser-facing base URL for this deployment. Must never be derived from
+ * request.url / request.nextUrl.origin — behind Coolify/Traefik those resolve to the
+ * internal container hostname (e.g. 0.0.0.0), which the user's browser cannot reach.
+ */
+export function getPublicAppUrl(): string {
+  return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://app.tamcocexperience.com";
+}
+
+/** Prefers an explicit env var (exact match required by Google Cloud Console) over the public app URL. */
+export function getGoogleOAuthRedirectUri(): string {
+  return process.env.GOOGLE_OAUTH_REDIRECT_URI || `${getPublicAppUrl()}/api/integrations/google/oauth/callback`;
 }
 
 export function buildGoogleAuthUrl(params: { redirectUri: string; state: string }): string {

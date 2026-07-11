@@ -420,39 +420,51 @@ export interface Database {
         };
         Relationships: [];
       };
-      google_oauth_credentials: {
+      google_oauth_connections: {
         Row: {
           id: string;
-          label: string;
-          refresh_token: string;
+          user_id: string;
+          provider: string;
+          google_email: string | null;
           access_token: string | null;
-          access_token_expires_at: string | null;
+          refresh_token: string | null;
+          token_type: string | null;
           scope: string | null;
-          connected_by: string | null;
+          access_token_expires_at: string | null;
           connected_at: string;
           updated_at: string;
+          last_refresh_at: string | null;
+          last_error: string | null;
         };
         Insert: {
           id?: string;
-          label?: string;
-          refresh_token: string;
+          user_id: string;
+          provider?: string;
+          google_email?: string | null;
           access_token?: string | null;
-          access_token_expires_at?: string | null;
+          refresh_token?: string | null;
+          token_type?: string | null;
           scope?: string | null;
-          connected_by?: string | null;
+          access_token_expires_at?: string | null;
           connected_at?: string;
           updated_at?: string;
+          last_refresh_at?: string | null;
+          last_error?: string | null;
         };
         Update: {
           id?: string;
-          label?: string;
-          refresh_token?: string;
+          user_id?: string;
+          provider?: string;
+          google_email?: string | null;
           access_token?: string | null;
-          access_token_expires_at?: string | null;
+          refresh_token?: string | null;
+          token_type?: string | null;
           scope?: string | null;
-          connected_by?: string | null;
+          access_token_expires_at?: string | null;
           connected_at?: string;
           updated_at?: string;
+          last_refresh_at?: string | null;
+          last_error?: string | null;
         };
         Relationships: [];
       };

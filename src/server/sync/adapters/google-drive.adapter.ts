@@ -61,8 +61,8 @@ export class GoogleDriveAdapter implements SyncAdapter {
       throw new SheetNotConfiguredError(this.sourceKey);
     }
 
-    const accessToken = await this.tokenStore.getValidAccessToken();
-    const metadata = await getFileMetadata(this.sheetId, accessToken);
+    const auth = await this.tokenStore.getSystemAuthorizedClient();
+    const metadata = await getFileMetadata(this.sheetId, auth);
 
     if (cursor && cursor === metadata.modifiedTime) {
       return { rows: [], nextCursor: cursor };
@@ -71,10 +71,10 @@ export class GoogleDriveAdapter implements SyncAdapter {
     let rows: RawSheetRow[];
 
     if (metadata.mimeType === SPREADSHEET_MIME_TYPE) {
-      const values = await getSheetValues(this.sheetId, this.sheetRange || "A:Z", accessToken);
+      const values = await getSheetValues(this.sheetId, this.sheetRange || "A:Z", auth);
       rows = rowsFromSheetValues(values);
     } else if (metadata.mimeType === DOCUMENT_MIME_TYPE) {
-      const paragraphs = await getDocParagraphs(this.sheetId, accessToken);
+      const paragraphs = await getDocParagraphs(this.sheetId, auth);
       rows = rowsFromDocParagraphs(paragraphs);
     } else {
       throw new UnsupportedGoogleFileTypeError(metadata.mimeType);

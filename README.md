@@ -193,6 +193,8 @@ Viewer access to every Sheet/Doc a source points at.
    - `drive.metadata.readonly`
    - `spreadsheets.readonly`
    - `documents.readonly`
+   - `userinfo.email` (used only to show which Google account is connected —
+     Google has no way to identify the account without it)
 4. **APIs & Services > Credentials > Create Credentials > OAuth client ID**,
    application type **Web application**. Add an **Authorized redirect URI**:
    `https://<your-domain>/api/integrations/google/oauth/callback`
@@ -222,11 +224,19 @@ container hostname, which the user's browser can't reach.
 **3. Connect the account** — as a signed-in `admin`/`owner` user, visit
 `/api/integrations/google/oauth/start` (or the **"Connect Google Account"**
 link on the Sync Status dashboard section). After granting consent you're
-redirected back with `?google_connected=1`; the refresh token is stored in
-`public.google_oauth_credentials` (service-role only — no RLS policy grants
-`anon`/`authenticated` any access to that table at all). Check
-`GET /api/integrations/google/status` for `{ "connected": true }` at any
-point.
+redirected back to `/#sync-status?google_connected=1`; the tokens are
+upserted into your row in `public.google_oauth_connections`, keyed by your
+`user_id`. RLS lets you `select` only your own row, and even then the
+`access_token`/`refresh_token` columns are never selectable by the
+`authenticated` role at all (column grants, see migration `0011`) — every
+read/write of those columns goes through the service-role client in
+`src/server/integrations/google/token-store.ts`. Background/scheduled sync
+jobs have no signed-in user, so they use whichever connection was made most
+recently. Check `GET /api/integrations/google/status` for
+`{ "connected": true, "googleEmail": "...", "connectedAt": "..." }` at any
+point — it never returns a token. Re-running the connect flow (**"Reconnect
+Google Account"**) re-authorizes and replaces the stored tokens for your
+account.
 
 **4. Point each source at a real file** — `sheet_id` is the ID segment from
 the file's URL (`https://docs.google.com/spreadsheets/d/<sheet_id>/edit`),

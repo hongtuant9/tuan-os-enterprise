@@ -1,16 +1,21 @@
 import "server-only";
-
-const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+import { google, Auth } from "googleapis";
+import { GaxiosError } from "gaxios";
 
 /** Name of the short-lived CSRF-state cookie shared between /oauth/start and /oauth/callback. */
 export const GOOGLE_OAUTH_STATE_COOKIE = "google_oauth_state";
 
-/** Least-privilege, read-only scopes — enough for Drive metadata + Sheets + Docs. */
+/**
+ * Least-privilege, read-only scopes for the Drive/Sheets/Docs sync framework,
+ * plus the minimal `userinfo.email` scope — Google has no way to identify the
+ * connected account without it, and the Sync Status UI needs to show which
+ * Google account is connected.
+ */
 export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",
   "https://www.googleapis.com/auth/spreadsheets.readonly",
   "https://www.googleapis.com/auth/documents.readonly",
+  "https://www.googleapis.com/auth/userinfo.email",
 ];
 
 export class GoogleOAuthConfigError extends Error {
@@ -66,86 +71,113 @@ export function getGoogleOAuthRedirectUri(): string {
   return process.env.GOOGLE_OAUTH_REDIRECT_URI || `${getPublicAppUrl()}/api/integrations/google/oauth/callback`;
 }
 
-export function buildGoogleAuthUrl(params: { redirectUri: string; state: string }): string {
-  const { clientId } = getClientCredentials();
-
-  const url = new URL(GOOGLE_AUTH_ENDPOINT);
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", params.redirectUri);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("access_type", "offline");
-  // Always force the consent screen so Google reissues a refresh_token —
-  // without this it's only returned on a user's very first authorization.
-  url.searchParams.set("prompt", "consent");
-  url.searchParams.set("scope", GOOGLE_OAUTH_SCOPES.join(" "));
-  url.searchParams.set("state", params.state);
-  return url.toString();
+export function createOAuth2Client(redirectUri: string): Auth.OAuth2Client {
+  const { clientId, clientSecret } = getClientCredentials();
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export type GoogleTokenResponse = {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  scope: string;
-  token_type: string;
-};
+export function buildGoogleAuthUrl(params: { redirectUri: string; state: string }): string {
+  const client = createOAuth2Client(params.redirectUri);
 
-async function postToken(body: URLSearchParams): Promise<GoogleTokenResponse> {
-  const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
+  return client.generateAuthUrl({
+    access_type: "offline",
+    // Always force the consent screen so Google reissues a refresh_token —
+    // without this it's only returned on a user's very first authorization.
+    prompt: "consent",
+    include_granted_scopes: true,
+    scope: GOOGLE_OAUTH_SCOPES,
+    state: params.state,
   });
+}
 
-  if (!response.ok) {
-    // Google's error body is `{ error, error_description }` — never log the raw
-    // body, since a misbehaving proxy or future Google change could echo the
-    // authorization code, client secret, or a token back into it.
-    let code = "unknown_error";
-    let description: string | undefined;
-    try {
-      const errorBody = (await response.json()) as { error?: string; error_description?: string };
-      if (errorBody.error) code = errorBody.error;
-      description = errorBody.error_description;
-    } catch {
-      // Non-JSON body — fall back to the generic code above.
-    }
+/**
+ * Extracts Google's safe `{error, error_description}` pair from a GaxiosError
+ * without ever touching the raw request/response body beyond those two
+ * fields — a misbehaving proxy or future Google change could otherwise echo
+ * the authorization code, client secret, or a token back into a wider body.
+ */
+function toGoogleTokenExchangeError(error: unknown): GoogleTokenExchangeError {
+  if (error instanceof GaxiosError) {
+    const status = error.response?.status ?? 0;
+    const data = error.response?.data as { error?: string; error_description?: string } | undefined;
+    const code = data?.error ?? "unknown_error";
+    const description = data?.error_description;
 
-    console.error("[google-oauth] token exchange failed", {
-      status: response.status,
-      code,
-      description,
+    console.error("[google-oauth] Google token exchange failed", {
+      status,
+      error: code,
+      error_description: description,
     });
 
-    throw new GoogleTokenExchangeError(response.status, code, description);
+    return new GoogleTokenExchangeError(status, code, description);
   }
 
-  return response.json();
+  console.error("[google-oauth] Google token exchange failed with a non-HTTP error", {
+    name: error instanceof Error ? error.name : "unknown",
+  });
+  return new GoogleTokenExchangeError(0, "unknown_error");
 }
 
-export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<GoogleTokenResponse> {
-  const { clientId, clientSecret } = getClientCredentials();
+export type GoogleTokens = {
+  access_token: string;
+  refresh_token?: string;
+  expiry_date: number | null;
+  scope?: string;
+  token_type?: string;
+};
 
-  return postToken(
-    new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-    })
-  );
+function toGoogleTokens(credentials: Auth.Credentials): GoogleTokens {
+  if (!credentials.access_token) {
+    throw new GoogleTokenExchangeError(0, "no_access_token", "Google did not return an access_token.");
+  }
+
+  return {
+    access_token: credentials.access_token,
+    refresh_token: credentials.refresh_token ?? undefined,
+    expiry_date: credentials.expiry_date ?? null,
+    scope: credentials.scope ?? undefined,
+    token_type: credentials.token_type ?? undefined,
+  };
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<GoogleTokenResponse> {
-  const { clientId, clientSecret } = getClientCredentials();
+export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<GoogleTokens> {
+  const client = createOAuth2Client(redirectUri);
 
-  return postToken(
-    new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "refresh_token",
-    })
-  );
+  try {
+    const { tokens } = await client.getToken(code);
+    return toGoogleTokens(tokens);
+  } catch (error) {
+    throw toGoogleTokenExchangeError(error);
+  }
+}
+
+/** Fetches the connected account's email via Google's userinfo endpoint (requires `userinfo.email` scope). */
+export async function fetchGoogleAccountEmail(client: Auth.OAuth2Client): Promise<string | null> {
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: client });
+    const { data } = await oauth2.userinfo.get();
+    return data.email ?? null;
+  } catch (error) {
+    console.error("[google-oauth] failed to fetch connected account email", {
+      status: error instanceof GaxiosError ? error.response?.status : undefined,
+    });
+    return null;
+  }
+}
+
+/**
+ * Refreshes an access token using a stored refresh_token. Returns a fresh
+ * OAuth2Client with credentials set — callers persist access_token/expiry
+ * from `client.credentials`.
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<Auth.OAuth2Client> {
+  const client = createOAuth2Client(getGoogleOAuthRedirectUri());
+  client.setCredentials({ refresh_token: refreshToken });
+
+  try {
+    await client.getAccessToken();
+    return client;
+  } catch (error) {
+    throw toGoogleTokenExchangeError(error);
+  }
 }

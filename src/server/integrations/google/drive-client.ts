@@ -1,4 +1,5 @@
 import "server-only";
+import { google, Auth } from "googleapis";
 
 export type GoogleFileMetadata = {
   id: string;
@@ -7,48 +8,34 @@ export type GoogleFileMetadata = {
   modifiedTime: string;
 };
 
-async function googleGet<T>(url: string, accessToken: string): Promise<T> {
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+export async function getFileMetadata(fileId: string, auth: Auth.OAuth2Client): Promise<GoogleFileMetadata> {
+  const drive = google.drive({ version: "v3", auth });
+  const { data } = await drive.files.get({
+    fileId,
+    fields: "id,name,mimeType,modifiedTime",
+  });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Google API request to ${new URL(url).pathname} failed (${response.status}): ${text}`);
-  }
-
-  return response.json();
+  return {
+    id: data.id ?? fileId,
+    name: data.name ?? "",
+    mimeType: data.mimeType ?? "",
+    modifiedTime: data.modifiedTime ?? "",
+  };
 }
 
-export async function getFileMetadata(fileId: string, accessToken: string): Promise<GoogleFileMetadata> {
-  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,modifiedTime`;
-  return googleGet<GoogleFileMetadata>(url, accessToken);
+export async function getSheetValues(spreadsheetId: string, range: string, auth: Auth.OAuth2Client): Promise<string[][]> {
+  const sheets = google.sheets({ version: "v4", auth });
+  const { data } = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  return (data.values as string[][] | undefined) ?? [];
 }
-
-type SheetValuesResponse = {
-  range: string;
-  values?: string[][];
-};
-
-export async function getSheetValues(
-  spreadsheetId: string,
-  range: string,
-  accessToken: string
-): Promise<string[][]> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`;
-  const result = await googleGet<SheetValuesResponse>(url, accessToken);
-  return result.values ?? [];
-}
-
-type DocsParagraphElement = { textRun?: { content?: string } };
-type DocsStructuralElement = { paragraph?: { elements?: DocsParagraphElement[] } };
-type DocsDocument = { body?: { content?: DocsStructuralElement[] } };
 
 /** Flattens a Google Doc's body into one string per non-empty paragraph. */
-export async function getDocParagraphs(documentId: string, accessToken: string): Promise<string[]> {
-  const url = `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`;
-  const doc = await googleGet<DocsDocument>(url, accessToken);
+export async function getDocParagraphs(documentId: string, auth: Auth.OAuth2Client): Promise<string[]> {
+  const docs = google.docs({ version: "v1", auth });
+  const { data } = await docs.documents.get({ documentId });
 
   const paragraphs: string[] = [];
-  for (const element of doc.body?.content ?? []) {
+  for (const element of data.body?.content ?? []) {
     const text = (element.paragraph?.elements ?? [])
       .map((el) => el.textRun?.content ?? "")
       .join("")

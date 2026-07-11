@@ -4,9 +4,9 @@
 -- Safe to re-run: every statement is idempotent (IF NOT EXISTS / ON CONFLICT).
 --
 -- Contents:
---   1. Migrations 0001-0010 (extensions, business_units, users, properties,
---      agents, tasks, approvals, activity_logs, sync framework, Google OAuth
---      credential storage)
+--   1. Migrations 0001-0011 (extensions, business_units, users, properties,
+--      agents, tasks, approvals, activity_logs, sync framework, per-user
+--      Google OAuth connections)
 --   2. Seed data for business_units, properties, agents, tasks, approvals,
 --      activity_logs, sync_sources
 --   3. Demo admin account (admin@tuanos.vn / 12345678)
@@ -453,34 +453,55 @@ create trigger set_updated_at before update on public.sync_records
 create index if not exists sync_records_source_key_idx on public.sync_records (source_key);
 
 -- -----------------------------------------------------------------------------
--- migrations/0010_google_oauth_credentials.sql
+-- migrations/0011_google_oauth_connections.sql
 -- -----------------------------------------------------------------------------
--- Stores the connected Google account's OAuth tokens for the sync
--- framework's Drive/Sheets/Docs adapter (src/server/integrations/google/).
---
--- refresh_token is a long-lived credential — this table intentionally has
--- RLS enabled with ZERO policies, so neither `anon` nor `authenticated`
--- can select/insert/update/delete it via PostgREST under any circumstance.
--- Only the service-role client (which bypasses RLS) can touch it, and only
--- src/server/integrations/google/token-store.ts and the OAuth callback
--- route ever construct that client for this table.
+-- Per-user Google OAuth connections for the sync framework's Drive/Sheets/Docs
+-- adapter (src/server/integrations/google/). Each authenticated TUAN OS user
+-- can connect their own Google account; RLS lets a user read only their own
+-- row, and every write (insert/update/refresh) happens server-side with the
+-- service-role key, which bypasses RLS entirely.
+drop table if exists public.google_oauth_credentials;
 
-create table if not exists public.google_oauth_credentials (
+create table if not exists public.google_oauth_connections (
   id uuid primary key default gen_random_uuid(),
-  label text not null unique default 'default',
-  refresh_token text not null,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  provider text not null default 'google',
+  google_email text,
   access_token text,
-  access_token_expires_at timestamptz,
+  refresh_token text,
+  token_type text,
   scope text,
-  connected_by text,
+  access_token_expires_at timestamptz,
   connected_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  last_refresh_at timestamptz,
+  last_error text,
+  unique (user_id, provider)
 );
 
-alter table public.google_oauth_credentials enable row level security;
+alter table public.google_oauth_connections enable row level security;
 
-drop trigger if exists set_updated_at on public.google_oauth_credentials;
-create trigger set_updated_at before update on public.google_oauth_credentials
+drop policy if exists "Users can view their own Google connection" on public.google_oauth_connections;
+create policy "Users can view their own Google connection"
+  on public.google_oauth_connections for select
+  to authenticated
+  using (user_id = auth.uid());
+
+-- No insert/update/delete policies for anon/authenticated — only the
+-- service-role client (SUPABASE_SERVICE_ROLE_KEY, which bypasses RLS) may
+-- write to this table.
+
+-- Defense in depth beyond RLS: even for a user's own row, the access/refresh
+-- tokens are never selectable through PostgREST — only the service-role
+-- client (which bypasses column privileges too) can read them.
+revoke all on public.google_oauth_connections from authenticated, anon;
+grant select (
+  id, user_id, provider, google_email, token_type, scope,
+  access_token_expires_at, connected_at, updated_at, last_refresh_at, last_error
+) on public.google_oauth_connections to authenticated;
+
+drop trigger if exists set_updated_at on public.google_oauth_connections;
+create trigger set_updated_at before update on public.google_oauth_connections
   for each row execute procedure public.set_updated_at();
 
 -- =============================================================================

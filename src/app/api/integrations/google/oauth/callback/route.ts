@@ -7,10 +7,30 @@ import {
   exchangeCodeForTokens,
   getGoogleOAuthRedirectUri,
   getPublicAppUrl,
+  GoogleOAuthConfigError,
+  GoogleTokenExchangeError,
   GOOGLE_OAUTH_STATE_COOKIE,
 } from "@/server/integrations/google/oauth-client";
 import { GoogleOAuthCredentialsRepository } from "@/server/repositories/google-oauth-credentials.repository";
 import { buildContainer } from "@/server/container";
+
+/**
+ * Google's `error` codes are safe to surface as-is (they describe the request/config,
+ * never token material). Anything outside this whitelist collapses to the generic
+ * `token_exchange_failed` so an unrecognized Google error string can't leak novel
+ * detail into a public redirect URL.
+ */
+const SAFE_GOOGLE_OAUTH_ERROR_CODES = new Set(["invalid_client", "invalid_grant", "redirect_uri_mismatch"]);
+
+function toSafeErrorCode(error: unknown): string {
+  if (error instanceof GoogleTokenExchangeError && SAFE_GOOGLE_OAUTH_ERROR_CODES.has(error.code)) {
+    return error.code;
+  }
+  if (error instanceof GoogleOAuthConfigError) {
+    return "invalid_client";
+  }
+  return "token_exchange_failed";
+}
 
 /**
  * Google redirects the user's browser here after consent. Validates the
@@ -90,8 +110,16 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(syncStatusUrl);
     response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return response;
-  } catch {
-    errorUrl.searchParams.set("google_oauth_error", "token_exchange_failed");
+  } catch (error) {
+    // GoogleTokenExchangeError already logged the safe (status, code, description)
+    // triple at the source in oauth-client.ts — nothing further to log here, and
+    // nothing token-shaped ever reaches this catch block.
+    if (!(error instanceof GoogleTokenExchangeError)) {
+      console.error("[google-oauth] callback failed before/after token exchange", {
+        name: error instanceof Error ? error.name : "unknown",
+      });
+    }
+    errorUrl.searchParams.set("google_oauth_error", toSafeErrorCode(error));
     const response = NextResponse.redirect(errorUrl);
     response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return response;

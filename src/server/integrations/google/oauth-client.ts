@@ -20,6 +20,25 @@ export class GoogleOAuthConfigError extends Error {
   }
 }
 
+/**
+ * Thrown when Google's token endpoint returns a non-2xx response. Carries only the
+ * HTTP status plus Google's own `error` / `error_description` fields — never the
+ * raw response body, which is where a code/secret/token could end up echoed back.
+ */
+export class GoogleTokenExchangeError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly description?: string;
+
+  constructor(status: number, code: string, description?: string) {
+    super(`Google token endpoint returned ${status}: ${code}`);
+    this.name = "GoogleTokenExchangeError";
+    this.status = status;
+    this.code = code;
+    this.description = description;
+  }
+}
+
 function getClientCredentials(): { clientId: string; clientSecret: string } {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
@@ -79,8 +98,26 @@ async function postToken(body: URLSearchParams): Promise<GoogleTokenResponse> {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Google token endpoint request failed (${response.status}): ${text}`);
+    // Google's error body is `{ error, error_description }` — never log the raw
+    // body, since a misbehaving proxy or future Google change could echo the
+    // authorization code, client secret, or a token back into it.
+    let code = "unknown_error";
+    let description: string | undefined;
+    try {
+      const errorBody = (await response.json()) as { error?: string; error_description?: string };
+      if (errorBody.error) code = errorBody.error;
+      description = errorBody.error_description;
+    } catch {
+      // Non-JSON body — fall back to the generic code above.
+    }
+
+    console.error("[google-oauth] token exchange failed", {
+      status: response.status,
+      code,
+      description,
+    });
+
+    throw new GoogleTokenExchangeError(response.status, code, description);
   }
 
   return response.json();

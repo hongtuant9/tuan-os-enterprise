@@ -10,7 +10,7 @@ insert into public.business_units
   (id, name, slug, description)
 values
   ('00000000-0000-4000-8000-000000000001', 'CEO Overview', 'ceo-overview', 'Company-wide performance at a glance'),
-  ('00000000-0000-4000-8000-000000000002', 'Hospitality AI', 'hospitality-ai', 'Guest messaging & reception automation'),
+  ('00000000-0000-4000-8000-000000000002', 'AI Lễ tân & Trải nghiệm', 'hospitality-ai', 'AI Booking, Concierge & Experience Agent cho Tam Coc Experience'),
   ('00000000-0000-4000-8000-000000000003', 'Marketing AI', 'marketing-ai', 'Campaigns, content & channel performance'),
   ('00000000-0000-4000-8000-000000000004', 'Finance AI', 'finance-ai', 'Revenue, expenses & forecasting'),
   ('00000000-0000-4000-8000-000000000005', 'iSTEAM AI', 'isteam-ai', 'Education programs & learning ops'),
@@ -35,7 +35,7 @@ insert into public.agents
   (id, business_unit_id, name, unit, status, current_task, last_active_at)
 values
   ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'CEO Chief of Staff', 'CEO Overview', 'online', 'Compiling daily priority brief', now() - interval '1 minute'),
-  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'Hospitality AI', 'Hospitality AI', 'online', 'Replying to guest messages', now()),
+  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'AI Booking, Concierge & Experience Agent', 'AI Lễ tân', 'online', 'Private Pilot — xử lý khách nhắn trực tiếp', now()),
   ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', 'Marketing AI', 'Marketing AI', 'online', 'Scheduling social content', now() - interval '2 minutes'),
   ('20000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000004', 'Finance AI', 'Finance AI', 'online', 'Reconciling OTA payouts', now() - interval '5 minutes'),
   ('20000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000005', 'iSTEAM AI', 'iSTEAM AI', 'idle', 'Waiting on enrollment copy approval', now() - interval '24 minutes'),

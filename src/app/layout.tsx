@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TUAN OS Command Center",
-  description: "TUAN OS Command Center — unified control for every AI-run business unit",
+  title: "TUAN OS — Trung tâm Điều hành",
+  description: "TUAN OS — trung tâm điều hành doanh nghiệp và AI Agent",
 };
 
 export default function RootLayout({
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <body className="antialiased">{children}</body>
     </html>
   );

@@ -3,7 +3,7 @@ import CeoOverview from "@/components/CeoOverview";
 import ApprovalQueue from "@/components/ApprovalQueue";
 import TaskCenter from "@/components/TaskCenter";
 import AgentsStatus from "@/components/AgentsStatus";
-import HospitalityOperations from "@/components/HospitalityOperations";
+import AiReceptionistSummary from "@/components/AiReceptionistSummary";
 import KnowledgeCenter from "@/components/KnowledgeCenter";
 import SyncStatus from "@/components/SyncStatus";
 import ActivityLogs from "@/components/ActivityLogs";
@@ -30,10 +30,10 @@ export default async function Home() {
       <main className="flex-1 px-6 py-8 md:px-10">
         <header className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink-primary)]">
-            TUAN OS Command Center
+            Trung tâm Điều hành TUAN OS
           </h1>
           <p className="mt-1 text-sm text-[var(--ink-muted)]">
-            Unified control center for every AI-run business unit.
+            Điều hành tập trung các đơn vị kinh doanh, AI Agent và quy trình phê duyệt.
           </p>
         </header>
 
@@ -48,7 +48,7 @@ export default async function Home() {
           <ApprovalQueue approvals={approvals} />
           <TaskCenter tasks={tasks} />
           <AgentsStatus agents={agents} />
-          <HospitalityOperations properties={properties} />
+          <AiReceptionistSummary />
           <KnowledgeCenter />
           <SyncStatus sources={syncSources} />
           <ActivityLogs />

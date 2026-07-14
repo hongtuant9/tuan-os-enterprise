@@ -283,3 +283,39 @@ separately via `docker-compose.yml`:
 See `docs/README_SETUP_VN.md` for Coolify setup steps for that stack, and
 `docs/ROADMAP.md` for the overall project roadmap. Agent prompts live under
 `agents/`, and knowledge-base source files live under `knowledge/`.
+
+## AI Agent Lễ tân — Private Pilot
+
+Khu vực mới: `/ai-le-tan`.
+
+Phạm vi giai đoạn đầu:
+
+- Hộp thư cho khách nhắn trực tiếp; không nhập booking OTA.
+- Phòng kiểm thử bằng tài khoản nội bộ ở chế độ `SIMULATION`.
+- Decision Gate không suy đoán dữ liệu thiếu.
+- Cổng Quản lý Homestay: Duyệt, Từ chối hoặc Yêu cầu bổ sung, bắt buộc có ghi chú.
+- `knowledge_candidate` để đề xuất cập nhật dữ liệu CSKH; không tự động xuất bản.
+- Khung KiotViet Hotel read-only và cờ khóa ghi production.
+
+### Cài đặt database
+
+Chạy migration theo thứ tự, bao gồm:
+
+```text
+supabase/migrations/0012_ai_receptionist.sql
+```
+
+Hoặc dùng `supabase/full_setup.sql` khi cài mới hoàn toàn.
+
+### Cấu hình an toàn ban đầu
+
+```text
+AI_RECEPTIONIST_MODE=SIMULATION
+AI_PILOT_ALLOWLIST_ENABLED=true
+AI_PILOT_KNOWLEDGE_CAPTURE_ENABLED=true
+AI_PILOT_OUTBOUND_ENABLED=false
+AI_PILOT_KIOTVIET_WRITE_ENABLED=false
+KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false
+```
+
+Không bật gửi khách thật hoặc ghi KiotViet trước khi hoàn thành kiểm thử, idempotency, read-back/Webhook verification, monitoring và rollback.

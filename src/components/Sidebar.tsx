@@ -7,6 +7,7 @@ import { signOut } from "@/app/actions/auth";
 const navigation = [
   { href: "/", label: "Tổng quan" },
   { href: "/ai-le-tan", label: "AI Lễ tân" },
+  { href: "/ai-cozy-garden", label: "AI Quản lý Cozy Garden" },
   { href: "/#approval-queue", label: "Phê duyệt" },
   { href: "/#task-center", label: "Công việc" },
   { href: "/#ai-agents", label: "Trạng thái AI" },
@@ -37,7 +38,9 @@ export default function Sidebar() {
               ? pathname === "/"
               : item.href === "/ai-le-tan"
                 ? pathname.startsWith("/ai-le-tan")
-                : false;
+                : item.href === "/ai-cozy-garden"
+                  ? pathname.startsWith("/ai-cozy-garden")
+                  : false;
           return (
             <Link
               key={item.href}

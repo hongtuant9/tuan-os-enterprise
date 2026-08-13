@@ -1,5 +1,5 @@
 import Sidebar from "@/components/Sidebar";
-import { actions, metrics, variances } from "@/lib/cozy/cozy-dashboard-data";
+import { getCozyDashboardSnapshot } from "@/lib/cozy/cozy-dashboard-provider";
 
 function LevelBadge({ level }: { level: string }) {
   const className =
@@ -16,7 +16,9 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
-export default function AiCozyGardenPage() {
+export default async function AiCozyGardenPage() {
+  const snapshot = await getCozyDashboardSnapshot();
+  const { actions, metrics, variances } = snapshot;
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
       <Sidebar />

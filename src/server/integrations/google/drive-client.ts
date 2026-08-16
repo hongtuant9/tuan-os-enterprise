@@ -1,5 +1,8 @@
 import "server-only";
-import { google, Auth } from "googleapis";
+import { drive } from "@googleapis/drive";
+import { sheets } from "@googleapis/sheets";
+import { docs } from "@googleapis/docs";
+import type { OAuth2Client } from "google-auth-library";
 
 export type GoogleFileMetadata = {
   id: string;
@@ -8,9 +11,16 @@ export type GoogleFileMetadata = {
   modifiedTime: string;
 };
 
-export async function getFileMetadata(fileId: string, auth: Auth.OAuth2Client): Promise<GoogleFileMetadata> {
-  const drive = google.drive({ version: "v3", auth });
-  const { data } = await drive.files.get({
+export async function getFileMetadata(
+  fileId: string,
+  auth: OAuth2Client
+): Promise<GoogleFileMetadata> {
+  const client = drive({
+    version: "v3",
+    auth,
+  });
+
+  const { data } = await client.files.get({
     fileId,
     fields: "id,name,mimeType,modifiedTime",
   });
@@ -23,24 +33,49 @@ export async function getFileMetadata(fileId: string, auth: Auth.OAuth2Client): 
   };
 }
 
-export async function getSheetValues(spreadsheetId: string, range: string, auth: Auth.OAuth2Client): Promise<string[][]> {
-  const sheets = google.sheets({ version: "v4", auth });
-  const { data } = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+export async function getSheetValues(
+  spreadsheetId: string,
+  range: string,
+  auth: OAuth2Client
+): Promise<string[][]> {
+  const client = sheets({
+    version: "v4",
+    auth,
+  });
+
+  const { data } = await client.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+  });
+
   return (data.values as string[][] | undefined) ?? [];
 }
 
-/** Flattens a Google Doc's body into one string per non-empty paragraph. */
-export async function getDocParagraphs(documentId: string, auth: Auth.OAuth2Client): Promise<string[]> {
-  const docs = google.docs({ version: "v1", auth });
-  const { data } = await docs.documents.get({ documentId });
+export async function getDocParagraphs(
+  documentId: string,
+  auth: OAuth2Client
+): Promise<string[]> {
+  const client = docs({
+    version: "v1",
+    auth,
+  });
+
+  const { data } = await client.documents.get({
+    documentId,
+  });
 
   const paragraphs: string[] = [];
+
   for (const element of data.body?.content ?? []) {
     const text = (element.paragraph?.elements ?? [])
       .map((el) => el.textRun?.content ?? "")
       .join("")
       .trim();
-    if (text) paragraphs.push(text);
+
+    if (text) {
+      paragraphs.push(text);
+    }
   }
+
   return paragraphs;
 }

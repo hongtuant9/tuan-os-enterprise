@@ -81,6 +81,8 @@ export class GoogleOAuthConnectionsRepository {
           token_type: input.tokenType,
           scope: input.scope,
           access_token_expires_at: input.accessTokenExpiresAt,
+          connected_at: new Date().toISOString(),
+          last_error: null,
         },
         { onConflict: "user_id,provider" }
       )

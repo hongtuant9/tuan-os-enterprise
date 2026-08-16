@@ -1,5 +1,5 @@
 import "server-only";
-import { google, Auth } from "googleapis";
+import { OAuth2Client, type Credentials } from "google-auth-library";
 import { GaxiosError } from "gaxios";
 
 /** Name of the short-lived CSRF-state cookie shared between /oauth/start and /oauth/callback. */
@@ -71,9 +71,9 @@ export function getGoogleOAuthRedirectUri(): string {
   return process.env.GOOGLE_OAUTH_REDIRECT_URI || `${getPublicAppUrl()}/api/integrations/google/oauth/callback`;
 }
 
-export function createOAuth2Client(redirectUri: string): Auth.OAuth2Client {
+export function createOAuth2Client(redirectUri: string): OAuth2Client {
   const { clientId, clientSecret } = getClientCredentials();
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return new OAuth2Client({ clientId, clientSecret, redirectUri });
 }
 
 export function buildGoogleAuthUrl(params: { redirectUri: string; state: string }): string {
@@ -126,7 +126,7 @@ export type GoogleTokens = {
   token_type?: string;
 };
 
-function toGoogleTokens(credentials: Auth.Credentials): GoogleTokens {
+function toGoogleTokens(credentials: Credentials): GoogleTokens {
   if (!credentials.access_token) {
     throw new GoogleTokenExchangeError(0, "no_access_token", "Google did not return an access_token.");
   }
@@ -152,11 +152,13 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
 }
 
 /** Fetches the connected account's email via Google's userinfo endpoint (requires `userinfo.email` scope). */
-export async function fetchGoogleAccountEmail(client: Auth.OAuth2Client): Promise<string | null> {
+export async function fetchGoogleAccountEmail(client: OAuth2Client): Promise<string | null> {
   try {
-    const oauth2 = google.oauth2({ version: "v2", auth: client });
-    const { data } = await oauth2.userinfo.get();
-    return data.email ?? null;
+    const response = await client.request<{ email?: string }>({
+      url: "https://www.googleapis.com/oauth2/v2/userinfo",
+      method: "GET",
+    });
+    return response.data.email ?? null;
   } catch (error) {
     console.error("[google-oauth] failed to fetch connected account email", {
       status: error instanceof GaxiosError ? error.response?.status : undefined,
@@ -170,7 +172,7 @@ export async function fetchGoogleAccountEmail(client: Auth.OAuth2Client): Promis
  * OAuth2Client with credentials set — callers persist access_token/expiry
  * from `client.credentials`.
  */
-export async function refreshAccessToken(refreshToken: string): Promise<Auth.OAuth2Client> {
+export async function refreshAccessToken(refreshToken: string): Promise<OAuth2Client> {
   const client = createOAuth2Client(getGoogleOAuthRedirectUri());
   client.setCredentials({ refresh_token: refreshToken });
 

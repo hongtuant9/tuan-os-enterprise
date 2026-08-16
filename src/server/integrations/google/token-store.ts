@@ -1,5 +1,5 @@
 import "server-only";
-import type { Auth } from "googleapis";
+import type { OAuth2Client } from "google-auth-library";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
 import {
@@ -46,7 +46,7 @@ export class GoogleOAuthTokenStore {
     return (await this.repo.findByUserId(userId)) !== null;
   }
 
-  async getAuthorizedClientForUser(userId: string): Promise<Auth.OAuth2Client> {
+  async getAuthorizedClientForUser(userId: string): Promise<OAuth2Client> {
     const connection = await this.repo.findByUserId(userId);
     if (!connection) {
       throw new GoogleNotConnectedError();
@@ -59,7 +59,7 @@ export class GoogleOAuthTokenStore {
    * sync_sources has no per-source owner, so they all share the connection
    * belonging to whoever connected Google most recently.
    */
-  async getSystemAuthorizedClient(): Promise<Auth.OAuth2Client> {
+  async getSystemAuthorizedClient(): Promise<OAuth2Client> {
     const connection = await this.repo.findMostRecent();
     if (!connection) {
       throw new GoogleNotConnectedError();
@@ -67,7 +67,7 @@ export class GoogleOAuthTokenStore {
     return this.getAuthorizedClient(connection);
   }
 
-  private async getAuthorizedClient(connection: ConnectionRow): Promise<Auth.OAuth2Client> {
+  private async getAuthorizedClient(connection: ConnectionRow): Promise<OAuth2Client> {
     if (!connection.refresh_token) {
       throw new GoogleNotConnectedError();
     }

@@ -1,11 +1,18 @@
 import Sidebar from "@/components/Sidebar";
 import CmiWorkspace from "@/components/cmi/CmiWorkspace";
+import CmiAutomationPanel from "@/components/cmi/CmiAutomationPanel";
 import { getRequestContainer } from "@/server/container";
+import { getCurrentSession } from "@/server/auth/session";
+import { hasMinimumRole } from "@/server/auth/roles";
+import { getCmiAutomationStatus } from "@/server/cmi/automation.service";
 
 export const dynamic = "force-dynamic";
 
 export default async function CmiPage() {
   const container = await getRequestContainer();
+  const session = await getCurrentSession(container.db);
+  const canManage = session ? hasMinimumRole(session.role, "manager") : false;
+  const automationStatus = getCmiAutomationStatus();
 
   let setupError = "";
   let dashboard = {
@@ -51,12 +58,14 @@ export default async function CmiPage() {
               Chưa hoàn tất cài đặt cơ sở dữ liệu CMI
             </p>
             <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">
-              Hãy chạy Migration <code>supabase/migrations/0013_cmi_marketing.sql</code> trước khi dùng dữ liệu thật.
-              Chi tiết kỹ thuật: {setupError}
+              Kiểm tra migration CMI trên Supabase trước khi dùng dữ liệu thật. Chi tiết kỹ thuật: {setupError}
             </p>
           </div>
         )}
-        <CmiWorkspace dashboard={dashboard} businessUnits={businessUnits} />
+        <div className="space-y-8">
+          <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
+          <CmiWorkspace dashboard={dashboard} businessUnits={businessUnits} />
+        </div>
       </main>
     </div>
   );

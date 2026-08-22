@@ -23,6 +23,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Chromium headless phục vụ CMI Browser V0.2. Không cài Playwright/SaaS Browser.
+RUN apk add --no-cache chromium
+
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 

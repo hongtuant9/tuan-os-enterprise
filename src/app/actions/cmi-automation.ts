@@ -18,6 +18,22 @@ async function requireManager() {
   return { container, session };
 }
 
+export async function discoverCmiCompetitors(formData: FormData) {
+  const { container } = await requireManager();
+  await container.cmiCompetitors.discover(text(formData, "researchJobId"));
+  revalidatePath("/intelligence/cmi");
+}
+
+export async function selectCmiCompetitors(formData: FormData) {
+  const { container } = await requireManager();
+  const selectedIds = formData.getAll("competitorIds").map((value) => String(value));
+  await container.cmiCompetitors.selectAndCreateSources({
+    researchJobId: text(formData, "researchJobId"),
+    selectedIds,
+  });
+  revalidatePath("/intelligence/cmi");
+}
+
 export async function captureCmiSourceBrowser(formData: FormData) {
   const { container } = await requireManager();
   await container.cmiAutomation.captureSource(text(formData, "sourceId"));

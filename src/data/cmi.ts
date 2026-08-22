@@ -18,6 +18,7 @@ export type CmiSource = {
   competitorName: string | null;
   captureMethod: string;
   status: string;
+  capturedAt: string | null;
   createdAt: string;
 };
 
@@ -28,6 +29,7 @@ export type CmiEvidence = {
   rawText: string | null;
   screenshotPath: string | null;
   sourceUrl: string | null;
+  contentHash: string | null;
   isVerified: boolean;
   capturedAt: string;
 };
@@ -75,6 +77,7 @@ export type MarketingStrategy = {
   testHypotheses: unknown[];
   kpis: unknown[];
   assumptions: unknown[];
+  risks: unknown[];
   status: string;
 };
 
@@ -96,6 +99,7 @@ export type CmiDashboard = {
   automation: {
     browserConnected: boolean;
     aiAnalysisConnected: boolean;
+    aiModel: string;
     note: string;
   };
 };

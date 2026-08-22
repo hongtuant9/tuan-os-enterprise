@@ -61,7 +61,7 @@ export async function discoverAllThreeBusinessLines() {
 
   for (const line of lines) {
     let job = dashboard.researchJobs.find(
-      (item) => item.businessLine === line && !item.title.trim().startsWith("[PILOT]")
+      (item) => item.businessLine === line && item.status !== "archived" && !item.title.trim().startsWith("[PILOT]")
     );
     if (!job) {
       const info = preset(line);

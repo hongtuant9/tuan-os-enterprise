@@ -29,6 +29,7 @@ import { AiReceptionistService } from "@/server/services/ai-receptionist.service
 import { CmiService } from "@/server/services/cmi.service";
 import { CmiAutomationService } from "@/server/cmi/automation.service";
 import { CmiCompetitorService } from "@/server/cmi/competitor.service";
+import { CmiCollectionQueueService } from "@/server/cmi/collection-queue.service";
 
 export type ServiceContainer = {
   db: SupabaseClient<Database>;
@@ -48,6 +49,7 @@ export type ServiceContainer = {
   cmi: CmiService;
   cmiAutomation: CmiAutomationService;
   cmiCompetitors: CmiCompetitorService;
+  cmiCollectionQueue: CmiCollectionQueueService;
 };
 
 export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
@@ -66,6 +68,7 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
   const cmi = new CmiService(new CmiRepository(db), activityLog);
   const cmiAutomation = new CmiAutomationService(db, activityLog);
   const cmiCompetitors = new CmiCompetitorService(db, activityLog);
+  const cmiCollectionQueue = new CmiCollectionQueueService(db, cmiAutomation);
 
   return {
     db,
@@ -85,6 +88,7 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
     cmi,
     cmiAutomation,
     cmiCompetitors,
+    cmiCollectionQueue,
   };
 }
 

@@ -99,6 +99,12 @@ export async function selectCmiCompetitors(formData: FormData) {
   revalidatePath("/intelligence/cmi");
 }
 
+export async function enqueueCmiResearchSources(formData: FormData) {
+  const { container } = await requireManager();
+  await container.cmiCollectionQueue.enqueueResearch(text(formData, "researchJobId"));
+  revalidatePath("/intelligence/cmi");
+}
+
 export async function captureCmiSourceBrowser(formData: FormData) {
   const { container } = await requireManager();
   await container.cmiAutomation.captureSource(text(formData, "sourceId"));

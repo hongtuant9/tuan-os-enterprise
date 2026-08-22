@@ -7,6 +7,7 @@ import { signOut } from "@/app/actions/auth";
 const navigation = [
   { href: "/", label: "Tổng quan" },
   { href: "/ai-le-tan", label: "AI Lễ tân" },
+  { href: "/intelligence/cmi", label: "Nghiên cứu Khách hàng & Thị trường" },
   { href: "/#approval-queue", label: "Phê duyệt" },
   { href: "/#task-center", label: "Công việc" },
   { href: "/#ai-agents", label: "Trạng thái AI" },
@@ -37,7 +38,9 @@ export default function Sidebar() {
               ? pathname === "/"
               : item.href === "/ai-le-tan"
                 ? pathname.startsWith("/ai-le-tan")
-                : false;
+                : item.href === "/intelligence/cmi"
+                  ? pathname.startsWith("/intelligence/cmi")
+                  : false;
           return (
             <Link
               key={item.href}
@@ -55,7 +58,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto flex items-center justify-between px-2 pt-6 text-xs text-[var(--ink-muted)]">
-        <span>v1.1.0</span>
+        <span>v1.2.0</span>
         <form action={signOut}>
           <button
             type="submit"

@@ -42,6 +42,10 @@ export default function CmiOneClickPanel({
   canManage: boolean;
   queueByResearch: Record<string, QueueSummary>;
 }) {
+  const visibleResearchJobs = dashboard.researchJobs
+    .filter((job) => !job.title.trim().startsWith("[PILOT]"))
+    .slice(0, 8);
+
   return (
     <section className="space-y-5">
       <div className={card}>
@@ -71,7 +75,7 @@ export default function CmiOneClickPanel({
         </div>
       </div>
 
-      {dashboard.researchJobs.slice(0, 8).map((job) => {
+      {visibleResearchJobs.map((job) => {
         const competitors = dashboard.competitors
           .filter((item) => item.researchJobId === job.id)
           .sort((a, b) => a.rank - b.rank);

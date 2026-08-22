@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getRequestContainer } from "@/server/container";
+import type { CmiBusinessLine } from "@/data/cmi";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -14,13 +15,22 @@ function lines(value: string) {
     .filter(Boolean);
 }
 
+function businessLine(formData: FormData): CmiBusinessLine {
+  const value = text(formData, "businessLine");
+  if (["cozy_garden", "homestay", "tpt_isteam", "cross_business"].includes(value)) {
+    return value as CmiBusinessLine;
+  }
+  return "cross_business";
+}
+
 export async function createCmiResearchJob(formData: FormData) {
   const container = await getRequestContainer();
   await container.cmi.createResearchJob({
     title: text(formData, "title"),
     objective: text(formData, "objective"),
     researchType: text(formData, "researchType") || "mixed",
-    businessUnitId: text(formData, "businessUnitId") || null,
+    businessLine: businessLine(formData),
+    businessUnitId: null,
   });
   revalidatePath("/intelligence/cmi");
 }
@@ -71,7 +81,7 @@ export async function createCmiOpportunity(formData: FormData) {
   const container = await getRequestContainer();
   await container.cmi.createOpportunity({
     researchJobId: text(formData, "researchJobId"),
-    businessUnitId: text(formData, "businessUnitId") || null,
+    businessUnitId: null,
     title: text(formData, "opportunityTitle"),
     customerSegment: text(formData, "customerSegment"),
     problem: text(formData, "problem"),
@@ -87,7 +97,7 @@ export async function createMarketingStrategyDraft(formData: FormData) {
   const container = await getRequestContainer();
   await container.cmi.createMarketingStrategyDraft({
     opportunityId: text(formData, "opportunityId"),
-    businessUnitId: text(formData, "businessUnitId") || null,
+    businessUnitId: null,
     targetCustomer: text(formData, "targetCustomer"),
     positioning: text(formData, "positioning"),
     valueProposition: text(formData, "valueProposition"),

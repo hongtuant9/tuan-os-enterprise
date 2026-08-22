@@ -1,10 +1,11 @@
-import type { CmiDashboard } from "@/data/cmi";
+import type { CmiBusinessLine, CmiDashboard } from "@/data/cmi";
 import { CmiRepository } from "@/server/repositories/cmi.repository";
 import { ActivityLogService } from "@/server/services/activity-log.service";
 
 type ResearchJobRow = {
   id: string;
   business_unit_id: string | null;
+  business_line: CmiBusinessLine;
   title: string;
   objective: string;
   research_type: string;
@@ -110,6 +111,7 @@ export class CmiService {
         return {
           id: r.id,
           businessUnitId: r.business_unit_id,
+          businessLine: r.business_line ?? "cross_business",
           title: r.title,
           objective: r.objective,
           researchType: r.research_type,
@@ -209,7 +211,7 @@ export class CmiService {
         browserConnected: false,
         aiAnalysisConnected: false,
         note:
-          "V0.1 đang ở chế độ thử nghiệm có kiểm soát. Browser tự động và mô hình AI chưa được nối vào production; dữ liệu phải có bằng chứng nguồn trước khi kết luận.",
+          "CMI vận hành theo nguyên tắc bằng chứng trước kết luận. Browser và AI có thể bật/tắt độc lập theo kiểm soát production.",
       },
     };
   }
@@ -218,6 +220,7 @@ export class CmiService {
     title: string;
     objective: string;
     researchType: string;
+    businessLine: CmiBusinessLine;
     businessUnitId?: string | null;
     createdBy?: string | null;
   }) {
@@ -226,6 +229,7 @@ export class CmiService {
     }
     const row = await this.repo.createResearchJob({
       business_unit_id: input.businessUnitId ?? null,
+      business_line: input.businessLine,
       title: input.title.trim(),
       objective: input.objective.trim(),
       research_type: input.researchType,
@@ -236,7 +240,7 @@ export class CmiService {
       agent: "AI Nghiên cứu Khách hàng & Thị trường (CMI)",
       unit: "Nghiên cứu & Cơ hội",
       businessUnitId: input.businessUnitId ?? null,
-      message: `Đã tạo công việc nghiên cứu: ${input.title.trim()}.`,
+      message: `Đã tạo công việc nghiên cứu: ${input.title.trim()} (${input.businessLine}).`,
       type: "action",
     });
     return row;

@@ -1,6 +1,40 @@
+export type CmiBusinessLine = "cozy_garden" | "homestay" | "tpt_isteam" | "cross_business";
+
+export const CMI_BUSINESS_LINES: Array<{
+  value: CmiBusinessLine;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "cozy_garden",
+    label: "Cozy Garden",
+    description: "Đồ ăn, đồ uống, trải nghiệm tại quán, cooking class và dịch vụ liên quan.",
+  },
+  {
+    value: "homestay",
+    label: "Homestay",
+    description: "Lưu trú, OTA, trải nghiệm khách, dịch vụ bổ sung và vận hành homestay.",
+  },
+  {
+    value: "tpt_isteam",
+    label: "TpT / iSTEAM",
+    description: "Tài nguyên giáo dục, AI & Robotics, worksheet, lesson plan, bundle và sản phẩm số.",
+  },
+  {
+    value: "cross_business",
+    label: "Dùng chung nhiều mảng",
+    description: "Nghiên cứu áp dụng cho nhiều mảng kinh doanh hoặc chưa cần tách riêng.",
+  },
+];
+
+export function cmiBusinessLineLabel(value: string): string {
+  return CMI_BUSINESS_LINES.find((item) => item.value === value)?.label ?? "Dùng chung nhiều mảng";
+}
+
 export type CmiResearchJob = {
   id: string;
   businessUnitId: string | null;
+  businessLine: CmiBusinessLine;
   title: string;
   objective: string;
   researchType: string;

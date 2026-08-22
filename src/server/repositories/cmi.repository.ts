@@ -12,6 +12,7 @@ type QuerySingleResult = {
 };
 
 type SelectQuery = {
+  neq(column: string, value: unknown): SelectQuery;
   order(column: string, options: { ascending: boolean }): SelectQuery;
   limit(count: number): PromiseLike<QueryListResult>;
 };
@@ -48,6 +49,7 @@ export class CmiRepository {
   async listResearchJobs(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_research_jobs")
       .select("*")
+      .neq("status", "archived")
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) throw error;

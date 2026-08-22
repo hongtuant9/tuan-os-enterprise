@@ -40,6 +40,7 @@ export default async function CmiPage() {
       note: "Chưa kết nối.",
     },
   } as Awaited<ReturnType<typeof container.cmi.dashboard>>;
+  let queueByResearch: Record<string, { queued: number; running: number; completed: number; failed: number }> = {};
 
   try {
     dashboard = await container.cmi.dashboard();
@@ -52,6 +53,11 @@ export default async function CmiPage() {
           ? "Browser tự động đã được nối vào production. AI phân tích CMI hiện đang tắt; dữ liệu thu thập vẫn phải có bằng chứng nguồn trước khi kết luận và mọi cơ hội cần được Quản lý duyệt."
           : "Browser tự động và AI phân tích CMI hiện đang tắt. Có thể tiếp tục nhập dữ liệu thủ công theo quy trình bằng chứng trước khi kết luận.",
     };
+
+    const queueRows = await Promise.all(
+      dashboard.researchJobs.slice(0, 8).map(async (job) => [job.id, await container.cmiCollectionQueue.summary(job.id)] as const)
+    );
+    queueByResearch = Object.fromEntries(queueRows);
   } catch (error) {
     setupError =
       error instanceof Error
@@ -74,7 +80,12 @@ export default async function CmiPage() {
           </div>
         )}
         <div className="space-y-8">
-          <CmiOneClickPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
+          <CmiOneClickPanel
+            dashboard={dashboard}
+            status={automationStatus}
+            canManage={canManage}
+            queueByResearch={queueByResearch}
+          />
           <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
           <CmiWorkspace dashboard={dashboard} />
         </div>

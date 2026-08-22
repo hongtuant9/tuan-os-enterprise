@@ -1,18 +1,51 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
+type QueryListResult = {
+  data: unknown[] | null;
+  error: unknown;
+};
+
+type QuerySingleResult = {
+  data: unknown;
+  error: unknown;
+};
+
+type SelectQuery = {
+  order(column: string, options: { ascending: boolean }): SelectQuery;
+  limit(count: number): PromiseLike<QueryListResult>;
+};
+
+type InsertSelectQuery = {
+  single(): PromiseLike<QuerySingleResult>;
+};
+
+type InsertQuery = {
+  select(columns: string): InsertSelectQuery;
+};
+
+type TableQuery = {
+  select(columns: string): SelectQuery;
+  insert(input: Record<string, unknown>): InsertQuery;
+};
+
+type CmiDbAdapter = {
+  from(name: string): TableQuery;
+};
+
 /**
- * V0.1 dùng ép kiểu cục bộ vì file Database types hiện tại chưa có các bảng migration 0013.
- * Sau khi chạy migration và regenerate Supabase types, có thể bỏ `as any`.
+ * Adapter tạm thời cho các bảng CMI chưa có trong file Database types hiện tại.
+ * Dùng unknown thay cho any để giữ type-safety và vẫn cho phép lint kiểm soát.
+ * Khi regenerate Supabase types sau migration 0013, có thể bỏ adapter này.
  */
 export class CmiRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
-  private table(name: string) {
-    return (this.db as any).from(name);
+  private table(name: string): TableQuery {
+    return (this.db as unknown as CmiDbAdapter).from(name);
   }
 
-  async listResearchJobs() {
+  async listResearchJobs(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_research_jobs")
       .select("*")
       .order("created_at", { ascending: false })
@@ -21,7 +54,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listSources() {
+  async listSources(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_sources")
       .select("*")
       .order("created_at", { ascending: false })
@@ -30,7 +63,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listEvidence() {
+  async listEvidence(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_evidence")
       .select("*")
       .order("created_at", { ascending: false })
@@ -39,7 +72,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listInsights() {
+  async listInsights(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_insights")
       .select("*")
       .order("created_at", { ascending: false })
@@ -48,7 +81,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listOpportunities() {
+  async listOpportunities(): Promise<unknown[]> {
     const { data, error } = await this.table("cmi_opportunities")
       .select("*")
       .order("created_at", { ascending: false })
@@ -57,7 +90,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listMarketingStrategies() {
+  async listMarketingStrategies(): Promise<unknown[]> {
     const { data, error } = await this.table("marketing_strategies")
       .select("*")
       .order("created_at", { ascending: false })
@@ -66,7 +99,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async createResearchJob(input: Record<string, unknown>) {
+  async createResearchJob(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("cmi_research_jobs")
       .insert(input)
       .select("*")
@@ -75,7 +108,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createSource(input: Record<string, unknown>) {
+  async createSource(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("cmi_sources")
       .insert(input)
       .select("*")
@@ -84,7 +117,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createEvidence(input: Record<string, unknown>) {
+  async createEvidence(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("cmi_evidence")
       .insert(input)
       .select("*")
@@ -93,7 +126,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createInsight(input: Record<string, unknown>) {
+  async createInsight(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("cmi_insights")
       .insert(input)
       .select("*")
@@ -102,7 +135,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createOpportunity(input: Record<string, unknown>) {
+  async createOpportunity(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("cmi_opportunities")
       .insert(input)
       .select("*")
@@ -111,7 +144,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createMarketingStrategy(input: Record<string, unknown>) {
+  async createMarketingStrategy(input: Record<string, unknown>): Promise<unknown> {
     const { data, error } = await this.table("marketing_strategies")
       .insert(input)
       .select("*")

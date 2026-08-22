@@ -69,7 +69,7 @@ function allowedHost(hostname: string): boolean {
   return configured.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
 }
 
-async function assertSafePublicUrl(rawUrl: string): Promise<URL> {
+async function assertSafePublicUrl(rawUrl: string, approvedExternal: boolean): Promise<URL> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -84,9 +84,9 @@ async function assertSafePublicUrl(rawUrl: string): Promise<URL> {
     throw new Error("Không cho phép thông tin đăng nhập nằm trong URL.");
   }
   if (url.port && !["80", "443"].includes(url.port)) {
-    throw new Error("V0.2 chỉ cho phép cổng web 80/443.");
+    throw new Error("CMI Browser chỉ cho phép cổng web 80/443.");
   }
-  if (!allowedHost(url.hostname)) {
+  if (!approvedExternal && !allowedHost(url.hostname)) {
     throw new Error("Tên miền chưa nằm trong danh sách được phép nghiên cứu.");
   }
 
@@ -151,12 +151,21 @@ function extractTitle(html: string): string {
   return match ? decodeBasicEntities(match[1].replace(/\s+/g, " ").trim()) : "Trang web chưa có tiêu đề";
 }
 
-export async function capturePublicPage(rawUrl: string): Promise<BrowserCaptureResult> {
+/**
+ * approvedExternal mặc định true vì hàm này chỉ được gọi từ server action CMI đã
+ * kiểm tra quyền Quản lý và URL phải là Source đã lưu trong database. Allowlist
+ * toàn cục vẫn có thể được ép buộc bằng approvedExternal=false cho caller khác.
+ * Dù được duyệt, mọi URL vẫn bắt buộc qua kiểm tra protocol/port/DNS/private IP.
+ */
+export async function capturePublicPage(
+  rawUrl: string,
+  options: { approvedExternal?: boolean } = { approvedExternal: true }
+): Promise<BrowserCaptureResult> {
   if (!isCmiBrowserEnabled()) {
     throw new Error("CMI Browser đang tắt. Cần bật CMI_BROWSER_ENABLED trong môi trường triển khai.");
   }
 
-  const url = await assertSafePublicUrl(rawUrl);
+  const url = await assertSafePublicUrl(rawUrl, options.approvedExternal !== false);
   const chromium = await findChromium();
   const workDir = await mkdtemp(join(tmpdir(), "cmi-browser-"));
   const screenshotPath = join(workDir, "evidence.png");

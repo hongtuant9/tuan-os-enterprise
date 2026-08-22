@@ -5,6 +5,7 @@ import { getRequestContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import type { CmiBusinessLine } from "@/data/cmi";
+import { consumeCmiAiQuota } from "@/server/cmi/ai-quota";
 
 const TPT_ANCHOR_URL = "https://www.teacherspayteachers.com/store/stem-in-the-middle";
 
@@ -106,12 +107,14 @@ export async function captureCmiSourceBrowser(formData: FormData) {
 
 export async function analyzeCmiResearchWithAi(formData: FormData) {
   const { container } = await requireManager();
+  await consumeCmiAiQuota(container.db, "cmi_analysis");
   await container.cmiAutomation.analyzeResearch(text(formData, "researchJobId"));
   revalidatePath("/intelligence/cmi");
 }
 
 export async function approveCmiOpportunityForMarketing(formData: FormData) {
   const { container, session } = await requireManager();
+  await consumeCmiAiQuota(container.db, "marketing_strategy");
   await container.cmiAutomation.approveOpportunityAndGenerateMarketing({
     opportunityId: text(formData, "opportunityId"),
     actorUserId: session.userId,

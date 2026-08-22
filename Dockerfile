@@ -23,7 +23,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Chromium headless phục vụ CMI Browser V0.2. Không cài Playwright/SaaS Browser.
+# Chromium headless phục vụ CMI Browser. Không cài Playwright/SaaS Browser.
 RUN apk add --no-cache chromium
 
 RUN addgroup --system --gid 1001 nodejs \
@@ -32,6 +32,7 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/start.mjs ./start.mjs
 
 USER nextjs
 
@@ -39,4 +40,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+# start.mjs chạy Next server và CMI queue worker trong cùng container.
+CMD ["node", "start.mjs"]

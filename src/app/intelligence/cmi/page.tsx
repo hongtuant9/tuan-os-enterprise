@@ -55,8 +55,6 @@ export default async function CmiPage() {
         : "Không thể đọc dữ liệu CMI. Cần kiểm tra migration Supabase.";
   }
 
-  const businessUnits = await container.businessUnits.list();
-
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
       <Sidebar />
@@ -73,7 +71,7 @@ export default async function CmiPage() {
         )}
         <div className="space-y-8">
           <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
-          <CmiWorkspace dashboard={dashboard} businessUnits={businessUnits} />
+          <CmiWorkspace dashboard={dashboard} />
         </div>
       </main>
     </div>

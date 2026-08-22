@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { getRequestContainer } from "@/server/container";
-import { getCurrentSession } from "@/server/auth/session";
-import { hasMinimumRole } from "@/server/auth/roles";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -16,24 +14,13 @@ function lines(value: string) {
     .filter(Boolean);
 }
 
-async function requireCmiManager() {
-  const container = await getRequestContainer();
-  const session = await getCurrentSession(container.db);
-  if (!session || !hasMinimumRole(session.role, "manager")) {
-    throw new Error("Chỉ Quản lý trở lên mới được chạy Browser hoặc AI CMI.");
-  }
-  return { container, session };
-}
-
 export async function createCmiResearchJob(formData: FormData) {
   const container = await getRequestContainer();
-  const session = await getCurrentSession(container.db);
   await container.cmi.createResearchJob({
     title: text(formData, "title"),
     objective: text(formData, "objective"),
     researchType: text(formData, "researchType") || "mixed",
     businessUnitId: text(formData, "businessUnitId") || null,
-    createdBy: session?.userId ?? null,
   });
   revalidatePath("/intelligence/cmi");
 }
@@ -109,27 +96,6 @@ export async function createMarketingStrategyDraft(formData: FormData) {
     testHypotheses: lines(text(formData, "testHypotheses")),
     kpis: lines(text(formData, "kpis")),
     assumptions: lines(text(formData, "assumptions")),
-  });
-  revalidatePath("/intelligence/cmi");
-}
-
-export async function captureCmiSourceBrowser(formData: FormData) {
-  const { container } = await requireCmiManager();
-  await container.cmi.captureSourceWithBrowser(text(formData, "sourceId"));
-  revalidatePath("/intelligence/cmi");
-}
-
-export async function analyzeCmiResearchWithAi(formData: FormData) {
-  const { container } = await requireCmiManager();
-  await container.cmi.analyzeResearchWithAi(text(formData, "researchJobId"));
-  revalidatePath("/intelligence/cmi");
-}
-
-export async function approveCmiOpportunityForMarketing(formData: FormData) {
-  const { container, session } = await requireCmiManager();
-  await container.cmi.approveOpportunityAndGenerateMarketing({
-    opportunityId: text(formData, "opportunityId"),
-    actorUserId: session.userId,
   });
   revalidatePath("/intelligence/cmi");
 }

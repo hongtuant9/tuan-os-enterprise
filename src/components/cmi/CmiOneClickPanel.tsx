@@ -1,6 +1,8 @@
 import type { CmiBusinessLine, CmiDashboard } from "@/data/cmi";
 import { cmiBusinessLineLabel } from "@/data/cmi";
 import {
+  analyzeCmiResearchWithAi,
+  approveCmiOpportunityForMarketing,
   discoverCmiCompetitors,
   enqueueCmiResearchSources,
   selectCmiCompetitors,
@@ -42,9 +44,12 @@ export default function CmiOneClickPanel({
   canManage: boolean;
   queueByResearch: Record<string, QueueSummary>;
 }) {
-  const visibleResearchJobs = dashboard.researchJobs
-    .filter((job) => !job.title.trim().startsWith("[PILOT]"))
-    .slice(0, 8);
+  const activeJobs = dashboard.researchJobs.filter((job) => !job.title.trim().startsWith("[PILOT]"));
+  const visibleResearchJobs = activeJobs
+    .filter((job, index, all) => all.findIndex((item) => item.businessLine === job.businessLine) === index)
+    .filter((job) => job.businessLine !== "cross_business")
+    .slice(0, 3);
+  const existingLines = new Set(visibleResearchJobs.map((job) => job.businessLine));
 
   return (
     <section className="space-y-5">
@@ -53,11 +58,11 @@ export default function CmiOneClickPanel({
           <div>
             <h2 className="text-lg font-semibold text-[var(--ink-primary)]">Nghiên cứu sản phẩm — thao tác bằng nút</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--ink-secondary)]">
-              Chọn mảng → AI đề xuất và xếp hạng tối đa 30 đối thủ → anh chọn đối thủ → hệ thống tạo nguồn Browser → đưa toàn bộ nguồn vào hàng đợi → AI phân tích → cơ hội sản phẩm → anh duyệt → AI Marketing.
+              Chọn mảng → AI tìm/xếp hạng đối thủ → anh chọn Top 20 → Browser thu thập → AI phân tích bằng chứng → cơ hội sản phẩm → anh duyệt → AI Marketing tạo phương án bán cần test.
             </p>
           </div>
           <div className="text-xs text-[var(--ink-muted)]">
-            AI tìm đối thủ: {status.aiAnalysisConnected ? "ĐÃ SẴN SÀNG" : "ĐANG KHÓA"}
+            AI có phí: {status.aiAnalysisConnected ? "ĐÃ BẬT" : "ĐANG TẮT"}
           </div>
         </div>
 
@@ -67,8 +72,8 @@ export default function CmiOneClickPanel({
               <input type="hidden" name="businessLine" value={line.value} />
               <p className="font-medium text-[var(--ink-primary)]">{line.title}</p>
               <p className="mt-2 min-h-10 text-xs leading-5 text-[var(--ink-muted)]">{line.subtitle}</p>
-              <button className={`${button} mt-4`} disabled={!canManage}>
-                Bắt đầu nghiên cứu
+              <button className={`${button} mt-4`} disabled={!canManage || existingLines.has(line.value)}>
+                {existingLines.has(line.value) ? "Đã có nghiên cứu" : "Bắt đầu nghiên cứu"}
               </button>
             </form>
           ))}
@@ -80,6 +85,9 @@ export default function CmiOneClickPanel({
           .filter((item) => item.researchJobId === job.id)
           .sort((a, b) => a.rank - b.rank);
         const sources = dashboard.sources.filter((item) => item.researchJobId === job.id);
+        const sourceIds = new Set(sources.map((item) => item.id));
+        const evidence = dashboard.evidence.filter((item) => sourceIds.has(item.sourceId));
+        const opportunities = dashboard.opportunities.filter((item) => item.researchJobId === job.id);
         const hasCompetitors = competitors.length > 0;
         const selectedCompetitors = competitors.filter((item) => item.selectionStatus === "selected").length;
         const queue = queueByResearch[job.id] ?? { queued: 0, running: 0, completed: 0, failed: 0 };
@@ -148,7 +156,7 @@ export default function CmiOneClickPanel({
                   <div>
                     <p className="text-sm font-semibold text-[var(--ink-primary)]">Thu thập hàng loạt</p>
                     <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                      Đối thủ đã chọn: {selectedCompetitors} · Nguồn: {sources.length} · Hàng đợi: {queueTotal}
+                      Đối thủ đã chọn: {selectedCompetitors} · Nguồn: {sources.length} · Bằng chứng: {evidence.length} · Hàng đợi: {queueTotal}
                     </p>
                     <p className="mt-2 text-xs text-[var(--ink-secondary)]">
                       Đang chờ {queue.queued} · Đang chạy {queue.running} · Hoàn thành {queue.completed} · Lỗi {queue.failed}
@@ -161,6 +169,60 @@ export default function CmiOneClickPanel({
                     </button>
                   </form>
                 </div>
+              </div>
+            )}
+
+            {evidence.length > 0 && opportunities.length === 0 && (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--border-hairline)] p-4">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink-primary)]">Phân tích bằng chứng</p>
+                  <p className="mt-1 text-xs text-[var(--ink-muted)]">Có {evidence.length} bằng chứng. AI sẽ tìm nỗi đau, nhu cầu, khoảng trống và cơ hội sản phẩm.</p>
+                </div>
+                <form action={analyzeCmiResearchWithAi}>
+                  <input type="hidden" name="researchJobId" value={job.id} />
+                  <button className={button} disabled={!canManage || !status.aiAnalysisConnected}>
+                    AI phân tích bằng chứng
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {opportunities.length > 0 && (
+              <div className="mt-5 space-y-3">
+                <p className="text-sm font-semibold text-[var(--ink-primary)]">Cơ hội sản phẩm cần quyết định</p>
+                {opportunities.map((opportunity) => {
+                  const strategy = dashboard.marketingStrategies.find((item) => item.opportunityId === opportunity.id);
+                  return (
+                    <div key={opportunity.id} className="rounded-lg border border-[var(--border-hairline)] p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="max-w-4xl">
+                          <h4 className="font-medium text-[var(--ink-primary)]">{opportunity.title}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]"><b>Vấn đề:</b> {opportunity.problem}</p>
+                          <p className="mt-1 text-sm leading-6 text-[var(--ink-secondary)]"><b>Giải pháp:</b> {opportunity.proposedSolution}</p>
+                          <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                            Nhu cầu {opportunity.desirabilityScore ?? "–"}/5 · Khả thi {opportunity.feasibilityScore ?? "–"}/5 · Tài chính {opportunity.viabilityScore ?? "–"}/5 · Điểm ưu tiên {opportunity.priorityScore ?? "–"}
+                          </p>
+                        </div>
+                        {!strategy && (
+                          <form action={approveCmiOpportunityForMarketing}>
+                            <input type="hidden" name="opportunityId" value={opportunity.id} />
+                            <button className={button} disabled={!canManage || !status.aiAnalysisConnected}>
+                              Duyệt → AI Marketing
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                      {strategy && (
+                        <div className="mt-4 rounded-lg bg-[var(--page)] p-4">
+                          <p className="text-xs font-semibold text-[var(--accent)]">AI Marketing — chiến lược cần test</p>
+                          <p className="mt-2 text-sm text-[var(--ink-secondary)]"><b>Khách hàng:</b> {strategy.targetCustomer}</p>
+                          <p className="mt-1 text-sm text-[var(--ink-secondary)]"><b>Định vị:</b> {strategy.positioning}</p>
+                          <p className="mt-1 text-sm text-[var(--ink-secondary)]"><b>Giá trị khác biệt:</b> {strategy.valueProposition}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

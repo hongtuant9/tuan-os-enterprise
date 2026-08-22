@@ -6,6 +6,8 @@ import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import type { CmiBusinessLine } from "@/data/cmi";
 
+const TPT_ANCHOR_URL = "https://www.teacherspayteachers.com/store/stem-in-the-middle";
+
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
@@ -40,7 +42,7 @@ function guidedResearch(line: CmiBusinessLine): { title: string; objective: stri
     return {
       title: "Tìm cơ hội sản phẩm TpT / iSTEAM từ seller dẫn đầu",
       objective:
-        "Dùng STEM in the Middle (https://www.teacherspayteachers.com/store/stem-in-the-middle) làm nguồn neo; tìm 20–30 seller tương đương về STEM, AI, Robotics và Computer Science. Phân tích từng nhóm sản phẩm, giá, grade, resource type, preview, review, lời khen/phàn nàn, bundle, positioning và funnel quan sát được để tìm nhu cầu giáo viên, khoảng trống thị trường và cơ hội sản phẩm số có nhu cầu cao.",
+        `Dùng STEM in the Middle (${TPT_ANCHOR_URL}) làm nguồn neo; tìm 20–30 seller tương đương về STEM, AI, Robotics và Computer Science. Phân tích từng nhóm sản phẩm, giá, grade, resource type, preview, review, lời khen/phàn nàn, bundle, positioning và funnel quan sát được để tìm nhu cầu giáo viên, khoảng trống thị trường và cơ hội sản phẩm số có nhu cầu cao.`,
       researchType: "mixed",
     };
   }
@@ -58,12 +60,25 @@ export async function startCmiGuidedResearch(formData: FormData) {
     ? (raw as CmiBusinessLine)
     : "cross_business";
   const preset = guidedResearch(line);
-  await container.cmi.createResearchJob({
+  const created = await container.cmi.createResearchJob({
     ...preset,
     businessLine: line,
     businessUnitId: null,
     createdBy: session.userId,
   });
+
+  if (line === "tpt_isteam" && created && typeof created === "object" && "id" in created) {
+    const researchJobId = String((created as { id: unknown }).id);
+    await container.cmi.createSource({
+      researchJobId,
+      platform: "Teachers Pay Teachers",
+      sourceType: "web_page",
+      url: TPT_ANCHOR_URL,
+      title: "STEM in the Middle — nguồn neo TpT",
+      competitorName: "STEM in the Middle",
+    });
+  }
+
   revalidatePath("/intelligence/cmi");
 }
 

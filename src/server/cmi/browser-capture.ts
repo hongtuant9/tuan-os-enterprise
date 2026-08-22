@@ -151,15 +151,21 @@ function extractTitle(html: string): string {
   return match ? decodeBasicEntities(match[1].replace(/\s+/g, " ").trim()) : "Trang web chưa có tiêu đề";
 }
 
+/**
+ * approvedExternal mặc định true vì hàm này chỉ được gọi từ server action CMI đã
+ * kiểm tra quyền Quản lý và URL phải là Source đã lưu trong database. Allowlist
+ * toàn cục vẫn có thể được ép buộc bằng approvedExternal=false cho caller khác.
+ * Dù được duyệt, mọi URL vẫn bắt buộc qua kiểm tra protocol/port/DNS/private IP.
+ */
 export async function capturePublicPage(
   rawUrl: string,
-  options: { approvedExternal?: boolean } = {}
+  options: { approvedExternal?: boolean } = { approvedExternal: true }
 ): Promise<BrowserCaptureResult> {
   if (!isCmiBrowserEnabled()) {
     throw new Error("CMI Browser đang tắt. Cần bật CMI_BROWSER_ENABLED trong môi trường triển khai.");
   }
 
-  const url = await assertSafePublicUrl(rawUrl, Boolean(options.approvedExternal));
+  const url = await assertSafePublicUrl(rawUrl, options.approvedExternal !== false);
   const chromium = await findChromium();
   const workDir = await mkdtemp(join(tmpdir(), "cmi-browser-"));
   const screenshotPath = join(workDir, "evidence.png");

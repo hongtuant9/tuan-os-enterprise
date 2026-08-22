@@ -29,6 +29,7 @@ type DbAdapter = { from(name: string): QueryBuilder };
 type ResearchJobRow = {
   id: string;
   business_unit_id: string | null;
+  business_line: string;
   title: string;
   objective: string;
 };
@@ -50,6 +51,7 @@ type EvidenceRow = {
 
 type OpportunityRow = {
   id: string;
+  research_job_id: string;
   business_unit_id: string | null;
   title: string;
   customer_segment: string | null;
@@ -286,7 +288,7 @@ export class CmiAutomationService {
       research_job_id: researchJobId,
       run_type: "ai_analysis",
       status: "running",
-      input_snapshot: { evidence_count: usableEvidence.length, model: getCmiAiModel() },
+      input_snapshot: { evidence_count: usableEvidence.length, model: getCmiAiModel(), business_line: job.business_line },
       started_at: new Date().toISOString(),
     });
 
@@ -294,6 +296,7 @@ export class CmiAutomationService {
       const analysis = await analyzeCmiEvidence({
         researchTitle: job.title,
         objective: job.objective,
+        businessLine: job.business_line ?? "cross_business",
         evidence: usableEvidence,
       });
 
@@ -340,6 +343,7 @@ export class CmiAutomationService {
           insight_count: analysis.insights.length,
           opportunity_count: analysis.opportunities.length,
           model: getCmiAiModel(),
+          business_line: job.business_line,
         },
         completed_at: new Date().toISOString(),
       });
@@ -347,7 +351,7 @@ export class CmiAutomationService {
         agent: "AI Nghiên cứu Khách hàng & Thị trường (CMI)",
         unit: "Nghiên cứu & Cơ hội",
         businessUnitId: job.business_unit_id,
-        message: `AI đã phân tích ${usableEvidence.length} bằng chứng, tạo ${analysis.insights.length} insight và ${analysis.opportunities.length} cơ hội cần kiểm chứng.`,
+        message: `AI đã phân tích ${usableEvidence.length} bằng chứng cho mảng ${job.business_line}, tạo ${analysis.insights.length} insight và ${analysis.opportunities.length} cơ hội cần kiểm chứng.`,
         type: "action",
       });
       return { insights: analysis.insights.length, opportunities: analysis.opportunities.length };
@@ -369,6 +373,9 @@ export class CmiAutomationService {
       throw new Error("Cơ hội hiện không ở trạng thái cho phép gửi sang AI Marketing.");
     }
 
+    const job = await this.findById<ResearchJobRow>("cmi_research_jobs", opportunity.research_job_id);
+    if (!job) throw new Error("Không tìm thấy nghiên cứu gốc của cơ hội.");
+
     await this.update("cmi_opportunities", opportunity.id, {
       status: "approved_for_marketing",
       approved_by: input.actorUserId,
@@ -377,6 +384,7 @@ export class CmiAutomationService {
     });
 
     const marketing = await buildMarketingStrategy({
+      businessLine: job.business_line ?? "cross_business",
       opportunity: {
         title: opportunity.title,
         customerSegment: opportunity.customer_segment,
@@ -406,7 +414,7 @@ export class CmiAutomationService {
       agent: "AI Marketing",
       unit: "Chiến lược Marketing",
       businessUnitId: opportunity.business_unit_id,
-      message: `Đã tạo chiến lược Marketing V${version} cho cơ hội “${opportunity.title}”. Nội dung vẫn là giả thuyết cần test.`,
+      message: `Đã tạo chiến lược Marketing V${version} cho cơ hội “${opportunity.title}” thuộc mảng ${job.business_line}. Nội dung vẫn là giả thuyết cần test.`,
       type: "action",
     });
     return strategy;

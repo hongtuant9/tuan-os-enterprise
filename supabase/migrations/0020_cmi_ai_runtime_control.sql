@@ -30,6 +30,55 @@ drop policy if exists "CMI AI settings authenticated select" on public.cmi_ai_se
 create policy "CMI AI settings authenticated select"
   on public.cmi_ai_settings for select to authenticated using (true);
 
+create or replace function public.set_cmi_ai_runtime_enabled(
+  p_enabled boolean,
+  p_updated_by uuid
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.cmi_ai_settings
+  set enabled = coalesce(p_enabled,false),
+      updated_by = p_updated_by,
+      updated_at = now()
+  where id='default';
+end;
+$$;
+revoke all on function public.set_cmi_ai_runtime_enabled(boolean,uuid) from public, anon, authenticated;
+grant execute on function public.set_cmi_ai_runtime_enabled(boolean,uuid) to service_role;
+
+create or replace function public.get_cmi_ai_runtime_status()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  with s as (
+    select * from public.cmi_ai_settings where id='default'
+  ), d as (
+    select count(*)::int as daily_used
+    from public.cmi_ai_usage
+    where usage_date = (now() at time zone 'Asia/Bangkok')::date
+      and status in ('reserved','completed')
+  ), m as (
+    select coalesce(sum(case when status='reserved' then reserved_cost_usd else estimated_cost_usd end),0)::numeric as monthly_used
+    from public.cmi_ai_usage
+    where created_at >= (date_trunc('month', now() at time zone 'Asia/Bangkok') at time zone 'Asia/Bangkok')
+      and status in ('reserved','completed')
+  )
+  select jsonb_build_object(
+    'enabled', s.enabled,
+    'monthly_budget_usd', s.monthly_budget_usd,
+    'monthly_estimated_used_usd', m.monthly_used,
+    'daily_limit', s.daily_limit,
+    'daily_used', d.daily_used
+  ) from s,d,m;
+$$;
+revoke all on function public.get_cmi_ai_runtime_status() from public, anon, authenticated;
+grant execute on function public.get_cmi_ai_runtime_status() to service_role;
+
 create or replace function public.reserve_cmi_ai_budget(
   p_action_type text,
   p_created_by uuid,
@@ -77,7 +126,6 @@ begin
   return v_id;
 end;
 $$;
-
 revoke all on function public.reserve_cmi_ai_budget(text,uuid,numeric,text) from public, anon, authenticated;
 grant execute on function public.reserve_cmi_ai_budget(text,uuid,numeric,text) to service_role;
 
@@ -104,6 +152,5 @@ begin
   where id = p_usage_id;
 end;
 $$;
-
 revoke all on function public.finish_cmi_ai_usage(uuid,bigint,bigint,integer,numeric,boolean) from public, anon, authenticated;
 grant execute on function public.finish_cmi_ai_usage(uuid,bigint,bigint,integer,numeric,boolean) to service_role;

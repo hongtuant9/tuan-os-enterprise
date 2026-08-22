@@ -5,6 +5,7 @@ import type { Database } from "@/lib/supabase/types";
 import type { CmiBusinessLine } from "@/data/cmi";
 import type { ActivityLogService } from "@/server/services/activity-log.service";
 import { discoverCompetitors } from "@/server/cmi/competitor-discovery";
+import { consumeCmiAiQuota } from "@/server/cmi/ai-quota";
 
 type QueryResult = { data: unknown; error: unknown };
 type QueryBuilder = PromiseLike<QueryResult> & {
@@ -38,7 +39,6 @@ type CompetitorRow = {
 };
 
 type SourceRow = { url: string | null };
-
 type IdRow = { id: string };
 
 function row<T>(value: unknown): T | null {
@@ -59,7 +59,7 @@ export class CmiCompetitorService {
   private readonly adapter: DbAdapter;
 
   constructor(
-    db: SupabaseClient<Database>,
+    private readonly db: SupabaseClient<Database>,
     private readonly activityLog: ActivityLogService
   ) {
     this.adapter = db as unknown as DbAdapter;
@@ -88,6 +88,7 @@ export class CmiCompetitorService {
       throw new Error("Nghiên cứu này đã có danh sách đối thủ. Hãy chọn đối thủ trong danh sách hiện có.");
     }
 
+    await consumeCmiAiQuota(this.db, "competitor_discovery");
     const discovered = await discoverCompetitors({
       businessLine: job.business_line,
       researchTitle: job.title,

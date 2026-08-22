@@ -48,10 +48,10 @@ export default async function CmiPage() {
       browserConnected: automationStatus.browserConnected,
       aiAnalysisConnected: automationStatus.aiAnalysisConnected,
       note: automationStatus.aiAnalysisConnected
-        ? "Browser tự động và AI phân tích CMI đang được bật theo chế độ có kiểm soát. Mọi kết luận vẫn phải dựa trên bằng chứng nguồn và cơ hội phải được Quản lý duyệt trước khi chuyển sang AI Marketing."
+        ? "Browser tự động và AI phân tích CMI đang được bật theo chế độ có kiểm soát."
         : automationStatus.browserConnected
-          ? "Browser tự động đã được nối vào production. AI phân tích CMI hiện đang tắt; dữ liệu thu thập vẫn phải có bằng chứng nguồn trước khi kết luận và mọi cơ hội cần được Quản lý duyệt."
-          : "Browser tự động và AI phân tích CMI hiện đang tắt. Có thể tiếp tục nhập dữ liệu thủ công theo quy trình bằng chứng trước khi kết luận.",
+          ? "Browser tự động đang hoạt động. AI phân tích CMI hiện đang tắt."
+          : "Browser tự động và AI phân tích CMI hiện đang tắt.",
     };
 
     const queueRows = await Promise.all(
@@ -79,15 +79,42 @@ export default async function CmiPage() {
             </p>
           </div>
         )}
-        <div className="space-y-8">
+
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] px-4 py-3 text-xs text-[var(--ink-secondary)]">
+            <span>
+              Browser: <b className="text-[var(--ink-primary)]">{automationStatus.browserConnected ? "Hoạt động" : "Tắt"}</b>
+            </span>
+            <span>
+              AI phân tích: <b className="text-[var(--ink-primary)]">{automationStatus.aiAnalysisConnected ? "Hoạt động" : "Tắt"}</b>
+            </span>
+            <span>
+              Bằng chứng: <b className="text-[var(--ink-primary)]">{dashboard.metrics.evidence}</b>
+            </span>
+            <span>
+              Cơ hội: <b className="text-[var(--ink-primary)]">{dashboard.metrics.opportunities}</b>
+            </span>
+          </div>
+
           <CmiOneClickPanel
             dashboard={dashboard}
             status={automationStatus}
             canManage={canManage}
             queueByResearch={queueByResearch}
           />
-          <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
-          <CmiWorkspace dashboard={dashboard} />
+
+          <details className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)]">
+            <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-[var(--ink-primary)]">
+              Công cụ nâng cao / Nhập thủ công
+              <span className="ml-2 text-xs font-normal text-[var(--ink-muted)]">
+                Chỉ mở khi cần kiểm tra Browser, bổ sung nguồn/bằng chứng hoặc xử lý ngoại lệ.
+              </span>
+            </summary>
+            <div className="space-y-8 border-t border-[var(--border-hairline)] p-5">
+              <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
+              <CmiWorkspace dashboard={dashboard} />
+            </div>
+          </details>
         </div>
       </main>
     </div>

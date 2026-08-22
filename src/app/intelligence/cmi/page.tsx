@@ -39,6 +39,15 @@ export default async function CmiPage() {
 
   try {
     dashboard = await container.cmi.dashboard();
+    dashboard.automation = {
+      browserConnected: automationStatus.browserConnected,
+      aiAnalysisConnected: automationStatus.aiAnalysisConnected,
+      note: automationStatus.aiAnalysisConnected
+        ? "Browser tự động và AI phân tích CMI đang được bật theo chế độ có kiểm soát. Mọi kết luận vẫn phải dựa trên bằng chứng nguồn và cơ hội phải được Quản lý duyệt trước khi chuyển sang AI Marketing."
+        : automationStatus.browserConnected
+          ? "Browser tự động đã được nối vào production. AI phân tích CMI hiện đang tắt; dữ liệu thu thập vẫn phải có bằng chứng nguồn trước khi kết luận và mọi cơ hội cần được Quản lý duyệt."
+          : "Browser tự động và AI phân tích CMI hiện đang tắt. Có thể tiếp tục nhập dữ liệu thủ công theo quy trình bằng chứng trước khi kết luận.",
+    };
   } catch (error) {
     setupError =
       error instanceof Error

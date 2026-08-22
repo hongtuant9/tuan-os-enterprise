@@ -13,6 +13,19 @@ type ResearchJobRow = {
   created_at: string;
 };
 
+type CompetitorRow = {
+  id: string;
+  research_job_id: string;
+  name: string;
+  rank: number;
+  score: number | string;
+  primary_url: string | null;
+  platform: string | null;
+  rationale: string | null;
+  source_urls: unknown;
+  selection_status: "candidate" | "selected" | "rejected";
+};
+
 type SourceRow = {
   id: string;
   research_job_id: string;
@@ -89,6 +102,10 @@ function n(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
 export class CmiService {
   constructor(
     private readonly repo: CmiRepository,
@@ -96,8 +113,9 @@ export class CmiService {
   ) {}
 
   async dashboard(): Promise<CmiDashboard> {
-    const [jobs, sources, evidence, insights, opportunities, strategies] = await Promise.all([
+    const [jobs, competitors, sources, evidence, insights, opportunities, strategies] = await Promise.all([
       this.repo.listResearchJobs(),
+      this.repo.listCompetitors(),
       this.repo.listSources(),
       this.repo.listEvidence(),
       this.repo.listInsights(),
@@ -117,6 +135,21 @@ export class CmiService {
           researchType: r.research_type,
           status: r.status,
           createdAt: r.created_at,
+        };
+      }),
+      competitors: competitors.map((row) => {
+        const r = row as CompetitorRow;
+        return {
+          id: r.id,
+          researchJobId: r.research_job_id,
+          name: r.name,
+          rank: Number(r.rank),
+          score: n(r.score) ?? 0,
+          primaryUrl: r.primary_url,
+          platform: r.platform,
+          rationale: r.rationale,
+          sourceUrls: stringArray(r.source_urls),
+          selectionStatus: r.selection_status,
         };
       }),
       sources: sources.map((row) => {
@@ -201,6 +234,8 @@ export class CmiService {
       }),
       metrics: {
         researchJobs: jobs.length,
+        competitors: competitors.length,
+        selectedCompetitors: competitors.filter((row) => (row as CompetitorRow).selection_status === "selected").length,
         evidence: evidence.length,
         verifiedEvidence: evidence.filter((row) => (row as EvidenceRow).is_verified).length,
         insights: insights.length,

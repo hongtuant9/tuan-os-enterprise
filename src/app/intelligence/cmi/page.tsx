@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import CmiWorkspace from "@/components/cmi/CmiWorkspace";
 import CmiAutomationPanel from "@/components/cmi/CmiAutomationPanel";
+import CmiOneClickPanel from "@/components/cmi/CmiOneClickPanel";
 import { getRequestContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
@@ -17,6 +18,7 @@ export default async function CmiPage() {
   let setupError = "";
   let dashboard = {
     researchJobs: [],
+    competitors: [],
     sources: [],
     evidence: [],
     insights: [],
@@ -24,6 +26,8 @@ export default async function CmiPage() {
     marketingStrategies: [],
     metrics: {
       researchJobs: 0,
+      competitors: 0,
+      selectedCompetitors: 0,
       evidence: 0,
       verifiedEvidence: 0,
       insights: 0,
@@ -70,6 +74,7 @@ export default async function CmiPage() {
           </div>
         )}
         <div className="space-y-8">
+          <CmiOneClickPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
           <CmiAutomationPanel dashboard={dashboard} status={automationStatus} canManage={canManage} />
           <CmiWorkspace dashboard={dashboard} />
         </div>

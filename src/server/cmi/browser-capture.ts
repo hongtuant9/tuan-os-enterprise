@@ -26,14 +26,24 @@ export function isCmiBrowserEnabled(): boolean {
 }
 
 function isPrivateAddress(address: string): boolean {
-  if (address === "::1" || address === "0:0:0:0:0:0:0:1") return true;
-
-  if (address.includes(":")) {
-    const value = address.toLowerCase();
-    return value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:");
+  const value = address.toLowerCase();
+  if (
+    value === "::" ||
+    value === "::1" ||
+    value === "0:0:0:0:0:0:0:1" ||
+    value.startsWith("::ffff:") ||
+    value.startsWith("fc") ||
+    value.startsWith("fd") ||
+    value.startsWith("fe80:") ||
+    value.startsWith("ff") ||
+    value.startsWith("2001:db8:")
+  ) {
+    return true;
   }
 
-  const parts = address.split(".").map(Number);
+  if (value.includes(":")) return false;
+
+  const parts = value.split(".").map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) return true;
 
   const [a, b] = parts;
@@ -67,13 +77,13 @@ async function assertSafePublicUrl(rawUrl: string): Promise<URL> {
     throw new Error("Đường dẫn nguồn không hợp lệ.");
   }
 
-  if (!['http:', 'https:'].includes(url.protocol)) {
+  if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("CMI Browser chỉ cho phép đường dẫn http/https.");
   }
   if (url.username || url.password) {
     throw new Error("Không cho phép thông tin đăng nhập nằm trong URL.");
   }
-  if (url.port && !['80', '443'].includes(url.port)) {
+  if (url.port && !["80", "443"].includes(url.port)) {
     throw new Error("V0.2 chỉ cho phép cổng web 80/443.");
   }
   if (!allowedHost(url.hostname)) {

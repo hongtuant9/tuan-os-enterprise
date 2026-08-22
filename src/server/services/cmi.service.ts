@@ -2,6 +2,86 @@ import type { CmiDashboard } from "@/data/cmi";
 import { CmiRepository } from "@/server/repositories/cmi.repository";
 import { ActivityLogService } from "@/server/services/activity-log.service";
 
+type ResearchJobRow = {
+  id: string;
+  business_unit_id: string | null;
+  title: string;
+  objective: string;
+  research_type: string;
+  status: string;
+  created_at: string;
+};
+
+type SourceRow = {
+  id: string;
+  research_job_id: string;
+  platform: string;
+  source_type: string;
+  url: string | null;
+  title: string | null;
+  competitor_name: string | null;
+  capture_method: string;
+  status: string;
+  created_at: string;
+};
+
+type EvidenceRow = {
+  id: string;
+  source_id: string;
+  evidence_type: string;
+  raw_text: string | null;
+  screenshot_path: string | null;
+  source_url: string | null;
+  is_verified: boolean;
+  captured_at: string;
+};
+
+type InsightRow = {
+  id: string;
+  research_job_id: string;
+  insight_type: string;
+  title: string;
+  summary: string;
+  customer_segment: string | null;
+  topic: string | null;
+  frequency_count: number | null;
+  confidence: number | string | null;
+  verification_status: string;
+};
+
+type OpportunityRow = {
+  id: string;
+  research_job_id: string;
+  business_unit_id: string | null;
+  title: string;
+  customer_segment: string | null;
+  problem: string;
+  proposed_solution: string;
+  evidence_summary: string | null;
+  current_capability: string | null;
+  capability_gap: string | null;
+  desirability_score: number | null;
+  feasibility_score: number | null;
+  viability_score: number | null;
+  priority_score: number | string | null;
+  status: string;
+};
+
+type MarketingStrategyRow = {
+  id: string;
+  opportunity_id: string;
+  version: number;
+  target_customer: string;
+  positioning: string;
+  value_proposition: string;
+  marketing_ideas: unknown;
+  channel_strategy: unknown;
+  test_hypotheses: unknown;
+  kpis: unknown;
+  assumptions: unknown;
+  status: string;
+};
+
 function n(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -25,84 +105,102 @@ export class CmiService {
     ]);
 
     return {
-      researchJobs: jobs.map((r: any) => ({
-        id: r.id,
-        businessUnitId: r.business_unit_id,
-        title: r.title,
-        objective: r.objective,
-        researchType: r.research_type,
-        status: r.status,
-        createdAt: r.created_at,
-      })),
-      sources: sources.map((r: any) => ({
-        id: r.id,
-        researchJobId: r.research_job_id,
-        platform: r.platform,
-        sourceType: r.source_type,
-        url: r.url,
-        title: r.title,
-        competitorName: r.competitor_name,
-        captureMethod: r.capture_method,
-        status: r.status,
-        createdAt: r.created_at,
-      })),
-      evidence: evidence.map((r: any) => ({
-        id: r.id,
-        sourceId: r.source_id,
-        evidenceType: r.evidence_type,
-        rawText: r.raw_text,
-        screenshotPath: r.screenshot_path,
-        sourceUrl: r.source_url,
-        isVerified: Boolean(r.is_verified),
-        capturedAt: r.captured_at,
-      })),
-      insights: insights.map((r: any) => ({
-        id: r.id,
-        researchJobId: r.research_job_id,
-        insightType: r.insight_type,
-        title: r.title,
-        summary: r.summary,
-        customerSegment: r.customer_segment,
-        topic: r.topic,
-        frequencyCount: Number(r.frequency_count ?? 0),
-        confidence: n(r.confidence),
-        verificationStatus: r.verification_status,
-      })),
-      opportunities: opportunities.map((r: any) => ({
-        id: r.id,
-        researchJobId: r.research_job_id,
-        businessUnitId: r.business_unit_id,
-        title: r.title,
-        customerSegment: r.customer_segment,
-        problem: r.problem,
-        proposedSolution: r.proposed_solution,
-        evidenceSummary: r.evidence_summary,
-        currentCapability: r.current_capability,
-        capabilityGap: r.capability_gap,
-        desirabilityScore: n(r.desirability_score),
-        feasibilityScore: n(r.feasibility_score),
-        viabilityScore: n(r.viability_score),
-        priorityScore: n(r.priority_score),
-        status: r.status,
-      })),
-      marketingStrategies: strategies.map((r: any) => ({
-        id: r.id,
-        opportunityId: r.opportunity_id,
-        version: r.version,
-        targetCustomer: r.target_customer,
-        positioning: r.positioning,
-        valueProposition: r.value_proposition,
-        marketingIdeas: Array.isArray(r.marketing_ideas) ? r.marketing_ideas : [],
-        channelStrategy: Array.isArray(r.channel_strategy) ? r.channel_strategy : [],
-        testHypotheses: Array.isArray(r.test_hypotheses) ? r.test_hypotheses : [],
-        kpis: Array.isArray(r.kpis) ? r.kpis : [],
-        assumptions: Array.isArray(r.assumptions) ? r.assumptions : [],
-        status: r.status,
-      })),
+      researchJobs: jobs.map((row) => {
+        const r = row as ResearchJobRow;
+        return {
+          id: r.id,
+          businessUnitId: r.business_unit_id,
+          title: r.title,
+          objective: r.objective,
+          researchType: r.research_type,
+          status: r.status,
+          createdAt: r.created_at,
+        };
+      }),
+      sources: sources.map((row) => {
+        const r = row as SourceRow;
+        return {
+          id: r.id,
+          researchJobId: r.research_job_id,
+          platform: r.platform,
+          sourceType: r.source_type,
+          url: r.url,
+          title: r.title,
+          competitorName: r.competitor_name,
+          captureMethod: r.capture_method,
+          status: r.status,
+          createdAt: r.created_at,
+        };
+      }),
+      evidence: evidence.map((row) => {
+        const r = row as EvidenceRow;
+        return {
+          id: r.id,
+          sourceId: r.source_id,
+          evidenceType: r.evidence_type,
+          rawText: r.raw_text,
+          screenshotPath: r.screenshot_path,
+          sourceUrl: r.source_url,
+          isVerified: Boolean(r.is_verified),
+          capturedAt: r.captured_at,
+        };
+      }),
+      insights: insights.map((row) => {
+        const r = row as InsightRow;
+        return {
+          id: r.id,
+          researchJobId: r.research_job_id,
+          insightType: r.insight_type,
+          title: r.title,
+          summary: r.summary,
+          customerSegment: r.customer_segment,
+          topic: r.topic,
+          frequencyCount: Number(r.frequency_count ?? 0),
+          confidence: n(r.confidence),
+          verificationStatus: r.verification_status,
+        };
+      }),
+      opportunities: opportunities.map((row) => {
+        const r = row as OpportunityRow;
+        return {
+          id: r.id,
+          researchJobId: r.research_job_id,
+          businessUnitId: r.business_unit_id,
+          title: r.title,
+          customerSegment: r.customer_segment,
+          problem: r.problem,
+          proposedSolution: r.proposed_solution,
+          evidenceSummary: r.evidence_summary,
+          currentCapability: r.current_capability,
+          capabilityGap: r.capability_gap,
+          desirabilityScore: n(r.desirability_score),
+          feasibilityScore: n(r.feasibility_score),
+          viabilityScore: n(r.viability_score),
+          priorityScore: n(r.priority_score),
+          status: r.status,
+        };
+      }),
+      marketingStrategies: strategies.map((row) => {
+        const r = row as MarketingStrategyRow;
+        return {
+          id: r.id,
+          opportunityId: r.opportunity_id,
+          version: r.version,
+          targetCustomer: r.target_customer,
+          positioning: r.positioning,
+          valueProposition: r.value_proposition,
+          marketingIdeas: Array.isArray(r.marketing_ideas) ? r.marketing_ideas : [],
+          channelStrategy: Array.isArray(r.channel_strategy) ? r.channel_strategy : [],
+          testHypotheses: Array.isArray(r.test_hypotheses) ? r.test_hypotheses : [],
+          kpis: Array.isArray(r.kpis) ? r.kpis : [],
+          assumptions: Array.isArray(r.assumptions) ? r.assumptions : [],
+          status: r.status,
+        };
+      }),
       metrics: {
         researchJobs: jobs.length,
         evidence: evidence.length,
-        verifiedEvidence: evidence.filter((x: any) => x.is_verified).length,
+        verifiedEvidence: evidence.filter((row) => (row as EvidenceRow).is_verified).length,
         insights: insights.length,
         opportunities: opportunities.length,
         marketingStrategies: strategies.length,

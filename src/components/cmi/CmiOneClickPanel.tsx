@@ -2,6 +2,7 @@ import type { CmiBusinessLine, CmiDashboard } from "@/data/cmi";
 import { cmiBusinessLineLabel } from "@/data/cmi";
 import {
   discoverCmiCompetitors,
+  enqueueCmiResearchSources,
   selectCmiCompetitors,
   startCmiGuidedResearch,
 } from "@/app/actions/cmi-automation";
@@ -9,6 +10,8 @@ import type { CmiAutomationStatus } from "@/components/cmi/CmiAutomationPanel";
 
 const card = "rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5";
 const button = "rounded-lg border border-[var(--border-hairline)] px-4 py-2 text-sm font-medium text-[var(--ink-primary)] disabled:cursor-not-allowed disabled:opacity-40";
+
+type QueueSummary = { queued: number; running: number; completed: number; failed: number };
 
 const quickLines: Array<{ value: CmiBusinessLine; title: string; subtitle: string }> = [
   {
@@ -32,10 +35,12 @@ export default function CmiOneClickPanel({
   dashboard,
   status,
   canManage,
+  queueByResearch,
 }: {
   dashboard: CmiDashboard;
   status: CmiAutomationStatus;
   canManage: boolean;
+  queueByResearch: Record<string, QueueSummary>;
 }) {
   return (
     <section className="space-y-5">
@@ -44,7 +49,7 @@ export default function CmiOneClickPanel({
           <div>
             <h2 className="text-lg font-semibold text-[var(--ink-primary)]">Nghiên cứu sản phẩm — thao tác bằng nút</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--ink-secondary)]">
-              Chọn mảng → AI đề xuất và xếp hạng tối đa 30 đối thủ → anh chọn đối thủ → hệ thống tạo nguồn Browser → thu thập bằng chứng → AI phân tích → cơ hội sản phẩm → anh duyệt → AI Marketing.
+              Chọn mảng → AI đề xuất và xếp hạng tối đa 30 đối thủ → anh chọn đối thủ → hệ thống tạo nguồn Browser → đưa toàn bộ nguồn vào hàng đợi → AI phân tích → cơ hội sản phẩm → anh duyệt → AI Marketing.
             </p>
           </div>
           <div className="text-xs text-[var(--ink-muted)]">
@@ -70,7 +75,12 @@ export default function CmiOneClickPanel({
         const competitors = dashboard.competitors
           .filter((item) => item.researchJobId === job.id)
           .sort((a, b) => a.rank - b.rank);
+        const sources = dashboard.sources.filter((item) => item.researchJobId === job.id);
         const hasCompetitors = competitors.length > 0;
+        const selectedCompetitors = competitors.filter((item) => item.selectionStatus === "selected").length;
+        const queue = queueByResearch[job.id] ?? { queued: 0, running: 0, completed: 0, failed: 0 };
+        const queueTotal = queue.queued + queue.running + queue.completed + queue.failed;
+
         return (
           <div key={job.id} className={card}>
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -126,6 +136,28 @@ export default function CmiOneClickPanel({
                   Xác nhận đối thủ & tạo nguồn thu thập
                 </button>
               </form>
+            )}
+
+            {sources.length > 0 && (
+              <div className="mt-5 rounded-lg border border-[var(--border-hairline)] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink-primary)]">Thu thập hàng loạt</p>
+                    <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                      Đối thủ đã chọn: {selectedCompetitors} · Nguồn: {sources.length} · Hàng đợi: {queueTotal}
+                    </p>
+                    <p className="mt-2 text-xs text-[var(--ink-secondary)]">
+                      Đang chờ {queue.queued} · Đang chạy {queue.running} · Hoàn thành {queue.completed} · Lỗi {queue.failed}
+                    </p>
+                  </div>
+                  <form action={enqueueCmiResearchSources}>
+                    <input type="hidden" name="researchJobId" value={job.id} />
+                    <button className={button} disabled={!canManage || !status.browserConnected}>
+                      Thu thập tất cả nguồn
+                    </button>
+                  </form>
+                </div>
+              </div>
             )}
           </div>
         );

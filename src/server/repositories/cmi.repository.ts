@@ -1,51 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
-type QueryListResult = {
-  data: unknown[] | null;
-  error: unknown;
-};
-
-type QuerySingleResult = {
-  data: unknown;
-  error: unknown;
-};
-
-type SelectQuery = {
-  order(column: string, options: { ascending: boolean }): SelectQuery;
-  limit(count: number): PromiseLike<QueryListResult>;
-};
-
-type InsertSelectQuery = {
-  single(): PromiseLike<QuerySingleResult>;
-};
-
-type InsertQuery = {
-  select(columns: string): InsertSelectQuery;
-};
-
-type TableQuery = {
-  select(columns: string): SelectQuery;
-  insert(input: Record<string, unknown>): InsertQuery;
-};
-
-type CmiDbAdapter = {
-  from(name: string): TableQuery;
-};
-
 /**
- * Adapter tạm thời cho các bảng CMI chưa có trong file Database types hiện tại.
- * Dùng unknown thay cho any để giữ type-safety và vẫn cho phép lint kiểm soát.
- * Khi regenerate Supabase types sau migration 0013, có thể bỏ adapter này.
+ * CMI dùng ép kiểu cục bộ cho các bảng migration mới cho tới khi regenerate Supabase types.
  */
 export class CmiRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
-  private table(name: string): TableQuery {
-    return (this.db as unknown as CmiDbAdapter).from(name);
+  private table(name: string) {
+    return (this.db as any).from(name);
   }
 
-  async listResearchJobs(): Promise<unknown[]> {
+  async listResearchJobs() {
     const { data, error } = await this.table("cmi_research_jobs")
       .select("*")
       .order("created_at", { ascending: false })
@@ -54,7 +20,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listSources(): Promise<unknown[]> {
+  async listSources() {
     const { data, error } = await this.table("cmi_sources")
       .select("*")
       .order("created_at", { ascending: false })
@@ -63,7 +29,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listEvidence(): Promise<unknown[]> {
+  async listEvidence() {
     const { data, error } = await this.table("cmi_evidence")
       .select("*")
       .order("created_at", { ascending: false })
@@ -72,7 +38,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listInsights(): Promise<unknown[]> {
+  async listInsights() {
     const { data, error } = await this.table("cmi_insights")
       .select("*")
       .order("created_at", { ascending: false })
@@ -81,7 +47,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listOpportunities(): Promise<unknown[]> {
+  async listOpportunities() {
     const { data, error } = await this.table("cmi_opportunities")
       .select("*")
       .order("created_at", { ascending: false })
@@ -90,7 +56,7 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async listMarketingStrategies(): Promise<unknown[]> {
+  async listMarketingStrategies() {
     const { data, error } = await this.table("marketing_strategies")
       .select("*")
       .order("created_at", { ascending: false })
@@ -99,7 +65,62 @@ export class CmiRepository {
     return data ?? [];
   }
 
-  async createResearchJob(input: Record<string, unknown>): Promise<unknown> {
+  async findResearchJobById(id: string) {
+    const { data, error } = await this.table("cmi_research_jobs")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async findSourceById(id: string) {
+    const { data, error } = await this.table("cmi_sources")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async findOpportunityById(id: string) {
+    const { data, error } = await this.table("cmi_opportunities")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async findEvidenceForResearchJob(researchJobId: string) {
+    const { data: sourceRows, error: sourceError } = await this.table("cmi_sources")
+      .select("id")
+      .eq("research_job_id", researchJobId);
+    if (sourceError) throw sourceError;
+
+    const sourceIds = (sourceRows ?? []).map((row: { id: string }) => row.id);
+    if (sourceIds.length === 0) return [];
+
+    const { data, error } = await this.table("cmi_evidence")
+      .select("*")
+      .in("source_id", sourceIds)
+      .not("raw_text", "is", null)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async findEvidenceByHash(sourceId: string, contentHash: string) {
+    const { data, error } = await this.table("cmi_evidence")
+      .select("*")
+      .eq("source_id", sourceId)
+      .eq("content_hash", contentHash)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async createResearchJob(input: Record<string, unknown>) {
     const { data, error } = await this.table("cmi_research_jobs")
       .insert(input)
       .select("*")
@@ -108,7 +129,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createSource(input: Record<string, unknown>): Promise<unknown> {
+  async createSource(input: Record<string, unknown>) {
     const { data, error } = await this.table("cmi_sources")
       .insert(input)
       .select("*")
@@ -117,7 +138,17 @@ export class CmiRepository {
     return data;
   }
 
-  async createEvidence(input: Record<string, unknown>): Promise<unknown> {
+  async updateSource(id: string, input: Record<string, unknown>) {
+    const { data, error } = await this.table("cmi_sources")
+      .update(input)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async createEvidence(input: Record<string, unknown>) {
     const { data, error } = await this.table("cmi_evidence")
       .insert(input)
       .select("*")
@@ -126,7 +157,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createInsight(input: Record<string, unknown>): Promise<unknown> {
+  async createInsight(input: Record<string, unknown>) {
     const { data, error } = await this.table("cmi_insights")
       .insert(input)
       .select("*")
@@ -135,7 +166,7 @@ export class CmiRepository {
     return data;
   }
 
-  async createOpportunity(input: Record<string, unknown>): Promise<unknown> {
+  async createOpportunity(input: Record<string, unknown>) {
     const { data, error } = await this.table("cmi_opportunities")
       .insert(input)
       .select("*")
@@ -144,12 +175,61 @@ export class CmiRepository {
     return data;
   }
 
-  async createMarketingStrategy(input: Record<string, unknown>): Promise<unknown> {
+  async updateOpportunity(id: string, input: Record<string, unknown>) {
+    const { data, error } = await this.table("cmi_opportunities")
+      .update(input)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async createMarketingStrategy(input: Record<string, unknown>) {
     const { data, error } = await this.table("marketing_strategies")
       .insert(input)
       .select("*")
       .single();
     if (error) throw error;
     return data;
+  }
+
+  async nextMarketingStrategyVersion(opportunityId: string): Promise<number> {
+    const { data, error } = await this.table("marketing_strategies")
+      .select("version")
+      .eq("opportunity_id", opportunityId)
+      .order("version", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return Number(data?.[0]?.version ?? 0) + 1;
+  }
+
+  async createResearchRun(input: Record<string, unknown>) {
+    const { data, error } = await this.table("cmi_research_runs")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateResearchRun(id: string, input: Record<string, unknown>) {
+    const { data, error } = await this.table("cmi_research_runs")
+      .update(input)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async uploadScreenshot(path: string, body: Buffer): Promise<void> {
+    const { error } = await this.db.storage
+      .from("cmi-evidence")
+      .upload(path, body, {
+        contentType: "image/png",
+        upsert: false,
+      });
+    if (error) throw error;
   }
 }

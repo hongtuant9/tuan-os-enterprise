@@ -42,6 +42,19 @@ export type CmiResearchJob = {
   createdAt: string;
 };
 
+export type CmiCompetitor = {
+  id: string;
+  researchJobId: string;
+  name: string;
+  rank: number;
+  score: number;
+  primaryUrl: string | null;
+  platform: string | null;
+  rationale: string | null;
+  sourceUrls: string[];
+  selectionStatus: "candidate" | "selected" | "rejected";
+};
+
 export type CmiSource = {
   id: string;
   researchJobId: string;
@@ -114,6 +127,7 @@ export type MarketingStrategy = {
 
 export type CmiDashboard = {
   researchJobs: CmiResearchJob[];
+  competitors: CmiCompetitor[];
   sources: CmiSource[];
   evidence: CmiEvidence[];
   insights: CmiInsight[];
@@ -121,6 +135,8 @@ export type CmiDashboard = {
   marketingStrategies: MarketingStrategy[];
   metrics: {
     researchJobs: number;
+    competitors: number;
+    selectedCompetitors: number;
     evidence: number;
     verifiedEvidence: number;
     insights: number;

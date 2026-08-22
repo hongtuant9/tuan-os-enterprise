@@ -60,6 +60,16 @@ export async function startCmiGuidedResearch(formData: FormData) {
   const line: CmiBusinessLine = ["cozy_garden", "homestay", "tpt_isteam", "cross_business"].includes(raw)
     ? (raw as CmiBusinessLine)
     : "cross_business";
+
+  const dashboard = await container.cmi.dashboard();
+  const existing = dashboard.researchJobs.find(
+    (item) => item.businessLine === line && item.status !== "archived" && !item.title.trim().startsWith("[PILOT]")
+  );
+  if (existing) {
+    revalidatePath("/intelligence/cmi");
+    return;
+  }
+
   const preset = guidedResearch(line);
   const created = await container.cmi.createResearchJob({
     ...preset,

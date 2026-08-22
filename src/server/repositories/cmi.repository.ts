@@ -36,7 +36,7 @@ type CmiDbAdapter = {
 /**
  * Adapter tạm thời cho các bảng CMI chưa có trong file Database types hiện tại.
  * Dùng unknown thay cho any để giữ type-safety và vẫn cho phép lint kiểm soát.
- * Khi regenerate Supabase types sau migration 0013, có thể bỏ adapter này.
+ * Khi regenerate Supabase types sau migration, có thể bỏ adapter này.
  */
 export class CmiRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -50,6 +50,15 @@ export class CmiRepository {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async listCompetitors(): Promise<unknown[]> {
+    const { data, error } = await this.table("cmi_competitors")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(300);
     if (error) throw error;
     return data ?? [];
   }

@@ -1,0 +1,33 @@
+name: CMI V0.2 kiểm tra
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  kiem-tra:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lấy source
+        uses: actions/checkout@v4
+
+      - name: Cài Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cài dependencies
+        run: npm ci
+
+      - name: Kiểm tra lint
+        run: npm run lint
+
+      - name: Kiểm tra build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          APP_URL: https://example.com
+          CMI_BROWSER_ENABLED: "false"
+          CMI_AI_ENABLED: "false"

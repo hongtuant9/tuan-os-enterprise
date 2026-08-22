@@ -40,12 +40,26 @@ export type MarketingAiStrategy = {
   risks: string[];
 };
 
+function intEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = Number(process.env[name]);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
+}
+
 export function isCmiAiEnabled(): boolean {
   return (process.env.CMI_AI_ENABLED ?? "false").toLowerCase() === "true" && Boolean(process.env.OPENAI_API_KEY);
 }
 
 export function getCmiAiModel(): string {
   return process.env.CMI_AI_MODEL?.trim() || "gpt-5.6-luna";
+}
+
+export function getCmiAiMaxEvidenceChars(): number {
+  return intEnv("CMI_AI_MAX_EVIDENCE_CHARS", 30_000, 5_000, 60_000);
+}
+
+export function getCmiAiMaxOutputTokens(): number {
+  return intEnv("CMI_AI_MAX_OUTPUT_TOKENS", 2_500, 500, 5_000);
 }
 
 function extractOutputText(payload: unknown): string {
@@ -93,7 +107,7 @@ async function callOpenAiJson(instructions: string, input: string): Promise<unkn
       model: getCmiAiModel(),
       instructions,
       input,
-      max_output_tokens: 5000,
+      max_output_tokens: getCmiAiMaxOutputTokens(),
       store: false,
     }),
     signal: AbortSignal.timeout(60_000),
@@ -149,6 +163,7 @@ function validInsightType(value: unknown): string {
 export async function analyzeCmiEvidence(input: {
   researchTitle: string;
   objective: string;
+  businessLine: string;
   evidence: Array<{ id: string; text: string; sourceUrl: string | null }>;
 }): Promise<CmiAiAnalysis> {
   const allowedEvidenceIds = new Set(input.evidence.map((item) => item.id));
@@ -157,18 +172,19 @@ export async function analyzeCmiEvidence(input: {
       `[BẰNG CHỨNG ${index + 1}]\nevidence_id=${item.id}\nsource=${item.sourceUrl ?? "không có URL"}\n${item.text.slice(0, 12000)}`
     )
     .join("\n\n")
-    .slice(0, 60_000);
+    .slice(0, getCmiAiMaxEvidenceChars());
 
   const raw = await callOpenAiJson(
     [
       "Bạn là AI Nghiên cứu Khách hàng & Thị trường (CMI) của TUAN OS Enterprise.",
       "Chỉ được kết luận từ bằng chứng được cung cấp. Không tự bịa dữ liệu, tần suất hoặc nhu cầu.",
+      "Phải phân tích trong đúng bối cảnh mảng kinh doanh được cung cấp; không trộn logic giữa các mảng.",
       "Nếu bằng chứng yếu, phải phản ánh bằng confidence thấp.",
       "Mọi insight và cơ hội phải trỏ tới evidence_id thực sự có trong đầu vào.",
       "Đầu ra phải là JSON hợp lệ, không markdown, không giải thích ngoài JSON.",
       "Toàn bộ nội dung diễn giải phải bằng tiếng Việt có dấu; thuật ngữ tiếng Anh chỉ để trong ngoặc khi cần.",
     ].join("\n"),
-    `Tên nghiên cứu: ${input.researchTitle}\nMục tiêu: ${input.objective}\n\n${evidenceText}\n\n` +
+    `Mảng kinh doanh: ${input.businessLine}\nTên nghiên cứu: ${input.researchTitle}\nMục tiêu: ${input.objective}\n\n${evidenceText}\n\n` +
       `Trả JSON theo cấu trúc: {"insights":[{"insight_type":"pain_point","title":"...","summary":"...","customer_segment":"... hoặc null","topic":"... hoặc null","frequency_count":1,"confidence":0,"evidence_ids":["uuid"]}],"opportunities":[{"title":"...","customer_segment":"... hoặc null","problem":"...","proposed_solution":"...","evidence_summary":"...","desirability_score":1,"feasibility_score":1,"viability_score":1,"evidence_ids":["uuid"]}]}. Tối đa 8 insights và 3 opportunities.`
   );
 
@@ -224,6 +240,7 @@ export async function analyzeCmiEvidence(input: {
 }
 
 export async function buildMarketingStrategy(input: {
+  businessLine: string;
   opportunity: {
     title: string;
     customerSegment: string | null;
@@ -236,12 +253,13 @@ export async function buildMarketingStrategy(input: {
     [
       "Bạn là AI Marketing của TUAN OS Enterprise.",
       "Nhiệm vụ duy nhất: trả lời câu hỏi 'Làm thế nào để bán?' cho cơ hội đã được quản lý phê duyệt.",
+      "Phải bám đúng mảng kinh doanh được cung cấp và không trộn chiến thuật giữa các mảng nếu không có cơ sở.",
       "Mọi ý tưởng và chiến lược đều là giả thuyết cần test, không được viết như kết quả chắc chắn.",
       "Ưu tiên test nhỏ nhất, rẻ nhất và đo được trước khi mở rộng.",
       "Không tự đề xuất thực thi Ads, chi tiền, đăng bài hoặc thay đổi giá; chỉ lập chiến lược để quản lý xem xét.",
       "Đầu ra phải là JSON hợp lệ, không markdown. Nội dung tiếng Việt có dấu; tiếng Anh chỉ trong ngoặc khi cần.",
     ].join("\n"),
-    `Cơ hội: ${input.opportunity.title}\nPhân khúc: ${input.opportunity.customerSegment ?? "Chưa xác định"}\nVấn đề: ${input.opportunity.problem}\nGiải pháp đề xuất: ${input.opportunity.proposedSolution}\nBằng chứng: ${input.opportunity.evidenceSummary ?? "Chưa có tóm tắt"}\n\n` +
+    `Mảng kinh doanh: ${input.businessLine}\nCơ hội: ${input.opportunity.title}\nPhân khúc: ${input.opportunity.customerSegment ?? "Chưa xác định"}\nVấn đề: ${input.opportunity.problem}\nGiải pháp đề xuất: ${input.opportunity.proposedSolution}\nBằng chứng: ${input.opportunity.evidenceSummary ?? "Chưa có tóm tắt"}\n\n` +
       `Trả JSON: {"target_customer":"...","positioning":"...","value_proposition":"...","marketing_ideas":["..."],"channel_strategy":["..."],"test_hypotheses":["..."],"kpis":["..."],"assumptions":["..."],"risks":["..."]}. Mỗi mảng tối đa 8 mục.`
   );
 

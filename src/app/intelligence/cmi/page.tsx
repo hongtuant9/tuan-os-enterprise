@@ -2,18 +2,42 @@ import Sidebar from "@/components/Sidebar";
 import CmiWorkspace from "@/components/cmi/CmiWorkspace";
 import CmiAutomationPanel from "@/components/cmi/CmiAutomationPanel";
 import CmiOneClickPanel from "@/components/cmi/CmiOneClickPanel";
+import CmiAiControl from "@/components/cmi/CmiAiControl";
 import { getRequestContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import { getCmiAutomationStatus } from "@/server/cmi/automation.service";
+import { getCmiAiRuntimeStatus, type CmiAiRuntimeStatus } from "@/server/cmi/ai-runtime";
 
 export const dynamic = "force-dynamic";
+
+const fallbackAiRuntime: CmiAiRuntimeStatus = {
+  enabled: false,
+  providerConfigured: false,
+  effectiveEnabled: false,
+  monthlyBudgetUsd: 5,
+  monthlyEstimatedUsedUsd: 0,
+  dailyLimit: 10,
+  dailyUsed: 0,
+};
 
 export default async function CmiPage() {
   const container = await getRequestContainer();
   const session = await getCurrentSession(container.db);
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
-  const automationStatus = getCmiAutomationStatus();
+  const baseAutomationStatus = getCmiAutomationStatus();
+
+  let aiRuntime = fallbackAiRuntime;
+  try {
+    aiRuntime = await getCmiAiRuntimeStatus();
+  } catch {
+    // Giữ trang đọc được trong lúc migration V0.9 chưa áp dụng.
+  }
+
+  const automationStatus = {
+    ...baseAutomationStatus,
+    aiAnalysisConnected: aiRuntime.effectiveEnabled,
+  };
 
   let setupError = "";
   let dashboard = {
@@ -48,10 +72,10 @@ export default async function CmiPage() {
       browserConnected: automationStatus.browserConnected,
       aiAnalysisConnected: automationStatus.aiAnalysisConnected,
       note: automationStatus.aiAnalysisConnected
-        ? "Browser tự động và AI phân tích CMI đang được bật theo chế độ có kiểm soát."
+        ? "Browser tự động và AI có phí đang hoạt động theo quota/ngân sách đã duyệt."
         : automationStatus.browserConnected
-          ? "Browser tự động đang hoạt động. AI phân tích CMI hiện đang tắt."
-          : "Browser tự động và AI phân tích CMI hiện đang tắt.",
+          ? "Browser tự động đang hoạt động. AI có phí hiện đang tắt."
+          : "Browser tự động và AI có phí hiện đang tắt.",
     };
 
     const queueRows = await Promise.all(
@@ -86,7 +110,7 @@ export default async function CmiPage() {
               Browser: <b className="text-[var(--ink-primary)]">{automationStatus.browserConnected ? "Hoạt động" : "Tắt"}</b>
             </span>
             <span>
-              AI phân tích: <b className="text-[var(--ink-primary)]">{automationStatus.aiAnalysisConnected ? "Hoạt động" : "Tắt"}</b>
+              AI có phí: <b className="text-[var(--ink-primary)]">{automationStatus.aiAnalysisConnected ? "Bật" : "Tắt"}</b>
             </span>
             <span>
               Bằng chứng: <b className="text-[var(--ink-primary)]">{dashboard.metrics.evidence}</b>
@@ -95,6 +119,8 @@ export default async function CmiPage() {
               Cơ hội: <b className="text-[var(--ink-primary)]">{dashboard.metrics.opportunities}</b>
             </span>
           </div>
+
+          <CmiAiControl status={aiRuntime} canManage={canManage} />
 
           <CmiOneClickPanel
             dashboard={dashboard}

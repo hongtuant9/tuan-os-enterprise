@@ -65,7 +65,8 @@ export default function DirectContactCard() {
           marginBottom: 14,
         }}
       >
-        Your message will come directly to me. / Tin nhắn của bạn sẽ được gửi trực tiếp tới tôi.
+        Your message will come directly to me, the owner of Cozy Garden. / Tin nhắn của
+        bạn sẽ được gửi trực tiếp tới tôi, chủ Cozy Garden.
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>

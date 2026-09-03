@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import DirectContactCard from "./DirectContactCard";
 
 const TRACK_ENDPOINT =
   "https://mmxgthzafjoienokyplw.supabase.co/functions/v1/cozy-review-page";
@@ -191,11 +192,14 @@ export default function ReviewClient({
           </h1>
 
           {isRecoveryCase ? (
-            <RecoveryNotice
-              onsite={isStillOnsite}
-              wantsContact={wantsContact}
-              table={table}
-            />
+            <>
+              <RecoveryNotice
+                onsite={isStillOnsite}
+                wantsContact={wantsContact}
+                table={table}
+              />
+              {!isStillOnsite && !wantsContact ? <DirectContactCard /> : null}
+            </>
           ) : (
             <p
               style={{

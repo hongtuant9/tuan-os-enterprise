@@ -412,24 +412,24 @@ function RecoveryNotice({
 }) {
   let title = "We’re sorry your experience wasn’t right.";
   let message =
-    "Your feedback has been sent to our management team for review.";
+    "Thank you for taking the time to tell us what happened. We truly value your feedback and would appreciate the opportunity to understand your experience better so we can improve our service.";
   let vietnamese =
-    "Phản hồi của bạn đã được gửi tới đội ngũ quản lý Cozy Garden để kiểm tra và xử lý.";
+    "Cảm ơn bạn đã dành thời gian chia sẻ. Cozy Garden thực sự trân trọng phản hồi của bạn và mong có cơ hội hiểu rõ hơn trải nghiệm của bạn để cải thiện chất lượng phục vụ.";
 
   if (onsite) {
-    title = "We’re sorry. Please give us a moment to make this right.";
+    title = "We’re sorry your experience wasn’t right.";
     message = table
-      ? `Our team is being alerted about your feedback at table ${table}. Someone will assist you as soon as possible.`
-      : "Our team is being alerted. Someone will assist you as soon as possible.";
+      ? `Thank you for telling us. We would really appreciate the chance to speak with you directly, understand what happened, and try to resolve the issue while you are still here. Our team has been alerted about your feedback at table ${table}, and a staff member or shift leader will come to assist you shortly.`
+      : "Thank you for telling us. We would really appreciate the chance to speak with you directly, understand what happened, and try to resolve the issue while you are still here. Our team has been alerted, and a staff member or shift leader will come to assist you shortly.";
     vietnamese = table
-      ? `Đội ngũ Cozy Garden đang được thông báo về phản hồi tại bàn ${table} và sẽ đến hỗ trợ bạn sớm nhất có thể.`
-      : "Đội ngũ Cozy Garden đang được thông báo và sẽ đến hỗ trợ bạn sớm nhất có thể.";
+      ? `Cảm ơn bạn đã chia sẻ. Chúng tôi rất mong được trao đổi trực tiếp với bạn để hiểu rõ hơn điều gì đã xảy ra và cố gắng xử lý vấn đề ngay khi bạn vẫn còn ở quán. Đội ngũ Cozy Garden đã được thông báo về phản hồi tại bàn ${table}; nhân viên hoặc Trưởng ca sẽ đến hỗ trợ bạn trong thời gian sớm nhất.`
+      : "Cảm ơn bạn đã chia sẻ. Chúng tôi rất mong được trao đổi trực tiếp với bạn để hiểu rõ hơn điều gì đã xảy ra và cố gắng xử lý vấn đề ngay khi bạn vẫn còn ở quán. Đội ngũ Cozy Garden đã được thông báo; nhân viên hoặc Trưởng ca sẽ đến hỗ trợ bạn trong thời gian sớm nhất.";
   } else if (wantsContact) {
-    title = "We’re sorry we didn’t resolve this during your visit.";
+    title = "We’re sorry we didn’t have the opportunity to resolve this during your visit.";
     message =
-      "A manager will follow up using the contact details you provided so we can understand what happened and try to resolve it properly.";
+      "We truly value your feedback and would appreciate the chance to speak with you directly, understand your experience better, and find an appropriate way to address your concerns. A member of our management team will contact you as soon as possible using the details you provided.";
     vietnamese =
-      "Quản lý Cozy Garden sẽ liên hệ theo thông tin bạn đã cung cấp để tìm hiểu và xử lý vấn đề thỏa đáng.";
+      "Cozy Garden thực sự trân trọng phản hồi của bạn và rất mong được trao đổi trực tiếp để hiểu rõ hơn trải nghiệm của bạn, lắng nghe những điều bạn chưa hài lòng và tìm phương án xử lý phù hợp. Quản lý của Cozy Garden sẽ liên hệ với bạn trong thời gian sớm nhất theo thông tin bạn đã cung cấp.";
   }
 
   return (

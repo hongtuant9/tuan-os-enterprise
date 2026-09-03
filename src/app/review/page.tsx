@@ -1,39 +1,26 @@
-import type { Metadata } from "next";
-import ReviewClient from "./ReviewClient";
-
-export const metadata: Metadata = {
-  title: "Thank you — Cozy Garden Tam Coc",
-  description: "Share your Cozy Garden Tam Coc experience on Google or Tripadvisor.",
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+import { redirect } from "next/navigation";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function one(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+function appendParam(target: URLSearchParams, key: string, value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => target.append(key, item));
+    return;
+  }
+
+  if (value !== undefined) target.set(key, value);
 }
 
-export default async function CozyReviewPage({
+export default async function LegacyReviewRedirect({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+  const query = new URLSearchParams();
 
-  return (
-    <ReviewClient
-      sid={one(params.sid)}
-      rating={one(params.rating)}
-      review={one(params.review)}
-      feedback={one(params.feedback)}
-      category={one(params.category)}
-      issue={one(params.issue)}
-      onsite={one(params.onsite)}
-      requestContact={one(params.request_contact)}
-      table={one(params.table)}
-    />
-  );
+  Object.entries(params).forEach(([key, value]) => appendParam(query, key, value));
+
+  const suffix = query.toString();
+  redirect(suffix ? `/cozy/review?${suffix}` : "/cozy/review");
 }

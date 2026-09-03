@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/review"];
 
 // API routes authenticate themselves (see src/server/auth/api-auth.ts) since
 // they accept either a dashboard session *or* an x-api-key service caller

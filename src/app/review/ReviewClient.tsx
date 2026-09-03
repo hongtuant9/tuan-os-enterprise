@@ -18,6 +18,9 @@ type Props = {
   feedback: string;
   category: string;
   issue: string;
+  onsite: string;
+  requestContact: string;
+  table: string;
 };
 
 function cleanReview(value: string) {
@@ -34,6 +37,16 @@ function parseTopics(value: string) {
     .slice(0, 6);
 }
 
+function parseRating(value: string) {
+  const match = value.match(/[1-5]/);
+  return match ? Number(match[0]) : 0;
+}
+
+function isYes(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized.includes("yes") || normalized.includes("có");
+}
+
 export default function ReviewClient({
   sid,
   rating,
@@ -41,9 +54,15 @@ export default function ReviewClient({
   feedback,
   category,
   issue,
+  onsite,
+  requestContact,
+  table,
 }: Props) {
-  // Positive Feedback and negative/neutral Feedback Text are both guest-owned text.
-  // Never generate a review sentence on the guest's behalf.
+  const numericRating = useMemo(() => parseRating(rating), [rating]);
+  const isRecoveryCase = numericRating >= 1 && numericRating <= 3;
+  const isStillOnsite = useMemo(() => isYes(onsite), [onsite]);
+  const wantsContact = useMemo(() => isYes(requestContact), [requestContact]);
+
   const originalReview = useMemo(
     () => cleanReview(review) || cleanReview(feedback),
     [review, feedback]
@@ -171,17 +190,25 @@ export default function ReviewClient({
             Thank you for sharing your experience
           </h1>
 
-          <p
-            style={{
-              color: "#68736b",
-              textAlign: "center",
-              lineHeight: 1.55,
-              margin: "0 0 24px",
-            }}
-          >
-            Your feedback has been saved. If you would like, you can also share the
-            same experience publicly on Google or Tripadvisor.
-          </p>
+          {isRecoveryCase ? (
+            <RecoveryNotice
+              onsite={isStillOnsite}
+              wantsContact={wantsContact}
+              table={table}
+            />
+          ) : (
+            <p
+              style={{
+                color: "#68736b",
+                textAlign: "center",
+                lineHeight: 1.55,
+                margin: "0 0 24px",
+              }}
+            >
+              Your feedback has been saved. If you would like, you can also share the
+              same experience publicly on Google or Tripadvisor.
+            </p>
+          )}
 
           {hasOriginalReview ? (
             <div
@@ -192,16 +219,15 @@ export default function ReviewClient({
                 margin: "18px 0 20px",
               }}
             >
-              <div style={labelStyle}>YOUR REVIEW</div>
+              <div style={labelStyle}>{isRecoveryCase ? "YOUR FEEDBACK" : "YOUR REVIEW"}</div>
 
               <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, fontSize: 17 }}>
                 {originalReview}
               </div>
 
               <div style={hintStyle}>
-                These are your own words from the feedback form. Tap a button below and
-                we will copy them first, then open the review platform. You can edit
-                them before posting.
+                These are your own words from the feedback form. You remain free to
+                edit them before posting anywhere publicly.
               </div>
             </div>
           ) : (
@@ -288,35 +314,49 @@ export default function ReviewClient({
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 12 }}>
-            <button
-              type="button"
-              onClick={() => copyAndOpen("google")}
-              style={buttonStyle("#6f8f35", "#fff")}
+          {isRecoveryCase ? (
+            <div
+              style={{
+                borderTop: "1px solid #e6e5dc",
+                paddingTop: 20,
+                marginTop: 24,
+              }}
             >
-              {activeReview ? "★ Copy & review on Google" : "★ Review on Google"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => copyAndOpen("tripadvisor")}
-              style={buttonStyle("#1d6b5d", "#fff")}
-            >
-              {activeReview
-                ? "Copy & review on Tripadvisor"
-                : "Review on Tripadvisor"}
-            </button>
-
-            {activeReview ? (
-              <button
-                type="button"
-                onClick={copyOnly}
-                style={buttonStyle("#edf0ea", "#203020")}
+              <div
+                style={{
+                  textAlign: "center",
+                  fontWeight: 800,
+                  fontSize: 15,
+                  marginBottom: 6,
+                }}
               >
-                Copy review only
-              </button>
-            ) : null}
-          </div>
+                If you still wish to share your experience publicly
+              </div>
+              <div
+                style={{
+                  color: "#68736b",
+                  textAlign: "center",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  marginBottom: 14,
+                }}
+              >
+                You can use the same words you already wrote. Posting a public review is
+                completely optional.
+              </div>
+              <ReviewActions
+                activeReview={activeReview}
+                copyOnly={copyOnly}
+                copyAndOpen={copyAndOpen}
+              />
+            </div>
+          ) : (
+            <ReviewActions
+              activeReview={activeReview}
+              copyOnly={copyOnly}
+              copyAndOpen={copyAndOpen}
+            />
+          )}
 
           <div
             aria-live="polite"
@@ -358,6 +398,125 @@ export default function ReviewClient({
         </section>
       </div>
     </main>
+  );
+}
+
+function RecoveryNotice({
+  onsite,
+  wantsContact,
+  table,
+}: {
+  onsite: boolean;
+  wantsContact: boolean;
+  table: string;
+}) {
+  let title = "We’re sorry your experience wasn’t right.";
+  let message =
+    "Your feedback has been sent to our management team for review.";
+  let vietnamese =
+    "Phản hồi của bạn đã được gửi tới đội ngũ quản lý Cozy Garden để kiểm tra và xử lý.";
+
+  if (onsite) {
+    title = "We’re sorry. Please give us a moment to make this right.";
+    message = table
+      ? `Our team is being alerted about your feedback at table ${table}. Someone will assist you as soon as possible.`
+      : "Our team is being alerted. Someone will assist you as soon as possible.";
+    vietnamese = table
+      ? `Đội ngũ Cozy Garden đang được thông báo về phản hồi tại bàn ${table} và sẽ đến hỗ trợ bạn sớm nhất có thể.`
+      : "Đội ngũ Cozy Garden đang được thông báo và sẽ đến hỗ trợ bạn sớm nhất có thể.";
+  } else if (wantsContact) {
+    title = "We’re sorry we didn’t resolve this during your visit.";
+    message =
+      "A manager will follow up using the contact details you provided so we can understand what happened and try to resolve it properly.";
+    vietnamese =
+      "Quản lý Cozy Garden sẽ liên hệ theo thông tin bạn đã cung cấp để tìm hiểu và xử lý vấn đề thỏa đáng.";
+  }
+
+  return (
+    <div
+      style={{
+        background: "#fff4df",
+        border: "1px solid #efd8aa",
+        borderRadius: 18,
+        padding: 20,
+        margin: "20px 0 22px",
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 850,
+          fontSize: 20,
+          lineHeight: 1.3,
+          textAlign: "center",
+          marginBottom: 10,
+          color: "#5b451c",
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          color: "#63573e",
+          textAlign: "center",
+          lineHeight: 1.55,
+          fontSize: 15,
+        }}
+      >
+        {message}
+      </div>
+      <div
+        style={{
+          color: "#63573e",
+          textAlign: "center",
+          lineHeight: 1.55,
+          fontSize: 14,
+          fontStyle: "italic",
+          marginTop: 8,
+        }}
+      >
+        {vietnamese}
+      </div>
+    </div>
+  );
+}
+
+function ReviewActions({
+  activeReview,
+  copyOnly,
+  copyAndOpen,
+}: {
+  activeReview: string;
+  copyOnly: () => void;
+  copyAndOpen: (platform: "google" | "tripadvisor") => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <button
+        type="button"
+        onClick={() => copyAndOpen("google")}
+        style={buttonStyle("#6f8f35", "#fff")}
+      >
+        {activeReview ? "★ Copy & review on Google" : "★ Review on Google"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => copyAndOpen("tripadvisor")}
+        style={buttonStyle("#1d6b5d", "#fff")}
+      >
+        {activeReview ? "Copy & review on Tripadvisor" : "Review on Tripadvisor"}
+      </button>
+
+      {activeReview ? (
+        <button
+          type="button"
+          onClick={copyOnly}
+          style={buttonStyle("#edf0ea", "#203020")}
+        >
+          Copy review only
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -11,7 +11,7 @@ function appendParam(target: URLSearchParams, key: string, value: string | strin
   if (value !== undefined) target.set(key, value);
 }
 
-export default async function LegacyReviewRedirect({
+export default async function LegacyFeedbackRedirect({
   searchParams,
 }: {
   searchParams: SearchParams;
@@ -22,5 +22,5 @@ export default async function LegacyReviewRedirect({
   Object.entries(params).forEach(([key, value]) => appendParam(query, key, value));
 
   const suffix = query.toString();
-  redirect(suffix ? `/cozy/review?${suffix}` : "/cozy/review");
+  redirect(suffix ? `/cozy/feedback?${suffix}` : "/cozy/feedback");
 }

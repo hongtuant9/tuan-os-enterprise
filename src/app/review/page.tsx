@@ -28,7 +28,9 @@ export default async function CozyReviewPage({
       sid={one(params.sid)}
       rating={one(params.rating)}
       review={one(params.review)}
+      feedback={one(params.feedback)}
       category={one(params.category)}
+      issue={one(params.issue)}
     />
   );
 }

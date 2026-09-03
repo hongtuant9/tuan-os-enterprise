@@ -416,9 +416,9 @@ function RecoveryNotice({
 }) {
   let title = "We’re sorry your experience wasn’t right.";
   let message =
-    "Thank you for taking the time to tell us what happened. We truly value your feedback and would appreciate the opportunity to understand your experience better so we can improve our service.";
+    "Thank you for telling us. At Cozy Garden, we do not want to simply receive a low rating and move on. We genuinely want to understand what happened, what we could have done better, and what we need to improve. Your honest feedback is very important to us. It helps our team recognize where we have fallen short, learn from it, and serve our guests better.";
   let vietnamese =
-    "Cảm ơn bạn đã dành thời gian chia sẻ. Cozy Garden thực sự trân trọng phản hồi của bạn và mong có cơ hội hiểu rõ hơn trải nghiệm của bạn để cải thiện chất lượng phục vụ.";
+    "Cảm ơn bạn đã chia sẻ với chúng tôi. Cozy Garden không muốn chỉ ghi nhận một đánh giá chưa tốt rồi bỏ qua. Chúng tôi thực sự muốn hiểu điều gì đã xảy ra, chúng tôi có thể làm tốt hơn ở đâu và cần cải thiện điều gì. Phản hồi chân thành của bạn rất quan trọng, giúp đội ngũ của chúng tôi nhận ra những điểm chưa tốt, rút kinh nghiệm và phục vụ khách hàng tốt hơn.";
 
   if (onsite) {
     title = "We’re sorry your experience wasn’t right.";

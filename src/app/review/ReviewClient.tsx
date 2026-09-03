@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const TRACK_ENDPOINT =
   "https://mmxgthzafjoienokyplw.supabase.co/functions/v1/cozy-review-page";
@@ -19,28 +19,28 @@ type Props = {
 };
 
 function cleanReview(value: string) {
-  return value.trim().replace(/^['\"]+|['\"]+$/g, "").trim();
+  return value.trim().replace(/^[\s'\"]+|[\s'\"]+$/g, "").trim();
 }
 
-function buildDraft(review: string, category: string) {
-  const clean = cleanReview(review);
-  if (clean) return clean;
-
-  const items = category
+function parseTopics(category: string) {
+  return category
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
-    .map((item) => item.split("/")[0].trim().toLowerCase())
+    .map((item) => item.split("/")[0].trim())
     .filter(Boolean)
-    .slice(0, 3);
-
-  if (!items.length) return "";
-  return `I enjoyed the ${items.join(", ")} at Cozy Garden Tam Coc.`;
+    .slice(0, 6);
 }
 
 export default function ReviewClient({ sid, rating, review, category }: Props) {
-  const draft = buildDraft(review, category);
+  const originalReview = useMemo(() => cleanReview(review), [review]);
+  const topics = useMemo(() => parseTopics(category), [category]);
+  const hasOriginalReview = Boolean(originalReview);
+
+  const [guestDraft, setGuestDraft] = useState("");
   const [status, setStatus] = useState("");
+
+  const activeReview = hasOriginalReview ? originalReview : guestDraft.trim();
 
   async function track(platform: "copy" | "google" | "tripadvisor") {
     try {
@@ -51,24 +51,24 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
           submission_id: sid,
           rating,
           platform,
-          review_text: draft,
+          review_text: activeReview,
           positive_category: category,
         }),
       });
     } catch {
-      // Tracking failure must never block the guest flow.
+      // Tracking must never block the guest flow.
     }
   }
 
   async function copyText() {
-    if (!draft) return false;
+    if (!activeReview) return false;
 
     try {
-      await navigator.clipboard.writeText(draft);
+      await navigator.clipboard.writeText(activeReview);
       return true;
     } catch {
       const area = document.createElement("textarea");
-      area.value = draft;
+      area.value = activeReview;
       area.style.position = "fixed";
       area.style.opacity = "0";
       document.body.appendChild(area);
@@ -82,21 +82,24 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
 
   async function copyOnly() {
     const ok = await copyText();
+    if (!ok) {
+      setStatus("Write a short comment first, then you can copy it.");
+      return;
+    }
+
     void track("copy");
-    setStatus(
-      ok
-        ? "Copied. You can paste it into your public review."
-        : "Please select and copy the review text above."
-    );
+    setStatus("Copied. You can paste it into your public review.");
   }
 
   async function copyAndOpen(platform: "google" | "tripadvisor") {
     const ok = await copyText();
     void track(platform);
+
+    const platformName = platform === "google" ? "Google" : "Tripadvisor";
     setStatus(
       ok
-        ? `Copied — opening ${platform === "google" ? "Google" : "Tripadvisor"}...`
-        : `Opening ${platform === "google" ? "Google" : "Tripadvisor"}...`
+        ? `Copied — opening ${platformName}...`
+        : `Opening ${platformName}... You can write your review there in your own words.`
     );
 
     window.setTimeout(() => {
@@ -158,49 +161,111 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
               margin: "0 0 24px",
             }}
           >
-            Your feedback has been saved. If you would like, you can share the same
-            experience publicly without typing it again.
+            Your feedback has been saved. If you would like, you can also share your
+            experience publicly on Google or Tripadvisor.
           </p>
 
-          <div
-            style={{
-              background: "#eef4e3",
-              borderRadius: 18,
-              padding: 18,
-              margin: "18px 0 20px",
-            }}
-          >
+          {hasOriginalReview ? (
             <div
               style={{
-                fontSize: 12,
-                fontWeight: 800,
-                letterSpacing: ".08em",
-                color: "#4d6f22",
-                marginBottom: 9,
+                background: "#eef4e3",
+                borderRadius: 18,
+                padding: 18,
+                margin: "18px 0 20px",
               }}
             >
-              YOUR REVIEW
-            </div>
+              <div style={labelStyle}>YOUR REVIEW</div>
 
-            <div
-              style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, fontSize: 17 }}
-            >
-              {draft ||
-                "Your feedback has been saved. You can still leave a public review if you wish."}
-            </div>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, fontSize: 17 }}>
+                {originalReview}
+              </div>
 
+              <div style={hintStyle}>
+                Tap a button below. We will copy your own words first, then open the
+                review platform. You can edit them before posting.
+              </div>
+            </div>
+          ) : (
             <div
               style={{
-                fontSize: 13,
-                color: "#68736b",
-                marginTop: 10,
-                lineHeight: 1.45,
+                background: "#eef4e3",
+                borderRadius: 18,
+                padding: 18,
+                margin: "18px 0 20px",
               }}
             >
-              Tap a button below. We will copy this text first, then open the review
-              platform. You can edit it before posting.
+              <div style={labelStyle}>WHAT YOU LIKED</div>
+
+              {topics.length > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginBottom: 16,
+                  }}
+                >
+                  {topics.map((topic) => (
+                    <span
+                      key={topic}
+                      style={{
+                        display: "inline-block",
+                        background: "#fff",
+                        border: "1px solid #d9e4c9",
+                        borderRadius: 999,
+                        padding: "7px 11px",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#4d6f22",
+                      }}
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <label
+                htmlFor="guest-review"
+                style={{
+                  display: "block",
+                  fontWeight: 750,
+                  fontSize: 15,
+                  marginBottom: 8,
+                }}
+              >
+                Would you like to add a short comment in your own words?
+              </label>
+
+              <textarea
+                id="guest-review"
+                value={guestDraft}
+                onChange={(event) => setGuestDraft(event.target.value)}
+                placeholder="What did you like most? You can mention the food, service, view, atmosphere, or anything else that stood out to you."
+                rows={4}
+                maxLength={1200}
+                style={{
+                  width: "100%",
+                  resize: "vertical",
+                  border: "1px solid #cdd8c0",
+                  borderRadius: 14,
+                  padding: "13px 14px",
+                  font: "inherit",
+                  fontSize: 16,
+                  lineHeight: 1.5,
+                  color: "#1f2a22",
+                  background: "#fff",
+                  outline: "none",
+                }}
+              />
+
+              <div style={hintStyle}>
+                The topics above are only reminders of what you selected. We do not
+                generate a review for you. You can write as much or as little as you
+                like, or continue without adding text.
+              </div>
             </div>
-          </div>
+          )}
 
           <div style={{ display: "grid", gap: 12 }}>
             <button
@@ -208,7 +273,7 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
               onClick={() => copyAndOpen("google")}
               style={buttonStyle("#6f8f35", "#fff")}
             >
-              ★ Copy & review on Google
+              {activeReview ? "★ Copy & review on Google" : "★ Review on Google"}
             </button>
 
             <button
@@ -216,16 +281,20 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
               onClick={() => copyAndOpen("tripadvisor")}
               style={buttonStyle("#1d6b5d", "#fff")}
             >
-              Copy & review on Tripadvisor
+              {activeReview
+                ? "Copy & review on Tripadvisor"
+                : "Review on Tripadvisor"}
             </button>
 
-            <button
-              type="button"
-              onClick={copyOnly}
-              style={buttonStyle("#edf0ea", "#203020")}
-            >
-              Copy review only
-            </button>
+            {activeReview ? (
+              <button
+                type="button"
+                onClick={copyOnly}
+                style={buttonStyle("#edf0ea", "#203020")}
+              >
+                Copy review only
+              </button>
+            ) : null}
           </div>
 
           <div
@@ -270,6 +339,21 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
     </main>
   );
 }
+
+const labelStyle = {
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: ".08em",
+  color: "#4d6f22",
+  marginBottom: 9,
+};
+
+const hintStyle = {
+  fontSize: 13,
+  color: "#68736b",
+  marginTop: 10,
+  lineHeight: 1.45,
+};
 
 function buttonStyle(background: string, color: string) {
   return {

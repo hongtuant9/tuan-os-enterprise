@@ -6,7 +6,7 @@ const TRACK_ENDPOINT =
   "https://mmxgthzafjoienokyplw.supabase.co/functions/v1/cozy-review-page";
 
 const GOOGLE_DEFAULT =
-  "https://www.google.com/maps/search/?api=1&query=Tam%20Coc%20Cozy%20Garden%2C%20Ninh%20Binh%2C%20Vietnam";
+  "https://g.page/r/CXUZD5eGTZEBEAI/review";
 
 const TRIPADVISOR_DEFAULT =
   "https://www.tripadvisor.com/UserReviewEdit-g303945-d28657657-Tam_coc_cozy_garden-Ninh_Binh_Ninh_Binh_Province.html";

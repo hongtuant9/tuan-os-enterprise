@@ -1,8 +1,14 @@
 const PHONE_DISPLAY = "+84 901 019 555";
 const PHONE_E164 = "+84901019555";
 const EMAIL = "hongtuant9@gmail.com";
+const WHATSAPP_MESSAGE =
+  "Hi, I recently visited Cozy Garden and would like to share some feedback about my experience.";
 
 export default function DirectContactCard() {
+  const whatsappUrl = `https://wa.me/${PHONE_E164.replace("+", "")}?text=${encodeURIComponent(
+    WHATSAPP_MESSAGE
+  )}`;
+
   return (
     <div
       style={{
@@ -28,87 +34,85 @@ export default function DirectContactCard() {
       <div
         style={{
           fontSize: 13,
-          lineHeight: 1.6,
+          lineHeight: 1.55,
           color: "#63573e",
           textAlign: "center",
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
-        If you prefer not to leave your contact details in the form, you are very
-        welcome to message, call, or email me directly. I am the owner of Cozy Garden,
-        and I would sincerely appreciate hearing more about your experience so I can
-        understand what went wrong, learn from it, and help our team improve our service.
+        I’m the owner of Cozy Garden, and I would genuinely appreciate hearing more
+        about your experience. If it’s easier, please send me a WhatsApp message
+        directly. I will personally read your message.
       </div>
 
       <div
         style={{
           fontSize: 13,
-          lineHeight: 1.6,
+          lineHeight: 1.55,
           color: "#63573e",
           textAlign: "center",
           fontStyle: "italic",
           marginBottom: 14,
         }}
       >
-        Nếu bạn không tiện để lại thông tin liên hệ trong biểu mẫu, bạn hoàn toàn có thể
-        nhắn tin, gọi điện hoặc gửi email trực tiếp cho tôi. Tôi là chủ Cozy Garden và
-        thực sự rất mong được nghe thêm về trải nghiệm của bạn để hiểu rõ điều gì chưa tốt,
-        rút kinh nghiệm và cùng đội ngũ cải thiện chất lượng phục vụ.
-      </div>
-
-      <div
-        style={{
-          fontSize: 12,
-          lineHeight: 1.5,
-          color: "#7a6a49",
-          textAlign: "center",
-          marginBottom: 14,
-        }}
-      >
-        Your message will come directly to me, the owner of Cozy Garden. / Tin nhắn của
-        bạn sẽ được gửi trực tiếp tới tôi, chủ Cozy Garden.
+        Tôi là chủ Cozy Garden và thực sự rất mong được nghe thêm về trải nghiệm của
+        bạn. Nếu thuận tiện, bạn hãy nhắn trực tiếp cho tôi qua WhatsApp. Tôi sẽ trực
+        tiếp đọc phản hồi của bạn.
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
         <a
-          href={`https://wa.me/${PHONE_E164.replace("+", "")}`}
+          href={whatsappUrl}
           target="_blank"
           rel="noreferrer"
-          style={contactButtonStyle("#1f7a4f", "#fff")}
+          style={contactButtonStyle("#1f7a4f", "#fff", 15)}
         >
-          WhatsApp the owner directly
+          Message the owner on WhatsApp
         </a>
 
         <a
-          href={`tel:${PHONE_E164}`}
-          style={contactButtonStyle("#edf0ea", "#203020")}
+          href={`mailto:${EMAIL}?subject=Cozy%20Garden%20%E2%80%94%20Guest%20Feedback`}
+          style={contactButtonStyle("#edf0ea", "#203020", 14)}
         >
-          Call the owner · {PHONE_DISPLAY}
+          Email the owner
         </a>
+      </div>
 
-        <a
-          href={`mailto:${EMAIL}?subject=Cozy%20Garden%20feedback`}
-          style={contactButtonStyle("#edf0ea", "#203020")}
-        >
-          Email the owner · {EMAIL}
-        </a>
+      <div
+        style={{
+          marginTop: 13,
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "#7a6a49",
+          textAlign: "center",
+        }}
+      >
+        Email: {EMAIL}
+        <br />
+        Phone: {PHONE_DISPLAY}
+        <br />
+        Messaging is preferred so I don’t miss your feedback.
+        <br />
+        <span style={{ fontStyle: "italic" }}>
+          Ưu tiên nhắn tin để tôi không bỏ lỡ phản hồi của bạn.
+        </span>
       </div>
     </div>
   );
 }
 
-function contactButtonStyle(background: string, color: string) {
+function contactButtonStyle(background: string, color: string, fontSize: number) {
   return {
     display: "block",
     width: "100%",
     boxSizing: "border-box" as const,
-    padding: "13px 14px",
+    padding: "14px 14px",
     borderRadius: 13,
     background,
     color,
     textAlign: "center" as const,
     textDecoration: "none",
-    fontSize: 14,
+    fontSize,
     fontWeight: 800,
   };
 }

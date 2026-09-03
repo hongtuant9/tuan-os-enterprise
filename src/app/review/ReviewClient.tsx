@@ -15,15 +15,17 @@ type Props = {
   sid: string;
   rating: string;
   review: string;
+  feedback: string;
   category: string;
+  issue: string;
 };
 
 function cleanReview(value: string) {
   return value.trim().replace(/^[\s'\"]+|[\s'\"]+$/g, "").trim();
 }
 
-function parseTopics(category: string) {
-  return category
+function parseTopics(value: string) {
+  return value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
@@ -32,10 +34,25 @@ function parseTopics(category: string) {
     .slice(0, 6);
 }
 
-export default function ReviewClient({ sid, rating, review, category }: Props) {
-  const originalReview = useMemo(() => cleanReview(review), [review]);
-  const topics = useMemo(() => parseTopics(category), [category]);
+export default function ReviewClient({
+  sid,
+  rating,
+  review,
+  feedback,
+  category,
+  issue,
+}: Props) {
+  // Positive Feedback and negative/neutral Feedback Text are both guest-owned text.
+  // Never generate a review sentence on the guest's behalf.
+  const originalReview = useMemo(
+    () => cleanReview(review) || cleanReview(feedback),
+    [review, feedback]
+  );
+
+  const topicSource = category || issue;
+  const topics = useMemo(() => parseTopics(topicSource), [topicSource]);
   const hasOriginalReview = Boolean(originalReview);
+  const isPositiveTopics = Boolean(category);
 
   const [guestDraft, setGuestDraft] = useState("");
   const [status, setStatus] = useState("");
@@ -53,6 +70,7 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
           platform,
           review_text: activeReview,
           positive_category: category,
+          issue_category: issue,
         }),
       });
     } catch {
@@ -161,8 +179,8 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
               margin: "0 0 24px",
             }}
           >
-            Your feedback has been saved. If you would like, you can also share your
-            experience publicly on Google or Tripadvisor.
+            Your feedback has been saved. If you would like, you can also share the
+            same experience publicly on Google or Tripadvisor.
           </p>
 
           {hasOriginalReview ? (
@@ -181,8 +199,9 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
               </div>
 
               <div style={hintStyle}>
-                Tap a button below. We will copy your own words first, then open the
-                review platform. You can edit them before posting.
+                These are your own words from the feedback form. Tap a button below and
+                we will copy them first, then open the review platform. You can edit
+                them before posting.
               </div>
             </div>
           ) : (
@@ -194,7 +213,9 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
                 margin: "18px 0 20px",
               }}
             >
-              <div style={labelStyle}>WHAT YOU LIKED</div>
+              <div style={labelStyle}>
+                {isPositiveTopics ? "WHAT YOU LIKED" : "WHAT YOU MENTIONED"}
+              </div>
 
               {topics.length > 0 ? (
                 <div
@@ -241,7 +262,7 @@ export default function ReviewClient({ sid, rating, review, category }: Props) {
                 id="guest-review"
                 value={guestDraft}
                 onChange={(event) => setGuestDraft(event.target.value)}
-                placeholder="What did you like most? You can mention the food, service, view, atmosphere, or anything else that stood out to you."
+                placeholder="What would you like others to know about your experience?"
                 rows={4}
                 maxLength={1200}
                 style={{

@@ -31,6 +31,9 @@ export default async function CozyReviewPage({
       feedback={one(params.feedback)}
       category={one(params.category)}
       issue={one(params.issue)}
+      onsite={one(params.onsite)}
+      requestContact={one(params.request_contact)}
+      table={one(params.table)}
     />
   );
 }

@@ -1,5 +1,90 @@
 import type { Json } from "@/lib/supabase/types";
 
+export type EcosystemIntent = "stay" | "eat" | "experience" | "explore" | "support" | "general";
+
+export type EcosystemRoute = {
+  primaryIntent: EcosystemIntent;
+  secondaryIntents: EcosystemIntent[];
+  routedAgent: "AI_RECEPTIONIST" | "AI_BOOKING" | "COZY_AGENT" | "AI_CONCIERGE" | "AI_UPSELL";
+  journeyEntry: "HOMESTAY" | "COZY" | "EXPERIENCE" | "EXPLORE" | "GENERAL";
+  upsellOffers: string[];
+};
+
+const INTENT_PATTERNS: Array<[EcosystemIntent, RegExp]> = [
+  ["experience", /(coffee experience|cooking class|lớp nấu ăn|học nấu ăn|trải nghiệm|experience|làm cà phê|make coffee)/i],
+  ["eat", /(cozy|restaurant|cafe|coffee|cà phê|menu|food|đồ ăn|món|ăn tối|ăn trưa|ăn sáng|drink|smoothie|juice|fried rice|noodles|shakshuka)/i],
+  ["explore", /(tour|tràng an|trang an|hang múa|mua cave|bích động|bich dong|xe đạp|bicycle|xe máy|motorbike|taxi|transfer|pickup|airport|ga ninh bình|đi đâu|lịch trình|itinerary|tham quan)/i],
+  ["stay", /(lavender|ruby|homestay|phòng|đặt phòng|booking|room|stay|check[ -]?in|check[ -]?out|còn phòng|available|overnight)/i],
+  ["support", /(khiếu nại|complaint|help|hỗ trợ|lost|quên đồ|sự cố|problem|issue)/i],
+];
+
+export function classifyEcosystemMessage(content: string): EcosystemRoute {
+  const intents = INTENT_PATTERNS.filter(([, pattern]) => pattern.test(content)).map(([intent]) => intent);
+  const primaryIntent = intents[0] ?? "general";
+  const secondaryIntents = [...new Set(intents.slice(1))];
+
+  const routedAgent = primaryIntent === "stay"
+    ? "AI_BOOKING"
+    : primaryIntent === "eat"
+      ? "COZY_AGENT"
+      : primaryIntent === "experience" || primaryIntent === "explore"
+        ? "AI_CONCIERGE"
+        : "AI_RECEPTIONIST";
+
+  const journeyEntry = primaryIntent === "stay"
+    ? "HOMESTAY"
+    : primaryIntent === "eat"
+      ? "COZY"
+      : primaryIntent === "experience"
+        ? "EXPERIENCE"
+        : primaryIntent === "explore"
+          ? "EXPLORE"
+          : "GENERAL";
+
+  const upsellOffers = primaryIntent === "stay"
+    ? ["BREAKFAST", "COZY_GARDEN", "LOCAL_PLAN"]
+    : primaryIntent === "eat"
+      ? ["STAY_NEARBY", "EXPERIENCE", "LOCAL_PLAN"]
+      : primaryIntent === "experience"
+        ? ["COZY_GARDEN", "STAY_NEARBY", "TRANSPORT"]
+        : primaryIntent === "explore"
+          ? ["COZY_GARDEN", "STAY_NEARBY"]
+          : [];
+
+  return { primaryIntent, secondaryIntents, routedAgent, journeyEntry, upsellOffers };
+}
+
+const VERIFIED_COZY_ITEMS = [
+  ["Coconut Coffee", "45.000 VND"],
+  ["Egg Coffee", "45.000 VND"],
+  ["Salt Coffee", "45.000 VND"],
+  ["Beef Fried Noodles", "60.000 VND"],
+  ["Chicken Fried Rice", "55.000 VND"],
+  ["Tofu in Tomato Sauce", "65.000 VND"],
+] as const;
+
+export function buildEcosystemSafeReply(content: string, route: EcosystemRoute): string | null {
+  if (route.primaryIntent === "eat") {
+    const asksMenu = /(menu|món|food|ăn gì|what.*eat|coffee|cà phê|drink|đồ uống|giá|price)/i.test(content);
+    if (asksMenu) {
+      const items = VERIFIED_COZY_ITEMS.map(([name, price]) => `${name} ${price}`).join("; " );
+      return `Cozy Garden có các món/đồ uống đã được xác minh như: ${items}. Em có thể gợi ý theo nhu cầu đồ uống, món chính hoặc món chay đã được xác minh. Nếu anh/chị cũng cần chỗ ở gần Tam Cốc hoặc lịch trình tham quan, em có thể hỗ trợ tiếp.`;
+    }
+    return "Em có thể hỗ trợ Cozy Garden về món ăn, đồ uống và thông tin đã được xác minh. Nếu anh/chị đang lên kế hoạch cho cả chuyến đi, em cũng có thể hỗ trợ chỗ ở và lịch trình Tam Cốc phù hợp.";
+  }
+
+  if (route.primaryIntent === "experience") {
+    return "Tam Coc Experience có nhóm trải nghiệm tại Cozy Garden như Coffee Experience và Cooking Class, nhưng giá, thời lượng và sức chứa hiện chưa được xác minh đầy đủ để AI tự cam kết. Em có thể tư vấn hướng lựa chọn và chuyển yêu cầu cụ thể để quản lý xác nhận. Sau trải nghiệm, em cũng có thể gợi ý bữa ăn tại Cozy Garden hoặc chỗ ở gần đó.";
+  }
+
+  if (route.primaryIntent === "explore") {
+    return "Em có thể hỗ trợ lên kế hoạch tham quan Tam Cốc, Tràng An, Hang Múa và các nhu cầu di chuyển. Giá tour/xe/transfer chỉ được báo khi nguồn dịch vụ đã được xác minh. Em có thể trước hết giúp anh/chị xây lịch trình phù hợp số ngày, điểm muốn đi và nơi đang lưu trú.";
+  }
+
+  return null;
+}
+
+
 export type PilotDecision = {
   reply: string;
   conversationStatus: "active" | "waiting_guest" | "needs_manager";
@@ -127,6 +212,7 @@ export function decidePilotMessage(
   customerContact?: string
 ): PilotDecision {
   const trimmed = content.trim();
+  const route = classifyEcosystemMessage(trimmed);
   const dates = extractDateRange(trimmed);
   const metadataPatch: Record<string, Json> = {
     customer_name: customerName ?? (existingMetadata.customer_name as string | undefined) ?? null,
@@ -138,10 +224,15 @@ export function decidePilotMessage(
     property_hint: detectProperty(trimmed) ?? existingMetadata.property_hint ?? null,
     last_guest_message: trimmed,
     language: detectLanguage(trimmed),
+    primary_intent: route.primaryIntent,
+    secondary_intents: route.secondaryIntents,
+    routed_agent: route.routedAgent,
+    journey_entry: route.journeyEntry,
+    upsell_offers: route.upsellOffers,
   };
 
   const evidence = {
-    engine: "PRIVATE_PILOT_RULE_ENGINE_V1",
+    engine: "PRIVATE_PILOT_RULE_ENGINE_V2_ECOSYSTEM",
     source: "guest_direct_message",
     evaluated_at: new Date().toISOString(),
   } satisfies Record<string, Json>;
@@ -175,6 +266,22 @@ export function decidePilotMessage(
     };
   }
 
+  const ecosystemReply = buildEcosystemSafeReply(trimmed, route);
+  const needsSpecificServiceVerification =
+    (route.primaryIntent === "experience" || route.primaryIntent === "explore") &&
+    /(giá|price|bao lâu|duration|sức chứa|capacity|đặt|book|booking|thuê|rent|có .* không|bán|offer|provide|available)/i.test(trimmed);
+  const asksCozyPromotion = route.primaryIntent === "eat" &&
+    /(voucher|discount|ưu đãi|khuyến mại|giảm|trong khuôn viên|ở đâu|vị trí)/i.test(trimmed);
+
+  if (ecosystemReply && !needsSpecificServiceVerification && !asksCozyPromotion) {
+    return {
+      reply: ecosystemReply,
+      conversationStatus: "active",
+      metadataPatch,
+      evidence: { ...evidence, routing: route as unknown as Json, cross_sell_rule_source: "11_CROSS_SELL_AI" },
+    };
+  }
+
   const matchedGap = GAP_RULES.find((rule) => rule.pattern.test(trimmed));
   if (matchedGap) {
     return {
@@ -201,7 +308,7 @@ export function decidePilotMessage(
   if (!bookingIntent) {
     return {
       reply:
-        "Em là AI Lễ tân của Tam Coc Experience. Em có thể hỗ trợ tư vấn phòng tại Lavender hoặc Ruby, hướng dẫn di chuyển và các dịch vụ phù hợp. Anh/chị đang cần hỗ trợ nội dung nào ạ?",
+        "Em là AI của Tam Coc Experience. Em có thể hỗ trợ chỗ ở Lavender/Ruby, Cozy Garden, món ăn/đồ uống, trải nghiệm, lịch trình Tam Cốc, tour/di chuyển và các dịch vụ đã được xác minh. Anh/chị đang cần hỗ trợ nội dung nào ạ?",
       conversationStatus: "active",
       metadataPatch,
       evidence,

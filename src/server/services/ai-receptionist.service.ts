@@ -292,7 +292,7 @@ export class AiReceptionistService {
       customer_name: input.customerName ?? existing?.customer_name ?? null,
       customer_contact: input.customerContact ?? existing?.customer_contact ?? null,
       language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi"),
-      intent: "booking_concierge_experience",
+      intent: typeof decision.metadataPatch.primary_intent === "string" ? decision.metadataPatch.primary_intent : "general",
       status: decision.conversationStatus,
       mode,
       last_message_at: new Date().toISOString(),

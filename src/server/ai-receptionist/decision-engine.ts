@@ -197,7 +197,7 @@ export function decidePilotMessage(
     };
   }
 
-  const bookingIntent = /(phòng|đặt phòng|booking|room|stay|cuối tuần|homestay)/i.test(trimmed);
+  const bookingIntent = /(phòng|đặt|booking|room|stay|cuối tuần|homestay|giá|price|available|còn phòng)/i.test(trimmed);
   if (!bookingIntent) {
     return {
       reply:

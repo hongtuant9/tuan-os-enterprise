@@ -1,6 +1,7 @@
 import {
   assertBookingTransition,
   canDraftConfirmation,
+  buildKiotVietOrderPayload,
   failureSafePatch,
   makeBookingIdempotencyKey,
   validateBookingDraftInput,
@@ -43,5 +44,9 @@ test("failure_safe", () => {
   const patch = failureSafePatch("API_TIMEOUT", { requestId: "x" });
   if (patch.status !== "failed_safe" || patch.verification_status !== "failed") throw new Error("bad patch");
 });
-console.log(`TOTAL ${pass}/15`);
-if (pass !== 15) process.exit(1);
+test("payload_verified", () => { const p = buildKiotVietOrderPayload({ ...base, roomClassId: "120841", quotedPrice: 900000, priceSource: "VERIFIED_PRICEBOOK", phone: "0900 000 000", branchId: 8992, roomClassVersion: 3 }); if (p.branchId !== 8992 || p.counterType !== 3 || p.roomClasses[0].version !== 3) throw new Error("bad payload"); });
+test("payload_requires_phone", () => throws(() => buildKiotVietOrderPayload({ ...base, roomClassId: "120841", quotedPrice: 900000, priceSource: "VERIFIED_PRICEBOOK", phone: "", branchId: 8992, roomClassVersion: 3 })));
+test("payload_requires_verified_price", () => throws(() => buildKiotVietOrderPayload({ ...base, roomClassId: "120841", phone: "0900000000", branchId: 8992, roomClassVersion: 3 })));
+test("payload_requires_version", () => throws(() => buildKiotVietOrderPayload({ ...base, roomClassId: "120841", quotedPrice: 900000, priceSource: "VERIFIED_PRICEBOOK", phone: "0900000000", branchId: 8992, roomClassVersion: -1 })));
+console.log(`TOTAL ${pass}/19`);
+if (pass !== 19) process.exit(1);

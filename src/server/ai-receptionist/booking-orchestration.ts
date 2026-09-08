@@ -78,3 +78,23 @@ export function failureSafePatch(reason: string, evidence: Record<string, unknow
     verification_evidence: { reason, ...evidence },
   };
 }
+
+export type KiotVietOrderPayloadInput = BookingDraftInput & {
+  phone: string; branchId: number; roomClassVersion: number; counterType?: 2 | 3;
+};
+
+export function buildKiotVietOrderPayload(input: KiotVietOrderPayloadInput): Record<string, unknown> {
+  validateBookingDraftInput(input);
+  const phone = input.phone.replace(/\s+/g, "").trim();
+  if (!phone) throw new Error("KiotViet booking bắt buộc có số điện thoại khách.");
+  if (!input.branchId || input.roomClassVersion < 0) throw new Error("Thiếu branch/version hạng phòng KiotViet.");
+  if (input.quotedPrice == null || input.quotedPrice <= 0 || !input.priceSource?.trim()) {
+    throw new Error("Chưa có giá VERIFIED nên không được tạo payload KiotViet.");
+  }
+  return {
+    phone, customerName: input.guestName.trim(), checkInTime: input.checkIn, checkOutTime: input.checkOut,
+    counterType: input.counterType ?? 3, branchId: input.branchId, adultQuantity: input.adults, childQuantity: input.children ?? 0,
+    note: "AI_DIRECT — chỉ gửi khi A2 được duyệt",
+    roomClasses: [{ id: Number(input.roomClassId), quantity: input.roomCount, price: input.quotedPrice, note: "AI booking", version: input.roomClassVersion }],
+  };
+}

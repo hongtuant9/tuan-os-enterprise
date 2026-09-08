@@ -393,7 +393,7 @@ export class AiReceptionistService {
     };
   }
 
-  async getLavenderRoomOptions(checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number }>> {
+  async getLavenderRoomOptions(checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }>> {
     if (!this.kiotViet.isConfigured()) throw new Error("KiotViet Hotel API chưa được cấu hình.");
     const query = new URLSearchParams({ startDate: checkIn, endDate: checkOut, pageSize: "100", pageIndex: "1" }).toString();
     const result = await this.kiotViet.listRoomClasses(query);
@@ -401,7 +401,7 @@ export class AiReceptionistService {
     const payload = result.data as { result?: { data?: Array<Record<string, unknown>> } } | null;
     return (payload?.result?.data ?? [])
       .filter((room) => Number(room.branchId) === 8992 && Number(room.totalAvailableRoom ?? 0) > 0)
-      .map((room) => ({ id: String(room.id ?? ""), code: String(room.code ?? ""), name: String(room.name ?? ""), available: Number(room.totalAvailableRoom ?? 0), version: Number(room.version ?? 0) }));
+      .map((room) => ({ id: String(room.id ?? ""), code: String(room.code ?? ""), name: String(room.name ?? ""), available: Number(room.totalAvailableRoom ?? 0), version: Number(room.version ?? 0), branchId: Number(room.branchId), checkedAt: new Date().toISOString(), requestId: result.requestId }));
   }
 
   async prepareBookingDraft(input: BookingDraftInput): Promise<{ bookingId: string; idempotencyKey: string; duplicate: boolean }> {
@@ -428,6 +428,7 @@ export class AiReceptionistService {
         price_source: input.priceSource ?? null,
         write_enabled: isKiotVietDirectBookingWriteEnabled(),
         stage: "internal_draft",
+        first_availability: input.availabilityEvidence ?? null,
       },
       idempotency_key: idempotencyKey,
       status: "draft",

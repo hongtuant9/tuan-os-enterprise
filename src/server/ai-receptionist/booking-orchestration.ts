@@ -23,6 +23,7 @@ export type BookingDraftInput = {
   roomClassName: string;
   quotedPrice?: number | null;
   priceSource?: string | null;
+  availabilityEvidence?: { branchId: number; roomClassVersion: number; available: number; checkedAt: string; requestId?: string | null };
 };
 export function validateBookingDraftInput(input: BookingDraftInput): void {
   if (!input.conversationId || !input.guestName.trim()) {

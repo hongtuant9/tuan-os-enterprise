@@ -45,7 +45,7 @@ export async function submitPilotMessage(input: {
   }
 }
 
-export async function getLavenderRoomOptionsAction(checkIn: string, checkOut: string): Promise<ActionResult<{ id: string; code: string; name: string; available: number; version: number }[]>> {
+export async function getLavenderRoomOptionsAction(checkIn: string, checkOut: string): Promise<ActionResult<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }[]>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
   if (!session) return { ok: false, error: "Anh cần đăng nhập để đọc phòng trống." };
@@ -62,6 +62,7 @@ export async function prepareBookingDraftAction(input: {
   conversationId: string; propertyId?: string | null; guestName: string; guestContact?: string;
   checkIn: string; checkOut: string; adults: number; children?: number; roomCount: number;
   roomClassId: string; roomClassName: string; quotedPrice?: number | null; priceSource?: string | null;
+  availabilityEvidence?: { branchId: number; roomClassVersion: number; available: number; checkedAt: string; requestId?: string | null };
 }): Promise<ActionResult<{ bookingId: string; duplicate: boolean }>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);

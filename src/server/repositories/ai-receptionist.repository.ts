@@ -7,6 +7,8 @@ type ConversationUpdate = Database["public"]["Tables"]["ai_conversations"]["Upda
 type MessageRow = Database["public"]["Tables"]["ai_messages"]["Row"];
 type MessageInsert = Database["public"]["Tables"]["ai_messages"]["Insert"];
 type BookingRow = Database["public"]["Tables"]["ai_booking_records"]["Row"];
+type BookingInsert = Database["public"]["Tables"]["ai_booking_records"]["Insert"];
+type BookingUpdate = Database["public"]["Tables"]["ai_booking_records"]["Update"];
 type ReviewRow = Database["public"]["Tables"]["ai_manager_reviews"]["Row"];
 type ReviewInsert = Database["public"]["Tables"]["ai_manager_reviews"]["Insert"];
 type CandidateRow = Database["public"]["Tables"]["ai_knowledge_candidates"]["Row"];
@@ -103,6 +105,26 @@ export class AiReceptionistRepository {
       .limit(limit);
     if (error) throw error;
     return data ?? [];
+  }
+
+  async findBookingByIdempotencyKey(idempotencyKey: string): Promise<BookingRow | null> {
+    const { data, error } = await this.db.from("ai_booking_records").select("*")
+      .eq("idempotency_key", idempotencyKey).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async createBooking(input: BookingInsert): Promise<BookingRow> {
+    const { data, error } = await this.db.from("ai_booking_records").insert(input).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateBooking(id: string, patch: BookingUpdate): Promise<BookingRow> {
+    const { data, error } = await this.db.from("ai_booking_records").update(patch)
+      .eq("id", id).select("*").single();
+    if (error) throw error;
+    return data;
   }
 
   async findManagerReviews(limit = 50): Promise<ReviewRow[]> {

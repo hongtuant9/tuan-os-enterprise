@@ -14,6 +14,7 @@ import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.
 import { ActivityLogService } from "@/server/services/activity-log.service";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
+import { makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -290,6 +291,10 @@ export class AiReceptionistService {
       ...existingMetadata,
       ...decision.metadataPatch,
       scenario_tag: input.scenarioTag ?? existingMetadata.scenario_tag ?? null,
+      acquisition_source: input.acquisitionSource ?? existingMetadata.acquisition_source ?? input.channel,
+      utm_source: input.utmSource ?? existingMetadata.utm_source ?? null,
+      utm_campaign: input.utmCampaign ?? existingMetadata.utm_campaign ?? null,
+      referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
     };
 
     const conversation = await this.repo.upsertConversation({
@@ -385,6 +390,44 @@ export class AiReceptionistService {
       reviewId,
       duplicate: false,
     };
+  }
+
+  async prepareBookingDraft(input: BookingDraftInput): Promise<{ bookingId: string; idempotencyKey: string; duplicate: boolean }> {
+    validateBookingDraftInput(input);
+    const idempotencyKey = makeBookingIdempotencyKey(input);
+    const existing = await this.repo.findBookingByIdempotencyKey(idempotencyKey);
+    if (existing) return { bookingId: existing.id, idempotencyKey, duplicate: true };
+
+    const booking = await this.repo.createBooking({
+      conversation_id: input.conversationId,
+      property_id: input.propertyId ?? null,
+      guest_name: input.guestName.trim(),
+      guest_contact: input.guestContact?.trim() || null,
+      check_in: input.checkIn,
+      check_out: input.checkOut,
+      adults: input.adults,
+      children: input.children ?? 0,
+      room_count: input.roomCount,
+      room_class_id: input.roomClassId,
+      room_class_name: input.roomClassName.trim(),
+      quoted_price: input.quotedPrice ?? null,
+      booking_note: "AI_INTERNAL_DRAFT — chưa ghi KiotViet, chưa gửi confirmation",
+      safety_evidence: {
+        price_source: input.priceSource ?? null,
+        write_enabled: isKiotVietDirectBookingWriteEnabled(),
+        stage: "internal_draft",
+      },
+      idempotency_key: idempotencyKey,
+      status: "draft",
+      verification_status: "pending",
+    });
+
+    await this.activityLog.record({
+      agent: "AI Booking Agent", unit: "Tam Cốc",
+      message: "Đã tạo booking draft nội bộ; chưa ghi KiotViet và chưa gửi khách.",
+      type: "action",
+    });
+    return { bookingId: booking.id, idempotencyKey, duplicate: false };
   }
 
   async decideManagerReview(input: ManagerDecisionInput): Promise<void> {

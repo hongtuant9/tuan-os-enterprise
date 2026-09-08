@@ -33,6 +33,10 @@ export async function POST(request: Request) {
       propertyId: payload.propertyId,
       content: payload.content.trim(),
       scenarioTag: payload.scenarioTag,
+      acquisitionSource: payload.acquisitionSource,
+      utmSource: payload.utmSource,
+      utmCampaign: payload.utmCampaign,
+      referralSource: payload.referralSource,
       testerUserId: principal.kind === "user" ? principal.userId : null,
     });
 

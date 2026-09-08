@@ -110,6 +110,10 @@ export type PilotMessageInput = {
   propertyId?: string | null;
   content: string;
   scenarioTag?: string;
+  acquisitionSource?: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  referralSource?: string;
   testerUserId?: string | null;
 };
 

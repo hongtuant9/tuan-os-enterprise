@@ -42,11 +42,11 @@ export function classifyEcosystemMessage(content: string): EcosystemRoute {
           : "GENERAL";
 
   const upsellOffers = primaryIntent === "stay"
-    ? ["BREAKFAST", "COZY_GARDEN", "LOCAL_PLAN"]
+    ? ["BREAKFAST", "COZY_GARDEN"]
     : primaryIntent === "eat"
-      ? ["STAY_NEARBY", "EXPERIENCE", "LOCAL_PLAN"]
+      ? ["STAY_NEARBY", "LOCAL_PLAN"]
       : primaryIntent === "experience"
-        ? ["COZY_GARDEN", "STAY_NEARBY", "TRANSPORT"]
+        ? ["COZY_GARDEN", "STAY_NEARBY"]
         : primaryIntent === "explore"
           ? ["COZY_GARDEN", "STAY_NEARBY"]
           : [];

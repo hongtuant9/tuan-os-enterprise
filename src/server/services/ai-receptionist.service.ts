@@ -14,7 +14,8 @@ import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.
 import { ActivityLogService } from "@/server/services/activity-log.service";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
-import { makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
+import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
+import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -439,6 +440,27 @@ export class AiReceptionistService {
       type: "action",
     });
     return { bookingId: booking.id, idempotencyKey, duplicate: false };
+  }
+
+  async executeApprovedBookingDraft(input: { bookingId: string; branchId: number; roomClassVersion: number; priceSource: string }) {
+    const booking = await this.repo.findBookingById(input.bookingId);
+    if (!booking) throw new Error("Không tìm thấy booking draft.");
+    if (booking.status !== "draft") throw new Error("Chỉ booking draft mới được phép bắt đầu execution.");
+    if (!booking.guest_contact) throw new Error("Booking draft thiếu số điện thoại/contact bắt buộc.");
+    const quotedPrice = booking.quoted_price == null ? null : Number(booking.quoted_price);
+    const base = {
+      conversationId: booking.conversation_id, propertyId: booking.property_id, guestName: booking.guest_name, guestContact: booking.guest_contact,
+      checkIn: booking.check_in, checkOut: booking.check_out, adults: booking.adults, children: booking.children, roomCount: booking.room_count,
+      roomClassId: booking.room_class_id ?? "", roomClassName: booking.room_class_name ?? "", quotedPrice, priceSource: input.priceSource,
+    };
+    const publicPayload = buildKiotVietOrderPayload({ ...base, phone: booking.guest_contact, branchId: input.branchId, roomClassVersion: input.roomClassVersion });
+    const safePayload = { ...publicPayload, conversationId: booking.conversation_id, idempotencyKey: booking.idempotency_key, note: String(publicPayload.note ?? "AI_DIRECT"),
+      availabilityGuard: { branchId: input.branchId, roomClassId: base.roomClassId, checkIn: booking.check_in, checkOut: booking.check_out, roomCount: booking.room_count } };
+    return executeBookingStateMachine({ id: booking.id, status: booking.status, verificationStatus: booking.verification_status, idempotencyKey: booking.idempotency_key }, {
+      update: async (id, patch) => { await this.repo.updateBooking(id, patch); await this.activityLog.record({ agent: "AI Booking Agent", unit: "Tam Cốc", message: `Booking ${id.slice(0, 8)} transition → ${String(patch.status ?? "update")}`, type: "action" }); },
+      create: async () => this.kiotViet.createSafeDirectBooking(safePayload),
+      verify: async (created) => this.kiotViet.verifyCreatedDirectBooking(created),
+    });
   }
 
   async decideManagerReview(input: ManagerDecisionInput): Promise<void> {

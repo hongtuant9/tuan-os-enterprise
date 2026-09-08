@@ -107,6 +107,12 @@ export class AiReceptionistRepository {
     return data ?? [];
   }
 
+  async findBookingById(id: string): Promise<BookingRow | null> {
+    const { data, error } = await this.db.from("ai_booking_records").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   async findBookingByIdempotencyKey(idempotencyKey: string): Promise<BookingRow | null> {
     const { data, error } = await this.db.from("ai_booking_records").select("*")
       .eq("idempotency_key", idempotencyKey).maybeSingle();

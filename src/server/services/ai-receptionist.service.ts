@@ -443,10 +443,26 @@ export class AiReceptionistService {
     return { bookingId: booking.id, idempotencyKey, duplicate: false };
   }
 
-  async executeApprovedBookingDraft(input: { bookingId: string; branchId: number; roomClassVersion: number; priceSource: string }) {
+  async requestBookingExecutionApproval(bookingId: string): Promise<{ reviewId: string }> {
+    const booking = await this.repo.findBookingById(bookingId);
+    if (!booking || booking.status !== "draft") throw new Error("Chỉ booking draft hợp lệ mới được gửi duyệt execution.");
+    const evidence = booking.safety_evidence as Record<string, unknown>;
+    if (!evidence?.first_availability) throw new Error("Thiếu evidence availability lần 1.");
+    if (!booking.guest_contact || booking.quoted_price == null || !evidence?.price_source) throw new Error("Booking chưa đủ contact + giá + nguồn giá VERIFIED.");
+    const review = await this.repo.createManagerReview({ conversation_id: booking.conversation_id, booking_record_id: booking.id, review_type: "booking_exception",
+      title: "Duyệt Booking Agent A2 pilot", guest_request: `Booking draft ${booking.id.slice(0,8)} · ${booking.check_in} → ${booking.check_out}`,
+      reason: "Yêu cầu approval trước khi Booking Agent được phép đi vào write path.", missing_fields: [], evidence: { booking_id: booking.id, room_class_id: booking.room_class_id, first_availability: evidence.first_availability, price_source: String(evidence.price_source) } as unknown as Json,
+      recommendation: "Chỉ approve nếu dữ liệu khách, hạng phòng, giá và nguồn giá đã kiểm tra.", proposed_reply: null, risk_level: "high" });
+    await this.activityLog.record({ agent: "AI Booking Agent", unit: "Tam Cốc", message: `Đã tạo approval request cho booking ${booking.id.slice(0,8)}; chưa ghi KiotViet.`, type: "action" });
+    return { reviewId: review.id };
+  }
+
+  async executeApprovedBookingDraft(input: { bookingId: string; branchId: number; roomClassVersion: number; priceSource: string; approvalReviewId: string }) {
     const booking = await this.repo.findBookingById(input.bookingId);
     if (!booking) throw new Error("Không tìm thấy booking draft.");
     if (booking.status !== "draft") throw new Error("Chỉ booking draft mới được phép bắt đầu execution.");
+    const approval = await this.repo.findApprovedBookingReview(input.approvalReviewId, booking.id);
+    if (!approval) throw new Error("Booking chưa có approval hợp lệ gắn đúng booking record.");
     if (!booking.guest_contact) throw new Error("Booking draft thiếu số điện thoại/contact bắt buộc.");
     const quotedPrice = booking.quoted_price == null ? null : Number(booking.quoted_price);
     const base = {

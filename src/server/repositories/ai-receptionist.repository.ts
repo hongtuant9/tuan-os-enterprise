@@ -143,6 +143,13 @@ export class AiReceptionistRepository {
     return data ?? [];
   }
 
+  async findApprovedBookingReview(id: string, bookingId: string): Promise<ReviewRow | null> {
+    const { data, error } = await this.db.from("ai_manager_reviews").select("*")
+      .eq("id", id).eq("booking_record_id", bookingId).eq("status", "approved").maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   async findManagerReviewById(id: string): Promise<ReviewRow | null> {
     const { data, error } = await this.db
       .from("ai_manager_reviews")

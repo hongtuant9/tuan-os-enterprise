@@ -77,6 +77,13 @@ export async function prepareBookingDraftAction(input: {
   }
 }
 
+export async function requestBookingExecutionApprovalAction(bookingId: string): Promise<ActionResult<{ reviewId: string }>> {
+  const db = await createRequestClient(); const session = await getCurrentSession(db);
+  if (!session || !hasMinimumRole(session.role, "manager")) return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được gửi booking đi duyệt." };
+  try { const data = await getAdminContainer().aiReceptionist.requestBookingExecutionApproval(bookingId); revalidatePath("/ai-le-tan"); return { ok: true, data }; }
+  catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Không thể tạo approval request." }; }
+}
+
 export async function decideManagerReviewAction(input: {
   reviewId: string;
   decision: Exclude<ManagerReviewStatus, "pending">;

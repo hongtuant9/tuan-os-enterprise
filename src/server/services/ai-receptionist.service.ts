@@ -12,6 +12,7 @@ import type {
 } from "@/data/ai-receptionist";
 import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.repository";
 import { ActivityLogService } from "@/server/services/activity-log.service";
+import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import {
   getReceptionistMode,
@@ -21,8 +22,6 @@ import {
 } from "@/server/ai-receptionist/config";
 
 export const MISSING_DATA_BACKLOG = [
-  "Giờ check-in/check-out cuối cùng của từng cơ sở",
-  "Chính sách bữa sáng",
   "Chính sách trẻ em",
   "Phụ thu nhận sớm, trả muộn và thêm người",
   "Giá, điều kiện và quy định hủy taxi",
@@ -108,6 +107,8 @@ function toCandidate(row: {
 }
 
 export class AiReceptionistService {
+  private readonly kiotViet = new KiotVietHotelClient();
+
   constructor(
     private readonly repo: AiReceptionistRepository,
     private readonly activityLog: ActivityLogService
@@ -225,12 +226,57 @@ export class AiReceptionistService {
       ? AiReceptionistRepository.toObject(existing.metadata)
       : ({} as Record<string, Json>);
 
-    const decision = decidePilotMessage(
+    let decision = decidePilotMessage(
       input.content,
       existingMetadata,
       input.customerName,
       input.customerContact
     );
+    if (
+      decision.review?.reviewType === "booking_exception" &&
+      decision.metadataPatch.property_hint === "Lavender Homestay" &&
+      typeof decision.metadataPatch.check_in === "string" &&
+      typeof decision.metadataPatch.check_out === "string" &&
+      this.kiotViet.isConfigured()
+    ) {
+      try {
+        const query = new URLSearchParams({
+          startDate: decision.metadataPatch.check_in,
+          endDate: decision.metadataPatch.check_out,
+          pageSize: "100",
+          pageIndex: "1",
+        }).toString();
+        const availability = await this.kiotViet.listRoomClasses(query);
+        const payload = availability.data as { result?: { data?: Array<Record<string, unknown>> } } | null;
+        const rooms = (payload?.result?.data ?? []).filter((room) => Number(room.branchId) === 8992);
+        const availableRooms = rooms.filter((room) => Number(room.totalAvailableRoom ?? 0) > 0);
+        const availabilityEvidence = availableRooms.map((room) => ({
+          roomClassId: String(room.id ?? ""),
+          roomClassCode: String(room.code ?? ""),
+          roomClassName: String(room.name ?? ""),
+          available: Number(room.totalAvailableRoom ?? 0),
+          version: Number(room.version ?? 0),
+        }));
+        decision = {
+          ...decision,
+          reply: availableRooms.length > 0
+            ? `KiotViet hiện ghi nhận ${availableRooms.length} hạng phòng còn trống cho khoảng ngày yêu cầu. Giá live từ API hiện chưa đủ tin cậy để báo khách, nên em chuyển Quản lý xác nhận giá trước khi trả lời chính thức.`
+            : "KiotViet hiện chưa ghi nhận hạng phòng còn trống cho khoảng ngày yêu cầu. Em chuyển Quản lý kiểm tra lại trước khi trả lời chính thức.",
+          evidence: { ...decision.evidence, kiotviet_read_status: availability.status, kiotviet_availability: availabilityEvidence },
+          review: decision.review ? {
+            ...decision.review,
+            reason: availableRooms.length > 0
+              ? "Đã kiểm tra live availability từ KiotViet; giá live chưa được xác minh."
+              : "KiotViet chưa ghi nhận phòng trống; cần quản lý xác minh trước khi phản hồi.",
+            missingFields: availableRooms.length > 0 ? ["kiotviet_live_price"] : ["manager_availability_verification"],
+            recommendation: "Quản lý xác nhận giá và/hoặc phòng trống trước khi gửi phản hồi cho khách.",
+          } : undefined,
+        };
+      } catch {
+        // Fail closed: giữ quyết định chuyển quản lý nếu KiotViet read bị lỗi.
+      }
+    }
+
     const mergedMetadata: Record<string, Json> = {
       ...existingMetadata,
       ...decision.metadataPatch,

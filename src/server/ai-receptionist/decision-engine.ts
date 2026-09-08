@@ -27,24 +27,6 @@ const GAP_RULES: Array<{
     : never;
 }> = [
   {
-    field: "check_in_cutoff",
-    title: "Xác nhận giờ nhận phòng",
-    pattern: /(check[ -]?in|nhận phòng|đến muộn|đến sớm)/i,
-    reviewType: "missing_data",
-  },
-  {
-    field: "check_out_cutoff",
-    title: "Xác nhận giờ trả phòng",
-    pattern: /(check[ -]?out|trả phòng|rời phòng)/i,
-    reviewType: "missing_data",
-  },
-  {
-    field: "breakfast_policy",
-    title: "Xác nhận chính sách bữa sáng",
-    pattern: /(breakfast|bữa sáng|ăn sáng)/i,
-    reviewType: "missing_data",
-  },
-  {
     field: "child_policy",
     title: "Xác nhận chính sách trẻ em",
     pattern: /(trẻ em|trẻ nhỏ|em bé|child|children|baby)/i,
@@ -156,6 +138,35 @@ export function decidePilotMessage(
     source: "guest_direct_message",
     evaluated_at: new Date().toISOString(),
   } satisfies Record<string, Json>;
+
+  const asksCheckIn = /(check[ -]?in|nhận phòng)/i.test(trimmed);
+  const asksCheckOut = /(check[ -]?out|trả phòng)/i.test(trimmed);
+  const asksBreakfast = /(breakfast|bữa sáng|ăn sáng)/i.test(trimmed);
+  if ((asksCheckIn || asksCheckOut || asksBreakfast) && metadataPatch.property_hint !== "Lavender Homestay") {
+    return {
+      reply: metadataPatch.property_hint === "Ruby Homestay"
+        ? "Thông tin này hiện mới được xác nhận cho Lavender Homestay. Em chuyển Quản lý xác nhận chính sách áp dụng cho Ruby trước khi trả lời chính thức."
+        : "Anh/chị đang hỏi chính sách của Lavender Homestay hay Ruby Homestay ạ?",
+      conversationStatus: metadataPatch.property_hint === "Ruby Homestay" ? "needs_manager" : "waiting_guest",
+      metadataPatch, evidence,
+    };
+  }
+  if (asksCheckIn || asksCheckOut) {
+    const parts: string[] = [];
+    if (asksCheckIn) parts.push("Giờ nhận phòng chuẩn của Lavender Homestay là từ 14:00");
+    if (asksCheckOut) parts.push("giờ trả phòng là trước 11:30");
+    return {
+      reply: `${parts.join(", ")}. Đây là thông tin đã được xác nhận trong Master Data.`,
+      conversationStatus: "active", metadataPatch, evidence,
+    };
+  }
+
+  if (asksBreakfast) {
+    return {
+      reply: "Bữa sáng phục vụ 07:00–09:30 và cần đặt trước 21:00 ngày hôm trước. Agoda/Booking.com là Room Only; Expedia/Airbnb/Tripadvisor gồm bữa sáng. Nếu đặt ngoài gói, giá tại khu vực chung là 75.000 VND/người. Các lựa chọn khác chỉ được xác nhận khi đã được duyệt.",
+      conversationStatus: "active", metadataPatch, evidence,
+    };
+  }
 
   const matchedGap = GAP_RULES.find((rule) => rule.pattern.test(trimmed));
   if (matchedGap) {

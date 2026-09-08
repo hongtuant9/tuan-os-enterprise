@@ -59,8 +59,8 @@ export class KiotVietHotelClient {
     return this.request("/public/branches");
   }
 
-  listRoomClasses(): Promise<KiotVietRequestResult> {
-    return this.request("/public/room-class");
+  listRoomClasses(query = ""): Promise<KiotVietRequestResult> {
+    return this.request(`/public/room-class${query ? `?${query}` : ""}`);
   }
 
   listOrders(query = ""): Promise<KiotVietRequestResult> {

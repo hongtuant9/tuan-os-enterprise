@@ -432,6 +432,12 @@ export interface Database {
         Update: { id?: string; customer_id?: string; identity_type?: string; identity_value?: string; identity_hash?: string; source_channel?: string | null; is_primary?: boolean; verified_at?: string | null; metadata?: Json; created_at?: string; updated_at?: string; };
         Relationships: [];
       };
+      ai_upsell_events: {
+        Row: { id: string; conversation_id: string | null; booking_record_id: string | null; customer_id: string | null; rule_id: string; offer_code: string; journey_entry: string; source_agent: string; acquisition_source: string | null; event_type: string; amount: number | null; currency: string; evidence: Json; created_at: string; };
+        Insert: { id?: string; conversation_id?: string | null; booking_record_id?: string | null; customer_id?: string | null; rule_id: string; offer_code: string; journey_entry: string; source_agent: string; acquisition_source?: string | null; event_type: string; amount?: number | null; currency?: string; evidence?: Json; created_at?: string; };
+        Update: { id?: string; conversation_id?: string | null; booking_record_id?: string | null; customer_id?: string | null; rule_id?: string; offer_code?: string; journey_entry?: string; source_agent?: string; acquisition_source?: string | null; event_type?: string; amount?: number | null; currency?: string; evidence?: Json; created_at?: string; };
+        Relationships: [];
+      };
       ai_conversations: {
         Row: {
           id: string;

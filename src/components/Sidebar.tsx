@@ -6,13 +6,13 @@ import { signOut } from "@/app/actions/auth";
 
 const navigation = [
   { href: "/", label: "Dashboard" },
-  { href: "/#customers", label: "Customers" },
+  { href: "/customers", label: "Customers" },
   { href: "/ai-le-tan", label: "Conversations" },
   { href: "/#leads", label: "Leads" },
   { href: "/#bookings", label: "Bookings" },
   { href: "/#lavender", label: "Lavender" },
   { href: "/#cozy-garden", label: "Cozy Garden" },
-  { href: "/#upsell", label: "Upsell" },
+  { href: "/upsell", label: "Upsell" },
   { href: "/#tasks", label: "Tasks" },
   { href: "/#approvals", label: "Approvals" },
   { href: "/#agents", label: "Agents" },

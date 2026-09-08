@@ -17,6 +17,7 @@ import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
 import { buildIdentityCandidates } from "@/server/ai-receptionist/customer-identity";
+import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -326,6 +327,15 @@ export class AiReceptionistService {
     };
 
     const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: input.customerName ?? existing?.customer_name ?? null, customerContact: input.customerContact ?? existing?.customer_contact ?? null, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recentUpsell = await this.repo.findRecentUpsellEvents(customerId, since24h);
+    const rawJourney = typeof decision.metadataPatch.journey_entry === "string" ? decision.metadataPatch.journey_entry : "GENERAL";
+    const journeyEntry: JourneyEntry = (["HOMESTAY", "COZY", "EXPERIENCE", "EXPLORE", "GENERAL"] as const).includes(rawJourney as JourneyEntry) ? rawJourney as JourneyEntry : "GENERAL";
+    const runtimeUpsellPlan = buildUpsellPlan(journeyEntry, {
+      offersShownLast24h: recentUpsell.filter((event) => event.event_type === "shown").length,
+      rejectedOffers: recentUpsell.filter((event) => event.event_type === "rejected").map((event) => event.offer_code),
+    });
+    mergedMetadata.upsell_offers = runtimeUpsellPlan.map((item) => item.offer);
 
     const conversation = await this.repo.upsertConversation({
       id: existing?.id,
@@ -343,6 +353,20 @@ export class AiReceptionistService {
       last_message_at: new Date().toISOString(),
       metadata: mergedMetadata,
     });
+
+    for (const offer of runtimeUpsellPlan) {
+      await this.repo.createUpsellEvent({
+        conversation_id: conversation.id,
+        customer_id: customerId,
+        rule_id: offer.ruleId,
+        offer_code: offer.offer,
+        journey_entry: journeyEntry,
+        source_agent: typeof decision.metadataPatch.routed_agent === "string" ? decision.metadataPatch.routed_agent : "AI_RECEPTIONIST",
+        acquisition_source: typeof mergedMetadata.acquisition_source === "string" ? mergedMetadata.acquisition_source : input.channel,
+        event_type: "eligible",
+        evidence: { mode, source: offer.source, offer_mode: offer.mode, outbound_sent: false },
+      });
+    }
 
     const inbound = await this.repo.createMessage({
       conversation_id: conversation.id,

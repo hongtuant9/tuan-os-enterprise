@@ -14,6 +14,7 @@ import { SyncRunsRepository } from "@/server/repositories/sync-runs.repository";
 import { ImportLogsRepository } from "@/server/repositories/import-logs.repository";
 import { SyncRecordsRepository } from "@/server/repositories/sync-records.repository";
 import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.repository";
+import { HospitalityCrmRepository } from "@/server/repositories/hospitality-crm.repository";
 import { CmiRepository } from "@/server/repositories/cmi.repository";
 
 import { BusinessUnitsService } from "@/server/services/business-units.service";
@@ -26,6 +27,7 @@ import { DashboardService } from "@/server/services/dashboard.service";
 import { SyncRunner } from "@/server/sync/sync-runner";
 import { SyncStatusService } from "@/server/sync/sync-status.service";
 import { AiReceptionistService } from "@/server/services/ai-receptionist.service";
+import { HospitalityCrmService } from "@/server/services/hospitality-crm.service";
 import { CmiService } from "@/server/services/cmi.service";
 import { CmiAutomationService } from "@/server/cmi/automation.service";
 import { CmiCompetitorService } from "@/server/cmi/competitor.service";
@@ -46,6 +48,7 @@ export type ServiceContainer = {
   syncRuns: SyncRunsRepository;
   importLogs: ImportLogsRepository;
   aiReceptionist: AiReceptionistService;
+  hospitalityCrm: HospitalityCrmService;
   cmi: CmiService;
   cmiAutomation: CmiAutomationService;
   cmiCompetitors: CmiCompetitorService;
@@ -65,6 +68,7 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
   const importLogs = new ImportLogsRepository(db);
   const syncRecords = new SyncRecordsRepository(db);
   const aiReceptionist = new AiReceptionistService(new AiReceptionistRepository(db), activityLog);
+  const hospitalityCrm = new HospitalityCrmService(new HospitalityCrmRepository(db));
   const cmi = new CmiService(new CmiRepository(db), activityLog);
   const cmiAutomation = new CmiAutomationService(db, activityLog);
   const cmiCompetitors = new CmiCompetitorService(db, activityLog);
@@ -85,6 +89,7 @@ export function buildContainer(db: SupabaseClient<Database>): ServiceContainer {
     syncRuns,
     importLogs,
     aiReceptionist,
+    hospitalityCrm,
     cmi,
     cmiAutomation,
     cmiCompetitors,

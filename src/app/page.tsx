@@ -8,11 +8,13 @@ function vnd(value: number) {
 
 export default async function Home() {
   const container = await getRequestContainer();
-  const [tasks, approvals, agents, receptionist] = await Promise.all([
+  const [tasks, approvals, agents, receptionist, customerSummaries, upsellSummary] = await Promise.all([
     container.tasks.list(),
     container.approvals.list(),
     container.agents.list(),
     container.aiReceptionist.dashboard(),
+    container.hospitalityCrm.customerSummaries(),
+    container.hospitalityCrm.upsellSummary(),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -36,7 +38,7 @@ export default async function Home() {
     { label: "Booking thành công", value: successfulBookings, hint: "Booking AI đã verified", href: "/#bookings" },
     { label: "Tỷ lệ chuyển đổi", value: conversion, hint: "Verified booking / hội thoại" },
     { label: "Doanh thu phòng", value: vnd(roomRevenue), hint: "Chỉ booking AI verified" },
-    { label: "Doanh thu upsell", value: "—", hint: "Chờ kết nối pipeline upsell", href: "/#upsell" },
+    { label: "Doanh thu upsell", value: vnd(upsellSummary.metrics.revenue), hint: `${upsellSummary.metrics.booked} upsell booked có attribution`, href: "/upsell" },
     { label: "Check-in hôm nay", value: checkIns, hint: "Theo booking AI hiện có" },
     { label: "Check-out hôm nay", value: checkOuts, hint: "Theo booking AI hiện có" },
     { label: "Phòng trống", value: "LIVE", hint: "Đọc từ KiotViet khi truy vấn", href: "/#lavender" },
@@ -68,6 +70,9 @@ export default async function Home() {
           agentsOnline={agentsOnline}
           agentsTotal={agents.length}
           conversationCount={conversations.length}
+          customerCount={customerSummaries.length}
+          upsellEventCount={upsellSummary.metrics.totalEvents}
+          upsellRevenue={upsellSummary.metrics.revenue}
           bookingCount={bookings.length}
           missingKnowledge={receptionist.missingDataBacklog.length}
         />

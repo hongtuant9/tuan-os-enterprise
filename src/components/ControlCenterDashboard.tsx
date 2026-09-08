@@ -11,6 +11,9 @@ type Props = {
   agentsOnline: number;
   agentsTotal: number;
   conversationCount: number;
+  customerCount: number;
+  upsellEventCount: number;
+  upsellRevenue: number;
   bookingCount: number;
   missingKnowledge: number;
 };
@@ -62,12 +65,12 @@ export default function ControlCenterDashboard(props: Props) {
         </div>
       </section>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Section id="customers" title="Customers">Hồ sơ khách tập trung từ hội thoại và booking. Hiện có {props.conversationCount} hội thoại trong Private Pilot.</Section>
+        <Section id="customers" title="Customers"><Link href="/customers" className="font-medium text-[var(--accent)]">Mở CRM Customers →</Link><p className="mt-2">{props.customerCount} hồ sơ khách hợp nhất từ {props.conversationCount} hội thoại hiện có.</p></Section>
         <Section id="leads" title="Leads">Lead được hình thành từ khách để lại thông tin liên hệ và nhu cầu. Không tự coi mọi hội thoại là lead.</Section>
         <Section id="bookings" title="Bookings">Theo dõi booking do AI hỗ trợ và trạng thái xác minh. Hiện có {props.bookingCount} booking trong dữ liệu AI Pilot.</Section>
         <Section id="lavender" title="Lavender">Nguồn phòng trống ưu tiên KiotViet; chính sách chỉ dùng dữ liệu VERIFIED trong Master Data.</Section>
         <Section id="cozy-garden" title="Cozy Garden">Theo dõi khách, menu verified, cross-sell và trải nghiệm. Các dịch vụ HOLD không được tự động bán.</Section>
-        <Section id="upsell" title="Upsell">Doanh thu upsell sẽ hiển thị khi pipeline CRM/booking được nối đủ. Không tạo số liệu giả.</Section>
+        <Section id="upsell" title="Upsell"><Link href="/upsell" className="font-medium text-[var(--accent)]">Mở Upsell Attribution →</Link><p className="mt-2">{props.upsellEventCount} event có nguồn; doanh thu booked hiện tại {new Intl.NumberFormat("vi-VN").format(props.upsellRevenue)} VND.</p></Section>
         <Section id="tasks" title="Tasks">{props.openTasks} công việc đang mở; bao gồm các tác vụ cần người hoặc OpenClaw xử lý.</Section>
         <Section id="approvals" title="Approvals">{props.pendingApprovals} yêu cầu đang chờ phê duyệt. Refund, hủy, bồi thường và ngoại lệ vẫn cần người duyệt.</Section>
         <Section id="agents" title="Agents">{props.agentsOnline}/{props.agentsTotal} agent đang online theo Control Center.</Section>

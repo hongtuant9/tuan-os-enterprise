@@ -14,6 +14,8 @@ type ReviewInsert = Database["public"]["Tables"]["ai_manager_reviews"]["Insert"]
 type CandidateRow = Database["public"]["Tables"]["ai_knowledge_candidates"]["Row"];
 type CandidateInsert = Database["public"]["Tables"]["ai_knowledge_candidates"]["Insert"];
 type PilotSessionInsert = Database["public"]["Tables"]["ai_pilot_sessions"]["Insert"];
+type UpsellRow = Database["public"]["Tables"]["ai_upsell_events"]["Row"];
+type UpsellInsert = Database["public"]["Tables"]["ai_upsell_events"]["Insert"];
 type CustomerRow = Database["public"]["Tables"]["hospitality_customers"]["Row"];
 type CustomerInsert = Database["public"]["Tables"]["hospitality_customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["hospitality_customers"]["Update"];
@@ -264,6 +266,18 @@ export class AiReceptionistRepository {
   async createPilotSession(input: PilotSessionInsert): Promise<void> {
     const { error } = await this.db.from("ai_pilot_sessions").insert(input);
     if (error) throw error;
+  }
+
+  async findRecentUpsellEvents(customerId: string, sinceIso: string): Promise<UpsellRow[]> {
+    const { data, error } = await this.db.from("ai_upsell_events").select("*").eq("customer_id", customerId).gte("created_at", sinceIso).order("created_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async createUpsellEvent(input: UpsellInsert): Promise<UpsellRow> {
+    const { data, error } = await this.db.from("ai_upsell_events").insert(input).select("*").single();
+    if (error) throw error;
+    return data;
   }
 
   async getPropertyNames(ids: string[]): Promise<Map<string, string>> {

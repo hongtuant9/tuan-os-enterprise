@@ -420,6 +420,18 @@ export interface Database {
         };
         Relationships: [];
       };
+      hospitality_customers: {
+        Row: { id: string; display_name: string | null; preferred_language: string | null; country_code: string | null; consent_status: string; lifecycle_status: string; first_seen_at: string; last_seen_at: string; metadata: Json; created_at: string; updated_at: string; };
+        Insert: { id?: string; display_name?: string | null; preferred_language?: string | null; country_code?: string | null; consent_status?: string; lifecycle_status?: string; first_seen_at?: string; last_seen_at?: string; metadata?: Json; created_at?: string; updated_at?: string; };
+        Update: { id?: string; display_name?: string | null; preferred_language?: string | null; country_code?: string | null; consent_status?: string; lifecycle_status?: string; first_seen_at?: string; last_seen_at?: string; metadata?: Json; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      hospitality_customer_identities: {
+        Row: { id: string; customer_id: string; identity_type: string; identity_value: string; identity_hash: string; source_channel: string | null; is_primary: boolean; verified_at: string | null; metadata: Json; created_at: string; updated_at: string; };
+        Insert: { id?: string; customer_id: string; identity_type: string; identity_value: string; identity_hash: string; source_channel?: string | null; is_primary?: boolean; verified_at?: string | null; metadata?: Json; created_at?: string; updated_at?: string; };
+        Update: { id?: string; customer_id?: string; identity_type?: string; identity_value?: string; identity_hash?: string; source_channel?: string | null; is_primary?: boolean; verified_at?: string | null; metadata?: Json; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
       ai_conversations: {
         Row: {
           id: string;
@@ -429,6 +441,7 @@ export interface Database {
           external_conversation_id: string;
           customer_name: string | null;
           customer_contact: string | null;
+          customer_id: string | null;
           language: string;
           intent: string;
           status: string;
@@ -446,6 +459,7 @@ export interface Database {
           external_conversation_id: string;
           customer_name?: string | null;
           customer_contact?: string | null;
+          customer_id?: string | null;
           language?: string;
           intent?: string;
           status?: string;
@@ -463,6 +477,7 @@ export interface Database {
           external_conversation_id?: string;
           customer_name?: string | null;
           customer_contact?: string | null;
+          customer_id?: string | null;
           language?: string;
           intent?: string;
           status?: string;
@@ -518,6 +533,7 @@ export interface Database {
           id: string;
           conversation_id: string;
           property_id: string | null;
+          customer_id: string | null;
           booking_source: string;
           created_by: string;
           guest_name: string;
@@ -547,6 +563,7 @@ export interface Database {
           id?: string;
           conversation_id: string;
           property_id?: string | null;
+          customer_id?: string | null;
           booking_source?: string;
           created_by?: string;
           guest_name: string;
@@ -576,6 +593,7 @@ export interface Database {
           id?: string;
           conversation_id?: string;
           property_id?: string | null;
+          customer_id?: string | null;
           booking_source?: string;
           created_by?: string;
           guest_name?: string;

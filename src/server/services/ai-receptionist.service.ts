@@ -16,6 +16,7 @@ import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
+import { buildIdentityCandidates } from "@/server/ai-receptionist/customer-identity";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -115,6 +116,32 @@ export class AiReceptionistService {
     private readonly repo: AiReceptionistRepository,
     private readonly activityLog: ActivityLogService
   ) {}
+
+  private async resolveCustomerId(input: { channel: string; externalConversationId: string; customerName?: string | null; customerContact?: string | null; language?: string | null }): Promise<string> {
+    const candidates = buildIdentityCandidates(input);
+    let customerId: string | null = null;
+    for (const candidate of candidates) {
+      const existingIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
+      if (existingIdentity) { customerId = existingIdentity.customer_id; break; }
+    }
+    if (!customerId) {
+      const customer = await this.repo.createCustomer({ display_name: input.customerName?.trim() || null, preferred_language: input.language ?? null, metadata: { created_from: input.channel } });
+      customerId = customer.id;
+    }
+    for (const candidate of candidates) {
+      const existingIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
+      if (!existingIdentity) {
+        try {
+          await this.repo.createCustomerIdentity({ customer_id: customerId, identity_type: candidate.type, identity_value: candidate.value, identity_hash: candidate.hash, source_channel: candidate.sourceChannel, is_primary: candidate.type !== "channel", verified_at: candidate.verified ? new Date().toISOString() : null });
+        } catch (error) {
+          const concurrentIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
+          if (!concurrentIdentity) throw error;
+        }
+      }
+    }
+    await this.repo.updateCustomer(customerId, { display_name: input.customerName?.trim() || undefined, preferred_language: input.language ?? undefined, last_seen_at: new Date().toISOString() });
+    return customerId;
+  }
 
   async dashboard(): Promise<ReceptionistDashboard> {
     const [conversationRows, bookingRows, reviewRows, candidateRows] = await Promise.all([
@@ -298,9 +325,12 @@ export class AiReceptionistService {
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
     };
 
+    const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: input.customerName ?? existing?.customer_name ?? null, customerContact: input.customerContact ?? existing?.customer_contact ?? null, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
+
     const conversation = await this.repo.upsertConversation({
       id: existing?.id,
       business_unit_id: existing?.business_unit_id ?? hospitalityBusinessUnitId,
+      customer_id: customerId,
       property_id: input.propertyId ?? existing?.property_id ?? null,
       channel: input.channel,
       external_conversation_id: externalConversationId,
@@ -410,9 +440,11 @@ export class AiReceptionistService {
     const existing = await this.repo.findBookingByIdempotencyKey(idempotencyKey);
     if (existing) return { bookingId: existing.id, idempotencyKey, duplicate: true };
 
+    const conversation = await this.repo.findConversationById(input.conversationId);
     const booking = await this.repo.createBooking({
       conversation_id: input.conversationId,
       property_id: input.propertyId ?? null,
+      customer_id: conversation?.customer_id ?? null,
       guest_name: input.guestName.trim(),
       guest_contact: input.guestContact?.trim() || null,
       check_in: input.checkIn,

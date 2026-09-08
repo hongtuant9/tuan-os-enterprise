@@ -14,9 +14,38 @@ type ReviewInsert = Database["public"]["Tables"]["ai_manager_reviews"]["Insert"]
 type CandidateRow = Database["public"]["Tables"]["ai_knowledge_candidates"]["Row"];
 type CandidateInsert = Database["public"]["Tables"]["ai_knowledge_candidates"]["Insert"];
 type PilotSessionInsert = Database["public"]["Tables"]["ai_pilot_sessions"]["Insert"];
+type CustomerRow = Database["public"]["Tables"]["hospitality_customers"]["Row"];
+type CustomerInsert = Database["public"]["Tables"]["hospitality_customers"]["Insert"];
+type CustomerUpdate = Database["public"]["Tables"]["hospitality_customers"]["Update"];
+type CustomerIdentityRow = Database["public"]["Tables"]["hospitality_customer_identities"]["Row"];
+type CustomerIdentityInsert = Database["public"]["Tables"]["hospitality_customer_identities"]["Insert"];
 
 export class AiReceptionistRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
+
+  async findCustomerIdentityByHash(identityHash: string): Promise<CustomerIdentityRow | null> {
+    const { data, error } = await this.db.from("hospitality_customer_identities").select("*").eq("identity_hash", identityHash).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async createCustomer(input: CustomerInsert): Promise<CustomerRow> {
+    const { data, error } = await this.db.from("hospitality_customers").insert(input).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateCustomer(id: string, patch: CustomerUpdate): Promise<CustomerRow> {
+    const { data, error } = await this.db.from("hospitality_customers").update(patch).eq("id", id).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async createCustomerIdentity(input: CustomerIdentityInsert): Promise<CustomerIdentityRow> {
+    const { data, error } = await this.db.from("hospitality_customer_identities").insert(input).select("*").single();
+    if (error) throw error;
+    return data;
+  }
 
   async findRecentConversations(limit = 40): Promise<ConversationRow[]> {
     const { data, error } = await this.db

@@ -35,3 +35,7 @@ create index if not exists ai_upsell_events_journey_created_idx
 
 comment on table public.ai_upsell_events is
   'Tam Coc Experience cross-sell attribution events. No outbound side effects.';
+
+create index if not exists ai_upsell_events_booking_record_idx
+  on public.ai_upsell_events (booking_record_id)
+  where booking_record_id is not null;

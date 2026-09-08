@@ -195,6 +195,20 @@ function Conversations({ items }: { items: ReceptionistConversation[] }) {
             <dd className="mt-1 text-[var(--ink-primary)]">{selected.intent}</dd>
           </div>
           <div>
+            <dt className="text-xs text-[var(--ink-muted)]">Agent xử lý</dt>
+            <dd className="mt-1 text-[var(--ink-primary)]">{selected.routedAgent}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--ink-muted)]">Điểm vào hành trình</dt>
+            <dd className="mt-1 text-[var(--ink-primary)]">{selected.journeyEntry}</dd>
+          </div>
+          {selected.upsellOffers.length > 0 ? (
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Upsell phù hợp</dt>
+              <dd className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{selected.upsellOffers.join(" · ")}</dd>
+            </div>
+          ) : null}
+          <div>
             <dt className="text-xs text-[var(--ink-muted)]">Chế độ</dt>
             <dd className="mt-1"><Pill label={MODE_LABEL[selected.mode]} tone="accent" /></dd>
           </div>

@@ -28,6 +28,9 @@ export type ReceptionistConversation = {
   propertyName: string | null;
   language: string;
   intent: string;
+  routedAgent: string;
+  journeyEntry: string;
+  upsellOffers: string[];
   status: ConversationStatus;
   mode: ReceptionistMode;
   lastMessageAt: string;

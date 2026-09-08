@@ -136,21 +136,30 @@ export class AiReceptionistService {
       messagesByConversation.set(row.conversation_id, list);
     }
 
-    const conversations: ReceptionistConversation[] = conversationRows.map((row) => ({
-      id: row.id,
-      channel: row.channel,
-      externalConversationId: row.external_conversation_id,
-      customerName: row.customer_name ?? "Khách chưa cung cấp tên",
-      customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
-      propertyId: row.property_id,
-      propertyName: row.property_id ? propertyNames.get(row.property_id) ?? null : null,
-      language: row.language,
-      intent: row.intent,
-      status: row.status as ReceptionistConversation["status"],
-      mode: row.mode as ReceptionistConversation["mode"],
-      lastMessageAt: row.last_message_at,
-      messages: messagesByConversation.get(row.id) ?? [],
-    }));
+    const conversations: ReceptionistConversation[] = conversationRows.map((row) => {
+      const metadata = AiReceptionistRepository.toObject(row.metadata);
+      const upsellOffers = Array.isArray(metadata.upsell_offers)
+        ? metadata.upsell_offers.filter((value): value is string => typeof value === "string")
+        : [];
+      return {
+        id: row.id,
+        channel: row.channel,
+        externalConversationId: row.external_conversation_id,
+        customerName: row.customer_name ?? "Khách chưa cung cấp tên",
+        customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
+        propertyId: row.property_id,
+        propertyName: row.property_id ? propertyNames.get(row.property_id) ?? null : null,
+        language: row.language,
+        intent: row.intent,
+        routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
+        journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
+        upsellOffers,
+        status: row.status as ReceptionistConversation["status"],
+        mode: row.mode as ReceptionistConversation["mode"],
+        lastMessageAt: row.last_message_at,
+        messages: messagesByConversation.get(row.id) ?? [],
+      };
+    });
 
     const bookings: AiBookingRecord[] = bookingRows.map((row) => ({
       id: row.id,

@@ -1,5 +1,6 @@
 import "server-only";
 import { isKiotVietDirectBookingWriteEnabled } from "@/server/ai-receptionist/config";
+import { assertAvailabilityStillAvailable, sanitizeDirectBookingPayload, validateAvailabilityGuard, type AvailabilityGuard } from "./booking-safety";
 
 export type KiotVietRequestResult<T = unknown> = {
   ok: boolean;
@@ -12,10 +13,10 @@ export type SafeDirectBookingPayload = Record<string, unknown> & {
   conversationId: string;
   idempotencyKey: string;
   note: string;
+  availabilityGuard: AvailabilityGuard;
 };
 
 const DEFAULT_BASE_URL = "https://api-integration-hotel.kiotviet.vn";
-
 export class KiotVietHotelClient {
   private readonly baseUrl = (process.env.KIOTVIET_HOTEL_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
   private readonly publicApiKey = process.env.KIOTVIET_HOTEL_PUBLIC_API_KEY;
@@ -40,7 +41,6 @@ export class KiotVietHotelClient {
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
-
     const requestId = response.headers.get("x-request-id");
     const text = await response.text();
     let data: T | null = null;
@@ -51,7 +51,6 @@ export class KiotVietHotelClient {
         data = null;
       }
     }
-
     return { ok: response.ok, status: response.status, data, requestId };
   }
 
@@ -75,6 +74,22 @@ export class KiotVietHotelClient {
     return this.request("/public/sale-channels");
   }
 
+  private async assertSecondAvailability(guard: AvailabilityGuard): Promise<KiotVietRequestResult> {
+    validateAvailabilityGuard(guard);
+    const query = new URLSearchParams({
+      startDate: guard.checkIn,
+      endDate: guard.checkOut,
+      pageSize: "100",
+      pageIndex: "1",
+    }).toString();
+    const result = await this.listRoomClasses(query);
+    if (!result.ok) {
+      throw new Error(`KiotViet availability lần 2 thất bại HTTP ${result.status}. Booking không được tạo.`);
+    }
+    assertAvailabilityStillAvailable(result.data, guard);
+    return result;
+  }
+
   async createSafeDirectBooking(payload: SafeDirectBookingPayload): Promise<KiotVietRequestResult> {
     if (!isKiotVietDirectBookingWriteEnabled()) {
       throw new Error("KiotViet write đang khóa. Chỉ mở sau khi Private Pilot được nghiệm thu.");
@@ -86,9 +101,12 @@ export class KiotVietHotelClient {
       throw new Error("Booking AI phải có ghi chú nhận diện nguồn tạo.");
     }
 
+    await this.assertSecondAvailability(payload.availabilityGuard);
+
+    const kiotVietPayload = sanitizeDirectBookingPayload(payload);
     return this.request("/public/order", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(kiotVietPayload),
       headers: {
         "Idempotency-Key": payload.idempotencyKey,
       },

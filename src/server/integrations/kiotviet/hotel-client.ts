@@ -1,6 +1,7 @@
 import "server-only";
 import { isKiotVietDirectBookingWriteEnabled } from "@/server/ai-receptionist/config";
 import { assertAvailabilityStillAvailable, sanitizeDirectBookingPayload, validateAvailabilityGuard, type AvailabilityGuard } from "./booking-safety";
+import { bookingVerificationQuery, extractBookingReference } from "./booking-verification";
 
 export type KiotVietRequestResult<T = unknown> = {
   ok: boolean;
@@ -88,6 +89,16 @@ export class KiotVietHotelClient {
     }
     assertAvailabilityStillAvailable(result.data, guard);
     return result;
+  }
+
+  async verifyCreatedDirectBooking(created: unknown): Promise<{ ok: boolean; bookingUuid?: string; bookingCode?: string; evidence: Record<string, unknown> }> {
+    const ref = extractBookingReference(created);
+    const result = await this.getOrder(bookingVerificationQuery(ref));
+    if (!result.ok) return { ok: false, evidence: { http_status: result.status, request_id: result.requestId } };
+    const verifiedRef = extractBookingReference(result.data);
+    const bookingUuid = verifiedRef.uuid ?? ref.uuid;
+    const bookingCode = verifiedRef.code ?? ref.code;
+    return { ok: Boolean(bookingUuid || bookingCode), bookingUuid, bookingCode, evidence: { http_status: result.status, request_id: result.requestId, source: "GET_ORDER" } };
   }
 
   async createSafeDirectBooking(payload: SafeDirectBookingPayload): Promise<KiotVietRequestResult> {

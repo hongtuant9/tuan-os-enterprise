@@ -320,7 +320,7 @@ function KnowledgeCard({ candidate, canManage }: { candidate: KnowledgeCandidate
   );
 }
 
-function PilotLab({ backlog }: { backlog: string[] }) {
+function PilotLab({ backlog, mode }: { backlog: string[]; mode: ReceptionistDashboard["mode"] }) {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [customerName, setCustomerName] = useState("Khách thử nghiệm");
@@ -354,7 +354,7 @@ function PilotLab({ backlog }: { backlog: string[] }) {
             <h3 className="text-base font-semibold text-[var(--ink-primary)]">Mô phỏng khách nhắn trực tiếp</h3>
             <p className="mt-1 text-sm text-[var(--ink-muted)]">Tin nhắn được lưu nhưng không gửi ra kênh thật và không ghi KiotViet.</p>
           </div>
-          <Pill label="SIMULATION" tone="accent" />
+          <Pill label={MODE_LABEL[mode]} tone="accent" />
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -414,7 +414,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage }: { dash
       {tab === "xac-nhan" && (dashboard.managerReviews.length ? <div className="space-y-4">{dashboard.managerReviews.map((review) => <ReviewCard key={review.id} review={review} canManage={canManage} />)}</div> : <EmptyState title="Chưa có yêu cầu cần xác nhận" description="Khi AI gặp dữ liệu thiếu, mâu thuẫn hoặc yêu cầu ngoài policy, yêu cầu sẽ xuất hiện tại đây." />)}
       {tab === "dat-phong" && (dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={booking.status} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có booking do AI tạo" description="Chỉ booking AI_DIRECT đã qua Safety Gate mới xuất hiện. Tính năng ghi KiotViet đang khóa trong Private Pilot." />)}
       {tab === "tri-thuc" && (dashboard.knowledgeCandidates.length ? <div className="space-y-4">{dashboard.knowledgeCandidates.map((candidate) => <KnowledgeCard key={candidate.id} candidate={candidate} canManage={canManage} />)}</div> : <EmptyState title="Chưa có đề xuất cập nhật tri thức" description="Sau khi Quản lý xử lý ngoại lệ, AI sẽ tạo đề xuất. Đề xuất không tự động trở thành dữ liệu production." />)}
-      {tab === "kiem-thu" && <PilotLab backlog={dashboard.missingDataBacklog} />}
+      {tab === "kiem-thu" && <PilotLab backlog={dashboard.missingDataBacklog} mode={dashboard.mode} />}
     </>
   );
 }

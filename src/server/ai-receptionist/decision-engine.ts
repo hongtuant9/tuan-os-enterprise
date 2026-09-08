@@ -108,6 +108,12 @@ function extractDateRange(content: string): { checkIn: string | null; checkOut: 
   return { checkIn: toIso(shortDates[0]), checkOut: toIso(shortDates[1]) };
 }
 
+function detectLanguage(content: string): "vi" | "en" {
+  if (/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(content)) return "vi";
+  if (/\b(hello|hi|room|booking|stay|check[ -]?in|check[ -]?out|breakfast|guest|people|price|available)\b/i.test(content)) return "en";
+  return "vi";
+}
+
 function detectProperty(content: string): string | null {
   if (/lavender/i.test(content)) return "Lavender Homestay";
   if (/ruby/i.test(content)) return "Ruby Homestay";
@@ -131,6 +137,7 @@ export function decidePilotMessage(
     guest_count: extractGuestCount(trimmed) ?? existingMetadata.guest_count ?? null,
     property_hint: detectProperty(trimmed) ?? existingMetadata.property_hint ?? null,
     last_guest_message: trimmed,
+    language: detectLanguage(trimmed),
   };
 
   const evidence = {

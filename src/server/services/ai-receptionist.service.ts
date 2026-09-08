@@ -291,7 +291,7 @@ export class AiReceptionistService {
       external_conversation_id: externalConversationId,
       customer_name: input.customerName ?? existing?.customer_name ?? null,
       customer_contact: input.customerContact ?? existing?.customer_contact ?? null,
-      language: existing?.language ?? "vi",
+      language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi"),
       intent: "booking_concierge_experience",
       status: decision.conversationStatus,
       mode,

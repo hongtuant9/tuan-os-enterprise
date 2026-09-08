@@ -45,6 +45,37 @@ export async function submitPilotMessage(input: {
   }
 }
 
+export async function getLavenderRoomOptionsAction(checkIn: string, checkOut: string): Promise<ActionResult<{ id: string; code: string; name: string; available: number; version: number }[]>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để đọc phòng trống." };
+  if (!checkIn || !checkOut || checkOut <= checkIn) return { ok: false, error: "Khoảng ngày không hợp lệ." };
+  try {
+    const data = await getAdminContainer().aiReceptionist.getLavenderRoomOptions(checkIn, checkOut);
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể đọc phòng trống KiotViet." };
+  }
+}
+
+export async function prepareBookingDraftAction(input: {
+  conversationId: string; propertyId?: string | null; guestName: string; guestContact?: string;
+  checkIn: string; checkOut: string; adults: number; children?: number; roomCount: number;
+  roomClassId: string; roomClassName: string; quotedPrice?: number | null; priceSource?: string | null;
+}): Promise<ActionResult<{ bookingId: string; duplicate: boolean }>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để tạo booking draft." };
+  if (!hasMinimumRole(session.role, "manager")) return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được tạo booking draft." };
+  try {
+    const result = await getAdminContainer().aiReceptionist.prepareBookingDraft(input);
+    revalidatePath("/ai-le-tan");
+    return { ok: true, data: { bookingId: result.bookingId, duplicate: result.duplicate } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể tạo booking draft." };
+  }
+}
+
 export async function decideManagerReviewAction(input: {
   reviewId: string;
   decision: Exclude<ManagerReviewStatus, "pending">;

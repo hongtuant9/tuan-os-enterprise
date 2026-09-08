@@ -392,6 +392,17 @@ export class AiReceptionistService {
     };
   }
 
+  async getLavenderRoomOptions(checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number }>> {
+    if (!this.kiotViet.isConfigured()) throw new Error("KiotViet Hotel API chưa được cấu hình.");
+    const query = new URLSearchParams({ startDate: checkIn, endDate: checkOut, pageSize: "100", pageIndex: "1" }).toString();
+    const result = await this.kiotViet.listRoomClasses(query);
+    if (!result.ok) throw new Error(`KiotViet availability thất bại HTTP ${result.status}.`);
+    const payload = result.data as { result?: { data?: Array<Record<string, unknown>> } } | null;
+    return (payload?.result?.data ?? [])
+      .filter((room) => Number(room.branchId) === 8992 && Number(room.totalAvailableRoom ?? 0) > 0)
+      .map((room) => ({ id: String(room.id ?? ""), code: String(room.code ?? ""), name: String(room.name ?? ""), available: Number(room.totalAvailableRoom ?? 0), version: Number(room.version ?? 0) }));
+  }
+
   async prepareBookingDraft(input: BookingDraftInput): Promise<{ bookingId: string; idempotencyKey: string; duplicate: boolean }> {
     validateBookingDraftInput(input);
     const idempotencyKey = makeBookingIdempotencyKey(input);

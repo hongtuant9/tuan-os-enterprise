@@ -1,25 +1,13 @@
 import Sidebar from "@/components/Sidebar";
 import { getRequestContainer } from "@/server/container";
 import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
-import type { AiOpsAgent } from "@/server/ai-operations/types";
+import { buildManagerItems, latestSyncAt } from "@/server/ai-operations/manager-data";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function freshness(updatedAt?: string | null): AuthoritySnapshot["state"] {
   if (!updatedAt) return "unavailable";
   return Date.now() - new Date(updatedAt).getTime() <= DAY_MS ? "verified" : "stale";
-}
-
-function agentFor(title: string, unit: string): AiOpsAgent {
-  const text = `${title} ${unit}`.toLowerCase();
-  if (/google ads|utm|tracking|campaign/.test(text)) return "google_ads_agent";
-  if (/website|seo|wordpress|web /.test(text)) return "website_agent";
-  if (/ota|booking|agoda|expedia|airbnb|channel/.test(text)) return "channel_auditor";
-  if (/vps|browser|computer|openclaw|remote/.test(text)) return "computer_operator";
-  return "manager_agent";
-}
-function priority(value: string): ManagerWorkItem["priority"] {
-  return value === "P0" || value === "P1" || value === "P2" || value === "P3" ? value : "P2";
 }
 
 function sourceStateClass(state: AuthoritySnapshot["state"]) {
@@ -49,16 +37,18 @@ function WorkList({ title, items, empty }: { title: string; items: ManagerWorkIt
 }
 export default async function AiManagerPage() {
   const container = await getRequestContainer();
-  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }] = await Promise.all([
+  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }, { data: syncRows }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
     container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),
+    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
   ]);
 
   const tasks = taskRows ?? [];
   const approvals = approvalRows ?? [];
-  const latestTask = tasks[0]?.updated_at ?? null;
-  const latestApproval = approvals[0]?.updated_at ?? null;
+  const syncRecords = syncRows ?? [];
+  const latestTask = latestSyncAt(syncRecords, "task-001");
+  const latestApproval = latestSyncAt(syncRecords, "approval-001");
   const authorities: AuthoritySnapshot[] = [
     { authority: "TASK-001", state: freshness(latestTask), checkedAt: new Date().toISOString(), lastUpdatedAt: latestTask ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
     { authority: "APPROVAL-001", state: freshness(latestApproval), checkedAt: new Date().toISOString(), lastUpdatedAt: latestApproval ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
@@ -66,13 +56,7 @@ export default async function AiManagerPage() {
     { authority: "RUNTIME", state: "verified", checkedAt: new Date().toISOString(), note: "Current authenticated web request succeeded." },
   ];
 
-  const items: ManagerWorkItem[] = tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    priority: priority(task.priority),
-    status: task.status.toUpperCase().replaceAll("-", "_"),
-    agent: agentFor(task.title, task.unit),
-  }));
+  const items: ManagerWorkItem[] = buildManagerItems(tasks, syncRecords);
   const brief = buildManagerBrief(items, authorities);
   return (
     <div className="flex min-h-screen bg-[var(--page)]">

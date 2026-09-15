@@ -19,6 +19,14 @@ export class UnsupportedGoogleFileTypeError extends Error {
 const SPREADSHEET_MIME_TYPE = "application/vnd.google-apps.spreadsheet";
 const DOCUMENT_MIME_TYPE = "application/vnd.google-apps.document";
 
+function canonicalSheetRange(sourceKey: string, configuredRange: string | null): string {
+  const range = configuredRange || "A:Z";
+  if (range.includes("!")) return range;
+  if (sourceKey === "task-001") return `TASK_MASTER!${range}`;
+  if (sourceKey === "approval-001") return `APPROVAL_MASTER!${range}`;
+  return range;
+}
+
 /** First row is treated as column headers; externalId is the 1-indexed sheet row number. */
 function rowsFromSheetValues(values: string[][]): RawSheetRow[] {
   if (values.length === 0) return [];
@@ -71,7 +79,7 @@ export class GoogleDriveAdapter implements SyncAdapter {
     let rows: RawSheetRow[];
 
     if (metadata.mimeType === SPREADSHEET_MIME_TYPE) {
-      const values = await getSheetValues(this.sheetId, this.sheetRange || "A:Z", auth);
+      const values = await getSheetValues(this.sheetId, canonicalSheetRange(this.sourceKey, this.sheetRange), auth);
       rows = rowsFromSheetValues(values);
     } else if (metadata.mimeType === DOCUMENT_MIME_TYPE) {
       const paragraphs = await getDocParagraphs(this.sheetId, auth);

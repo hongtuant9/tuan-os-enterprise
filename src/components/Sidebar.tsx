@@ -6,6 +6,7 @@ import { signOut } from "@/app/actions/auth";
 
 const navigation = [
   { href: "/", label: "Dashboard" },
+  { href: "/ai-manager", label: "AI Manager" },
   { href: "/customers", label: "Customers" },
   { href: "/ai-le-tan", label: "Conversations" },
   { href: "/#leads", label: "Leads" },
@@ -36,7 +37,7 @@ export default function Sidebar() {
 
       <nav className="flex flex-col gap-1 overflow-y-auto pr-1">
         {navigation.map((item) => {
-          const isActive = item.href === "/" ? pathname === "/" : item.href === "/ai-le-tan" ? pathname.startsWith("/ai-le-tan") : false;
+          const isActive = item.href === "/" ? pathname === "/" : item.href.startsWith("/#") ? false : pathname.startsWith(item.href);
           return (
             <Link key={item.href} href={item.href} className={`rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? "bg-[var(--surface-raised)] font-medium text-[var(--ink-primary)]" : "text-[var(--ink-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--ink-primary)]"}`}>
               {item.label}

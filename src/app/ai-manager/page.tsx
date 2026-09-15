@@ -1,0 +1,149 @@
+import Sidebar from "@/components/Sidebar";
+import { getRequestContainer } from "@/server/container";
+import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
+import type { AiOpsAgent } from "@/server/ai-operations/types";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function freshness(updatedAt?: string | null): AuthoritySnapshot["state"] {
+  if (!updatedAt) return "unavailable";
+  return Date.now() - new Date(updatedAt).getTime() <= DAY_MS ? "verified" : "stale";
+}
+
+function agentFor(title: string, unit: string): AiOpsAgent {
+  const text = `${title} ${unit}`.toLowerCase();
+  if (/google ads|utm|tracking|campaign/.test(text)) return "google_ads_agent";
+  if (/website|seo|wordpress|web /.test(text)) return "website_agent";
+  if (/ota|booking|agoda|expedia|airbnb|channel/.test(text)) return "channel_auditor";
+  if (/vps|browser|computer|openclaw|remote/.test(text)) return "computer_operator";
+  return "manager_agent";
+}
+function priority(value: string): ManagerWorkItem["priority"] {
+  return value === "P0" || value === "P1" || value === "P2" || value === "P3" ? value : "P2";
+}
+
+function sourceStateClass(state: AuthoritySnapshot["state"]) {
+  if (state === "verified") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (state === "stale") return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-rose-50 text-rose-700 border-rose-200";
+}
+
+function WorkList({ title, items, empty }: { title: string; items: ManagerWorkItem[]; empty: string }) {
+  return (
+    <section className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+      <h2 className="text-sm font-semibold text-[var(--ink-primary)]">{title}</h2>
+      <div className="mt-3 space-y-2">
+        {items.length === 0 ? <p className="text-sm text-[var(--ink-muted)]">{empty}</p> : items.map((item) => (
+          <div key={item.id} className="rounded-lg bg-[var(--surface-raised)] px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-[var(--ink-primary)]">{item.title}</span>
+              <span className="text-xs text-[var(--ink-muted)]">{item.priority}</span>
+            </div>
+            <p className="mt-1 text-xs text-[var(--ink-muted)]">{item.id} · {item.agent}</p>
+            {item.blocker ? <p className="mt-1 text-xs text-amber-700">Blocker: {item.blocker}</p> : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+export default async function AiManagerPage() {
+  const container = await getRequestContainer();
+  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }] = await Promise.all([
+    container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
+    container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
+    container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),
+  ]);
+
+  const tasks = taskRows ?? [];
+  const approvals = approvalRows ?? [];
+  const latestTask = tasks[0]?.updated_at ?? null;
+  const latestApproval = approvals[0]?.updated_at ?? null;
+  const authorities: AuthoritySnapshot[] = [
+    { authority: "TASK-001", state: freshness(latestTask), checkedAt: new Date().toISOString(), lastUpdatedAt: latestTask ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
+    { authority: "APPROVAL-001", state: freshness(latestApproval), checkedAt: new Date().toISOString(), lastUpdatedAt: latestApproval ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
+    { authority: "L3", state: "unavailable", checkedAt: new Date().toISOString(), note: "No authoritative L3 connector is wired into this web runtime yet." },
+    { authority: "RUNTIME", state: "verified", checkedAt: new Date().toISOString(), note: "Current authenticated web request succeeded." },
+  ];
+
+  const items: ManagerWorkItem[] = tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    priority: priority(task.priority),
+    status: task.status.toUpperCase().replaceAll("-", "_"),
+    agent: agentFor(task.title, task.unit),
+  }));
+  const brief = buildManagerBrief(items, authorities);
+  return (
+    <div className="flex min-h-screen bg-[var(--page)]">
+      <Sidebar />
+      <main className="flex-1 px-6 py-8 md:px-10">
+        <header className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">AI Operations / Manager Agent</p>
+            <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">CEO Operations Cockpit</h1>
+            <p className="mt-1 max-w-3xl text-sm text-[var(--ink-muted)]">Kênh tương tác chính giữa Tuấn và Manager Agent. Hiện chạy READ-ONLY SHADOW cho tới khi authority sync và Stability Gate PASS.</p>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">MUTATION LOCKED</div>
+        </header>
+
+        <section className="grid gap-3 md:grid-cols-4">
+          {authorities.map((source) => (
+            <div key={source.authority} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-[var(--ink-primary)]">{source.authority}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${sourceStateClass(source.state)}`}>{source.state}</span>
+              </div>
+              <p className="mt-2 text-xs text-[var(--ink-muted)]">{source.note}</p>
+              {source.lastUpdatedAt ? <p className="mt-1 text-[11px] text-[var(--ink-muted)]">Updated: {new Date(source.lastUpdatedAt).toLocaleString("vi-VN")}</p> : null}
+            </div>
+          ))}
+        </section>
+        <section className="mt-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Manager Brief</h2>
+              <p className="mt-1 text-sm text-[var(--ink-secondary)]">{brief.summary}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-lg bg-[var(--surface-raised)] px-3 py-2"><b className="block text-base text-[var(--ink-primary)]">{brief.nextItems.length}</b>Next</div>
+              <div className="rounded-lg bg-[var(--surface-raised)] px-3 py-2"><b className="block text-base text-[var(--ink-primary)]">{brief.blockedItems.length}</b>Blocked</div>
+              <div className="rounded-lg bg-[var(--surface-raised)] px-3 py-2"><b className="block text-base text-[var(--ink-primary)]">{approvals.filter((item) => item.status === "pending").length}</b>Approval</div>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có task đủ điều kiện để đề xuất chạy." />
+          <WorkList title="Blocked" items={brief.blockedItems} empty="Không có blocker trong mirror hiện tại." />
+          <WorkList title="Chờ Owner / Approval" items={brief.waitingOwnerItems} empty="Không có task được map rõ là đang chờ Owner trong mirror hiện tại." />
+        </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+          <section className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+            <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Giao tiếp với Manager Agent</h2>
+            <p className="mt-1 text-sm text-[var(--ink-muted)]">Kênh chat/command sẽ được bật sau khi TASK-001, APPROVAL-001 và L3 được đồng bộ authoritative vào runtime. Hiện khóa nhập lệnh để tránh tạo quyết định trên dữ liệu stale.</p>
+            <div className="mt-4 rounded-lg border border-dashed border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4">
+              <textarea disabled rows={4} placeholder="Ví dụ: Kiểm tra tình hình TCE hôm nay..." className="w-full resize-none bg-transparent text-sm text-[var(--ink-muted)] outline-none disabled:cursor-not-allowed" />
+              <div className="mt-2 flex items-center justify-between text-xs text-[var(--ink-muted)]">
+                <span>Primary channel: TUAN OS Web App</span>
+                <button disabled className="rounded-md bg-[var(--ink-muted)] px-3 py-1.5 font-semibold text-white opacity-50">Gửi</button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+            <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Hoạt động gần đây</h2>
+            <div className="mt-3 space-y-3">
+              {(activityRows ?? []).length === 0 ? <p className="text-sm text-[var(--ink-muted)]">Chưa có activity log.</p> : (activityRows ?? []).map((row) => (
+                <div key={row.id} className="border-b border-[var(--border-hairline)] pb-2 last:border-0">
+                  <p className="text-sm text-[var(--ink-secondary)]">{row.message}</p>
+                  <p className="mt-1 text-[11px] text-[var(--ink-muted)]">{row.agent} · {new Date(row.created_at).toLocaleString("vi-VN")}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}

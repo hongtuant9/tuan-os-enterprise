@@ -8,16 +8,27 @@ function vnd(value: number) {
 
 export default async function Home() {
   const container = await getRequestContainer();
-  const [tasks, approvals, agents, receptionist, customerSummaries, upsellSummary] = await Promise.all([
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+  const [tasks, approvals, agents, receptionist, customerSummaries, upsellSummary, monthUsage, dayUsage] = await Promise.all([
     container.tasks.list(),
     container.approvals.list(),
     container.agents.list(),
     container.aiReceptionist.dashboard(),
     container.hospitalityCrm.customerSummaries(),
     container.hospitalityCrm.upsellSummary(),
+    container.db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", monthStart),
+    container.db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", dayStart),
   ]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = now.toISOString().slice(0, 10);
+  const sumCost = (rows: Array<{ estimated_cost_usd: number }> | null) => (rows ?? []).reduce((sum, row) => sum + Number(row.estimated_cost_usd ?? 0), 0);
+  const aiCostMonth = sumCost(monthUsage.data);
+  const aiCostToday = sumCost(dayUsage.data);
+  const aiDailyBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0") || 0;
+  const aiMonthlyBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0") || 0;
+  const aiCostStatus = aiDailyBudget > 0 && aiMonthlyBudget > 0 ? "ENABLED_WITH_BUDGET" : "HOLD_COST_APPROVAL";
   const conversations = receptionist.conversations;
   const bookings = receptionist.bookings;
   const newLeads = conversations.filter((item) => item.customerContact && !item.customerContact.includes("Chưa có")).length;
@@ -75,6 +86,11 @@ export default async function Home() {
           upsellRevenue={upsellSummary.metrics.revenue}
           bookingCount={bookings.length}
           missingKnowledge={receptionist.missingDataBacklog.length}
+          aiCostToday={aiCostToday}
+          aiCostMonth={aiCostMonth}
+          aiCostStatus={aiCostStatus}
+          aiDailyBudget={aiDailyBudget}
+          aiMonthlyBudget={aiMonthlyBudget}
         />
       </main>
     </div>

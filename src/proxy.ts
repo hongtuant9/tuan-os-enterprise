@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const PUBLIC_PATHS = [
+  "/health",
   "/login",
   "/review",
   "/feedback",

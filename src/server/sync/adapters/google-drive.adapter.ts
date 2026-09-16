@@ -34,7 +34,9 @@ function rowsFromSheetValues(values: string[][], headerRowIndex = 0): RawSheetRo
 
   const header = values[headerRowIndex];
   const body = values.slice(headerRowIndex + 1);
-  return body.map((row, index) => {
+  return body.map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.some((cell) => String(cell ?? "").trim() !== ""))
+    .map(({ row, index }) => {
     const fields: Record<string, string> = {};
     header.forEach((column, columnIndex) => {
       if (column) fields[column.trim()] = row[columnIndex] ?? "";

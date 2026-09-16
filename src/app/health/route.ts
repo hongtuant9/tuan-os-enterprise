@@ -13,6 +13,8 @@ export async function GET() {
         {
           status: "degraded",
           service: "tuan-os-enterprise",
+          runtime: "tce-15-agent-v2",
+          agentRegistry: 15,
           checkedAt,
           checks: { app: "ok", database: "error" },
         },
@@ -24,6 +26,8 @@ export async function GET() {
       {
         status: "ok",
         service: "tuan-os-enterprise",
+        runtime: "tce-15-agent-v2",
+        agentRegistry: 15,
         checkedAt,
         checks: { app: "ok", database: "ok" },
       },
@@ -34,6 +38,8 @@ export async function GET() {
       {
         status: "degraded",
         service: "tuan-os-enterprise",
+        runtime: "tce-15-agent-v2",
+        agentRegistry: 15,
         checkedAt,
         checks: { app: "ok", database: "unavailable" },
       },

@@ -65,23 +65,23 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
     guardrails: ["second availability check required", "no booking write"],
   },
   {
-    id: "booking_agent", name: "Booking Agent", domain: "customer", mode: "approval_required", permission: "L2_APPROVAL",
-    mission: "Thực thi booking write chỉ sau approval và đầy đủ safety gate.",
-    sources: ["approved booking draft", "KiotViet Hotel runtime", "approval record"],
+    id: "booking_agent", name: "Booking Agent", domain: "customer", mode: "active", permission: "L2_APPROVAL",
+    mission: "Thực thi booking write khi source/safety gate/idempotency/read-back PASS; chỉ ngoại lệ tài chính cần Owner approval.",
+    sources: ["verified booking draft", "KiotViet Hotel runtime", "L3 pricing/policy authority"],
     capabilities: ["second check", "idempotent create", "post-create readback", "audit log"],
-    guardrails: ["write disabled unless gate passes", "no success claim before readback"],
+    guardrails: ["write disabled unless safety gate passes", "financial exception requires Owner approval", "no success claim before readback"],
   },  {
     id: "channel_auditor", name: "Channel Auditor", domain: "operations", mode: "active", permission: "L0_READ",
     mission: "Phát hiện mismatch giữa Master và Website/OTA/Maps/Tripadvisor.",
     sources: ["L3 Master", "MKT-001", "authenticated/public channel evidence"],
     capabilities: ["reconciliation", "severity classification", "remediation proposal"],
-    guardrails: ["public evidence cannot overwrite Master", "mutation requires approval"],
+    guardrails: ["public evidence cannot overwrite Master", "non-financial remediation requires verified source + evidence + rollback"],
   },
   {
-    id: "website_agent", name: "Website Agent", domain: "operations", mode: "approval_required", permission: "L2_APPROVAL",
-    mission: "Audit và sửa website theo WEB-TCE-001 sau approval.",
+    id: "website_agent", name: "Website Agent", domain: "operations", mode: "active", permission: "L2_APPROVAL",
+    mission: "Audit và tự sửa lỗi website không liên quan tài chính theo WEB-TCE-001 với evidence, read-back và rollback.",
     sources: ["WEB-TCE-001", "L3 Master", "production website"],
-    capabilities: ["content audit", "CTA/link/schema/mobile checks", "approved patch"],
+    capabilities: ["content audit", "CTA/link/schema/mobile checks", "controlled patch"],
     guardrails: ["no publish of unverified facts", "before/after evidence and rollback"],
   },
   {
@@ -125,11 +125,11 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
     guardrails: ["recommend before mutate", "large/public pricing changes require approval"],
   },
   {
-    id: "computer_operator", name: "Computer Operator Controller", domain: "execution", mode: "approval_required", permission: "L2_APPROVAL",
-    mission: "Điều phối browser worker cho tác vụ không có API/DOM phù hợp.",
-    sources: ["approved task envelope", "runtime access matrix"],
+    id: "computer_operator", name: "Computer Operator Controller", domain: "execution", mode: "active", permission: "L2_APPROVAL",
+    mission: "Điều phối browser worker cho tác vụ không có API/Terminal/DOM phù hợp; tự thực thi non-financial task trong policy.",
+    sources: ["verified task envelope", "runtime access matrix", "TASK-001"],
     capabilities: ["task queue", "worker handoff", "evidence capture", "result verification"],
-    guardrails: ["API first", "no password/token logging", "L3 actions require explicit owner approval"],
+    guardrails: ["API → Terminal → DOM → GUI", "no password/token logging", "financial mutation requires Owner approval", "destructive action requires rollback"],
   },
 ];
 

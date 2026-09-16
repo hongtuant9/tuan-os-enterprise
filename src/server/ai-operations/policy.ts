@@ -5,80 +5,43 @@ export function decideExecution(
   context: ExecutionContext,
 ): ExecutionDecision {
   if (!context.sourceVerified) {
-    return {
-      allowed: false,
-      status: "blocked",
-      reason: "SOURCE_NOT_VERIFIED",
-    };
+    return { allowed: false, status: "blocked", reason: "SOURCE_NOT_VERIFIED" };
   }
 
   if (context.requiresPasswordOrMfa) {
-    return {
-      allowed: false,
-      status: "waiting_owner",
-      reason: "OWNER_AUTH_REQUIRED",
-    };
+    return { allowed: false, status: "waiting_owner", reason: "OWNER_AUTH_REQUIRED" };
   }
 
   if (task.mode === "mutation") {
     if (task.approvalLevel === "L0_READ" || task.approvalLevel === "L1_SAFE") {
-      return {
-        allowed: false,
-        status: "blocked",
-        reason: "MUTATION_REQUIRES_L2_OR_L3",
-      };
+      return { allowed: false, status: "blocked", reason: "MUTATION_REQUIRES_L2_OR_L3" };
     }
 
-    if (!context.approvalApproved || !task.approvalId) {
-      return {
-        allowed: false,
-        status: "waiting_owner",
-        reason: "APPROVAL_REQUIRED",
-      };
+    // Owner directive 2026-09-16: only financial/cost/budget/payment-related
+    // mutations require explicit owner approval. Non-financial technical and
+    // security work is handled internally with evidence + rollback/read-back.
+    if (context.financial && (!context.approvalApproved || !task.approvalId || !context.ownerPresent)) {
+      return { allowed: false, status: "waiting_owner", reason: "OWNER_REQUIRED_FOR_FINANCIAL_MUTATION" };
     }
 
-    const criticalMutation =
-      task.approvalLevel === "L3_CRITICAL" ||
-      context.destructive ||
-      context.financial ||
-      context.customerCritical;
-
-    if (criticalMutation && !context.ownerPresent) {
-      return {
-        allowed: false,
-        status: "waiting_owner",
-        reason: "OWNER_REQUIRED_FOR_CRITICAL_MUTATION",
-      };
+    // Destructive work still fails closed without a rollback plan. This is an
+    // internal safety requirement, not an owner-approval gate.
+    if (context.destructive && !task.rollbackPlan) {
+      return { allowed: false, status: "blocked", reason: "DESTRUCTIVE_ACTION_REQUIRES_ROLLBACK_PLAN" };
     }
   }
 
   if (!context.foundationGatePassed && task.mode === "mutation") {
-    return {
-      allowed: false,
-      status: "blocked",
-      reason: "FOUNDATION_GATE_NOT_PASSED",
-    };
+    return { allowed: false, status: "blocked", reason: "FOUNDATION_GATE_NOT_PASSED" };
   }
 
   if (task.maxAttempts < 1 || task.maxAttempts > 3) {
-    return {
-      allowed: false,
-      status: "blocked",
-      reason: "INVALID_RETRY_POLICY",
-    };
+    return { allowed: false, status: "blocked", reason: "INVALID_RETRY_POLICY" };
   }
 
   if (task.timeoutMs <= 0) {
-    return {
-      allowed: false,
-      status: "blocked",
-      reason: "INVALID_TIMEOUT",
-    };
+    return { allowed: false, status: "blocked", reason: "INVALID_TIMEOUT" };
   }
 
-  return {
-    allowed: true,
-    status: "queued",
-    reason: "POLICY_PASS",
-  };
+  return { allowed: true, status: "queued", reason: "POLICY_PASS" };
 }

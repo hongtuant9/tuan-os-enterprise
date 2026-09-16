@@ -10,8 +10,8 @@ const navigation = [
   { href: "/ai-le-tan", label: "Khách & Booking" },
   { href: "/customers", label: "Khách hàng" },
   { href: "/upsell", label: "Bán thêm" },
-  { href: "/#approvals", label: "Việc cần duyệt" },
-  { href: "/ai-manager#agents", label: "15 AI Agent" },
+  { href: "/approvals", label: "Việc cần duyệt" },
+  { href: "/agents", label: "15 AI Agent" },
 ];
 
 export default function Sidebar() {

@@ -102,24 +102,6 @@ export function auditChannel(record: CanonicalChannelRecord, observed?: Observed
     mutationAllowed: false, recommendedAction: verification === "VERIFIED" ? "No change." : "Review evidence and update canonical verification only after authority rules pass.",
   };
 }
-
-export function canonicalChannelRecordsFromL3Rows(rows: Array<Record<string, string>>): CanonicalChannelRecord[] {
-  return rows
-    .filter((row) => (row["Record Type"] ?? "").trim().toUpperCase() === "CHANNEL")
-    .map((row) => ({
-      stableKey: (row["Stable Key"] ?? "").trim(),
-      channel: (row["ID/Channel"] ?? "").trim(),
-      entity: (row["Entity"] ?? row["Business"] ?? "TCE").trim(),
-      expectedStatus: (row["Status"] ?? "").trim(),
-      verificationStatus: (row["Verification Status"] ?? "NEED VERIFY").trim(),
-      lastVerified: (row["Last Verified"] ?? "").trim() || undefined,
-      sourceOfTruth: (row["Source of Truth"] ?? "Tam_Coc_Experience_Master_Information_Sheet_V1").trim(),
-      decisionId: (row["Decision ID"] ?? "").trim() || undefined,
-      notes: (row["Notes"] ?? "").trim() || undefined,
-    }))
-    .filter((row) => Boolean(row.stableKey && row.channel));
-}
-
 export function auditChannels(records: CanonicalChannelRecord[], observations: ObservedChannelState[]) {
   const observedByKey = new Map(observations.map((item) => [item.stableKey, item]));
   const findings = records.map((record) => auditChannel(record, observedByKey.get(record.stableKey)));

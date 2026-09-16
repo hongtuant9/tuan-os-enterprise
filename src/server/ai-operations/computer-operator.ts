@@ -64,6 +64,6 @@ export function buildOperatorPlan(envelope: OperatorEnvelope): OperatorPlan {
 
 export function requiresManualTakeover(envelope: OperatorEnvelope) {
   return envelope.context.requiresPasswordOrMfa ||
-    (envelope.task.approvalLevel === "L3_CRITICAL" && !envelope.context.ownerPresent) ||
-    envelope.context.destructive;
+    (envelope.context.financial && !envelope.context.ownerPresent) ||
+    (envelope.context.destructive && !envelope.task.rollbackPlan);
 }

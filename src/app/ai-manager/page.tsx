@@ -2,6 +2,8 @@ import Sidebar from "@/components/Sidebar";
 import { getRequestContainer } from "@/server/container";
 import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
 import { buildManagerItems, latestSyncAt } from "@/server/ai-operations/manager-data";
+import TceManagerChat from "@/components/ai-manager/TceManagerChat";
+import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -98,6 +100,13 @@ export default async function AiManagerPage() {
           </div>
         </section>
 
+        <section className="mt-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-[var(--ink-primary)]">TCE Agent Registry</h2><span className="text-xs text-[var(--ink-muted)]">{TCE_AGENT_REGISTRY.length}/15 registered</span></div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {TCE_AGENT_REGISTRY.map((agent) => <div key={agent.id} className="rounded-lg bg-[var(--surface-raised)] p-3"><div className="flex items-center justify-between gap-2"><b className="text-sm text-[var(--ink-primary)]">{agent.name}</b><span className="text-[10px] uppercase text-[var(--ink-muted)]">{agent.mode}</span></div><p className="mt-1 text-xs text-[var(--ink-muted)]">{agent.permission} · {agent.domain}</p><p className="mt-2 text-xs text-[var(--ink-secondary)]">{agent.mission}</p></div>)}
+          </div>
+        </section>
+
         <div className="mt-6 grid gap-4 xl:grid-cols-3">
           <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có task đủ điều kiện để đề xuất chạy." />
           <WorkList title="Blocked" items={brief.blockedItems} empty="Không có blocker trong mirror hiện tại." />
@@ -105,15 +114,9 @@ export default async function AiManagerPage() {
         </div>
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
           <section className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Giao tiếp với Manager Agent</h2>
-            <p className="mt-1 text-sm text-[var(--ink-muted)]">Kênh chat/command sẽ được bật sau khi TASK-001, APPROVAL-001 và L3 được đồng bộ authoritative vào runtime. Hiện khóa nhập lệnh để tránh tạo quyết định trên dữ liệu stale.</p>
-            <div className="mt-4 rounded-lg border border-dashed border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4">
-              <textarea disabled rows={4} placeholder="Ví dụ: Kiểm tra tình hình TCE hôm nay..." className="w-full resize-none bg-transparent text-sm text-[var(--ink-muted)] outline-none disabled:cursor-not-allowed" />
-              <div className="mt-2 flex items-center justify-between text-xs text-[var(--ink-muted)]">
-                <span>Primary channel: TUAN OS Web App</span>
-                <button disabled className="rounded-md bg-[var(--ink-muted)] px-3 py-1.5 font-semibold text-white opacity-50">Gửi</button>
-              </div>
-            </div>
+            <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Giao tiếp với TCE AI Manager</h2>
+            <p className="mt-1 text-sm text-[var(--ink-muted)]">Lệnh được route tới một trong 15 AI Agent theo intent. Các mutation L2/L3 vẫn đi qua Approval Queue và guardrail hiện hành.</p>
+            <div className="mt-4"><TceManagerChat /></div>
           </section>
 
           <section className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">

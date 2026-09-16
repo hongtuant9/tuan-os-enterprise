@@ -41,7 +41,7 @@ export default async function AiManagerPage() {
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
     container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),
-    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
+    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
   ]);
 
   const tasks = taskRows ?? [];
@@ -49,10 +49,11 @@ export default async function AiManagerPage() {
   const syncRecords = syncRows ?? [];
   const latestTask = latestSyncAt(syncRecords, "task-001");
   const latestApproval = latestSyncAt(syncRecords, "approval-001");
+  const latestL3 = latestSyncAt(syncRecords, "l3-channel-tracking");
   const authorities: AuthoritySnapshot[] = [
     { authority: "TASK-001", state: freshness(latestTask), checkedAt: new Date().toISOString(), lastUpdatedAt: latestTask ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
     { authority: "APPROVAL-001", state: freshness(latestApproval), checkedAt: new Date().toISOString(), lastUpdatedAt: latestApproval ?? undefined, note: "Supabase mirror; Google Drive remains canonical." },
-    { authority: "L3", state: "unavailable", checkedAt: new Date().toISOString(), note: "No authoritative L3 connector is wired into this web runtime yet." },
+    { authority: "L3", state: freshness(latestL3), checkedAt: new Date().toISOString(), lastUpdatedAt: latestL3 ?? undefined, note: "Read-only mirror of L3 12_CHANNEL_TRACKING; Google Drive remains canonical." },
     { authority: "RUNTIME", state: "verified", checkedAt: new Date().toISOString(), note: "Current authenticated web request succeeded." },
   ];
 

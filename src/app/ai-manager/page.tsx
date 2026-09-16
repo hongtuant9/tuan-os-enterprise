@@ -100,7 +100,7 @@ export default async function AiManagerPage() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+        <section id="agent-registry" className="mt-6 scroll-mt-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
           <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-[var(--ink-primary)]">TCE Agent Registry</h2><span className="text-xs text-[var(--ink-muted)]">{TCE_AGENT_REGISTRY.length}/15 registered</span></div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {TCE_AGENT_REGISTRY.map((agent) => <div key={agent.id} className="rounded-lg bg-[var(--surface-raised)] p-3"><div className="flex items-center justify-between gap-2"><b className="text-sm text-[var(--ink-primary)]">{agent.name}</b><span className="text-[10px] uppercase text-[var(--ink-muted)]">{agent.mode}</span></div><p className="mt-1 text-xs text-[var(--ink-muted)]">{agent.permission} · {agent.domain}</p><p className="mt-2 text-xs text-[var(--ink-secondary)]">{agent.mission}</p></div>)}

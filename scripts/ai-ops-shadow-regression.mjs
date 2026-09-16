@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { auditWebsite } from "../src/server/ai-operations/website-agent.ts";
-import { auditChannels, canonicalChannelRecordsFromL3Rows } from "../src/server/ai-operations/channel-auditor.ts";
+import { auditChannels } from "../src/server/ai-operations/channel-auditor.ts";
 import { buildAdsReport } from "../src/server/ai-operations/google-ads-agent.ts";
 
 const website = auditWebsite(
@@ -19,14 +19,6 @@ const channels = auditChannels(
 );
 assert.equal(channels.canMutate, false);
 assert.deepEqual(channels.findings.map((x) => x.status), ["match", "hold"]);
-
-const l3Channels = canonicalChannelRecordsFromL3Rows([
-  { "Record Type": "CHANNEL", "ID/Channel": "Facebook", Status: "LIVE", "Verification Status": "VERIFIED", "Source of Truth": "Metricool runtime", Entity: "TCE", "Stable Key": "CHANNEL|Facebook" },
-  { "Record Type": "METRIC", "ID/Channel": "website_book_click", Status: "VERIFIED", "Stable Key": "METRIC|website_book_click" },
-]);
-assert.equal(l3Channels.length, 1);
-assert.equal(l3Channels[0].stableKey, "CHANNEL|Facebook");
-assert.equal(l3Channels[0].verificationStatus, "VERIFIED");
 
 const ads = buildAdsReport({
   accountId: "cozy",

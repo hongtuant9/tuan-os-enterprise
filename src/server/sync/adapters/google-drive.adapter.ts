@@ -24,7 +24,6 @@ function canonicalSheetRange(sourceKey: string, configuredRange: string | null):
   if (range.includes("!")) return range;
   if (sourceKey === "task-001") return `TASK_MASTER!${range}`;
   if (sourceKey === "approval-001") return `APPROVAL_MASTER!${range}`;
-  if (sourceKey === "l3-channel-tracking") return `12_CHANNEL_TRACKING!${range}`;
   return range;
 }
 

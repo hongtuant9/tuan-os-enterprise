@@ -40,7 +40,8 @@ export default async function Home() {
   const checkOuts = bookings.filter((item) => item.checkOut === today).length;
   const openTasks = tasks.filter((item) => item.status !== "done").length;
   const pendingApprovals = approvals.filter((item) => item.status === "pending").length;
-  const agentsOnline = agents.filter((item) => item.status === "online").length;
+  const tceAgents = agents.filter((item) => item.unit === "TCE AI");
+  const agentsOnline = tceAgents.filter((item) => item.status === "online").length;
 
   const metrics = [
     { label: "Hội thoại mới", value: conversations.length, hint: "Private Pilot / dữ liệu hiện có", href: "/ai-le-tan" },
@@ -79,7 +80,7 @@ export default async function Home() {
           openTasks={openTasks}
           pendingApprovals={pendingApprovals}
           agentsOnline={agentsOnline}
-          agentsTotal={agents.length}
+          agentsTotal={tceAgents.length}
           conversationCount={conversations.length}
           customerCount={customerSummaries.length}
           upsellEventCount={upsellSummary.metrics.totalEvents}

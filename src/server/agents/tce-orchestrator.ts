@@ -1,7 +1,7 @@
 import "server-only";
 import { getAdminContainer } from "@/server/container";
 import { TCE_AGENT_REGISTRY, agentSummary, type TceAgentDefinition } from "./tce-registry";
-import { assertTceAiBudget, recordTceAiUsage } from "./tce-cost-guard";
+import { assertTceAiBudget, estimatePreflightCostUsd, recordTceAiUsage } from "./tce-cost-guard";
 
 export type TceAgentReply = {
   agent: string;
@@ -24,8 +24,14 @@ function enabled(): boolean {
   return (process.env.TCE_AGENT_AI_ENABLED ?? "false").toLowerCase() === "true" && Boolean(process.env.OPENAI_API_KEY);
 }
 
-function model(): string {
-  return process.env.TCE_AGENT_MODEL?.trim() || "gpt-5.6-luna";
+function selectModel(agent: TceAgentDefinition, message: string): string {
+  const luna = process.env.TCE_AGENT_MODEL_LUNA?.trim() || process.env.TCE_AGENT_MODEL?.trim() || "gpt-5.6-luna";
+  const terra = process.env.TCE_AGENT_MODEL_TERRA?.trim() || "gpt-5.6-terra";
+  const sol = process.env.TCE_AGENT_MODEL_SOL?.trim() || "gpt-5.6-sol";
+  const complex = /root cause|kiến trúc|architecture|multi-source|nhiều nguồn|worst-case|incident|security|bảo mật|complex/i.test(message);
+  if (agent.id === "manager_agent" && complex) return sol;
+  if (["revenue_yield", "data_quality", "reputation", "manager_agent"].includes(agent.id) || complex) return terra;
+  return luna;
 }
 function pickAgent(message: string): TceAgentDefinition {
   const text = message.toLowerCase();
@@ -136,12 +142,15 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
   ].join("\n");
 
   const input = `YÊU CẦU:\n${message}\n\nRUNTIME CONTEXT (trusted internal snapshot):\n${JSON.stringify(context)}`;
-  await assertTceAiBudget();
-  const selectedModel = model();
+  const selectedModel = selectModel(agent, message);
+  const estimatedInputTokens = Math.ceil((instructions.length + input.length) / 3);
+  const maxOutputTokens = 1000;
+  const reservedCostUsd = estimatePreflightCostUsd(selectedModel, estimatedInputTokens, maxOutputTokens);
+  await assertTceAiBudget(reservedCostUsd);
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: model(), instructions, input, max_output_tokens: 1000, store: false }),
+    body: JSON.stringify({ model: selectedModel, instructions, input, max_output_tokens: maxOutputTokens, store: false }),
     signal: AbortSignal.timeout(45_000),
   });
   if (!response.ok) {

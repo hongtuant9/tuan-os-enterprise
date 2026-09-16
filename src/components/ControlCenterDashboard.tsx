@@ -16,13 +16,18 @@ type Props = {
   upsellRevenue: number;
   bookingCount: number;
   missingKnowledge: number;
+  aiCostToday: number;
+  aiCostMonth: number;
+  aiCostStatus: string;
+  aiDailyBudget: number;
+  aiMonthlyBudget: number;
 };
 
 const mainActions = [
   { href: "/ai-manager", title: "Hỏi AI Manager", note: "Giao việc hoặc hỏi tình trạng TCE bằng ngôn ngữ bình thường." },
-  { href: "/#approvals", title: "Việc cần tôi duyệt", note: "Chỉ hiện các quyết định cần Owner xử lý, đặc biệt tài chính/chi phí." },
+  { href: "/approvals", title: "Việc cần tôi duyệt", note: "Chỉ hiện các quyết định cần Owner xử lý, đặc biệt tài chính/chi phí." },
   { href: "/ai-le-tan", title: "Khách & Booking", note: "Xem hội thoại, phòng trống và booking đang xử lý." },
-  { href: "/ai-manager#agent-registry", title: "15 AI Agent", note: "Xem Agent nào đang Active, Shadow hoặc bị chặn." },
+  { href: "/agents", title: "15 AI Agent", note: "Xem Agent nào đang Active, Shadow hoặc bị chặn." },
 ];
 function MetricCard({ item }: { item: Metric }) {
   return (
@@ -83,6 +88,23 @@ export default function ControlCenterDashboard(props: Props) {
           <Link href="/ai-manager#agent-registry" className="text-sm font-semibold text-[var(--accent)]">Xem trạng thái →</Link>
         </div>
       </section>
+      <section id="ai-cost" className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-[var(--ink-primary)]">Chi phí AI</p>
+            <p className="mt-1 text-sm text-[var(--ink-secondary)]">Theo dõi OpenAI API theo usage ledger. Các ngưỡng kỹ thuật không phải ngân sách được duyệt.</p>
+          </div>
+          <span className="rounded-full bg-[var(--surface-raised)] px-3 py-1 text-xs font-semibold text-[var(--ink-secondary)]">{props.aiCostStatus}</span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Hôm nay</p><p className="mt-1 text-lg font-semibold">${props.aiCostToday.toFixed(4)}</p></div>
+          <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Tháng này</p><p className="mt-1 text-lg font-semibold">${props.aiCostMonth.toFixed(4)}</p></div>
+          <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Daily budget</p><p className="mt-1 text-lg font-semibold">{props.aiDailyBudget > 0 ? `$${props.aiDailyBudget.toFixed(2)}` : "Chưa duyệt"}</p></div>
+          <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Monthly budget</p><p className="mt-1 text-lg font-semibold">{props.aiMonthlyBudget > 0 ? `$${props.aiMonthlyBudget.toFixed(2)}` : "Chưa duyệt"}</p></div>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-[var(--ink-muted)]">Thiết kế kiểm soát: cảnh báo kỹ thuật tại $20 / $30, soft stop $40, hard stop $50. Vượt hard stop phải Owner duyệt trước khi tiếp tục paid AI.</p>
+      </section>
+
       <section id="system-health">
         <p className="text-sm font-semibold text-[var(--ink-primary)]">Tình trạng hệ thống</p>
         <div className="mt-3 grid gap-3 md:grid-cols-3">

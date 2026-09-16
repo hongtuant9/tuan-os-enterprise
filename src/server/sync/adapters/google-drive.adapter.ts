@@ -29,16 +29,17 @@ function canonicalSheetRange(sourceKey: string, configuredRange: string | null):
 }
 
 /** First row is treated as column headers; externalId is the 1-indexed sheet row number. */
-function rowsFromSheetValues(values: string[][]): RawSheetRow[] {
-  if (values.length === 0) return [];
+function rowsFromSheetValues(values: string[][], headerRowIndex = 0): RawSheetRow[] {
+  if (values.length <= headerRowIndex) return [];
 
-  const [header, ...body] = values;
+  const header = values[headerRowIndex];
+  const body = values.slice(headerRowIndex + 1);
   return body.map((row, index) => {
     const fields: Record<string, string> = {};
     header.forEach((column, columnIndex) => {
       if (column) fields[column.trim()] = row[columnIndex] ?? "";
     });
-    return { externalId: String(index + 2), fields }; // +2: 1-indexed rows, header is row 1
+    return { externalId: String(index + headerRowIndex + 2), fields };
   });
 }
 
@@ -81,7 +82,10 @@ export class GoogleDriveAdapter implements SyncAdapter {
 
     if (metadata.mimeType === SPREADSHEET_MIME_TYPE) {
       const values = await getSheetValues(this.sheetId, canonicalSheetRange(this.sourceKey, this.sheetRange), auth);
-      rows = rowsFromSheetValues(values);
+      // L3 12_CHANNEL_TRACKING has a human-readable title row above the canonical header row.
+      // All other sync sources keep the first row as the header.
+      const headerRowIndex = this.sourceKey === "l3-channel-tracking" ? 1 : 0;
+      rows = rowsFromSheetValues(values, headerRowIndex);
     } else if (metadata.mimeType === DOCUMENT_MIME_TYPE) {
       const paragraphs = await getDocParagraphs(this.sheetId, auth);
       rows = rowsFromDocParagraphs(paragraphs);

@@ -144,6 +144,12 @@ export interface Database {
         };
         Relationships: [];
       };
+      tce_ai_usage_ledger: {
+        Row: { id: string; agent_id: string; model: string; input_tokens: number; cached_input_tokens: number; output_tokens: number; estimated_cost_usd: number; request_source: string; created_at: string; };
+        Insert: { id?: string; agent_id: string; model: string; input_tokens?: number; cached_input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; request_source?: string; created_at?: string; };
+        Update: { id?: string; agent_id?: string; model?: string; input_tokens?: number; cached_input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; request_source?: string; created_at?: string; };
+        Relationships: [];
+      };
       tasks: {
         Row: {
           id: string;

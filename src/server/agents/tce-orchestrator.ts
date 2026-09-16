@@ -1,6 +1,7 @@
 import "server-only";
 import { getAdminContainer } from "@/server/container";
 import { TCE_AGENT_REGISTRY, agentSummary, type TceAgentDefinition } from "./tce-registry";
+import { assertTceAiBudget, recordTceAiUsage } from "./tce-cost-guard";
 
 export type TceAgentReply = {
   agent: string;
@@ -135,6 +136,8 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
   ].join("\n");
 
   const input = `YÊU CẦU:\n${message}\n\nRUNTIME CONTEXT (trusted internal snapshot):\n${JSON.stringify(context)}`;
+  await assertTceAiBudget();
+  const selectedModel = model();
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
@@ -144,7 +147,10 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
   if (!response.ok) {
     throw new Error(`TCE Agent API lỗi ${response.status}`);
   }
-  const reply = extractText(await response.json());
+  const payload = await response.json();
+  const usage = (payload && typeof payload === "object" ? (payload as Record<string, unknown>).usage : undefined) as Parameters<typeof recordTceAiUsage>[2] | undefined;
+  if (usage) await recordTceAiUsage(agent.id, selectedModel, usage);
+  const reply = extractText(payload);
   return {
     agent: agent.name,
     agentId: agent.id,

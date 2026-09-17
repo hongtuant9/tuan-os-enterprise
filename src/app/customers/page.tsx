@@ -52,9 +52,9 @@ export default async function CustomersPage() {
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
           <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Kênh nhắn tin</h2><p className="text-xs text-[var(--ink-muted)]">Một CRM chung cho các kênh. Secret chỉ nằm server-side.</p></div>
-          <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: chỉ Facebook Messenger được mở ở PRIVATE PILOT. Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
+          <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: <span className="font-semibold">{channelPolicy.stage}</span> · chỉ Facebook Messenger được mở ở PRIVATE PILOT. Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {channelPolicy.map((channel) => {
+            {channelPolicy.channels.map((channel) => {
               const isOpen = channel.mode === "PRIVATE_PILOT";
               const readinessLabel = channel.readiness === "LIVE_PILOT" ? "Live pilot" : channel.readiness === "ADAPTER_READY" ? "Adapter sẵn sàng" : channel.readiness === "ATTRIBUTION_READY" ? "Attribution sẵn sàng" : channel.readiness === "PENDING_PARTNER_API" ? "Chờ quyền/API đối tác" : "Chờ xác thực/quyền";
               return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "PRIVATE PILOT" : "Đóng"} · ${readinessLabel}`} ready={isOpen}/>;

@@ -18,6 +18,7 @@ export type CustomerChannelId =
   | "other";
 
 export type ChannelMode = "PRIVATE_PILOT" | "CLOSED";
+export type CustomerChannelStage = "closed" | "facebook_only" | "progressive";
 
 export const CUSTOMER_CONVERSATION_CHANNELS = [
   "website", "facebook", "instagram", "booking", "agoda", "airbnb",
@@ -58,9 +59,19 @@ export const CUSTOMER_CHANNELS: readonly ChannelDefinition[] = [
   { id: "other", label: "Kênh khác", group: "offline", purpose: "Catch-all source pending classification", readiness: "ATTRIBUTION_READY" },
 ] as const;
 
+export function customerChannelStage(): CustomerChannelStage {
+  const raw = process.env.TCE_CUSTOMER_CHANNEL_STAGE?.trim().toLowerCase();
+  if (raw === "closed" || raw === "progressive" || raw === "facebook_only") return raw;
+  return "facebook_only";
+}
+
 function configuredPilotChannels(): Set<CustomerChannelId> {
+  const stage = customerChannelStage();
+  if (stage === "closed") return new Set();
+  if (stage === "facebook_only") return new Set(["facebook"]);
   const raw = process.env.TCE_ENABLED_CUSTOMER_CHANNELS?.trim() || "facebook";
-  return new Set(raw.split(",").map((item) => item.trim()).filter(Boolean) as CustomerChannelId[]);
+  const requested = raw.split(",").map((item) => item.trim()).filter(Boolean) as CustomerChannelId[];
+  return new Set(requested.filter((item) => CUSTOMER_CHANNELS.some((channel) => channel.id === item)));
 }
 
 export function customerChannelMode(id: CustomerChannelId): ChannelMode {
@@ -76,5 +87,8 @@ export function assertCustomerChannelEnabled(id: CustomerChannelId): void {
 }
 
 export function channelPolicySnapshot() {
-  return CUSTOMER_CHANNELS.map((channel) => ({ ...channel, mode: customerChannelMode(channel.id) }));
+  return {
+    stage: customerChannelStage(),
+    channels: CUSTOMER_CHANNELS.map((channel) => ({ ...channel, mode: customerChannelMode(channel.id) })),
+  };
 }

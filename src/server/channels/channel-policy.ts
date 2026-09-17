@@ -105,11 +105,13 @@ function providerEvidence(id: CustomerChannelId): {
   providerVerification: ProviderVerificationStatus;
 } {
   switch (id) {
-    case "facebook":
+    case "facebook": {
+      const providerConfig = configStatus(["FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]);
       return {
-        providerConfig: configStatus(["FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]),
-        providerVerification: "VERIFIED_PILOT",
+        providerConfig,
+        providerVerification: providerConfig === "CONFIGURED" ? "VERIFIED_PILOT" : "NEED_VERIFY",
       };
+    }
     case "whatsapp":
       return {
         providerConfig: configStatus(["WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"]),
@@ -122,10 +124,9 @@ function providerEvidence(id: CustomerChannelId): {
       };
     case "google_maps":
     case "google_ads":
-      return {
-        providerConfig: configStatus(["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"]),
-        providerVerification: "NEED_VERIFY",
-      };
+      // Existing Google OAuth scopes are Drive/Sheets/Docs only. Do not infer
+      // Maps/Business Profile or Ads provider readiness from those credentials.
+      return { providerConfig: "NOT_CONFIGURED", providerVerification: "NEED_VERIFY" };
     case "instagram":
     case "booking":
     case "agoda":

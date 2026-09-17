@@ -57,21 +57,37 @@ function isDone(status: string) {
   );
 }
 
-function parseVietnameseDate(value: string): Date | null {
+type DateParts = { day: number; month: number; year: number };
+
+function parseVietnameseDateParts(value: string): DateParts | null {
   const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) return null;
-  const [, day, month, year] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const parts = { day: Number(match[1]), month: Number(match[2]), year: Number(match[3]) };
+  if (parts.month < 1 || parts.month > 12 || parts.day < 1 || parts.day > 31) return null;
+  return parts;
+}
+
+function dateKey(parts: DateParts): string {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function vietnamDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function dueDateTime(task: StaffOpsTask): Date | null {
-  const date = parseVietnameseDate(task.workDate);
-  if (!date) return null;
+  const parts = parseVietnameseDateParts(task.workDate);
+  if (!parts) return null;
   const time = task.dueAt.match(/(?:Trước\s*)?(\d{1,2}):(\d{2})/i);
   if (!time) return null;
-  date.setHours(Number(time[1]), Number(time[2]), 0, 0);
-  return date;
+  const iso = `${dateKey(parts)}T${String(Number(time[1])).padStart(2, "0")}:${time[2]}:00+07:00`;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function priorityRank(value: string) {
@@ -102,10 +118,6 @@ function toTask(data: Json): StaffOpsTask | null {
   };
 }
 
-function sameLocalDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
 export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOpsCycleResult> {
   const container = getAdminContainer();
   const sync = await container.sync.run(SOURCE_KEY, "scheduled", "tce-staff-ops-worker");
@@ -129,13 +141,13 @@ export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOp
   });
   const todayPriority = openTasks
     .filter((task) => {
-      const date = parseVietnameseDate(task.workDate);
-      return Boolean(date && sameLocalDay(date, now));
+      const parts = parseVietnameseDateParts(task.workDate);
+      return Boolean(parts && dateKey(parts) === vietnamDateKey(now));
     })
     .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
     .slice(0, 10);
 
-  if (blocked.length > 0 || overdue.length > 0 || waitingApproval.length > 0) {
+  if (sync.recordsSeen > 0 && (blocked.length > 0 || overdue.length > 0 || waitingApproval.length > 0)) {
     await container.activityLog.record({
       agent: "AI Tổng quản lý",
       unit: "TCE Staff Operations",

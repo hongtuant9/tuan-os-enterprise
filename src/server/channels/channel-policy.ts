@@ -19,6 +19,17 @@ export type CustomerChannelId =
 
 export type ChannelMode = "PRIVATE_PILOT" | "CLOSED";
 
+export const CUSTOMER_CONVERSATION_CHANNELS = [
+  "website", "facebook", "instagram", "booking", "agoda", "airbnb",
+  "expedia", "tripadvisor", "email", "whatsapp", "zalo", "other",
+] as const;
+
+export type CustomerConversationChannel = typeof CUSTOMER_CONVERSATION_CHANNELS[number];
+
+export function isCustomerConversationChannel(value: string): value is CustomerConversationChannel {
+  return (CUSTOMER_CONVERSATION_CHANNELS as readonly string[]).includes(value);
+}
+
 export type ChannelDefinition = {
   id: CustomerChannelId;
   label: string;

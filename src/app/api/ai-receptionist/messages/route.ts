@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateApiRequest, principalLabel } from "@/server/auth/api-auth";
 import { getAdminContainer } from "@/server/container";
 import type { PilotMessageInput } from "@/data/ai-receptionist";
-import { assertCustomerChannelEnabled, type CustomerChannelId } from "@/server/channels/channel-policy";
-
-const CHANNELS = new Set(["website", "facebook", "zalo", "whatsapp", "instagram", "pilot"]);
+import { assertCustomerChannelEnabled, isCustomerConversationChannel, type CustomerChannelId } from "@/server/channels/channel-policy";
 
 export async function POST(request: Request) {
   const principal = await authenticateApiRequest(request);
@@ -17,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!payload.channel || !CHANNELS.has(payload.channel)) {
+  if (!payload.channel || (payload.channel !== "pilot" && !isCustomerConversationChannel(payload.channel))) {
     return NextResponse.json({ error: "channel is invalid" }, { status: 400 });
   }
   if (payload.channel !== "pilot") {

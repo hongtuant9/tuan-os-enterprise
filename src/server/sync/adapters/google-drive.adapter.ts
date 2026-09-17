@@ -88,6 +88,9 @@ export class GoogleDriveAdapter implements SyncAdapter {
       // All other sync sources keep the first row as the header.
       const headerRowIndex = this.sourceKey === "l3-channel-tracking" ? 1 : 0;
       rows = rowsFromSheetValues(values, headerRowIndex);
+      if (this.sourceKey === "tce-checklist-daily") {
+        rows = rows.filter((row) => row.fields["CHECKLIST_ID"]?.trim());
+      }
     } else if (metadata.mimeType === DOCUMENT_MIME_TYPE) {
       const paragraphs = await getDocParagraphs(this.sheetId, auth);
       rows = rowsFromDocParagraphs(paragraphs);

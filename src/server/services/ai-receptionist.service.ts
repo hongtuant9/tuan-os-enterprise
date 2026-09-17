@@ -237,6 +237,7 @@ export class AiReceptionistService {
     messageId: string;
     reply: string;
     reviewId: string | null;
+    outboundMessageId: string | null;
     duplicate: boolean;
   }> {
     const externalMessageId = input.externalMessageId?.trim() || null;
@@ -248,6 +249,7 @@ export class AiReceptionistService {
           messageId: duplicate.id,
           reply: "Tin nhắn đã được xử lý trước đó.",
           reviewId: null,
+          outboundMessageId: null,
           duplicate: true,
         };
       }
@@ -382,9 +384,9 @@ export class AiReceptionistService {
       },
     });
 
-    const outboundEnabled = pilotConversationAllowed && isPilotOutboundEnabled() && mode !== "simulation";
+    const outboundEnabled = pilotConversationAllowed && isPilotOutboundEnabled() && (mode === "limited_auto" || mode === "live");
     const outboundStatus = outboundEnabled ? "draft" : "simulated";
-    await this.repo.createMessage({
+    const outbound = await this.repo.createMessage({
       conversation_id: conversation.id,
       direction: "outbound",
       sender_type: "ai",
@@ -443,8 +445,18 @@ export class AiReceptionistService {
       messageId: inbound.id,
       reply: decision.reply,
       reviewId,
+      outboundMessageId: outbound.id,
       duplicate: false,
     };
+  }
+
+
+  async markOutboundDelivery(messageId: string, input: { status: "sent" | "failed"; externalMessageId?: string | null; detail?: string | null }): Promise<void> {
+    await this.repo.updateMessage(messageId, {
+      status: input.status,
+      external_message_id: input.externalMessageId ?? undefined,
+      metadata: { delivery_status: input.status, delivery_detail: input.detail ?? null },
+    });
   }
 
   async getLavenderRoomOptions(checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }>> {

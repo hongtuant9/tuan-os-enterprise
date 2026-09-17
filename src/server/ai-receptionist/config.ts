@@ -35,5 +35,11 @@ export function isPilotConversationAllowed(channel: string, externalConversation
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  return allowlist.includes(externalConversationId);
+  if (allowlist.includes(externalConversationId)) return true;
+  // Multi-Page Facebook conversations are stored as <pageId>:<senderId>.
+  // Preserve the existing pilot allowlist semantics by also accepting the senderId suffix.
+  const senderScopedId = externalConversationId.includes(":")
+    ? externalConversationId.split(":").at(-1) ?? externalConversationId
+    : externalConversationId;
+  return allowlist.includes(senderScopedId);
 }

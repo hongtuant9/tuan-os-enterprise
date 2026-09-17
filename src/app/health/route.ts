@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
+import { customerChannelStage } from "@/server/channels/channel-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function GET() {
           service: "tuan-os-enterprise",
           runtime: "tce-15-agent-v2",
           agentRegistry: 15,
+          customerChannelStage: customerChannelStage(),
           checkedAt,
           checks: { app: "ok", database: "error" },
         },
@@ -28,6 +30,7 @@ export async function GET() {
         service: "tuan-os-enterprise",
         runtime: "tce-15-agent-v2",
         agentRegistry: 15,
+        customerChannelStage: customerChannelStage(),
         checkedAt,
         checks: { app: "ok", database: "ok" },
       },
@@ -40,6 +43,7 @@ export async function GET() {
         service: "tuan-os-enterprise",
         runtime: "tce-15-agent-v2",
         agentRegistry: 15,
+        customerChannelStage: customerChannelStage(),
         checkedAt,
         checks: { app: "ok", database: "unavailable" },
       },

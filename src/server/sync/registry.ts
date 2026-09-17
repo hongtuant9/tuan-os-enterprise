@@ -11,7 +11,6 @@ import { ApprovalsRepository } from "@/server/repositories/approvals.repository"
 export const SYNC_SOURCE_KEYS = [
   "task-001",
   "task-tce-ops-001",
-  "tce-checklist-daily",
   "approval-001",
   "l3-channel-tracking",
   "fin-001",
@@ -42,7 +41,6 @@ export function getMapperForSource(key: SyncSourceKey, db: SupabaseClient<Databa
     case "task-001":
       return new TasksImportMapper(new TasksRepository(db));
     case "task-tce-ops-001":
-    case "tce-checklist-daily":
       return new GenericRecordMapper();
     case "approval-001":
       return new ApprovalsImportMapper(new ApprovalsRepository(db));

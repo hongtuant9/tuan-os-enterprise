@@ -106,7 +106,7 @@ function providerEvidence(id: CustomerChannelId): {
 } {
   switch (id) {
     case "facebook": {
-      const providerConfig = configStatus(["FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]);
+      const providerConfig = configStatus(["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]);
       const pilotVerified = process.env.FACEBOOK_PILOT_VERIFIED?.trim().toLowerCase() === "true";
       return {
         providerConfig,

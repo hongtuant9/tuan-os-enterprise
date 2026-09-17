@@ -38,6 +38,20 @@ async function probeFacebookToken(token: string, pageId?: string) {
   const data = body?.data;
   const scopes = data?.scopes ?? [];
   const hasMessaging = scopes.includes("pages_messaging");
+
+  let tokenPage: { id: string | null; name: string | null } | null = null;
+  if (response.ok && data?.is_valid === true) {
+    const meUrl = new URL(`https://graph.facebook.com/${version}/me`);
+    meUrl.searchParams.set("fields", "id,name");
+    meUrl.searchParams.set("access_token", token);
+    const meResponse = await fetch(meUrl, { signal: AbortSignal.timeout(12_000), cache: "no-store" });
+    const meBody = await meResponse.json().catch(() => null) as { id?: string; name?: string } | null;
+    tokenPage = {
+      id: meResponse.ok ? meBody?.id ?? null : null,
+      name: meResponse.ok ? meBody?.name ?? null : null,
+    };
+  }
+
   let page: { id: string | null; name: string | null; matchesExpectedId: boolean | null } | null = null;
   if (pageId && response.ok && data?.is_valid === true) {
     const pageUrl = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}`);
@@ -47,7 +61,7 @@ async function probeFacebookToken(token: string, pageId?: string) {
     const pageBody = await pageResponse.json().catch(() => null) as { id?: string; name?: string } | null;
     page = { id: pageResponse.ok ? pageBody?.id ?? null : null, name: pageResponse.ok ? pageBody?.name ?? null : null, matchesExpectedId: pageResponse.ok ? pageBody?.id === pageId : false };
   }
-  return { ok: response.ok && data?.is_valid === true && hasMessaging && (page ? page.matchesExpectedId === true : true), reachable: true, httpStatus: response.status, tokenValid: data?.is_valid ?? false, tokenType: data?.type ?? null, appIdMatches: data?.app_id ? data.app_id === appId : null, scopes, hasPagesMessaging: hasMessaging, expiresAt: data?.expires_at ?? null, dataAccessExpiresAt: data?.data_access_expires_at ?? null, page, error: safeGraphError(body?.error) };
+  return { ok: response.ok && data?.is_valid === true && hasMessaging && (page ? page.matchesExpectedId === true : true), reachable: true, httpStatus: response.status, tokenValid: data?.is_valid ?? false, tokenType: data?.type ?? null, appIdMatches: data?.app_id ? data.app_id === appId : null, scopes, hasPagesMessaging: hasMessaging, expiresAt: data?.expires_at ?? null, dataAccessExpiresAt: data?.data_access_expires_at ?? null, tokenPage, page, error: safeGraphError(body?.error) };
 }
 
 async function probeFacebook() {

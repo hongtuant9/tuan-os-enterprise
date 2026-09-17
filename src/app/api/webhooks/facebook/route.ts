@@ -8,6 +8,32 @@ type MetaMessage = { mid?: string; text?: string };
 type MetaMessaging = { sender?: { id?: string }; recipient?: { id?: string }; timestamp?: number; message?: MetaMessage };
 type MetaEntry = { id?: string; messaging?: MetaMessaging[] };
 type MetaWebhook = { object?: string; entry?: MetaEntry[] };
+type FacebookPageEntity = "tce" | "lavender" | "ruby" | "cozy" | "unknown";
+
+function parseJsonMap(name: string): Record<string, string> {
+  const raw = process.env[name]?.trim();
+  if (!raw) return {};
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+  } catch {
+    return {};
+  }
+}
+
+function pageEntity(pageId: string): FacebookPageEntity {
+  const value = (parseJsonMap("FACEBOOK_PAGE_ENTITY_MAP_JSON")[pageId] ?? "unknown").trim().toLowerCase();
+  return (["tce", "lavender", "ruby", "cozy"] as const).includes(value as Exclude<FacebookPageEntity, "unknown">)
+    ? value as Exclude<FacebookPageEntity, "unknown">
+    : "unknown";
+}
+
+function pageAccessToken(pageId: string): string | null {
+  const mapped = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON")[pageId]?.trim();
+  if (mapped) return mapped;
+  return process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() || null;
+}
 
 function safeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message.slice(0, 300);
@@ -25,13 +51,13 @@ function verifySignature(raw: string, signature: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function sendMessenger(recipientId: string, text: string): Promise<{ sent: boolean; messageId: string | null }> {
-  const token = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
-  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) {
+async function sendMessenger(pageId: string, recipientId: string, text: string): Promise<{ sent: boolean; messageId: string | null }> {
+  const token = pageAccessToken(pageId);
+  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) || !["limited_auto", "live"].includes(getReceptionistMode())) {
     return { sent: false, messageId: null };
   }
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
-  const response = await fetch(`https://graph.facebook.com/${version}/me/messages?access_token=${encodeURIComponent(token)}`, {
+  const response = await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}/messages?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ recipient: { id: recipientId }, messaging_type: "RESPONSE", message: { text: text.slice(0, 1900) } }),
@@ -63,6 +89,9 @@ export async function POST(request: Request) {
   const service = getAdminContainer().aiReceptionist;
   let processed = 0;
   for (const entry of payload.entry ?? []) {
+    const pageId = entry.id?.trim();
+    if (!pageId) continue;
+    const entity = pageEntity(pageId);
     for (const event of entry.messaging ?? []) {
       const senderId = event.sender?.id?.trim();
       const text = event.message?.text?.trim();
@@ -70,18 +99,18 @@ export async function POST(request: Request) {
       try {
         const result = await service.ingestGuestMessage({
           channel: "facebook",
-          externalConversationId: senderId,
+          externalConversationId: `${pageId}:${senderId}`,
           externalMessageId: event.message.mid,
           customerName: undefined,
           customerContact: undefined,
           content: text,
-          acquisitionSource: "facebook_messenger",
+          acquisitionSource: `facebook_${entity}_messenger`,
           utmSource: "facebook",
           testerUserId: null,
         });
         if (!result.duplicate) {
           try {
-            const delivery = await sendMessenger(senderId, result.reply);
+            const delivery = await sendMessenger(pageId, senderId, result.reply);
             if (delivery.sent && result.outboundMessageId) {
               await service.markOutboundDelivery(result.outboundMessageId, { status: "sent", externalMessageId: delivery.messageId });
             }

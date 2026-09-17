@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { getRequestContainer } from "@/server/container";
+import { channelPolicySnapshot } from "@/server/channels/channel-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function CustomersPage() {
   const facebookReady = Boolean(process.env.FACEBOOK_APP_SECRET && process.env.FACEBOOK_PAGE_ACCESS_TOKEN && process.env.FACEBOOK_VERIFY_TOKEN);
   const zaloReady = Boolean(process.env.ZALO_APP_ID && process.env.ZALO_OA_SECRET_KEY && process.env.ZALO_OA_ACCESS_TOKEN);
   const whatsappReady = Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN);
+  const channelPolicy = channelPolicySnapshot();
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
@@ -53,8 +55,13 @@ export default async function CustomersPage() {
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
           <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Kênh nhắn tin</h2><p className="text-xs text-[var(--ink-muted)]">Một CRM chung cho các kênh. Secret chỉ nằm server-side.</p></div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <ChannelStatus name="Facebook Messenger" status={facebookReady ? "Đã cấu hình" : "Chờ cấu hình Meta"} ready={facebookReady}/><ChannelStatus name="Zalo" status={zaloReady ? "Đã cấu hình" : "Chờ cấu hình Zalo OA"} ready={zaloReady}/><ChannelStatus name="WhatsApp" status={whatsappReady ? "Đã cấu hình" : "Chờ cấu hình WhatsApp"} ready={whatsappReady}/>
+          <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: chỉ Facebook Messenger được mở ở PRIVATE PILOT. Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {channelPolicy.map((channel) => {
+              const connectorReady = channel.id === "facebook" ? facebookReady : channel.id === "zalo" ? zaloReady : channel.id === "whatsapp" ? whatsappReady : false;
+              const isOpen = channel.mode === "PRIVATE_PILOT";
+              return <ChannelStatus key={channel.id} name={channel.label} status={isOpen ? (connectorReady || channel.id === "facebook" ? "PRIVATE PILOT" : "PRIVATE PILOT · chờ connector") : "Đóng"} ready={isOpen}/>;
+            })}
           </div>
         </section>
 

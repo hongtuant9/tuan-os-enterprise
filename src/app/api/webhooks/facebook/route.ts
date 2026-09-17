@@ -32,7 +32,13 @@ function pageEntity(pageId: string): FacebookPageEntity {
 function pageAccessToken(pageId: string): string | null {
   const tokenMap = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
   if (Object.keys(tokenMap).length > 0) return tokenMap[pageId]?.trim() || null;
-  return process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() || null;
+
+  const legacyToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() || null;
+  const entityMap = parseJsonMap("FACEBOOK_PAGE_ENTITY_MAP_JSON");
+  if (Object.keys(entityMap).length === 0) return legacyToken;
+
+  const legacyPageId = process.env.FACEBOOK_LEGACY_UNSCOPED_PAGE_ID?.trim();
+  return legacyPageId && pageId === legacyPageId ? legacyToken : null;
 }
 
 function conversationExternalId(pageId: string, senderId: string): string {

@@ -57,6 +57,12 @@ function isDone(status: string) {
   );
 }
 
+function hasActiveBlocker(value: string) {
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return false;
+  return !/^(KHÔNG|KHONG|NONE|NO\b)/.test(normalized);
+}
+
 type DateParts = { day: number; month: number; year: number };
 
 function parseVietnameseDateParts(value: string): DateParts | null {
@@ -133,7 +139,7 @@ export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOp
     .filter((task): task is StaffOpsTask => Boolean(task));
 
   const openTasks = tasks.filter((task) => !isDone(task.status));
-  const blocked = openTasks.filter((task) => normalizeStatus(task.status) === "BỊ_VƯỚNG" || Boolean(task.blocker));
+  const blocked = openTasks.filter((task) => normalizeStatus(task.status) === "BỊ_VƯỚNG" || hasActiveBlocker(task.blocker));
   const waitingApproval = openTasks.filter((task) => task.approvalRequired && !task.approvalId);
   const overdue = openTasks.filter((task) => {
     const due = dueDateTime(task);

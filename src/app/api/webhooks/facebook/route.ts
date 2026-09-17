@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
-import { getReceptionistMode, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
+import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
 
 type MetaMessage = { mid?: string; text?: string };
 type MetaMessaging = { sender?: { id?: string }; recipient?: { id?: string }; timestamp?: number; message?: MetaMessage };
@@ -26,7 +26,7 @@ function verifySignature(raw: string, signature: string | null): boolean {
 
 async function sendMessenger(recipientId: string, text: string): Promise<void> {
   const token = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
-  if (!token || !isPilotOutboundEnabled() || !["limited_auto", "live"].includes(getReceptionistMode())) return;
+  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) return;
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
   const response = await fetch(`https://graph.facebook.com/${version}/me/messages?access_token=${encodeURIComponent(token)}`, {
     method: "POST",

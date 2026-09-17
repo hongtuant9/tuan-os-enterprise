@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export type CustomerIdentityCandidate = {
-  type: "phone" | "email" | "channel";
+  type: "phone" | "email" | "facebook" | "instagram" | "zalo" | "whatsapp" | "website" | "other";
   value: string;
   hash: string;
   sourceChannel: string;
@@ -41,6 +41,10 @@ export function buildIdentityCandidates(input: {
     }
   }
   const channelValue = `${input.channel}:${input.externalConversationId.trim()}`;
-  candidates.push({ type: "channel", value: channelValue, hash: hashIdentity("channel", channelValue), sourceChannel: input.channel, verified: false });
+  const supportedChannelTypes = new Set(["facebook", "instagram", "zalo", "whatsapp", "website"]);
+  const identityType = supportedChannelTypes.has(input.channel)
+    ? input.channel as CustomerIdentityCandidate["type"]
+    : "other";
+  candidates.push({ type: identityType, value: channelValue, hash: hashIdentity(identityType, channelValue), sourceChannel: input.channel, verified: false });
   return candidates;
 }

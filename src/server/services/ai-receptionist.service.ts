@@ -133,7 +133,7 @@ export class AiReceptionistService {
       const existingIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
       if (!existingIdentity) {
         try {
-          await this.repo.createCustomerIdentity({ customer_id: customerId, identity_type: candidate.type, identity_value: candidate.value, identity_hash: candidate.hash, source_channel: candidate.sourceChannel, is_primary: candidate.type !== "channel", verified_at: candidate.verified ? new Date().toISOString() : null });
+          await this.repo.createCustomerIdentity({ customer_id: customerId, identity_type: candidate.type, identity_value: candidate.value, identity_hash: candidate.hash, source_channel: candidate.sourceChannel, is_primary: candidate.type === "phone" || candidate.type === "email", verified_at: candidate.verified ? new Date().toISOString() : null });
         } catch (error) {
           const concurrentIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
           if (!concurrentIdentity) throw error;
@@ -255,9 +255,7 @@ export class AiReceptionistService {
 
     const mode = getReceptionistMode();
     if (mode === "off") throw new Error("AI Lễ tân đang tắt.");
-    if (!isPilotConversationAllowed(input.channel, input.externalConversationId)) {
-      throw new Error("Hội thoại chưa nằm trong danh sách Private Pilot.");
-    }
+    const pilotConversationAllowed = isPilotConversationAllowed(input.channel, input.externalConversationId);
     const externalConversationId = input.externalConversationId?.trim() || `pilot-${randomUUID()}`;
     const existing = await this.repo.findConversation(input.channel, externalConversationId);
     const hospitalityBusinessUnitId = await this.repo.findHospitalityBusinessUnitId();
@@ -384,7 +382,8 @@ export class AiReceptionistService {
       },
     });
 
-    const outboundStatus = isPilotOutboundEnabled() && mode !== "simulation" ? "draft" : "simulated";
+    const outboundEnabled = pilotConversationAllowed && isPilotOutboundEnabled() && mode !== "simulation";
+    const outboundStatus = outboundEnabled ? "draft" : "simulated";
     await this.repo.createMessage({
       conversation_id: conversation.id,
       direction: "outbound",
@@ -394,7 +393,8 @@ export class AiReceptionistService {
       evidence: decision.evidence,
       metadata: {
         mode,
-        outbound_enabled: isPilotOutboundEnabled(),
+        outbound_enabled: outboundEnabled,
+        pilot_conversation_allowed: pilotConversationAllowed,
       },
     });
 

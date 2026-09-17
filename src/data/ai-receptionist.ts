@@ -102,7 +102,7 @@ export type ReceptionistDashboard = {
 };
 
 export type PilotMessageInput = {
-  channel: "website" | "facebook" | "zalo" | "whatsapp" | "instagram" | "pilot";
+  channel: "website" | "facebook" | "instagram" | "booking" | "agoda" | "airbnb" | "expedia" | "tripadvisor" | "email" | "whatsapp" | "zalo" | "other" | "pilot";
   externalConversationId?: string;
   externalMessageId?: string;
   customerName?: string;

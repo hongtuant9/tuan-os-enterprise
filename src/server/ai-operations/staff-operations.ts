@@ -2,7 +2,8 @@ import "server-only";
 import { getAdminContainer } from "@/server/container";
 import type { Json } from "@/lib/supabase/types";
 
-const SOURCE_KEY = "task-tce-ops-001";
+const TASK_SOURCE_KEY = "task-tce-ops-001";
+const CHECKLIST_SOURCE_KEY = "tce-checklist-daily";
 
 export type StaffOpsTask = {
   id: string;
@@ -19,17 +20,44 @@ export type StaffOpsTask = {
   channel: string;
 };
 
+export type ChecklistItem = {
+  id: string;
+  workDate: string;
+  shift: string;
+  area: string;
+  role: string;
+  assignee: string;
+  verifier: string;
+  criterionCode: string;
+  title: string;
+  verificationType: string;
+  employeeConfirmed: boolean;
+  managerConfirmed: boolean;
+  systemConfirmed: boolean;
+  status: string;
+  evidence: string;
+  seriousException: boolean;
+  note: string;
+  dueAt: string;
+};
+
 export type StaffOpsCycleResult = {
   ok: boolean;
   generatedAt: string;
   syncStatus: string;
+  checklistSyncStatus: string;
   recordsSeen: number;
+  checklistSeen: number;
   open: number;
   completed: number;
   blocked: StaffOpsTask[];
   overdue: StaffOpsTask[];
   waitingApproval: StaffOpsTask[];
   todayPriority: StaffOpsTask[];
+  checklistOpen: ChecklistItem[];
+  checklistOverdue: ChecklistItem[];
+  checklistFailed: ChecklistItem[];
+  checklistToday: ChecklistItem[];
 };
 
 function asFields(data: Json): Record<string, string> {
@@ -46,21 +74,28 @@ function first(fields: Record<string, string>, ...keys: string[]) {
   }
   return "";
 }
-
 function normalizeStatus(value: string) {
   return value.trim().toUpperCase().replaceAll(" ", "_").replaceAll("-", "_");
 }
 
-function isDone(status: string) {
+function isTaskDone(status: string) {
   return ["DONE", "HOÀN_THÀNH", "DA_HOAN_THANH", "ĐÃ_HOÀN_THÀNH", "CANCELLED", "HỦY", "SUPERSEDED"].includes(
     normalizeStatus(status),
   );
+}
+
+function isChecklistDone(status: string) {
+  return ["ĐẠT_CHẤT_LƯỢNG", "KHÔNG_ÁP_DỤNG"].includes(normalizeStatus(status));
 }
 
 function hasActiveBlocker(value: string) {
   const normalized = value.trim().toUpperCase();
   if (!normalized) return false;
   return !/^(KHÔNG|KHONG|NONE|NO\b)/.test(normalized);
+}
+
+function asBoolean(value: string) {
+  return ["TRUE", "CÓ", "YES", "1"].includes(value.trim().toUpperCase());
 }
 
 type DateParts = { day: number; month: number; year: number };
@@ -72,7 +107,6 @@ function parseVietnameseDateParts(value: string): DateParts | null {
   if (parts.month < 1 || parts.month > 12 || parts.day < 1 || parts.day > 31) return null;
   return parts;
 }
-
 function dateKey(parts: DateParts): string {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 }
@@ -86,10 +120,10 @@ function vietnamDateKey(date: Date): string {
   }).format(date);
 }
 
-function dueDateTime(task: StaffOpsTask): Date | null {
-  const parts = parseVietnameseDateParts(task.workDate);
+function dueDateTime(workDate: string, dueAt: string): Date | null {
+  const parts = parseVietnameseDateParts(workDate);
   if (!parts) return null;
-  const time = task.dueAt.match(/(?:Trước\s*)?(\d{1,2}):(\d{2})/i);
+  const time = dueAt.match(/(?:Trước\s*)?(\d{1,2}):(\d{2})/i);
   if (!time) return null;
   const iso = `${dateKey(parts)}T${String(Number(time[1])).padStart(2, "0")}:${time[2]}:00+07:00`;
   const parsed = new Date(iso);
@@ -103,7 +137,6 @@ function priorityRank(value: string) {
   if (["P2", "THẤP"].includes(normalized)) return 2;
   return 3;
 }
-
 function toTask(data: Json): StaffOpsTask | null {
   const fields = asFields(data);
   const id = first(fields, "MÃ CÔNG VIỆC", "OPS_TASK_ID");
@@ -118,31 +151,68 @@ function toTask(data: Json): StaffOpsTask | null {
     dueAt: first(fields, "HẠN HOÀN THÀNH", "DUE_AT"),
     status: first(fields, "TRẠNG THÁI", "STATUS"),
     blocker: first(fields, "VƯỚNG MẮC", "BLOCKER"),
-    approvalRequired: ["CÓ", "YES", "TRUE"].includes(first(fields, "CẦN DUYỆT", "APPROVAL_REQUIRED").toUpperCase()),
+    approvalRequired: asBoolean(first(fields, "CẦN DUYỆT", "APPROVAL_REQUIRED")),
     approvalId: first(fields, "MÃ PHÊ DUYỆT", "APPROVAL_ID"),
     channel: first(fields, "KÊNH GIAO VIỆC", "CHANNEL"),
   };
 }
 
-export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOpsCycleResult> {
+function toChecklistItem(data: Json): ChecklistItem | null {
+  const fields = asFields(data);
+  const id = first(fields, "CHECKLIST_ID");
+  if (!id) return null;
+  return {
+    id,
+    workDate: first(fields, "NGÀY"),
+    shift: first(fields, "CA"),
+    area: first(fields, "BỘ PHẬN"),
+    role: first(fields, "VỊ TRÍ"),
+    assignee: first(fields, "NGƯỜI THỰC HIỆN"),
+    verifier: first(fields, "NGƯỜI XÁC NHẬN"),
+    criterionCode: first(fields, "MÃ TIÊU CHÍ"),
+    title: first(fields, "CÔNG VIỆC"),
+    verificationType: first(fields, "LOẠI XÁC MINH"),
+    employeeConfirmed: asBoolean(first(fields, "NV XÁC NHẬN")),
+    managerConfirmed: asBoolean(first(fields, "QL XÁC NHẬN")),
+    systemConfirmed: asBoolean(first(fields, "HỆ THỐNG XÁC NHẬN")),
+    status: first(fields, "TRẠNG THÁI"),
+    evidence: first(fields, "BẰNG CHỨNG / LIÊN KẾT"),
+    seriousException: asBoolean(first(fields, "NGOẠI LỆ NGHIÊM TRỌNG")),
+    note: first(fields, "GHI CHÚ"),
+    dueAt: first(fields, "HẠN HOÀN THÀNH"),
+  };
+}
+
+async function readSourceRecords(sourceKey: string) {
   const container = getAdminContainer();
-  const sync = await container.sync.run(SOURCE_KEY, "scheduled", "tce-staff-ops-worker");
   const result = await container.db
     .from("sync_records")
     .select("data")
-    .eq("source_key", SOURCE_KEY)
+    .eq("source_key", sourceKey)
     .order("synced_at", { ascending: false });
-
   if (result.error) throw new Error(result.error.message);
-  const tasks = (result.data ?? [])
+  return result.data ?? [];
+}
+export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOpsCycleResult> {
+  const container = getAdminContainer();
+  const taskSync = await container.sync.run(TASK_SOURCE_KEY, "scheduled", "tce-staff-ops-worker");
+  const checklistSync = await container.sync.run(CHECKLIST_SOURCE_KEY, "scheduled", "tce-staff-ops-worker");
+
+  const taskRows = await readSourceRecords(TASK_SOURCE_KEY);
+  const checklistRows = await readSourceRecords(CHECKLIST_SOURCE_KEY);
+
+  const tasks = taskRows
     .map((row) => toTask(row.data))
     .filter((task): task is StaffOpsTask => Boolean(task));
+  const checklist = checklistRows
+    .map((row) => toChecklistItem(row.data))
+    .filter((item): item is ChecklistItem => Boolean(item));
 
-  const openTasks = tasks.filter((task) => !isDone(task.status));
+  const openTasks = tasks.filter((task) => !isTaskDone(task.status));
   const blocked = openTasks.filter((task) => normalizeStatus(task.status) === "BỊ_VƯỚNG" || hasActiveBlocker(task.blocker));
   const waitingApproval = openTasks.filter((task) => task.approvalRequired && !task.approvalId);
   const overdue = openTasks.filter((task) => {
-    const due = dueDateTime(task);
+    const due = dueDateTime(task.workDate, task.dueAt);
     return Boolean(due && due.getTime() < now.getTime());
   });
   const todayPriority = openTasks
@@ -152,26 +222,50 @@ export async function runStaffOperationsCycle(now = new Date()): Promise<StaffOp
     })
     .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
     .slice(0, 10);
+  const checklistOpen = checklist.filter((item) => !isChecklistDone(item.status));
+  const checklistToday = checklistOpen.filter((item) => {
+    const parts = parseVietnameseDateParts(item.workDate);
+    return Boolean(parts && dateKey(parts) === vietnamDateKey(now));
+  });
+  const checklistFailed = checklist.filter(
+    (item) => normalizeStatus(item.status) === "QUALITY_FAIL" || item.seriousException,
+  );
+  const checklistOverdue = checklistToday.filter((item) => {
+    const due = dueDateTime(item.workDate, item.dueAt);
+    return Boolean(due && due.getTime() < now.getTime());
+  });
 
-  if (sync.recordsSeen > 0 && (blocked.length > 0 || overdue.length > 0 || waitingApproval.length > 0)) {
+  if (
+    taskSync.recordsSeen > 0 &&
+    (blocked.length > 0 || overdue.length > 0 || waitingApproval.length > 0 || checklistFailed.length > 0)
+  ) {
     await container.activityLog.record({
       agent: "AI Tổng quản lý",
       unit: "TCE Staff Operations",
-      message: `Staff Ops cycle: ${overdue.length} quá hạn, ${blocked.length} bị vướng, ${waitingApproval.length} chờ duyệt.`,
+      message:
+        `TCE Ops: ${overdue.length} task quá hạn, ${blocked.length} bị vướng, ` +
+        `${waitingApproval.length} chờ duyệt, ${checklistOverdue.length} checklist quá hạn, ` +
+        `${checklistFailed.length} checklist lỗi chất lượng/ngoại lệ.`,
       type: "alert",
     });
   }
 
   return {
-    ok: sync.status !== "failed",
+    ok: taskSync.status !== "failed" && checklistSync.status !== "failed",
     generatedAt: now.toISOString(),
-    syncStatus: sync.status,
+    syncStatus: taskSync.status,
+    checklistSyncStatus: checklistSync.status,
     recordsSeen: tasks.length,
+    checklistSeen: checklist.length,
     open: openTasks.length,
     completed: tasks.length - openTasks.length,
     blocked,
     overdue,
     waitingApproval,
     todayPriority,
+    checklistOpen,
+    checklistOverdue,
+    checklistFailed,
+    checklistToday,
   };
 }

@@ -8,6 +8,14 @@ type MetaMessaging = { sender?: { id?: string }; recipient?: { id?: string }; ti
 type MetaEntry = { id?: string; messaging?: MetaMessaging[] };
 type MetaWebhook = { object?: string; entry?: MetaEntry[] };
 
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message.slice(0, 300);
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message.slice(0, 300);
+  }
+  return "Unknown error";
+}
+
 function verifySignature(raw: string, signature: string | null): boolean {
   const secret = process.env.FACEBOOK_APP_SECRET?.trim();
   if (!secret || !signature?.startsWith("sha256=")) return false;
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
         await getAdminContainer().activityLog.record({
           agent: "Facebook Messenger",
           unit: "TCE AI",
-          message: error instanceof Error ? `Facebook inbound HOLD: ${error.message}` : "Facebook inbound HOLD",
+          message: `Facebook inbound HOLD: ${safeErrorMessage(error)}`,
           type: "alert",
         });
       }

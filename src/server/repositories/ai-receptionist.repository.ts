@@ -81,9 +81,21 @@ export class AiReceptionistRepository {
   }
 
   async upsertConversation(input: ConversationInsert): Promise<ConversationRow> {
+    if (input.id) {
+      const { id, ...patch } = input;
+      const { data, error } = await this.db
+        .from("ai_conversations")
+        .update(patch)
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
     const { data, error } = await this.db
       .from("ai_conversations")
-      .upsert(input, { onConflict: "channel,external_conversation_id" })
+      .insert(input)
       .select("*")
       .single();
     if (error) throw error;

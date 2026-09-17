@@ -41,6 +41,7 @@ async function sendWhatsApp(recipientId: string, text: string): Promise<string |
 }
 
 export async function GET(request: Request) {
+  try { assertCustomerChannelEnabled("whatsapp"); } catch { return new Response("Channel closed", { status: 423 }); }
   const url = new URL(request.url);
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");

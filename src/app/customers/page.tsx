@@ -57,7 +57,16 @@ export default async function CustomersPage() {
             {channelPolicy.channels.map((channel) => {
               const isOpen = channel.mode === "PRIVATE_PILOT";
               const readinessLabel = channel.readiness === "LIVE_PILOT" ? "Live pilot" : channel.readiness === "ADAPTER_READY" ? "Adapter sẵn sàng" : channel.readiness === "ATTRIBUTION_READY" ? "Attribution sẵn sàng" : channel.readiness === "PENDING_PARTNER_API" ? "Chờ quyền/API đối tác" : "Chờ xác thực/quyền";
-              return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "PRIVATE PILOT" : "Đóng"} · ${readinessLabel}`} ready={isOpen}/>;
+              const providerLabel = channel.providerVerification === "VERIFIED_PILOT"
+                ? "Provider đã xác minh pilot"
+                : channel.providerVerification === "NOT_REQUIRED"
+                  ? "Không cần provider auth"
+                  : channel.providerConfig === "CONFIGURED"
+                    ? "Server config có đủ · chưa xác minh kết nối"
+                    : channel.providerConfig === "PARTIAL"
+                      ? "Server config chưa đủ · chưa xác minh"
+                      : "Provider chưa xác minh";
+              return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "PRIVATE PILOT" : "Đóng"} · ${readinessLabel} · ${providerLabel}`} ready={isOpen}/>;
             })}
           </div>
         </section>

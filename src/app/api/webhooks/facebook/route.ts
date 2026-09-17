@@ -3,47 +3,38 @@ import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { assertCustomerChannelEnabled } from "@/server/channels/channel-policy";
 import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
+import {
+  facebookLegacyPageId,
+  facebookPageEntityMap,
+  parseStringMapEnv,
+  type FacebookPageEntity,
+} from "@/server/social/facebook-pages";
 
 type MetaMessage = { mid?: string; text?: string };
 type MetaMessaging = { sender?: { id?: string }; recipient?: { id?: string }; timestamp?: number; message?: MetaMessage };
 type MetaEntry = { id?: string; messaging?: MetaMessaging[] };
 type MetaWebhook = { object?: string; entry?: MetaEntry[] };
-type FacebookPageEntity = "tce" | "lavender" | "ruby" | "cozy" | "unknown";
-
-function parseJsonMap(name: string): Record<string, string> {
-  const raw = process.env[name]?.trim();
-  if (!raw) return {};
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-  } catch {
-    return {};
-  }
-}
 
 function pageEntity(pageId: string): FacebookPageEntity {
-  const value = (parseJsonMap("FACEBOOK_PAGE_ENTITY_MAP_JSON")[pageId] ?? "unknown").trim().toLowerCase();
+  const value = (facebookPageEntityMap()[pageId] ?? "unknown").trim().toLowerCase();
   return (["tce", "lavender", "ruby", "cozy"] as const).includes(value as Exclude<FacebookPageEntity, "unknown">)
     ? value as Exclude<FacebookPageEntity, "unknown">
     : "unknown";
 }
 
 function pageAccessToken(pageId: string): string | null {
-  const tokenMap = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
+  const tokenMap = parseStringMapEnv("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
   if (Object.keys(tokenMap).length > 0) return tokenMap[pageId]?.trim() || null;
 
   const legacyToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() || null;
-  const entityMap = parseJsonMap("FACEBOOK_PAGE_ENTITY_MAP_JSON");
+  const entityMap = facebookPageEntityMap();
   if (Object.keys(entityMap).length === 0) return legacyToken;
 
-  const legacyPageId = process.env.FACEBOOK_LEGACY_UNSCOPED_PAGE_ID?.trim();
-  return legacyPageId && pageId === legacyPageId ? legacyToken : null;
+  return pageId === facebookLegacyPageId() ? legacyToken : null;
 }
 
 function conversationExternalId(pageId: string, senderId: string): string {
-  const legacyPageId = process.env.FACEBOOK_LEGACY_UNSCOPED_PAGE_ID?.trim();
-  return legacyPageId && pageId === legacyPageId ? senderId : `${pageId}:${senderId}`;
+  return pageId === facebookLegacyPageId() ? senderId : `${pageId}:${senderId}`;
 }
 
 function safeErrorMessage(error: unknown): string {

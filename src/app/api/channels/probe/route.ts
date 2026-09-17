@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateApiRequest, principalHasMinimumRole } from "@/server/auth/api-auth";
 import { channelPolicySnapshot } from "@/server/channels/channel-policy";
+import { facebookLegacyPageId, facebookPageEntityMap, parseStringMapEnv } from "@/server/social/facebook-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -12,19 +13,6 @@ type GraphError = {
   code?: number;
   error_subcode?: number;
 };
-
-
-function parseJsonMap(name: string): Record<string, string> {
-  const raw = process.env[name]?.trim();
-  if (!raw) return {};
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-  } catch {
-    return {};
-  }
-}
 
 function safeGraphError(error: GraphError | undefined) {
   if (!error) return null;
@@ -63,15 +51,16 @@ async function probeFacebookToken(token: string, pageId?: string) {
 }
 
 async function probeFacebook() {
-  const tokenMap = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
-  const entityMap = parseJsonMap("FACEBOOK_PAGE_ENTITY_MAP_JSON");
+  const tokenMap = parseStringMapEnv("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
+  const entityMap = facebookPageEntityMap();
   if (Object.keys(tokenMap).length > 0) {
     const pages = await Promise.all(Object.entries(tokenMap).map(async ([pageId, token]) => ({ pageId, entity: entityMap[pageId] ?? "unknown", probe: await probeFacebookToken(token.trim(), pageId) })));
     return { ok: pages.length > 0 && pages.every((item) => item.probe.ok), reachable: true, mode: "multi_page", pageCount: pages.length, pages };
   }
   const token = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
   if (!token) return { ok: false, reachable: false, reason: "missing_page_access_token" };
-  return { ...(await probeFacebookToken(token)), mode: "single_page_legacy" };
+  const pageId = facebookLegacyPageId();
+  return { ...(await probeFacebookToken(token, pageId)), mode: "single_page_legacy", pageId, entity: entityMap[pageId] ?? "unknown" };
 }
 
 async function probeWhatsApp() {

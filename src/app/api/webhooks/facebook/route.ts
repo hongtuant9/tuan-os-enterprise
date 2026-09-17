@@ -30,9 +30,14 @@ function pageEntity(pageId: string): FacebookPageEntity {
 }
 
 function pageAccessToken(pageId: string): string | null {
-  const mapped = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON")[pageId]?.trim();
-  if (mapped) return mapped;
+  const tokenMap = parseJsonMap("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
+  if (Object.keys(tokenMap).length > 0) return tokenMap[pageId]?.trim() || null;
   return process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() || null;
+}
+
+function conversationExternalId(pageId: string, senderId: string): string {
+  const legacyPageId = process.env.FACEBOOK_LEGACY_UNSCOPED_PAGE_ID?.trim();
+  return legacyPageId && pageId === legacyPageId ? senderId : `${pageId}:${senderId}`;
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -99,7 +104,7 @@ export async function POST(request: Request) {
       try {
         const result = await service.ingestGuestMessage({
           channel: "facebook",
-          externalConversationId: `${pageId}:${senderId}`,
+          externalConversationId: conversationExternalId(pageId, senderId),
           externalMessageId: event.message.mid,
           customerName: undefined,
           customerContact: undefined,

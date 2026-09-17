@@ -5,11 +5,28 @@ import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/c
 export const dynamic = "force-dynamic";
 
 function runtimeSignals() {
-  const facebook = channelPolicySnapshot().channels.find((channel) => channel.id === "facebook");
+  const snapshot = channelPolicySnapshot();
+  const facebook = snapshot.channels.find((channel) => channel.id === "facebook");
+  const openCustomerChannels = snapshot.channels
+    .filter((channel) => channel.mode === "PRIVATE_PILOT")
+    .map((channel) => channel.id);
+  const allowedConversationCount = (process.env.AI_PILOT_ALLOWED_CONVERSATION_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean).length;
+
   return {
     staffOpsWorkerEnabled: process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true",
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
+    openCustomerChannels,
+    nonFacebookOpenChannelCount: openCustomerChannels.filter((channel) => channel !== "facebook").length,
+    receptionistMode: process.env.AI_RECEPTIONIST_MODE?.trim().toLowerCase() || "simulation",
+    pilotAllowlistEnabled: process.env.AI_PILOT_ALLOWLIST_ENABLED?.trim().toLowerCase() !== "false",
+    pilotAllowedConversationCount: allowedConversationCount,
+    pilotOutboundEnabled: process.env.AI_PILOT_OUTBOUND_ENABLED?.trim().toLowerCase() === "true",
+    kiotVietWriteEnabled: process.env.AI_PILOT_KIOTVIET_WRITE_ENABLED?.trim().toLowerCase() === "true",
+    directBookingAutoCreateEnabled: process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true",
   };
 }
 

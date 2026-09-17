@@ -77,17 +77,20 @@ export class HospitalityCrmService {
       this.repo.upsellEvents(ids),
     ]);
 
-    return customers.map((customer) => {
+    return customers.flatMap((customer) => {
       const customerIdentities = identities.filter((item) => item.customer_id === customer.id);
       const customerConversations = conversations.filter((item) => item.customer_id === customer.id);
       const customerBookings = bookings.filter((item) => item.customer_id === customer.id);
       const customerUpsell = upsellEvents.filter((item) => item.customer_id === customer.id);
+      // Không hiển thị các customer shell rỗng do webhook đã fail trước khi identity/conversation được lưu.
+      // Giữ dữ liệu trong DB để audit; chỉ loại khỏi operational UI để không làm nhiễu funnel.
+      if (!customerIdentities.length && !customerConversations.length && !customerBookings.length && !customerUpsell.length) return [];
       const channels = [...new Set(customerConversations.map((item) => item.channel))];
       const acquisitionSources = [...new Set(customerConversations.map((item) => stringMeta(item.metadata, "acquisition_source") ?? item.channel))];
       const utmSources = [...new Set(customerConversations.map((item) => stringMeta(item.metadata, "utm_source")).filter((value): value is string => Boolean(value)))];
       const utmCampaigns = [...new Set(customerConversations.map((item) => stringMeta(item.metadata, "utm_campaign")).filter((value): value is string => Boolean(value)))];
       const journeyEntries = [...new Set(customerConversations.map((item) => stringMeta(item.metadata, "journey_entry") ?? "GENERAL"))];
-      return {
+      return [{
         id: customer.id,
         displayName: customer.display_name ?? "Khách chưa có tên",
         preferredLanguage: customer.preferred_language,
@@ -105,7 +108,7 @@ export class HospitalityCrmService {
         upsellEventCount: customerUpsell.length,
         upsellRevenue: customerUpsell.filter((item) => item.event_type === "booked").reduce((sum, item) => sum + Number(item.amount ?? 0), 0),
         lastSeenAt: customer.last_seen_at,
-      };
+      }];
     });
   }
   async customerDetail(customerId: string): Promise<HospitalityCustomerDetail | null> {

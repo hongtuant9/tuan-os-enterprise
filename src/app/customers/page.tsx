@@ -26,9 +26,6 @@ export default async function CustomersPage() {
   const totalUpsellRevenue = customers.reduce((sum, item) => sum + item.upsellRevenue, 0);
   const activeJourney = customers.filter((item) => !["POST_STAY", "LOYAL"].includes(item.journeyStage)).length;
   const journeyCounts = Object.entries(JOURNEY_LABELS).map(([stage, label]) => ({ stage, label, count: customers.filter((item) => item.journeyStage === stage).length }));
-  const facebookReady = Boolean(process.env.FACEBOOK_APP_SECRET && process.env.FACEBOOK_PAGE_ACCESS_TOKEN && process.env.FACEBOOK_VERIFY_TOKEN);
-  const zaloReady = Boolean(process.env.ZALO_APP_ID && process.env.ZALO_OA_SECRET_KEY && process.env.ZALO_OA_ACCESS_TOKEN);
-  const whatsappReady = Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN);
   const channelPolicy = channelPolicySnapshot();
 
   return (
@@ -58,9 +55,9 @@ export default async function CustomersPage() {
           <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: chỉ Facebook Messenger được mở ở PRIVATE PILOT. Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {channelPolicy.map((channel) => {
-              const connectorReady = channel.id === "facebook" ? facebookReady : channel.id === "zalo" ? zaloReady : channel.id === "whatsapp" ? whatsappReady : false;
               const isOpen = channel.mode === "PRIVATE_PILOT";
-              return <ChannelStatus key={channel.id} name={channel.label} status={isOpen ? (connectorReady || channel.id === "facebook" ? "PRIVATE PILOT" : "PRIVATE PILOT · chờ connector") : "Đóng"} ready={isOpen}/>;
+              const readinessLabel = channel.readiness === "LIVE_PILOT" ? "Live pilot" : channel.readiness === "ADAPTER_READY" ? "Adapter sẵn sàng" : channel.readiness === "ATTRIBUTION_READY" ? "Attribution sẵn sàng" : channel.readiness === "PENDING_PARTNER_API" ? "Chờ quyền/API đối tác" : "Chờ xác thực/quyền";
+              return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "PRIVATE PILOT" : "Đóng"} · ${readinessLabel}`} ready={isOpen}/>;
             })}
           </div>
         </section>

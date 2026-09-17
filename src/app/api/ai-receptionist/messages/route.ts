@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateApiRequest, principalLabel } from "@/server/auth/api-auth";
 import { getAdminContainer } from "@/server/container";
 import type { PilotMessageInput } from "@/data/ai-receptionist";
+import { assertCustomerChannelEnabled, type CustomerChannelId } from "@/server/channels/channel-policy";
 
 const CHANNELS = new Set(["website", "facebook", "zalo", "whatsapp", "instagram", "pilot"]);
 
@@ -18,6 +19,10 @@ export async function POST(request: Request) {
 
   if (!payload.channel || !CHANNELS.has(payload.channel)) {
     return NextResponse.json({ error: "channel is invalid" }, { status: 400 });
+  }
+  if (payload.channel !== "pilot") {
+    try { assertCustomerChannelEnabled(payload.channel as CustomerChannelId); }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Channel closed" }, { status: 423 }); }
   }
   if (!payload.content?.trim()) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });

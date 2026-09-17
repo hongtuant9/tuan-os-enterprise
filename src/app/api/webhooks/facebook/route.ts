@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
+import { assertCustomerChannelEnabled } from "@/server/channels/channel-policy";
 import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
 
 type MetaMessage = { mid?: string; text?: string };
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  try { assertCustomerChannelEnabled("facebook"); } catch { return NextResponse.json({ error: "Facebook channel closed" }, { status: 423 }); }
   const raw = await request.text();
   if (!verifySignature(raw, request.headers.get("x-hub-signature-256"))) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   let payload: MetaWebhook;

@@ -33,6 +33,10 @@ export type ChannelAttribution = {
   channel: string; customers: number; conversations: number; bookingIntents: number; verifiedBookings: number; upsellRevenue: number;
 };
 
+export type AcquisitionAttribution = {
+  source: string; customers: number; conversations: number; bookingIntents: number; verifiedBookings: number; upsellRevenue: number;
+};
+
 function metadataObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -151,6 +155,26 @@ export class HospitalityCrmService {
         customers: customerIds.size,
         conversations: channelConversations.length,
         bookingIntents: channelConversations.filter((item) => /booking|room|stay|đặt phòng|phòng/i.test(item.intent)).length,
+        verifiedBookings: bookings.filter((item) => conversationIds.has(item.conversation_id) && item.verification_status === "verified").length,
+        upsellRevenue: upsells.filter((item) => item.conversation_id && conversationIds.has(item.conversation_id) && item.event_type === "booked").reduce((sum, item) => sum + Number(item.amount ?? 0), 0),
+      };
+    }).sort((a, b) => b.verifiedBookings - a.verifiedBookings || b.conversations - a.conversations);
+  }
+
+  async acquisitionAttribution(limit = 500): Promise<AcquisitionAttribution[]> {
+    const customers = await this.repo.customers(limit);
+    const ids = customers.map((item) => item.id);
+    const [conversations, bookings, upsells] = await Promise.all([this.repo.conversations(ids), this.repo.bookings(ids), this.repo.upsellEvents(ids)]);
+    const sources = [...new Set(conversations.map((item) => stringMeta(item.metadata, "acquisition_source") ?? item.channel))];
+    return sources.map((source) => {
+      const rows = conversations.filter((item) => (stringMeta(item.metadata, "acquisition_source") ?? item.channel) === source);
+      const customerIds = new Set(rows.map((item) => item.customer_id).filter((value): value is string => Boolean(value)));
+      const conversationIds = new Set(rows.map((item) => item.id));
+      return {
+        source,
+        customers: customerIds.size,
+        conversations: rows.length,
+        bookingIntents: rows.filter((item) => /booking|room|stay|đặt phòng|phòng/i.test(item.intent)).length,
         verifiedBookings: bookings.filter((item) => conversationIds.has(item.conversation_id) && item.verification_status === "verified").length,
         upsellRevenue: upsells.filter((item) => item.conversation_id && conversationIds.has(item.conversation_id) && item.event_type === "booked").reduce((sum, item) => sum + Number(item.amount ?? 0), 0),
       };

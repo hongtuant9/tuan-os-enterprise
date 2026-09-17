@@ -21,7 +21,7 @@ function Metric({ label, value, hint }: { label: string; value: string | number;
 
 export default async function CustomersPage() {
   const crm = (await getRequestContainer()).hospitalityCrm;
-  const [customers, attribution] = await Promise.all([crm.customerSummaries(), crm.channelAttribution()]);
+  const [customers, attribution, acquisitionAttribution] = await Promise.all([crm.customerSummaries(), crm.channelAttribution(), crm.acquisitionAttribution()]);
   const totalVerifiedBookings = customers.reduce((sum, item) => sum + item.verifiedBookingCount, 0);
   const totalUpsellRevenue = customers.reduce((sum, item) => sum + item.upsellRevenue, 0);
   const activeJourney = customers.filter((item) => !["POST_STAY", "LOYAL"].includes(item.journeyStage)).length;
@@ -63,6 +63,15 @@ export default async function CustomersPage() {
               return <ChannelStatus key={channel.id} name={channel.label} status={isOpen ? (connectorReady || channel.id === "facebook" ? "PRIVATE PILOT" : "PRIVATE PILOT · chờ connector") : "Đóng"} ready={isOpen}/>;
             })}
           </div>
+        </section>
+
+
+        <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
+          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hiệu quả theo nguồn tiếp cận</h2><p className="text-xs text-[var(--ink-muted)]">Đây là attribution marketing: Google Search/Maps/Ads, Facebook, Instagram, OTA, Email, WhatsApp, Zalo, referral/partner… khi dữ liệu thực xuất hiện.</p></div>
+          <div className="overflow-x-auto"><table className="min-w-full text-sm">
+            <thead className="text-left text-xs text-[var(--ink-muted)]"><tr><th className="py-2 pr-4">Nguồn</th><th className="py-2 pr-4">Khách</th><th className="py-2 pr-4">Hội thoại</th><th className="py-2 pr-4">Ý định booking</th><th className="py-2 pr-4">Booking verified</th><th className="py-2">Upsell</th></tr></thead>
+            <tbody className="divide-y divide-[var(--border-hairline)]">{acquisitionAttribution.map((row) => <tr key={row.source}><td className="py-2 pr-4 font-medium text-[var(--ink-primary)]">{row.source}</td><td className="py-2 pr-4">{row.customers}</td><td className="py-2 pr-4">{row.conversations}</td><td className="py-2 pr-4">{row.bookingIntents}</td><td className="py-2 pr-4">{row.verifiedBookings}</td><td className="py-2">{vnd(row.upsellRevenue)}</td></tr>)}{!acquisitionAttribution.length && <tr><td colSpan={6} className="py-6 text-center text-[var(--ink-muted)]">Chưa có dữ liệu nguồn tiếp cận.</td></tr>}</tbody>
+          </table></div>
         </section>
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">

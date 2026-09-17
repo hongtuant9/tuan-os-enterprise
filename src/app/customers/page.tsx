@@ -26,6 +26,8 @@ export default async function CustomersPage() {
   const activeJourney = customers.filter((item) => !["POST_STAY", "LOYAL"].includes(item.journeyStage)).length;
   const journeyCounts = Object.entries(JOURNEY_LABELS).map(([stage, label]) => ({ stage, label, count: customers.filter((item) => item.journeyStage === stage).length }));
   const facebookReady = Boolean(process.env.FACEBOOK_APP_SECRET && process.env.FACEBOOK_PAGE_ACCESS_TOKEN && process.env.FACEBOOK_VERIFY_TOKEN);
+  const zaloReady = Boolean(process.env.ZALO_APP_ID && process.env.ZALO_OA_SECRET_KEY && process.env.ZALO_OA_ACCESS_TOKEN);
+  const whatsappReady = Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN);
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
@@ -52,7 +54,7 @@ export default async function CustomersPage() {
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
           <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Kênh nhắn tin</h2><p className="text-xs text-[var(--ink-muted)]">Một CRM chung cho các kênh. Secret chỉ nằm server-side.</p></div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <ChannelStatus name="Facebook Messenger" status={facebookReady ? "Đã cấu hình" : "Chờ cấu hình Meta"} ready={facebookReady}/><ChannelStatus name="Zalo" status="Chưa kết nối" ready={false}/><ChannelStatus name="WhatsApp" status="Chưa kết nối" ready={false}/>
+            <ChannelStatus name="Facebook Messenger" status={facebookReady ? "Đã cấu hình" : "Chờ cấu hình Meta"} ready={facebookReady}/><ChannelStatus name="Zalo" status={zaloReady ? "Đã cấu hình" : "Chờ cấu hình Zalo OA"} ready={zaloReady}/><ChannelStatus name="WhatsApp" status={whatsappReady ? "Đã cấu hình" : "Chờ cấu hình WhatsApp"} ready={whatsappReady}/>
           </div>
         </section>
 

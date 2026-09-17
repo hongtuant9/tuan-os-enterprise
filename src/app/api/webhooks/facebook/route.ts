@@ -66,13 +66,21 @@ async function sendMessenger(pageId: string, recipientId: string, text: string):
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
-    const errorPayload = await response.json().catch(() => null) as { error?: { message?: string; type?: string; code?: number; error_subcode?: number } } | null;
+    const rawError = (await response.text().catch(() => '')).slice(0, 500);
+    let errorPayload: { error?: { message?: string; type?: string; code?: number; error_subcode?: number } } | null = null;
+    try { errorPayload = rawError ? JSON.parse(rawError) : null; } catch { errorPayload = null; }
     const graphError = errorPayload?.error;
+    const safeRaw = rawError
+      .replace(/EA[A-Za-z0-9_-]{20,}/g, '[REDACTED_TOKEN]')
+      .replace(/access_token=[^&\s"']+/gi, 'access_token=[REDACTED]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 300);
     const detail = [
       graphError?.code != null ? `code=${graphError.code}` : null,
       graphError?.error_subcode != null ? `subcode=${graphError.error_subcode}` : null,
       graphError?.type ? `type=${graphError.type}` : null,
       graphError?.message ? `message=${graphError.message.slice(0, 220)}` : null,
+      !graphError && safeRaw ? `contentType=${response.headers.get('content-type') ?? 'unknown'} body=${safeRaw}` : null,
     ].filter(Boolean).join(' ');
     throw new Error(`Facebook Send API failed: ${response.status}${detail ? ` ${detail}` : ''}`);
   }

@@ -6,12 +6,27 @@ type IdentityRow = Database["public"]["Tables"]["hospitality_customer_identities
 type ConversationRow = Database["public"]["Tables"]["ai_conversations"]["Row"];
 type BookingRow = Database["public"]["Tables"]["ai_booking_records"]["Row"];
 type UpsellRow = Database["public"]["Tables"]["ai_upsell_events"]["Row"];
+type MessageRow = Database["public"]["Tables"]["ai_messages"]["Row"];
 
 export class HospitalityCrmRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async customers(limit = 100): Promise<CustomerRow[]> {
     const { data, error } = await this.db.from("hospitality_customers").select("*").order("last_seen_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+
+  async customerById(id: string): Promise<CustomerRow | null> {
+    const { data, error } = await this.db.from("hospitality_customers").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async messages(conversationIds: string[]): Promise<MessageRow[]> {
+    if (!conversationIds.length) return [];
+    const { data, error } = await this.db.from("ai_messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: true });
     if (error) throw error;
     return data ?? [];
   }

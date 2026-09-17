@@ -25,19 +25,43 @@ function safeGraphError(error: GraphError | undefined) {
 
 async function probeFacebook() {
   const token = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
+  const appId = process.env.FACEBOOK_APP_ID?.trim();
+  const appSecret = process.env.FACEBOOK_APP_SECRET?.trim();
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
   if (!token) return { ok: false, reachable: false, reason: "missing_page_access_token" };
-  const url = new URL(`https://graph.facebook.com/${version}/me`);
-  url.searchParams.set("fields", "id,name");
-  url.searchParams.set("access_token", token);
+  if (!appId || !appSecret) return { ok: false, reachable: false, reason: "missing_facebook_app_credentials" };
+
+  const url = new URL(`https://graph.facebook.com/${version}/debug_token`);
+  url.searchParams.set("input_token", token);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
   const response = await fetch(url, { signal: AbortSignal.timeout(12_000), cache: "no-store" });
-  const body = await response.json().catch(() => null) as { id?: string; name?: string; error?: GraphError } | null;
+  const body = await response.json().catch(() => null) as {
+    data?: {
+      app_id?: string;
+      type?: string;
+      application?: string;
+      is_valid?: boolean;
+      scopes?: string[];
+      user_id?: string;
+      expires_at?: number;
+      data_access_expires_at?: number;
+    };
+    error?: GraphError;
+  } | null;
+  const data = body?.data;
+  const scopes = data?.scopes ?? [];
+  const hasMessaging = scopes.includes("pages_messaging");
   return {
-    ok: response.ok && Boolean(body?.id),
+    ok: response.ok && data?.is_valid === true && hasMessaging,
     reachable: true,
     httpStatus: response.status,
-    pageId: response.ok ? body?.id ?? null : null,
-    pageName: response.ok ? body?.name ?? null : null,
+    tokenValid: data?.is_valid ?? false,
+    tokenType: data?.type ?? null,
+    appIdMatches: data?.app_id ? data.app_id === appId : null,
+    scopes,
+    hasPagesMessaging: hasMessaging,
+    expiresAt: data?.expires_at ?? null,
+    dataAccessExpiresAt: data?.data_access_expires_at ?? null,
     error: safeGraphError(body?.error),
   };
 }
@@ -84,7 +108,10 @@ export async function POST(request: Request) {
   const policy = snapshot.channels.find((item) => item.id === channel) ?? null;
   try {
     const probe = channel === "facebook" ? await probeFacebook() : await probeWhatsApp();
-    return NextResponse.json({ channel, stage: snapshot.stage, policy, probe, checkedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { channel, stage: snapshot.stage, policy, probe, checkedAt: new Date().toISOString() },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     return NextResponse.json({
       channel,

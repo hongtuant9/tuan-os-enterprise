@@ -61,7 +61,12 @@ async function probeFacebookToken(token: string, pageId?: string) {
     const pageBody = await pageResponse.json().catch(() => null) as { id?: string; name?: string } | null;
     page = { id: pageResponse.ok ? pageBody?.id ?? null : null, name: pageResponse.ok ? pageBody?.name ?? null : null, matchesExpectedId: pageResponse.ok ? pageBody?.id === pageId : false };
   }
-  return { ok: response.ok && data?.is_valid === true && hasMessaging && (page ? page.matchesExpectedId === true : true), reachable: true, httpStatus: response.status, tokenValid: data?.is_valid ?? false, tokenType: data?.type ?? null, tokenProfileId: data?.profile_id ?? null, appIdMatches: data?.app_id ? data.app_id === appId : null, scopes, hasPagesMessaging: hasMessaging, expiresAt: data?.expires_at ?? null, dataAccessExpiresAt: data?.data_access_expires_at ?? null, tokenPage, page, error: safeGraphError(body?.error) };
+
+  const identityMatchesExpectedId = pageId
+    ? data?.profile_id === pageId || page?.matchesExpectedId === true
+    : true;
+
+  return { ok: response.ok && data?.is_valid === true && hasMessaging && identityMatchesExpectedId, reachable: true, httpStatus: response.status, tokenValid: data?.is_valid ?? false, tokenType: data?.type ?? null, tokenProfileId: data?.profile_id ?? null, identityMatchesExpectedId, appIdMatches: data?.app_id ? data.app_id === appId : null, scopes, hasPagesMessaging: hasMessaging, expiresAt: data?.expires_at ?? null, dataAccessExpiresAt: data?.data_access_expires_at ?? null, tokenPage, page, error: safeGraphError(body?.error) };
 }
 
 async function probeFacebook() {

@@ -65,7 +65,17 @@ async function sendMessenger(pageId: string, recipientId: string, text: string):
     body: JSON.stringify({ recipient: { id: recipientId }, messaging_type: "RESPONSE", message: { text: text.slice(0, 1900) } }),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`Facebook Send API failed: ${response.status}`);
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null) as { error?: { message?: string; type?: string; code?: number; error_subcode?: number } } | null;
+    const graphError = errorPayload?.error;
+    const detail = [
+      graphError?.code != null ? `code=${graphError.code}` : null,
+      graphError?.error_subcode != null ? `subcode=${graphError.error_subcode}` : null,
+      graphError?.type ? `type=${graphError.type}` : null,
+      graphError?.message ? `message=${graphError.message.slice(0, 220)}` : null,
+    ].filter(Boolean).join(' ');
+    throw new Error(`Facebook Send API failed: ${response.status}${detail ? ` ${detail}` : ''}`);
+  }
   const payload = await response.json().catch(() => null) as { message_id?: string } | null;
   return { sent: true, messageId: payload?.message_id ?? null };
 }

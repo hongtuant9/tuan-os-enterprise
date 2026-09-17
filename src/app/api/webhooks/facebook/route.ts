@@ -24,9 +24,11 @@ function verifySignature(raw: string, signature: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function sendMessenger(recipientId: string, text: string): Promise<void> {
+async function sendMessenger(recipientId: string, text: string): Promise<{ sent: boolean; messageId: string | null }> {
   const token = process.env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
-  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) return;
+  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) {
+    return { sent: false, messageId: null };
+  }
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
   const response = await fetch(`https://graph.facebook.com/${version}/me/messages?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
@@ -35,6 +37,8 @@ async function sendMessenger(recipientId: string, text: string): Promise<void> {
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Facebook Send API failed: ${response.status}`);
+  const payload = await response.json().catch(() => null) as { message_id?: string } | null;
+  return { sent: true, messageId: payload?.message_id ?? null };
 }
 
 export async function GET(request: Request) {
@@ -73,7 +77,19 @@ export async function POST(request: Request) {
           utmSource: "facebook",
           testerUserId: null,
         });
-        if (!result.duplicate) await sendMessenger(senderId, result.reply);
+        if (!result.duplicate) {
+          try {
+            const delivery = await sendMessenger(senderId, result.reply);
+            if (delivery.sent && result.outboundMessageId) {
+              await service.markOutboundDelivery(result.outboundMessageId, { status: "sent", externalMessageId: delivery.messageId });
+            }
+          } catch (sendError) {
+            if (result.outboundMessageId) {
+              await service.markOutboundDelivery(result.outboundMessageId, { status: "failed", detail: safeErrorMessage(sendError) });
+            }
+            throw sendError;
+          }
+        }
         processed += 1;
       } catch (error) {
         await getAdminContainer().activityLog.record({

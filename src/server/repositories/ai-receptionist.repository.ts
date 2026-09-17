@@ -140,6 +140,12 @@ export class AiReceptionistRepository {
     return data;
   }
 
+  async updateMessage(id: string, patch: Database["public"]["Tables"]["ai_messages"]["Update"]): Promise<MessageRow> {
+    const { data, error } = await this.db.from("ai_messages").update(patch).eq("id", id).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+
   async findBookings(limit = 50): Promise<BookingRow[]> {
     const { data, error } = await this.db
       .from("ai_booking_records")

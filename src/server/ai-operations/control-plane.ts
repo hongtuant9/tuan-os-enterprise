@@ -18,6 +18,7 @@ export interface ManagerWorkItem {
   blocker?: string;
   dependency?: string;
   nextAction?: string;
+  dueDate?: string;
   executionGate?: string;
   owner?: string;
   approvalRequired?: boolean;

@@ -13,7 +13,7 @@ export default async function AgentsPage() {
       <Sidebar />
       <main className="flex-1 px-4 py-6 md:px-10 md:py-8">
         <header className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">15 tác nhân trí tuệ nhân tạo</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{TCE_AGENT_REGISTRY.length} tác nhân trí tuệ nhân tạo</p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">Đội ngũ trí tuệ nhân tạo của Tam Coc Experience</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Anh không cần chọn tác nhân khi giao việc. Chỉ cần giao cho quản lý AI; hệ thống tự định tuyến tới đúng tác nhân. Trang này dùng để xem chức năng, quyền hạn và trạng thái.</p>
         </header>

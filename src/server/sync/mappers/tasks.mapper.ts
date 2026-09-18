@@ -18,6 +18,22 @@ function normalizeStatus(raw: string): TaskStatus {
   return "todo";
 }
 
+function normalizeDueDate(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (iso) return value;
+
+  const vi = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+  if (vi) {
+    const [, day, month, year] = vi;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
 function normalizePriority(raw: string): TaskPriority {
   const value = raw.trim().toUpperCase();
   if (value === "P0" || value === "P1" || value === "HIGH") return "high";
@@ -37,7 +53,7 @@ export class TasksImportMapper implements SyncMapper {
       owner: first(fields, "OWNER", "owner") || "Unassigned",
       status: normalizeStatus(first(fields, "STATUS", "status")),
       priority: normalizePriority(first(fields, "PRIORITY", "priority")),
-      due_date: first(fields, "DUE_DATE", "due_date") || null,
+      due_date: normalizeDueDate(first(fields, "DUE_DATE", "due_date")),
     };
 
     if (existingTargetId) {

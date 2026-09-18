@@ -9,16 +9,16 @@ import type { Task, TaskPriority, TaskStatus } from "@/data/tasks";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const STATUS_BADGE: Record<TaskStatus, { label: string; tone: "muted" | "accent" | "bad" | "good" }> = {
-  todo: { label: "To do", tone: "muted" },
-  "in-progress": { label: "In progress", tone: "accent" },
-  blocked: { label: "Blocked", tone: "bad" },
-  done: { label: "Done", tone: "good" },
+  todo: { label: "Chờ thực hiện", tone: "muted" },
+  "in-progress": { label: "Đang thực hiện", tone: "accent" },
+  blocked: { label: "Bị chặn", tone: "bad" },
+  done: { label: "Hoàn thành", tone: "good" },
 };
 
 const PRIORITY_BADGE: Record<TaskPriority, { label: string; tone: "bad" | "warn" | "muted" }> = {
-  high: { label: "High", tone: "bad" },
-  medium: { label: "Medium", tone: "warn" },
-  low: { label: "Low", tone: "muted" },
+  high: { label: "Cao", tone: "bad" },
+  medium: { label: "Vừa", tone: "warn" },
+  low: { label: "Thấp", tone: "muted" },
 };
 
 const STATUS_OPTIONS: TaskStatus[] = ["todo", "in-progress", "blocked", "done"];
@@ -40,7 +40,7 @@ export default function TaskCenter({ tasks: initialTasks }: { tasks: Task[] }) {
     const logId = pushLog({
       agent: "You",
       unit: task?.unit ?? "General",
-      message: `Task "${task?.title ?? id}" marked as ${status.replace("-", " ")}.`,
+      message: `Cập nhật trạng thái công việc "${task?.title ?? id}" thành ${STATUS_BADGE[status].label}.`,
       type: "action",
     });
 
@@ -57,13 +57,13 @@ export default function TaskCenter({ tasks: initialTasks }: { tasks: Task[] }) {
   return (
     <section id="task-center" className="mb-10 scroll-mt-6">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-        Task Center
+        Trung tâm công việc
       </h2>
 
       {priorityToday.length > 0 && (
         <div className="mb-4 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-            Today&apos;s priority
+            Ưu tiên hôm nay
           </p>
           <ul className="flex flex-col gap-1.5">
             {priorityToday.map((task) => (
@@ -86,7 +86,7 @@ export default function TaskCenter({ tasks: initialTasks }: { tasks: Task[] }) {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-[var(--ink-primary)]">{task.title}</p>
                   <p className="text-xs text-[var(--ink-muted)]">
-                    {task.unit} · {task.owner} · due {task.dueDate}
+                    {task.unit} · {task.owner} · hạn {task.dueDate}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

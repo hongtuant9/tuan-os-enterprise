@@ -80,6 +80,13 @@ function WorkList({ title, items, empty, tone = "default" }: { title: string; it
               </span>
             </div>
             {item.ceoSupportReason ? <p className="mt-2 text-xs leading-5 text-rose-200">{item.ceoSupportReason}</p> : null}
+            {item.ceoSupportAction ? (
+              <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/[0.05] px-2.5 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">CEO cần làm gì</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{item.ceoSupportAction}</p>
+                {item.ceoSupportTiming ? <p className="mt-1 text-[10px] font-semibold text-amber-300">Thời điểm: {item.ceoSupportTiming}</p> : null}
+              </div>
+            ) : null}
             {item.blocker ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">Tình trạng: {item.blocker}</p> : null}
             {item.nextAction ? <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Tiếp theo: {item.nextAction}</p> : null}
           </div>
@@ -116,6 +123,9 @@ export default async function AiManagerPage() {
 
   const items: ManagerWorkItem[] = buildManagerItems(tasks, syncRecords);
   const brief = buildManagerBrief(items, authorities);
+  const ceoSupportItems = items
+    .filter((item) => item.status !== "DONE" && item.needsCeoSupport)
+    .sort((a, b) => (a.pendingCeoApproval === b.pendingCeoApproval ? 0 : a.pendingCeoApproval ? -1 : 1));
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
@@ -215,7 +225,11 @@ export default async function AiManagerPage() {
             </div>
           </section>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="mt-5">
+            <WorkList title="CEO cần hỗ trợ — hành động cụ thể" items={ceoSupportItems} empty="Hiện không có công việc nào cần CEO thao tác hoặc quyết định." tone="ceo" />
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <WorkList title="Bị chặn — cần CEO quyết định/phê duyệt" items={brief.blockedItems} empty="Không có công việc nào đang bị chặn bởi cổng phê duyệt CEO." tone="ceo" />
             <WorkList title="Đang chờ điều kiện / công việc trước" items={brief.waitingItems} empty="Không có công việc nào đang chờ dependency hoặc sequence." tone="waiting" />
             <WorkList title="Vấn đề hệ thống / kỹ thuật cần đội phụ trách xử lý" items={brief.systemIssueItems} empty="Không có vấn đề kỹ thuật đang cản trở thực thi." tone="system" />

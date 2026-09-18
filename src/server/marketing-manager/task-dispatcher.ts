@@ -2,8 +2,8 @@ import "server-only";
 import { getAdminContainer } from "@/server/container";
 import type { MarketingPlan, MarketingTaskSpec } from "./types";
 
-function taskPriority(priority: MarketingTaskSpec["priority"]): "urgent" | "high" | "medium" | "low" {
-  if (priority === "P0") return "urgent";
+function taskPriority(priority: MarketingTaskSpec["priority"]): "high" | "medium" | "low" {
+  if (priority === "P0") return "high";
   if (priority === "P1") return "high";
   if (priority === "P2") return "medium";
   return "low";

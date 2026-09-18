@@ -185,25 +185,25 @@ function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, messa
 
     const lines = [
       `TÌNH HÌNH TCE HÔM NAY — ${health}`,
-      `Tiến độ: ${done}/${total} task canonical hoàn thành (${pct(done,total)}%). Đang thực thi: ${inProgress}. Chờ điều kiện: ${context.waitingItems.length}. Vấn đề hệ thống/kỹ thuật: ${context.systemIssueItems.length}. Chờ CEO phê duyệt: ${context.blockedItems.length}.`,
+      `Tiến độ: ${done}/${total} công việc chính thức hoàn thành (${pct(done,total)}%). Đang thực hiện: ${inProgress}. Chờ điều kiện: ${context.waitingItems.length}. Vấn đề hệ thống/kỹ thuật: ${context.systemIssueItems.length}. Chờ CEO phê duyệt: ${context.blockedItems.length}.`,
       `Tác nhân AI: ${agentOnline}/${context.agentStates.length} đang online trong runtime.`,
       `Dữ liệu điều hành: ${authorityText}.`,
     ];
 
     if (context.hospitality) {
-      lines.push(`Khách hàng/runtime: ${context.hospitality.conversations} hội thoại, ${context.hospitality.bookings} booking AI, ${context.hospitality.missingKnowledge} mục dữ liệu cần xác minh.`);
+      lines.push(`Khách hàng: ${context.hospitality.conversations} hội thoại, ${context.hospitality.bookings} đặt phòng AI, ${context.hospitality.missingKnowledge} mục dữ liệu cần xác minh.`);
     }
-    if (topNext.length) lines.push(`Ưu tiên tiếp theo: ${topNext.join(" | ")}.`);
+    if (topNext.length) lines.push(`Việc ưu tiên tiếp theo: ${topNext.join(" | ")}.`);
     if (systemIssues.length) lines.push(`Cần đội kỹ thuật xử lý: ${systemIssues.join(" | ")}.`);
     if (supportNow.length) {
       lines.push(`CEO cần hành động NGAY: ${supportNow.map((item) => `${item.id}: ${item.ceoSupportAction ?? item.ceoSupportReason ?? "cần quyết định"}`).join(" | ")}.`);
     } else if (supportLater.length) {
-      lines.push(`CEO chưa cần hành động ngay. Có ${supportLater.length} việc sẽ cần hỗ trợ human-only khi đến đúng lane; dashboard đã ghi rõ thời điểm và thao tác.`);
+      lines.push(`CEO chưa cần hành động ngay. Có ${supportLater.length} việc sẽ cần CEO hỗ trợ thao tác xác thực khi đến đúng giai đoạn; bảng điều hành đã ghi rõ thời điểm và thao tác.`);
     } else {
       lines.push("CEO cần hành động ngay: KHÔNG.");
     }
     if (finance) lines.push(finance);
-    lines.push("Nguồn: TASK-001 / APPROVAL-001 / L3 / runtime. Đây là báo cáo deterministic từ dữ liệu hiện có; không dùng AI tạo sinh để bịa hoặc suy diễn.");
+    lines.push("Nguồn: TASK-001 / APPROVAL-001 / L3 / runtime. Đây là báo cáo tổng hợp theo quy tắc cố định từ dữ liệu đã xác minh; không dùng AI tạo sinh để bịa hoặc suy diễn.");
     return lines.join("\n\n");
   }
 
@@ -213,12 +213,12 @@ function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, messa
 
   return [
     `Đã chuyển yêu cầu tới ${agent.name}.`,
-    `Tình trạng điều hành hiện tại: ${done}/${total} task canonical hoàn thành; ${inProgress} đang thực thi; ${context.waitingItems.length} chờ điều kiện; ${context.systemIssueItems.length} vấn đề hệ thống/kỹ thuật; ${context.blockedItems.length} chờ CEO phê duyệt.`,
+    `Tình hình điều hành hiện tại: ${done}/${total} công việc chính thức hoàn thành; ${inProgress} đang thực thi; ${context.waitingItems.length} chờ điều kiện; ${context.systemIssueItems.length} vấn đề hệ thống/kỹ thuật; ${context.blockedItems.length} chờ CEO phê duyệt.`,
     next ? `Ưu tiên có thể tiếp tục: ${next}.` : "",
     system ? `Vấn đề kỹ thuật đang mở: ${system}.` : "",
     support ? `Việc cần CEO hỗ trợ: ${support}.` : "CEO cần hỗ trợ ngay: KHÔNG.",
     finance,
-    "AI tạo sinh chưa bật; phản hồi này chỉ dùng dữ liệu canonical/runtime đã có. Với yêu cầu cần phân tích sâu hơn, hệ thống sẽ không tự suy diễn khi thiếu bằng chứng.",
+    "AI tạo sinh chưa bật; phản hồi này chỉ dùng dữ liệu chính thức và trạng thái hệ thống hiện có. Với yêu cầu cần phân tích sâu hơn, hệ thống sẽ không tự suy diễn khi thiếu bằng chứng.",
   ].filter(Boolean).join("\n\n");
 }
 export async function runTceAgent(message: string): Promise<TceAgentReply> {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/channel-policy";
+import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
-          agentRegistry: 15,
+          agentRegistry: TCE_AGENT_REGISTRY.length,
           executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
           runtimeSignals: runtimeSignals(),
@@ -59,7 +60,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        agentRegistry: 15,
+        agentRegistry: TCE_AGENT_REGISTRY.length,
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
         runtimeSignals: runtimeSignals(),
@@ -74,7 +75,7 @@ export async function GET() {
         status: "degraded",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        agentRegistry: 15,
+        agentRegistry: TCE_AGENT_REGISTRY.length,
           executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
         runtimeSignals: runtimeSignals(),

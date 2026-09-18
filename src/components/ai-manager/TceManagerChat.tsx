@@ -76,7 +76,7 @@ export default function TceManagerChat() {
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }}
+          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitWith(); } }}
           rows={3}
           placeholder="Hỏi tình hình, giao việc hoặc báo đã hoàn tất hỗ trợ…"
           className="min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-white px-3 py-2 text-sm text-slate-950 caret-sky-600 outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"

@@ -10,6 +10,8 @@ const cmiIntervalMs = Math.max(5000, Number(process.env.CMI_QUEUE_WORKER_INTERVA
 
 const staffOpsWorkerEnabled = process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true";
 const staffOpsIntervalMs = Math.max(60_000, Number(process.env.TCE_STAFF_OPS_WORKER_INTERVAL_MS || 300_000));
+const executiveWorkerEnabled = process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const executiveIntervalMs = Math.max(300_000, Number(process.env.TCE_EXECUTIVE_WORKER_INTERVAL_MS || 900_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -26,6 +28,7 @@ function deriveToken(suffix) {
 
 const cmiToken = deriveToken("cmi-worker-v1");
 const staffOpsToken = deriveToken("tce-staff-ops-worker-v1");
+const executiveToken = deriveToken("tce-executive-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -81,6 +84,47 @@ async function staffOpsTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`[TCE Staff Ops] ${message}`);
+  }
+}
+
+async function executiveTick() {
+  if (!executiveWorkerEnabled || !executiveToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/executive/worker",
+      "x-tce-executive-worker-token",
+      executiveToken,
+      120000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE Executive] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped && payload?.changed) {
+      console.log(
+        `[TCE Executive] next=${payload?.next ?? 0} blocked=${payload?.blocked ?? 0} waiting_owner=${payload?.waitingOwner ?? 0} open_p0=${payload?.openP0 ?? 0}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE Executive] ${message}`);
+  }
+}
+
+async function executiveWorkerLoop() {
+  if (!executiveWorkerEnabled) {
+    console.log("[TCE Executive] disabled");
+    return;
+  }
+  if (!executiveToken) {
+    console.error("[TCE Executive] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE Executive] enabled interval_ms=${executiveIntervalMs}`);
+  await sleep(20000);
+  while (!stopping) {
+    await executiveTick();
+    await sleep(executiveIntervalMs);
   }
 }
 
@@ -140,3 +184,4 @@ server.on("exit", (code, signal) => {
 
 void cmiWorkerLoop();
 void staffOpsWorkerLoop();
+void executiveWorkerLoop();

@@ -4,6 +4,7 @@ import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from 
 import { buildManagerItems, latestSyncAt } from "@/server/ai-operations/manager-data";
 import TceManagerChat from "@/components/ai-manager/TceManagerChat";
 import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
+import { TCE_EXECUTIVE_ORG } from "@/server/agents/tce-executive-org";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -69,7 +70,7 @@ export default async function AiManagerPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">AI Operations / Manager Agent</p>
             <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">CEO Operations Cockpit</h1>
-            <p className="mt-1 max-w-3xl text-sm text-[var(--ink-muted)]">Kênh tương tác chính giữa Tuấn và Manager Agent. Hiện chạy READ-ONLY SHADOW cho tới khi authority sync và Stability Gate PASS.</p>
+            <p className="mt-1 max-w-3xl text-sm text-[var(--ink-muted)]">TUAN OS — AI CEO Delegate chạy liên tục trên VPS, dùng TASK-001 / APPROVAL-001 / L3 / runtime để điều phối. Financial và critical mutations tiếp tục fail-closed theo approval rules.</p>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">MUTATION LOCKED</div>
         </header>
@@ -97,6 +98,29 @@ export default async function AiManagerPage() {
               <div className="rounded-lg bg-[var(--surface-raised)] px-3 py-2"><b className="block text-base text-[var(--ink-primary)]">{brief.blockedItems.length}</b>Blocked</div>
               <div className="rounded-lg bg-[var(--surface-raised)] px-3 py-2"><b className="block text-base text-[var(--ink-primary)]">{approvals.filter((item) => item.status === "pending").length}</b>Approval</div>
             </div>
+          </div>
+        </section>
+
+        <section id="executive-org" className="mt-6 scroll-mt-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--ink-primary)]">TCE + TUAN OS Executive AI Organization</h2>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">CEO Tuấn → TUAN OS AI CEO Delegate → các AI Trưởng phòng. Đây là lớp tổ chức; 15 specialist agents bên dưới dùng chung runtime, không tạo 11 server riêng.</p>
+            </div>
+            <span className="text-xs text-[var(--ink-muted)]">{TCE_EXECUTIVE_ORG.length} executive roles</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {TCE_EXECUTIVE_ORG.map((role) => (
+              <div key={role.id} className="rounded-lg bg-[var(--surface-raised)] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <b className="text-sm text-[var(--ink-primary)]">{role.name}</b>
+                  <span className="text-[10px] uppercase text-[var(--ink-muted)]">{role.permission}</span>
+                </div>
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">Reports to: {role.reportsTo === "CEO_TUAN" ? "CEO Tuấn" : "TUAN OS — AI CEO Delegate"}</p>
+                <p className="mt-2 text-xs text-[var(--ink-secondary)]">{role.mission}</p>
+                <p className="mt-2 text-[11px] text-[var(--ink-muted)]">Mapped agents: {role.mappedAgents.join(", ")}</p>
+              </div>
+            ))}
           </div>
         </section>
 

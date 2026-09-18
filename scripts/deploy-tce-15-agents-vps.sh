@@ -10,7 +10,7 @@ CANDIDATE_CONTAINER="${CANDIDATE_CONTAINER:-tce-control-center-candidate}"
 APP_PORT="${APP_PORT:-3000}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-3300}"
 STATE_DIR="${STATE_DIR:-/opt/tuan-ai/deploy-state}"
-EXPECTED_RUNTIME="tce-15-agent-v2"
+EXPECTED_RUNTIME="tce-executive-org-v1"
 
 log() { printf '[TCE deploy] %s\n' "$*"; }
 fail() { log "FAIL: $*"; exit 1; }

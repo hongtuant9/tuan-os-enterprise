@@ -17,6 +17,7 @@ function runtimeSignals() {
 
   return {
     staffOpsWorkerEnabled: process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true",
+    executiveWorkerEnabled: process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
     openCustomerChannels,
@@ -40,8 +41,9 @@ export async function GET() {
         {
           status: "degraded",
           service: "tuan-os-enterprise",
-          runtime: "tce-15-agent-v2",
+          runtime: "tce-executive-org-v1",
           agentRegistry: 15,
+          executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
           runtimeSignals: runtimeSignals(),
           checkedAt,
@@ -55,8 +57,9 @@ export async function GET() {
       {
         status: "ok",
         service: "tuan-os-enterprise",
-        runtime: "tce-15-agent-v2",
+        runtime: "tce-executive-org-v1",
         agentRegistry: 15,
+        executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
         runtimeSignals: runtimeSignals(),
         checkedAt,
@@ -69,8 +72,9 @@ export async function GET() {
       {
         status: "degraded",
         service: "tuan-os-enterprise",
-        runtime: "tce-15-agent-v2",
+        runtime: "tce-executive-org-v1",
         agentRegistry: 15,
+          executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
         runtimeSignals: runtimeSignals(),
         checkedAt,

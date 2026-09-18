@@ -91,7 +91,7 @@ function WorkList({ title, items, empty, tone = "default" }: { title: string; it
 
 export default async function AiManagerPage() {
   const container = await getRequestContainer();
-  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }, { data: syncRows }, { data: syncSources }] = await Promise.all([
+  const [{ data: taskRows }, { data: activityRows }, { data: syncRows }, { data: syncSources }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
     container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),

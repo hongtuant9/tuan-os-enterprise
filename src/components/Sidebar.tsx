@@ -11,7 +11,7 @@ const navigation = [
   { href: "/customers", label: "Khách hàng", sub: "Hồ sơ & lịch sử" },
   { href: "/upsell", label: "Bán thêm", sub: "Upsell / Cross-sell" },
   { href: "/approvals", label: "Việc cần phê duyệt", sub: "CEO Approval" },
-  { href: "/agents", label: "15 tác nhân AI", sub: "Agent Registry" },
+  { href: "/agents", label: "Tác nhân AI", sub: "Agent Registry" },
 ];
 
 export default function Sidebar() {

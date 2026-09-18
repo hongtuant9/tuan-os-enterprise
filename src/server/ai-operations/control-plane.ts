@@ -27,6 +27,8 @@ export interface ManagerWorkItem {
   approvalDecision?: "approved" | "rejected" | "pending" | "unknown";
   needsCeoSupport?: boolean;
   ceoSupportReason?: string;
+  ceoSupportAction?: string;
+  ceoSupportTiming?: string;
   resolutionOwner?: string;
   agent: AiOpsAgent;
 }

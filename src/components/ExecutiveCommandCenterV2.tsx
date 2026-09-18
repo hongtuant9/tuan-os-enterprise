@@ -18,6 +18,8 @@ export type ViecUuTien = {
   chuTri: string;
   mucDo: string;
   trangThai: string;
+  canCeoHoTro?: boolean;
+  phuTrachXuLy?: string;
   han?: string;
 };
 
@@ -205,7 +207,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
             <Ring value={sourceRate} label="Dữ liệu" color={sourceRate === 100 ? "#34d399" : "#fbbf24"} />
             <div className="col-span-3 grid grid-cols-4 gap-2 border-t border-white/[0.06] pt-3 text-center">
               <div><p className="text-lg font-semibold text-white">{props.dangLam}</p><p className="text-[9px] text-[var(--ink-muted)]">Đang làm</p></div>
-              <div><p className="text-lg font-semibold text-amber-300">{props.biChan}</p><p className="text-[9px] text-[var(--ink-muted)]">Bị chặn</p></div>
+              <div><p className="text-lg font-semibold text-amber-300">{props.biChan}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ CEO</p></div>
               <div><p className="text-lg font-semibold text-rose-300">{props.quaHan}</p><p className="text-[9px] text-[var(--ink-muted)]">Quá hạn</p></div>
               <div><p className="text-lg font-semibold text-sky-300">{props.choDuyet}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ duyệt</p></div>
             </div>
@@ -230,7 +232,12 @@ export default function ExecutiveCommandCenterV2(props: Props) {
                   <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${taskTone(item.trangThai)}`}>{item.trangThai}</span>
                 </div>
                 <p className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-white">{item.ten}</p>
-                <p className="mt-2 truncate text-[10px] text-[var(--ink-muted)]">{item.chuTri}</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="truncate text-[10px] text-[var(--ink-muted)]">{item.phuTrachXuLy ?? item.chuTri}</p>
+                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${item.canCeoHoTro ? "border-rose-500/20 bg-rose-500/[0.07] text-rose-300" : "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300"}`}>
+                    CEO: {item.canCeoHoTro ? "CÓ" : "KHÔNG"}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -281,7 +288,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
               {[
                 ["Hoàn thành", props.hoanThanh, props.tongCongViec ? props.hoanThanh / props.tongCongViec * 100 : 0, "bg-emerald-400"],
                 ["Đang làm", props.dangLam, props.tongCongViec ? props.dangLam / props.tongCongViec * 100 : 0, "bg-sky-400"],
-                ["Bị chặn", props.biChan, props.tongCongViec ? props.biChan / props.tongCongViec * 100 : 0, "bg-amber-400"],
+                ["Chờ CEO", props.biChan, props.tongCongViec ? props.biChan / props.tongCongViec * 100 : 0, "bg-rose-400"],
                 ["Quá hạn", props.quaHan, props.tongCongViec ? props.quaHan / props.tongCongViec * 100 : 0, "bg-rose-400"],
               ].map(([label, value, percent, color]) => (
                 <div key={String(label)}>

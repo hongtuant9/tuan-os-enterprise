@@ -92,7 +92,7 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     }
   }
 
-  return tasks.map((task) => {
+  return tasks.filter((task) => metadataByTarget.has(task.id)).map((task) => {
     const fields = metadataByTarget.get(task.id) ?? {};
     const title = first(fields, "TASK_NAME") || task.title;
     const unit = first(fields, "DEPARTMENT", "BUSINESS_UNIT") || task.unit;

@@ -1,14 +1,15 @@
 import Sidebar from "@/components/Sidebar";
 import { getRequestContainer } from "@/server/container";
 import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
-import { buildManagerItems, latestSyncAt } from "@/server/ai-operations/manager-data";
+import { buildManagerItems } from "@/server/ai-operations/manager-data";
 import TceManagerChat from "@/components/ai-manager/TceManagerChat";
 import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 import { TCE_EXECUTIVE_ORG, type TceExecutiveRoleId } from "@/server/agents/tce-executive-org";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function freshness(updatedAt?: string | null): AuthoritySnapshot["state"] {
+function freshness(updatedAt?: string | null, status?: string | null): AuthoritySnapshot["state"] {
+  if (status === "error") return "unavailable";
   if (!updatedAt) return "unavailable";
   return Date.now() - new Date(updatedAt).getTime() <= DAY_MS ? "verified" : "stale";
 }
@@ -69,23 +70,28 @@ function WorkList({ title, items, empty }: { title: string; items: ManagerWorkIt
 
 export default async function AiManagerPage() {
   const container = await getRequestContainer();
-  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }, { data: syncRows }] = await Promise.all([
+  const [{ data: taskRows }, { data: approvalRows }, { data: activityRows }, { data: syncRows }, { data: syncSources }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
     container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
+    container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
   ]);
 
   const tasks = taskRows ?? [];
   const approvals = approvalRows ?? [];
   const syncRecords = syncRows ?? [];
-  const latestTask = latestSyncAt(syncRecords, "task-001");
-  const latestApproval = latestSyncAt(syncRecords, "approval-001");
-  const latestL3 = latestSyncAt(syncRecords, "l3-channel-tracking");
+  const sourceByKey = new Map((syncSources ?? []).map((item) => [item.key, item]));
+  const taskSource = sourceByKey.get("task-001");
+  const approvalSource = sourceByKey.get("approval-001");
+  const l3Source = sourceByKey.get("l3-channel-tracking");
+  const latestTask = taskSource?.last_synced_at ?? null;
+  const latestApproval = approvalSource?.last_synced_at ?? null;
+  const latestL3 = l3Source?.last_synced_at ?? null;
   const authorities: AuthoritySnapshot[] = [
-    { authority: "TASK-001", state: freshness(latestTask), checkedAt: new Date().toISOString(), lastUpdatedAt: latestTask ?? undefined, note: "Bản đồng bộ Supabase; Google Drive vẫn là nguồn chính thức." },
-    { authority: "APPROVAL-001", state: freshness(latestApproval), checkedAt: new Date().toISOString(), lastUpdatedAt: latestApproval ?? undefined, note: "Bản đồng bộ Supabase; Google Drive vẫn là nguồn chính thức." },
-    { authority: "L3", state: freshness(latestL3), checkedAt: new Date().toISOString(), lastUpdatedAt: latestL3 ?? undefined, note: "Bản chỉ đọc dữ liệu L3; Google Drive vẫn là nguồn chính thức." },
+    { authority: "TASK-001", state: freshness(latestTask, taskSource?.status), checkedAt: new Date().toISOString(), lastUpdatedAt: latestTask ?? undefined, note: taskSource?.last_error ? `Lỗi đồng bộ: ${taskSource.last_error}` : "Bản đồng bộ Supabase; Google Drive vẫn là nguồn chính thức." },
+    { authority: "APPROVAL-001", state: freshness(latestApproval, approvalSource?.status), checkedAt: new Date().toISOString(), lastUpdatedAt: latestApproval ?? undefined, note: approvalSource?.last_error ? `Lỗi đồng bộ: ${approvalSource.last_error}` : "Bản đồng bộ Supabase; Google Drive vẫn là nguồn chính thức." },
+    { authority: "L3", state: freshness(latestL3, l3Source?.status), checkedAt: new Date().toISOString(), lastUpdatedAt: latestL3 ?? undefined, note: l3Source?.last_error ? `Lỗi đồng bộ: ${l3Source.last_error}` : "Bản chỉ đọc dữ liệu L3; Google Drive vẫn là nguồn chính thức." },
     { authority: "RUNTIME", state: "verified", checkedAt: new Date().toISOString(), note: "Phiên web đã xác thực và runtime đang phản hồi." },
   ];
 

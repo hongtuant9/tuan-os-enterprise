@@ -145,7 +145,7 @@ export default async function Home() {
   const inProgressTasks = tasks.filter((item) => item.status === "in-progress").length;
   const managerItems = buildManagerItems(managerTaskQuery.data ?? [], syncRecordsQuery.data ?? []);
   const ceoBlockedItems = managerItems.filter(
-    (item) => item.status !== "DONE" && Boolean(item.approvalRequired) && !Boolean(item.approvalResolved),
+    (item) => item.status !== "DONE" && Boolean(item.pendingCeoApproval),
   );
   const ceoBlockedIds = new Set(ceoBlockedItems.map((item) => item.id));
   const overdueTasks = tasks.filter((item) => quaHan(item.dueDate, item.status));

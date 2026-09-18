@@ -57,7 +57,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),
       blocked: brief.blockedItems.map((item) => item.id),
-      waiting: brief.waitingOwnerItems.map((item) => item.id),
+      waiting: brief.waitingItems.map((item) => item.id),
+      system_issues: brief.systemIssueItems.map((item) => item.id),
       stale: brief.staleAuthorities,
       openP0,
       pendingApprovals,
@@ -67,7 +68,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
 
   const message =
     `Executive digest=${digest} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
-    `waiting_owner=${brief.waitingOwnerItems.length} · open_p0=${openP0} · pending_approvals=${pendingApprovals} · ` +
+    `waiting_dependency=${brief.waitingItems.length} · system_issues=${brief.systemIssueItems.length} · open_p0=${openP0} · pending_approvals=${pendingApprovals} · ` +
     `authorities=${brief.staleAuthorities.length === 0 ? "VERIFIED" : "STALE:" + brief.staleAuthorities.join(",")}.`;
 
   const previous = latestLogs?.[0]?.message ?? "";
@@ -86,7 +87,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     generatedAt: now.toISOString(),
     next: brief.nextItems.length,
     blocked: brief.blockedItems.length,
-    waitingOwner: brief.waitingOwnerItems.length,
+    waitingOwner: brief.waitingItems.length,
     openP0,
     pendingApprovals,
     staleAuthorities: brief.staleAuthorities,

@@ -8,6 +8,7 @@ export type TceAgentId =
   | "channel_auditor"
   | "website_agent"
   | "manager_agent"
+  | "marketing_manager"
   | "ads_agent"
   | "data_quality"
   | "operations_quality"
@@ -90,6 +91,12 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
     sources: ["TASK-001", "APPROVAL-001", "L3 Master", "runtime logs"],
     capabilities: ["briefing", "priority triage", "exception routing", "approval queue"],
     guardrails: ["recommend only for critical decisions", "no invented KPI"],
+  },  {
+    id: "marketing_manager", name: "AI Marketing Manager", domain: "growth", mode: "active", permission: "L2_APPROVAL",
+    mission: "Hoạt động như Trưởng phòng Marketing: lập chiến lược, kế hoạch, điều phối specialist agents, kiểm soát thương hiệu, funnel, KPI, kênh và tối ưu tăng trưởng cho TCE.",
+    sources: ["L3 Master", "MKT-001", "TASK-001", "APPROVAL-001", "runtime channel analytics", "verified CRM and booking signals"],
+    capabilities: ["marketing strategy", "90-day planning", "campaign orchestration", "brand governance", "content direction", "channel planning", "funnel management", "KPI review", "experiment design", "specialist-agent capability planning"],
+    guardrails: ["TCE is master brand; Lavender/Ruby/Cozy are service lines", "use verified facts only", "financial mutations require Owner approval", "GREEN non-financial work may auto-dispatch", "prefer API/cloud execution", "Facebook is the first auto-publishing pilot"],
   },  {
     id: "ads_agent", name: "Ads Agent", domain: "growth", mode: "shadow", permission: "L3_CRITICAL",
     mission: "Đọc và phân tích quảng cáo; đề xuất thay đổi nhưng không tự chi ngân sách.",

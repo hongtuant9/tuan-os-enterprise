@@ -81,7 +81,6 @@ export default async function Home() {
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
 
   const [
-    tasks,
     approvals,
     agents,
     receptionist,
@@ -94,7 +93,6 @@ export default async function Home() {
     managerTaskQuery,
     syncRecordsQuery,
   ] = await Promise.all([
-    container.tasks.list(),
     container.approvals.list(),
     container.agents.list(),
     container.aiReceptionist.dashboard(),
@@ -244,8 +242,6 @@ export default async function Home() {
     },
   ];
 
-  const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
-  const managerItemById = new Map(managerItems.map((item) => [item.id, item]));
   const canonicalPriorityRank = { P0: 0, P1: 1, P2: 2, P3: 3 } as const;
   const priorities: ViecUuTien[] = [...managerItems]
     .filter((item) => item.status !== "DONE")

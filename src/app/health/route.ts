@@ -18,6 +18,7 @@ function runtimeSignals() {
   return {
     staffOpsWorkerEnabled: process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true",
     executiveWorkerEnabled: process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    syncWorkerEnabled: process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
     openCustomerChannels,

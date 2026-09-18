@@ -5,7 +5,7 @@ import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 export default async function AgentsPage() {
   const container = await getRequestContainer();
   const live = await container.agents.list();
-  const byName = new Map(live.map((item) => [item.name, item]));
+  const byName = new Map(live.map((item) => [item.name, item]));\n  const statusLabel = (status: string) => status === "online" ? "Đang hoạt động" : status === "offline" ? "Ngoại tuyến" : "Chờ";
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
@@ -25,7 +25,7 @@ export default async function AgentsPage() {
               <article key={agent.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div><h2 className="text-sm font-semibold text-[var(--ink-primary)]">{agent.name}</h2><p className="mt-1 text-xs text-[var(--ink-muted)]">{agent.permission} · <span className="italic">{agent.mode}</span></p></div>
-                  <span className="rounded-full bg-[var(--surface-raised)] px-2 py-1 text-[11px] font-semibold uppercase text-[var(--ink-secondary)]">{status}</span>
+                  <span className="rounded-full bg-[var(--surface-raised)] px-2 py-1 text-[11px] font-semibold uppercase text-[var(--ink-secondary)]">{statusLabel(status)}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-[var(--ink-secondary)]">{agent.mission}</p>
                 <p className="mt-3 text-xs leading-5 text-[var(--ink-muted)]"><b>Nguồn dữ liệu:</b> {agent.sources.join(" · ")}</p>

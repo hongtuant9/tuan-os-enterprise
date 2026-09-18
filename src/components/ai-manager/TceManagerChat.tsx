@@ -17,6 +17,25 @@ const QUICK_PROMPTS = [
   "3 ưu tiên tiếp theo của TCE là gì?",
 ];
 
+function agentLabel(agentId: string, agentName: string) {
+  if (agentId === "manager_agent") return "Quản lý AI TCE";
+  return agentName;
+}
+
+function modeLabel(mode: string) {
+  if (mode === "active") return "Đang hoạt động";
+  if (mode === "shadow") return "Chạy bóng";
+  return mode;
+}
+
+function permissionLabel(permission: string) {
+  if (permission === "L1_SAFE") return "L1 · An toàn";
+  if (permission === "L0_READ") return "L0 · Chỉ đọc";
+  if (permission === "L2_APPROVAL") return "L2 · Cần phê duyệt";
+  if (permission === "L3_CRITICAL") return "L3 · Tối quan trọng";
+  return permission;
+}
+
 export default function TceManagerChat() {
   const [message, setMessage] = useState("");
   const [items, setItems] = useState<ChatItem[]>([]);
@@ -36,7 +55,7 @@ export default function TceManagerChat() {
         id: Date.now() + 1,
         role: "assistant",
         text: result.data.reply,
-        meta: `${result.data.agent} · ${result.data.mode} · ${result.data.permission}`,
+        meta: `${agentLabel(result.data.agentId, result.data.agent)} · ${modeLabel(result.data.mode)} · ${permissionLabel(result.data.permission)}`,
       }]);
     });
   }

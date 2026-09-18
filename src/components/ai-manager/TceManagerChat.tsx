@@ -10,14 +10,21 @@ type ChatItem = {
   meta?: string;
 };
 
+const QUICK_PROMPTS = [
+  "Kiểm tra tình hình TCE hôm nay",
+  "CEO cần xử lý việc gì ngay?",
+  "Các vấn đề hệ thống đang mở là gì?",
+  "3 ưu tiên tiếp theo của TCE là gì?",
+];
+
 export default function TceManagerChat() {
   const [message, setMessage] = useState("");
   const [items, setItems] = useState<ChatItem[]>([]);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  function submit() {
-    const input = message.trim();
+  function submitWith(inputValue?: string) {
+    const input = (inputValue ?? message).trim();
     if (!input || pending) return;
     setError("");
     setMessage("");
@@ -49,8 +56,21 @@ export default function TceManagerChat() {
         {pending ? <p className="text-xs text-[var(--ink-muted)]">Đang xử lý…</p> : null}
       </div>
       {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {QUICK_PROMPTS.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            disabled={pending}
+            onClick={() => submitWith(prompt)}
+            className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[var(--ink-secondary)] transition hover:border-sky-400/30 hover:bg-sky-500/[0.07] hover:text-sky-200 disabled:opacity-40"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
       <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[11px] leading-5 text-[var(--ink-muted)]">
-        Sau khi hoàn tất một thao tác CEO hỗ trợ, báo lại ngay trong ô dưới theo mẫu: <span className="font-semibold text-sky-300">“Đã hoàn tất hỗ trợ TASK-ID — nội dung đã làm”</span>. Không gửi mật khẩu, OTP, private key hoặc token.
+        Sau khi hoàn tất một thao tác CEO hỗ trợ, báo lại tại đây theo mẫu: <span className="font-semibold text-sky-300">“Đã hoàn tất hỗ trợ TASK-ID — nội dung đã làm”</span>. Không gửi mật khẩu, OTP, private key hoặc token.
       </div>
       <div className="mt-3 flex gap-2">
         <textarea
@@ -58,11 +78,11 @@ export default function TceManagerChat() {
           onChange={(event) => setMessage(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }}
           rows={3}
-          placeholder="Giao việc cho quản lý AI của TCE…"
+          placeholder="Hỏi tình hình, giao việc hoặc báo đã hoàn tất hỗ trợ…"
           className="min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-white px-3 py-2 text-sm text-slate-950 caret-sky-600 outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
         />
         <button
-          onClick={submit}
+          onClick={() => submitWith()}
           disabled={pending || !message.trim()}
           className="self-end rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
         >

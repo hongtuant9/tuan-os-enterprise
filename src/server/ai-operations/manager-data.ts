@@ -140,6 +140,7 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     const blocker = first(fields, "BLOCKER");
     const dependency = first(fields, "DEPENDENCY");
     const nextAction = first(fields, "NEXT_ACTION");
+    const dueDate = first(fields, "DUE_DATE");
     const executionGate = first(fields, "EXECUTION_GATE");
     const owner = first(fields, "OWNER");
     const taskApprovalId = first(fields, "APPROVAL_ID");

@@ -7,13 +7,13 @@ import { useActivityFeed } from "./ActivityFeedContext";
 import type { Approval, ApprovalStatus } from "@/data/approvals";
 
 const STATUS_BADGE: Record<ApprovalStatus, { label: string; tone: "warn" | "good" | "bad" }> = {
-  pending: { label: "Pending", tone: "warn" },
-  approved: { label: "Approved", tone: "good" },
-  rejected: { label: "Rejected", tone: "bad" },
+  pending: { label: "Đang chờ", tone: "warn" },
+  approved: { label: "Đã duyệt", tone: "good" },
+  rejected: { label: "Đã từ chối", tone: "bad" },
 };
 
 function formatSubmittedAt(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("vi-VN", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -36,7 +36,7 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
     const logId = pushLog({
       agent: "You",
       unit: approval?.unit ?? "General",
-      message: `${status === "approved" ? "Approved" : "Rejected"} request: "${approval?.title ?? id}".`,
+      message: `${status === "approved" ? "Đã duyệt" : "Đã từ chối"} yêu cầu: "${approval?.title ?? id}".`,
       type: "approval",
     });
 
@@ -57,9 +57,9 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
     <section id="approval-queue" className="mb-10 scroll-mt-6">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-          Approval Queue
+          Hàng chờ phê duyệt
         </h2>
-        <span className="text-xs text-[var(--ink-muted)]">{pendingCount} waiting for you</span>
+        <span className="text-xs text-[var(--ink-muted)]">{pendingCount} quyết định đang chờ anh</span>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -89,7 +89,7 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
                   onClick={() => decide(approval.id, "approved")}
                   className="rounded-lg bg-[var(--status-good)] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {busy ? "Saving..." : "Approve"}
+                  {busy ? "Đang lưu..." : "Duyệt"}
                 </button>
                 <button
                   type="button"
@@ -97,7 +97,7 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
                   onClick={() => decide(approval.id, "rejected")}
                   className="rounded-lg border border-[var(--border-hairline)] px-3 py-1.5 text-xs font-medium text-[var(--ink-secondary)] transition-colors hover:border-[var(--status-bad)]/50 hover:text-[var(--status-bad)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {busy ? "Saving..." : "Reject"}
+                  {busy ? "Đang lưu..." : "Từ chối"}
                 </button>
               </div>
             </div>

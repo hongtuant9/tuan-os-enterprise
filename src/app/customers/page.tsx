@@ -33,64 +33,64 @@ export default async function CustomersPage() {
       <Sidebar />
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8 xl:px-10">
         <header className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">CRM · Omnichannel Customer Journey</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Quản lý khách hàng · Hành trình đa kênh</p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">Khách hàng & hành trình</h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--ink-muted)]">Một hồ sơ khách xuyên Website · Facebook · Zalo · WhatsApp · OTA/direct. Lưu source, journey stage, lịch sử tư vấn và kết quả booking/upsell.</p>
+          <p className="mt-2 max-w-3xl text-sm text-[var(--ink-muted)]">Một hồ sơ khách xuyên Website, Facebook, Zalo, WhatsApp và OTA/direct. Lưu nguồn tiếp cận, giai đoạn hành trình, lịch sử tư vấn, kết quả đặt phòng và bán thêm.</p>
         </header>
 
         <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
           <Metric label="Khách hợp nhất" value={customers.length} />
           <Metric label="Đang trong hành trình" value={activeJourney} />
-          <Metric label="Booking verified" value={totalVerifiedBookings} />
-          <Metric label="Upsell revenue" value={vnd(totalUpsellRevenue)} />
+          <Metric label="Đặt phòng đã xác minh" value={totalVerifiedBookings} />
+          <Metric label="Doanh thu bán thêm" value={vnd(totalUpsellRevenue)} />
         </div>
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
-          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hành trình khách hàng</h2><p className="text-xs text-[var(--ink-muted)]">Trạng thái tự động từ hội thoại + booking đã xác minh. Không tự suy diễn khi thiếu evidence.</p></div>
+          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hành trình khách hàng</h2><p className="text-xs text-[var(--ink-muted)]">Trạng thái tự động từ hội thoại và đặt phòng đã xác minh. Không tự suy diễn khi thiếu bằng chứng.</p></div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">{journeyCounts.map((item) => <div key={item.stage} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">{item.label}</p><p className="mt-1 text-xl font-semibold text-[var(--ink-primary)]">{item.count}</p></div>)}</div>
         </section>
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
-          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Kênh nhắn tin</h2><p className="text-xs text-[var(--ink-muted)]">Một CRM chung cho các kênh. Secret chỉ nằm server-side.</p></div>
-          <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: <span className="font-semibold">{channelPolicy.stage}</span> · chỉ Facebook Messenger được mở ở PRIVATE PILOT. Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
+          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Kênh nhắn tin</h2><p className="text-xs text-[var(--ink-muted)]">Một hệ thống quản lý khách hàng chung cho các kênh. Secret chỉ nằm phía máy chủ.</p></div>
+          <div className="mb-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--ink-secondary)]">Chế độ kiểm duyệt hiện tại: <span className="font-semibold">{channelPolicy.stage}</span> · chỉ Facebook Messenger được mở ở thử nghiệm riêng (PRIVATE PILOT). Tất cả kênh khác bị khóa ở runtime dù connector/credential đã sẵn sàng.</div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {channelPolicy.channels.map((channel) => {
               const isOpen = channel.mode === "PRIVATE_PILOT";
-              const readinessLabel = channel.readiness === "LIVE_PILOT" ? "Live pilot" : channel.readiness === "ADAPTER_READY" ? "Adapter sẵn sàng" : channel.readiness === "ATTRIBUTION_READY" ? "Attribution sẵn sàng" : channel.readiness === "PENDING_PARTNER_API" ? "Chờ quyền/API đối tác" : "Chờ xác thực/quyền";
+              const readinessLabel = channel.readiness === "LIVE_PILOT" ? "Thử nghiệm đang hoạt động" : channel.readiness === "ADAPTER_READY" ? "Bộ kết nối sẵn sàng" : channel.readiness === "ATTRIBUTION_READY" ? "Gán nguồn sẵn sàng" : channel.readiness === "PENDING_PARTNER_API" ? "Chờ quyền/API đối tác" : "Chờ xác thực/quyền";
               const providerLabel = channel.providerVerification === "VERIFIED_PILOT"
-                ? "Provider đã xác minh pilot"
+                ? "Nhà cung cấp đã xác minh thử nghiệm"
                 : channel.providerVerification === "NOT_REQUIRED"
-                  ? "Không cần provider auth"
+                  ? "Không cần xác thực nhà cung cấp"
                   : channel.providerConfig === "CONFIGURED"
-                    ? "Server config có đủ · chưa xác minh kết nối"
+                    ? "Cấu hình máy chủ đầy đủ · chưa xác minh kết nối"
                     : channel.providerConfig === "PARTIAL"
-                      ? "Server config chưa đủ · chưa xác minh"
-                      : "Provider chưa xác minh";
-              return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "PRIVATE PILOT" : "Đóng"} · ${readinessLabel} · ${providerLabel}`} ready={isOpen}/>;
+                      ? "Cấu hình máy chủ chưa đủ · chưa xác minh"
+                      : "Nhà cung cấp chưa xác minh";
+              return <ChannelStatus key={channel.id} name={channel.label} status={`${isOpen ? "Thử nghiệm riêng (PRIVATE PILOT)" : "Đóng"} · ${readinessLabel} · ${providerLabel}`} ready={isOpen}/>;
             })}
           </div>
         </section>
 
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
-          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hiệu quả theo nguồn tiếp cận</h2><p className="text-xs text-[var(--ink-muted)]">Đây là attribution marketing: Google Search/Maps/Ads, Facebook, Instagram, OTA, Email, WhatsApp, Zalo, referral/partner… khi dữ liệu thực xuất hiện.</p></div>
+          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hiệu quả theo nguồn tiếp cận</h2><p className="text-xs text-[var(--ink-muted)]">Đây là gán nguồn marketing: Google Search/Maps/Ads, Facebook, Instagram, OTA, Email, WhatsApp, Zalo, giới thiệu/đối tác… khi dữ liệu thực xuất hiện.</p></div>
           <div className="overflow-x-auto"><table className="min-w-full text-sm">
-            <thead className="text-left text-xs text-[var(--ink-muted)]"><tr><th className="py-2 pr-4">Nguồn</th><th className="py-2 pr-4">Khách</th><th className="py-2 pr-4">Hội thoại</th><th className="py-2 pr-4">Ý định booking</th><th className="py-2 pr-4">Booking verified</th><th className="py-2">Upsell</th></tr></thead>
+            <thead className="text-left text-xs text-[var(--ink-muted)]"><tr><th className="py-2 pr-4">Nguồn</th><th className="py-2 pr-4">Khách</th><th className="py-2 pr-4">Hội thoại</th><th className="py-2 pr-4">Ý định đặt phòng</th><th className="py-2 pr-4">Đặt phòng đã xác minh</th><th className="py-2">Bán thêm</th></tr></thead>
             <tbody className="divide-y divide-[var(--border-hairline)]">{acquisitionAttribution.map((row) => <tr key={row.source}><td className="py-2 pr-4 font-medium text-[var(--ink-primary)]">{row.source}</td><td className="py-2 pr-4">{row.customers}</td><td className="py-2 pr-4">{row.conversations}</td><td className="py-2 pr-4">{row.bookingIntents}</td><td className="py-2 pr-4">{row.verifiedBookings}</td><td className="py-2">{vnd(row.upsellRevenue)}</td></tr>)}{!acquisitionAttribution.length && <tr><td colSpan={6} className="py-6 text-center text-[var(--ink-muted)]">Chưa có dữ liệu nguồn tiếp cận.</td></tr>}</tbody>
           </table></div>
         </section>
 
         <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
-          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hiệu quả theo kênh tiếp cận</h2><p className="text-xs text-[var(--ink-muted)]">Attribution từ conversation → customer → booking/upsell. Không suy diễn khi chưa có dữ liệu.</p></div>
+          <div className="mb-3"><h2 className="font-semibold text-[var(--ink-primary)]">Hiệu quả theo kênh tiếp cận</h2><p className="text-xs text-[var(--ink-muted)]">Gán nguồn từ hội thoại → khách hàng → đặt phòng/bán thêm. Không suy diễn khi chưa có dữ liệu.</p></div>
           <div className="overflow-x-auto"><table className="min-w-full text-sm">
-            <thead className="text-left text-xs text-[var(--ink-muted)]"><tr><th className="py-2 pr-4">Kênh</th><th className="py-2 pr-4">Khách</th><th className="py-2 pr-4">Hội thoại</th><th className="py-2 pr-4">Ý định booking</th><th className="py-2 pr-4">Booking verified</th><th className="py-2">Upsell</th></tr></thead>
+            <thead className="text-left text-xs text-[var(--ink-muted)]"><tr><th className="py-2 pr-4">Kênh</th><th className="py-2 pr-4">Khách</th><th className="py-2 pr-4">Hội thoại</th><th className="py-2 pr-4">Ý định đặt phòng</th><th className="py-2 pr-4">Đặt phòng đã xác minh</th><th className="py-2">Bán thêm</th></tr></thead>
             <tbody className="divide-y divide-[var(--border-hairline)]">{attribution.map((row) => <tr key={row.channel}><td className="py-2 pr-4 font-medium text-[var(--ink-primary)]">{row.channel}</td><td className="py-2 pr-4">{row.customers}</td><td className="py-2 pr-4">{row.conversations}</td><td className="py-2 pr-4">{row.bookingIntents}</td><td className="py-2 pr-4">{row.verifiedBookings}</td><td className="py-2">{vnd(row.upsellRevenue)}</td></tr>)}{!attribution.length && <tr><td colSpan={6} className="py-6 text-center text-[var(--ink-muted)]">Chưa có attribution data.</td></tr>}</tbody>
           </table></div>
         </section>
 
         <div className="overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)]">
           <div className="overflow-x-auto"><table className="min-w-full text-sm">
-            <thead className="bg-[var(--surface-raised)] text-left text-xs text-[var(--ink-muted)]"><tr><th className="px-4 py-3">Khách</th><th className="px-4 py-3">Journey stage</th><th className="px-4 py-3">Kênh / nguồn</th><th className="px-4 py-3">Campaign</th><th className="px-4 py-3">Hội thoại</th><th className="px-4 py-3">Booking</th><th className="px-4 py-3">Seen</th></tr></thead>
+            <thead className="bg-[var(--surface-raised)] text-left text-xs text-[var(--ink-muted)]"><tr><th className="px-4 py-3">Khách</th><th className="px-4 py-3">Giai đoạn hành trình</th><th className="px-4 py-3">Kênh / nguồn</th><th className="px-4 py-3">Chiến dịch</th><th className="px-4 py-3">Hội thoại</th><th className="px-4 py-3">Đặt phòng</th><th className="px-4 py-3">Cập nhật gần nhất</th></tr></thead>
             <tbody className="divide-y divide-[var(--border-hairline)]">
               {customers.map((item) => <tr key={item.id} className="align-top">
                 <td className="px-4 py-3"><Link href={`/customers/${item.id}`} className="font-medium text-[var(--ink-primary)] underline-offset-2 hover:underline">{item.displayName}</Link><p className="mt-1 text-xs text-[var(--ink-muted)]">{item.identities.join(" · ") || "—"}</p></td>

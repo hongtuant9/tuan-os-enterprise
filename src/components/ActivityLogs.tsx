@@ -5,14 +5,14 @@ import { useActivityFeed } from "./ActivityFeedContext";
 import type { LogType } from "@/data/logs";
 
 const TYPE_BADGE: Record<LogType, { label: string; tone: "muted" | "accent" | "warn" | "bad" }> = {
-  info: { label: "Info", tone: "muted" },
-  action: { label: "Action", tone: "accent" },
-  approval: { label: "Approval", tone: "warn" },
-  alert: { label: "Alert", tone: "bad" },
+  info: { label: "Thông tin", tone: "muted" },
+  action: { label: "Hành động", tone: "accent" },
+  approval: { label: "Phê duyệt", tone: "warn" },
+  alert: { label: "Cảnh báo", tone: "bad" },
 };
 
 function formatTimestamp(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("vi-VN", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -26,7 +26,7 @@ export default function ActivityLogs() {
   return (
     <section id="activity-logs" className="mb-10 scroll-mt-6">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-        Activity Logs
+        Nhật ký hoạt động
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)]">

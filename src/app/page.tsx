@@ -1,9 +1,52 @@
 import Sidebar from "@/components/Sidebar";
-import ControlCenterDashboard from "@/components/ControlCenterDashboard";
+import ExecutiveCommandCenterV2, {
+  type CanhBaoDieuHanh,
+  type ChiSoDieuHanh,
+  type HoatDongGanDay,
+  type KiemSoatHeThong,
+  type NguonDuLieu,
+  type PhongBanDieuHanh,
+  type ViecUuTien,
+} from "@/components/ExecutiveCommandCenterV2";
 import { getRequestContainer } from "@/server/container";
+import { channelPolicySnapshot } from "@/server/channels/channel-policy";
+import { latestSyncAt } from "@/server/ai-operations/manager-data";
 
-function vnd(value: number) {
+const MOT_NGAY = 24 * 60 * 60 * 1000;
+
+function tienViet(value: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value);
+}
+
+function trangThaiNguon(updatedAt?: string | null): "verified" | "stale" | "unavailable" {
+  if (!updatedAt) return "unavailable";
+  return Date.now() - new Date(updatedAt).getTime() <= MOT_NGAY ? "verified" : "stale";
+}
+
+function quaHan(dateText: string, status: string) {
+  if (!dateText || status === "done") return false;
+  const parsed = new Date(dateText);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < Date.now();
+}
+
+function nhomPhongBan(title: string, unit: string) {
+  const text = `${title} ${unit}`.toLowerCase();
+  if (/marketing|social|content|ads|quảng cáo|truyền thông/.test(text)) return "marketing";
+  if (/sales|revenue|booking|ota|doanh thu|bán hàng|đặt phòng/.test(text)) return "sales";
+  if (/finance|cash|cost|budget|tài chính|chi phí|ngân sách/.test(text)) return "finance";
+  if (/customer|guest|reception|review|reputation|khách|lễ tân|đánh giá/.test(text)) return "customer";
+  if (/product|experience|cooking|tour|coffee|sản phẩm|trải nghiệm/.test(text)) return "product";
+  if (/hr|staff|nhân sự|đào tạo|ca làm/.test(text)) return "hr";
+  if (/vps|github|coolify|supabase|website|system|data|tech|api|runtime|kỹ thuật|dữ liệu/.test(text)) return "tech";
+  return "operations";
+}
+
+function tenTrangThaiTask(status: string) {
+  if (status === "done") return "Hoàn thành";
+  if (status === "blocked") return "Bị chặn";
+  if (status === "in-progress") return "Đang thực hiện";
+  return "Chờ thực hiện";
 }
 
 export default async function Home() {
@@ -11,7 +54,19 @@ export default async function Home() {
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-  const [tasks, approvals, agents, receptionist, customerSummaries, upsellSummary, monthUsage, dayUsage] = await Promise.all([
+
+  const [
+    tasks,
+    approvals,
+    agents,
+    receptionist,
+    customerSummaries,
+    upsellSummary,
+    monthUsage,
+    dayUsage,
+    activity,
+    syncQuery,
+  ] = await Promise.all([
     container.tasks.list(),
     container.approvals.list(),
     container.agents.list(),
@@ -20,78 +75,307 @@ export default async function Home() {
     container.hospitalityCrm.upsellSummary(),
     container.db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", monthStart),
     container.db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", dayStart),
+    container.activityLog.list(12),
+    container.db
+      .from("sync_records")
+      .select("source_key,target_id,data,synced_at")
+      .in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
   ]);
 
+  const syncRecords = syncQuery.data ?? [];
+  const latestTask = latestSyncAt(syncRecords, "task-001");
+  const latestApproval = latestSyncAt(syncRecords, "approval-001");
+  const latestL3 = latestSyncAt(syncRecords, "l3-channel-tracking");
+
   const today = now.toISOString().slice(0, 10);
-  const sumCost = (rows: Array<{ estimated_cost_usd: number }> | null) => (rows ?? []).reduce((sum, row) => sum + Number(row.estimated_cost_usd ?? 0), 0);
+  const sumCost = (rows: Array<{ estimated_cost_usd: number }> | null) =>
+    (rows ?? []).reduce((sum, row) => sum + Number(row.estimated_cost_usd ?? 0), 0);
+
   const aiCostMonth = sumCost(monthUsage.data);
   const aiCostToday = sumCost(dayUsage.data);
   const aiDailyBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0") || 0;
   const aiMonthlyBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0") || 0;
-  const aiCostStatus = aiDailyBudget > 0 && aiMonthlyBudget > 0 ? "ENABLED_WITH_BUDGET" : "HOLD_COST_APPROVAL";
+  const aiBudgetApproved = aiDailyBudget > 0 && aiMonthlyBudget > 0;
+
   const conversations = receptionist.conversations;
   const bookings = receptionist.bookings;
-  const newLeads = conversations.filter((item) => item.customerContact && !item.customerContact.includes("Chưa có")).length;
-  const roomInquiries = conversations.filter((item) => (item.intent ?? "").toLowerCase().includes("booking") || (item.intent ?? "").toLowerCase().includes("room")).length;
   const successfulBookings = bookings.filter((item) => item.verificationStatus === "verified").length;
-  const conversion = conversations.length ? `${((successfulBookings / conversations.length) * 100).toFixed(1)}%` : "0%";
-  const roomRevenue = bookings.filter((item) => item.verificationStatus === "verified").reduce((sum, item) => sum + Number(item.quotedPrice ?? 0), 0);
+  const roomRevenue = bookings
+    .filter((item) => item.verificationStatus === "verified")
+    .reduce((sum, item) => sum + Number(item.quotedPrice ?? 0), 0);
+  const attributedRevenue = roomRevenue + upsellSummary.metrics.revenue;
+  const conversionRate = conversations.length ? (successfulBookings / conversations.length) * 100 : 0;
   const checkIns = bookings.filter((item) => item.checkIn === today).length;
-  const checkOuts = bookings.filter((item) => item.checkOut === today).length;
+
+  const completedTasks = tasks.filter((item) => item.status === "done").length;
   const openTasks = tasks.filter((item) => item.status !== "done").length;
-  const pendingApprovals = approvals.filter((item) => item.status === "pending").length;
+  const inProgressTasks = tasks.filter((item) => item.status === "in-progress").length;
+  const blockedTasks = tasks.filter((item) => item.status === "blocked");
+  const overdueTasks = tasks.filter((item) => quaHan(item.dueDate, item.status));
+  const completionRate = tasks.length ? (completedTasks / tasks.length) * 100 : 0;
+  const pendingApprovals = approvals.filter((item) => item.status === "pending");
   const tceAgents = agents.filter((item) => item.unit === "TCE AI");
   const agentsOnline = tceAgents.filter((item) => item.status === "online").length;
 
-  const metrics = [
-    { label: "Hội thoại mới", value: conversations.length, hint: "Private Pilot / dữ liệu hiện có", href: "/ai-le-tan" },
-    { label: "Lead mới", value: newLeads, hint: "Có thông tin liên hệ rõ ràng", href: "/#leads" },
-    { label: "Khách hỏi phòng", value: roomInquiries, hint: "Theo intent hội thoại", href: "/#bookings" },
-    { label: "Booking thành công", value: successfulBookings, hint: "Booking AI đã verified", href: "/#bookings" },
-    { label: "Tỷ lệ chuyển đổi", value: conversion, hint: "Verified booking / hội thoại" },
-    { label: "Doanh thu phòng", value: vnd(roomRevenue), hint: "Chỉ booking AI verified" },
-    { label: "Doanh thu upsell", value: vnd(upsellSummary.metrics.revenue), hint: `${upsellSummary.metrics.booked} upsell booked có attribution`, href: "/upsell" },
-    { label: "Check-in hôm nay", value: checkIns, hint: "Theo booking AI hiện có" },
-    { label: "Check-out hôm nay", value: checkOuts, hint: "Theo booking AI hiện có" },
-    { label: "Phòng trống", value: "LIVE", hint: "Đọc từ KiotViet khi truy vấn", href: "/#lavender" },
-    { label: "Task OpenClaw đang chờ", value: openTasks, hint: "Task chưa hoàn thành", href: "/#tasks" },
-    { label: "Cảnh báo cần Tuấn xử lý", value: pendingApprovals, hint: "Approval đang pending", href: "/#approvals" },
+  const channelSnapshot = channelPolicySnapshot();
+  const openChannels = channelSnapshot.channels.filter((item) => item.mode === "PRIVATE_PILOT");
+  const executiveWorkerEnabled = process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+  const staffWorkerEnabled = process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true";
+  const kiotVietWriteEnabled = process.env.AI_PILOT_KIOTVIET_WRITE_ENABLED?.trim().toLowerCase() === "true";
+  const directBookingWriteEnabled = process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true";
+
+  const sourceProblem = [latestTask, latestApproval, latestL3].some((value) => trangThaiNguon(value) !== "verified");
+  const criticalBlocked = blockedTasks.some((item) => item.priority === "high");
+  const healthStatus = sourceProblem || criticalBlocked ? "can-theo-doi" : "tot";
+  const healthLabel = sourceProblem || criticalBlocked ? "Cần theo dõi" : "Ổn định";
+
+  const kpis: ChiSoDieuHanh[] = [
+    {
+      id: "progress",
+      nhan: "Tiến độ công việc",
+      giaTri: `${completionRate.toFixed(0)}%`,
+      moTa: `${completedTasks}/${tasks.length} công việc đã hoàn thành`,
+      tinhTrang: completionRate >= 75 ? "tot" : completionRate >= 50 ? "can-theo-doi" : "nguy-co",
+      lienKet: "/ai-manager",
+      nguon: "TASK-001",
+    },
+    {
+      id: "open",
+      nhan: "Công việc đang mở",
+      giaTri: openTasks,
+      moTa: `${inProgressTasks} đang thực hiện · ${blockedTasks.length} bị chặn`,
+      tinhTrang: blockedTasks.length > 0 ? "can-theo-doi" : "trung-tinh",
+      lienKet: "/ai-manager",
+      nguon: "TASK-001",
+    },
+    {
+      id: "approval",
+      nhan: "Chờ phê duyệt",
+      giaTri: pendingApprovals.length,
+      moTa: "Quyết định đang chờ Tổng giám đốc xử lý",
+      tinhTrang: pendingApprovals.length > 0 ? "can-theo-doi" : "tot",
+      lienKet: "/approvals",
+      nguon: "APPROVAL-001",
+    },
+    {
+      id: "agents",
+      nhan: "Tác nhân AI hoạt động",
+      giaTri: `${agentsOnline}/${tceAgents.length}`,
+      moTa: "Trạng thái tác nhân TCE ghi nhận trong hệ thống",
+      tinhTrang: tceAgents.length > 0 && agentsOnline === tceAgents.length ? "tot" : "can-theo-doi",
+      lienKet: "/agents",
+      nguon: "Runtime",
+    },
+    {
+      id: "booking",
+      nhan: "Đặt phòng đã xác minh",
+      giaTri: successfulBookings,
+      moTa: `Tỷ lệ chuyển đổi hội thoại: ${conversionRate.toFixed(1)}%`,
+      tinhTrang: "trung-tinh",
+      lienKet: "/ai-le-tan",
+      nguon: "Lễ tân AI",
+    },
+    {
+      id: "revenue",
+      nhan: "Doanh thu có gán nguồn AI",
+      giaTri: tienViet(attributedRevenue),
+      moTa: "Chỉ gồm đặt phòng đã xác minh + bán thêm có attribution; không phải tổng doanh thu công ty",
+      tinhTrang: "trung-tinh",
+      lienKet: "/upsell",
+      nguon: "Booking AI + Upsell",
+    },
+    {
+      id: "customer",
+      nhan: "Hồ sơ khách hàng",
+      giaTri: customerSummaries.length,
+      moTa: `${conversations.length} hội thoại · ${checkIns} check-in hôm nay`,
+      tinhTrang: "trung-tinh",
+      lienKet: "/customers",
+      nguon: "CRM Hospitality",
+    },
+    {
+      id: "knowledge",
+      nhan: "Dữ liệu cần xác minh",
+      giaTri: receptionist.missingDataBacklog.length,
+      moTa: "Không dùng làm cam kết với khách cho tới khi được xác minh",
+      tinhTrang: receptionist.missingDataBacklog.length > 0 ? "can-theo-doi" : "tot",
+      lienKet: "/ai-le-tan",
+      nguon: "Knowledge backlog",
+    },
   ];
 
-  const health = [
-    { label: "VPS", status: "FOUNDATION", note: "TUAN AI HUB được theo dõi riêng; Control Center hiện vẫn chạy trên production host hiện tại." },
-    { label: "Database", status: "CONNECTED", note: "Supabase trả dữ liệu dashboard trong request hiện tại." },
-    { label: "API", status: "OPERATIONAL", note: "API nội bộ đang phục vụ Control Center; KiotViet write vẫn giữ khóa an toàn." },
+  const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
+  const priorities: ViecUuTien[] = [...tasks]
+    .filter((item) => item.status !== "done")
+    .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+    .slice(0, 3)
+    .map((item) => ({
+      id: item.id,
+      ten: item.title,
+      chuTri: item.owner || item.unit,
+      mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
+      trangThai: tenTrangThaiTask(item.status),
+      han: item.dueDate || undefined,
+    }));
+
+  const alerts: CanhBaoDieuHanh[] = [];
+  for (const item of blockedTasks.filter((task) => task.priority === "high").slice(0, 2)) {
+    alerts.push({ id: item.id, tieuDe: "Công việc ưu tiên cao đang bị chặn", moTa: item.title, mucDo: "cao" });
+  }
+  if (sourceProblem) {
+    alerts.push({
+      id: "DATA-FRESHNESS",
+      tieuDe: "Có nguồn dữ liệu chưa đủ mới",
+      moTa: "Cần kiểm tra độ mới của TASK-001 / APPROVAL-001 / L3 trước khi dùng để quyết định hoặc mở thêm quyền tự động.",
+      mucDo: "cao",
+    });
+  }
+  if (overdueTasks.length > 0) {
+    alerts.push({
+      id: "OVERDUE",
+      tieuDe: `${overdueTasks.length} công việc đã quá hạn`,
+      moTa: "Chief of Staff cần xác định nguyên nhân, blocker và next action cho từng công việc.",
+      mucDo: "vua",
+    });
+  }
+  if (pendingApprovals.length > 0) {
+    alerts.push({
+      id: "APPROVAL",
+      tieuDe: `${pendingApprovals.length} quyết định đang chờ phê duyệt`,
+      moTa: "Các tác vụ liên quan tiếp tục giữ fail-closed cho tới khi có quyết định hợp lệ.",
+      mucDo: "vua",
+    });
+  }
+  if (receptionist.missingDataBacklog.length > 0) {
+    alerts.push({
+      id: "KNOWLEDGE",
+      tieuDe: "Còn dữ liệu customer-facing chưa xác minh",
+      moTa: `${receptionist.missingDataBacklog.length} mục đang bị khóa an toàn, không được dùng để cam kết với khách.`,
+      mucDo: "thap",
+    });
+  }
+
+  const departmentDefinitions = [
+    { id: "marketing", ten: "Marketing và tăng trưởng", vietTat: "CMO", kpi: "Traffic đủ điều kiện, lead, hiệu quả nội dung, CAC/ROAS khi tracking tin cậy", moTa: "Thương hiệu, nội dung, social, quảng cáo và tăng trưởng." },
+    { id: "sales", ten: "Bán hàng và doanh thu", vietTat: "CCO", kpi: "Lead → booking, direct booking, doanh thu/khách, upsell", moTa: "Lead, booking, revenue pipeline và bán thêm." },
+    { id: "operations", ten: "Vận hành", vietTat: "COO", kpi: "Checklist, quá hạn, lỗi chất lượng, sự cố vận hành", moTa: "Homestay, Cozy, checklist, SOP và chất lượng hằng ngày." },
+    { id: "finance", ten: "Tài chính và kế hoạch", vietTat: "CFO", kpi: "Dòng tiền, biên lợi nhuận, variance ngân sách, cảnh báo chi phí", moTa: "Phân tích tài chính; không tự thực hiện giao dịch." },
+    { id: "customer", ten: "Trải nghiệm khách hàng", vietTat: "CXO", kpi: "SLA phản hồi, complaint, review, lỗi cam kết", moTa: "FAQ, chăm sóc khách, review và escalation." },
+    { id: "product", ten: "Sản phẩm và trải nghiệm", vietTat: "CPO", kpi: "Attach rate, margin, satisfaction, khả năng lặp lại", moTa: "Cooking class, coffee, tour và gói trải nghiệm." },
+    { id: "hr", ten: "Nhân sự và văn hóa", vietTat: "CHRO", kpi: "Chấm công, đào tạo, checklist, năng suất", moTa: "Ca làm, năng lực, đào tạo và kỷ luật theo policy." },
+    { id: "tech", ten: "Công nghệ và dữ liệu", vietTat: "CTO", kpi: "Uptime, deploy, lỗi hệ thống, backup, security", moTa: "VPS, GitHub/Coolify, dữ liệu, tích hợp, logging và backup." },
+  ];
+
+  const departments: PhongBanDieuHanh[] = departmentDefinitions.map((department) => {
+    const scoped = tasks.filter((item) => nhomPhongBan(item.title, item.unit) === department.id && item.status !== "done");
+    const blocked = scoped.filter((item) => item.status === "blocked").length;
+    const overdue = scoped.filter((item) => quaHan(item.dueDate, item.status)).length;
+    const status: PhongBanDieuHanh["sucKhoe"] = blocked > 0 || overdue > 1 ? "can-theo-doi" : "tot";
+    return {
+      id: department.id,
+      ten: department.ten,
+      tenVietTat: department.vietTat,
+      sucKhoe: status,
+      chiSoChinh: department.kpi,
+      congViecDangLam: scoped.length,
+      biChan: blocked,
+      quaHan: overdue,
+      moTa: department.moTa,
+    };
+  });
+
+  const activities: HoatDongGanDay[] = activity.map((item) => ({
+    id: item.id,
+    tacNhan: item.agent,
+    noiDung: item.message,
+    thoiGian: item.timestamp,
+    loai: item.type === "approval" ? "Phê duyệt" : item.type === "alert" ? "Cảnh báo" : item.type === "action" ? "Hành động" : "Thông tin",
+  }));
+
+  const authorities: NguonDuLieu[] = [
+    { ten: "TASK-001", trangThai: trangThaiNguon(latestTask), capNhatLuc: latestTask, ghiChu: "Nguồn task chính thức trên Google Drive" },
+    { ten: "APPROVAL-001", trangThai: trangThaiNguon(latestApproval), capNhatLuc: latestApproval, ghiChu: "Nguồn quyết định cần CEO duyệt" },
+    { ten: "Dữ liệu chuẩn L3", trangThai: trangThaiNguon(latestL3), capNhatLuc: latestL3, ghiChu: "Thông tin customer-facing và channel tracking" },
+    { ten: "Runtime VPS", trangThai: "verified", capNhatLuc: now.toISOString(), ghiChu: "Request hiện tại và database đều phản hồi thành công" },
+  ];
+
+  const controls: KiemSoatHeThong[] = [
+    {
+      ten: "Điều hành AI 24/7",
+      giaTri: executiveWorkerEnabled ? "Đang bật" : "Đang tắt",
+      tinhTrang: executiveWorkerEnabled ? "tot" : "nguy-co",
+      ghiChu: "TUAN OS — AI CEO Delegate chạy trên VPS, không phụ thuộc thiết bị cá nhân.",
+    },
+    {
+      ten: "Worker vận hành nhân sự",
+      giaTri: staffWorkerEnabled ? "Đang bật" : "Đang tắt",
+      tinhTrang: staffWorkerEnabled ? "tot" : "can-theo-doi",
+      ghiChu: "Theo dõi checklist, quá hạn và ngoại lệ vận hành.",
+    },
+    {
+      ten: "Kênh giao tiếp với khách",
+      giaTri: openChannels.length === 1 && openChannels[0]?.id === "facebook" ? "Chỉ Facebook pilot" : `${openChannels.length} kênh mở`,
+      tinhTrang: openChannels.length === 1 && openChannels[0]?.id === "facebook" ? "tot" : "can-theo-doi",
+      ghiChu: "Các kênh khác tiếp tục đóng cho tới khi từng gate được nghiệm thu.",
+    },
+    {
+      ten: "Ghi booking KiotViet",
+      giaTri: kiotVietWriteEnabled ? "Đang mở" : "Đang khóa",
+      tinhTrang: kiotVietWriteEnabled ? "nguy-co" : "tot",
+      ghiChu: "Giai đoạn đầu giữ khóa để tránh mutation booking ngoài approval.",
+    },
+    {
+      ten: "Tạo booking trực tiếp tự động",
+      giaTri: directBookingWriteEnabled ? "Đang mở" : "Đang khóa",
+      tinhTrang: directBookingWriteEnabled ? "nguy-co" : "tot",
+      ghiChu: "Chỉ mở sau Safety Gate, idempotency và read-back verification.",
+    },
+    {
+      ten: "AI trả phí",
+      giaTri: aiBudgetApproved ? "Có ngân sách" : "Đang giữ",
+      tinhTrang: aiBudgetApproved ? "can-theo-doi" : "tot",
+      ghiChu: aiBudgetApproved
+        ? `Đã cấu hình ngưỡng kỹ thuật. Hôm nay dùng $${aiCostToday.toFixed(4)}, tháng này $${aiCostMonth.toFixed(4)}.`
+        : "Chưa có ngân sách paid AI được duyệt; không tự phát sinh chi phí.",
+    },
+    {
+      ten: "Phê duyệt tài chính / bảo mật",
+      giaTri: "Khóa bắt buộc",
+      tinhTrang: "tot",
+      ghiChu: "Chi tiền, refund lớn, giá lớn, quyền truy cập và security-critical mutation phải có CEO approval.",
+    },
+    {
+      ten: "Tự động triển khai production",
+      giaTri: "Đã xác minh",
+      tinhTrang: "tot",
+      ghiChu: "GitHub push → Coolify webhook → VPS đã được kiểm thử bằng deployment thành công.",
+    },
   ];
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
       <Sidebar />
-      <main className="flex-1 px-6 py-8 md:px-10">
-        <header className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">app.tamcocexperience.com</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--ink-primary)]">TUAN Hospitality AI — Control Center</h1>
-          <p className="mt-1 max-w-3xl text-sm text-[var(--ink-muted)]">Một giao diện vận hành duy nhất cho khách hàng, hội thoại, booking, Lavender, Cozy Garden, agent, phê duyệt và tình trạng hệ thống.</p>
-        </header>
-
-        <ControlCenterDashboard
-          metrics={metrics}
-          health={health}
-          openTasks={openTasks}
-          pendingApprovals={pendingApprovals}
-          agentsOnline={agentsOnline}
-          agentsTotal={tceAgents.length}
-          conversationCount={conversations.length}
-          customerCount={customerSummaries.length}
-          upsellEventCount={upsellSummary.metrics.totalEvents}
-          upsellRevenue={upsellSummary.metrics.revenue}
-          bookingCount={bookings.length}
-          missingKnowledge={receptionist.missingDataBacklog.length}
-          aiCostToday={aiCostToday}
-          aiCostMonth={aiCostMonth}
-          aiCostStatus={aiCostStatus}
-          aiDailyBudget={aiDailyBudget}
-          aiMonthlyBudget={aiMonthlyBudget}
+      <main className="min-w-0 flex-1 px-4 py-5 md:px-6 xl:px-8">
+        <ExecutiveCommandCenterV2
+          capNhatLuc={now.toISOString()}
+          sucKhoeTongThe={healthStatus}
+          sucKhoeNhan={healthLabel}
+          chiSo={kpis}
+          uuTien={priorities}
+          canhBao={alerts}
+          choDuyet={pendingApprovals.length}
+          phongBan={departments}
+          hoatDong={activities}
+          nguonDuLieu={authorities}
+          kiemSoat={controls}
+          tongCongViec={tasks.length}
+          hoanThanh={completedTasks}
+          dangLam={inProgressTasks}
+          biChan={blockedTasks.length}
+          quaHan={overdueTasks.length}
+          tiLeHoanThanh={completionRate}
+          tacNhanHoatDong={agentsOnline}
+          tongTacNhan={tceAgents.length}
         />
       </main>
     </div>

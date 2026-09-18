@@ -8,9 +8,9 @@ export default function AgentsStatus({ agents }: { agents: Agent[] }) {
     <section id="ai-agents" className="mb-10 scroll-mt-6">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-          AI Agents Status
+          Trạng thái các tác nhân trí tuệ nhân tạo
         </h2>
-        <span className="text-xs text-[var(--ink-muted)]">{onlineCount}/{agents.length} online</span>
+        <span className="text-xs text-[var(--ink-muted)]">{onlineCount}/{agents.length} đang hoạt động</span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -27,7 +27,7 @@ export default function AgentsStatus({ agents }: { agents: Agent[] }) {
               <StatusPill status={agent.status} pulse={agent.status === "online"} />
             </div>
             <p className="text-sm text-[var(--ink-secondary)]">{agent.currentTask}</p>
-            <p className="text-xs text-[var(--ink-muted)]">Last active: {agent.lastActive}</p>
+            <p className="text-xs text-[var(--ink-muted)]">Hoạt động gần nhất: {agent.lastActive}</p>
           </div>
         ))}
       </div>

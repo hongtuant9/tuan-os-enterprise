@@ -16,13 +16,13 @@ function readHashParams(): URLSearchParams {
 }
 
 const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
-  invalid_state: "The connection attempt expired or was invalid — please try again.",
-  forbidden: "Your account doesn't have permission to connect Google.",
-  no_refresh_token: "Google didn't grant offline access — please try again and accept all prompts.",
-  invalid_client: "Google OAuth isn't configured correctly. Contact an admin.",
-  invalid_grant: "That authorization code was invalid or already used — please try again.",
-  redirect_uri_mismatch: "OAuth redirect URI misconfiguration. Contact an admin.",
-  token_exchange_failed: "Google couldn't be reached to finish connecting — please try again.",
+  invalid_state: "Phiên kết nối đã hết hạn hoặc không hợp lệ — vui lòng thử lại.",
+  forbidden: "Tài khoản của anh không có quyền kết nối Google.",
+  no_refresh_token: "Google chưa cấp quyền truy cập ngoại tuyến — vui lòng thử lại và chấp nhận đầy đủ yêu cầu quyền.",
+  invalid_client: "Google OAuth chưa được cấu hình đúng. Cần kiểm tra cấu hình quản trị.",
+  invalid_grant: "Mã xác thực không hợp lệ hoặc đã được dùng — vui lòng thử lại.",
+  redirect_uri_mismatch: "URI chuyển hướng OAuth chưa đúng. Cần kiểm tra cấu hình quản trị.",
+  token_exchange_failed: "Không thể kết nối Google để hoàn tất liên kết — vui lòng thử lại.",
 };
 
 function GoogleConnection() {
@@ -68,11 +68,11 @@ function GoogleConnection() {
         <span className="text-sm text-[var(--ink-secondary)]">
           {connected ? (
             <>
-              Google account connected
+              Tài khoản Google đã kết nối
               {status?.googleEmail && <span className="text-[var(--ink-muted)]"> · {status.googleEmail}</span>}
             </>
           ) : (
-            "No Google account connected"
+            "No Tài khoản Google đã kết nối"
           )}
         </span>
       </div>
@@ -82,11 +82,11 @@ function GoogleConnection() {
           href="/api/integrations/google/oauth/start"
           className="text-xs font-medium text-[var(--accent)] hover:underline"
         >
-          {connected ? "Reconnect Google Account" : "Connect Google Account"}
+          {connected ? "Kết nối lại tài khoản Google" : "Kết nối tài khoản Google"}
         </a>
         {(status?.lastError || oauthError) && (
           <p className="text-xs text-[var(--status-bad)]">
-            {oauthError ? GOOGLE_OAUTH_ERROR_MESSAGES[oauthError] ?? "Failed to connect Google account." : status?.lastError}
+            {oauthError ? GOOGLE_OAUTH_ERROR_MESSAGES[oauthError] ?? "Không thể kết nối tài khoản Google." : status?.lastError}
           </p>
         )}
       </div>
@@ -101,8 +101,8 @@ const STATUS_MAP: Record<SyncSourceStatus["status"], "online" | "monitoring" | "
 };
 
 function formatDateTime(iso: string | null) {
-  if (!iso) return "Never";
-  return new Date(iso).toLocaleString("en-US", {
+  if (!iso) return "Chưa từng";
+  return new Date(iso).toLocaleString("vi-VN", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -132,8 +132,8 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
         pushLog({
           agent: "Sync Engine",
           unit: label,
-          message: `Synced ${label}: ${summary.recordsCreated} created, ${summary.recordsUpdated} updated${
-            summary.recordsFailed ? `, ${summary.recordsFailed} failed` : ""
+          message: `Đã đồng bộ ${label}: ${summary.recordsCreated} bản ghi mới, ${summary.recordsUpdated} bản ghi cập nhật${
+            summary.recordsFailed ? `, ${summary.recordsFailed} lỗi` : ""
           }.`,
           type: summary.recordsFailed > 0 ? "alert" : "action",
         });
@@ -165,7 +165,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
         pushLog({
           agent: "Sync Engine",
           unit: label,
-          message: `Sync failed for ${label}: ${result.error}`,
+          message: `Đồng bộ thất bại với ${label}: ${result.error}`,
           type: "alert",
         });
 
@@ -182,7 +182,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
     <section id="sync-status" className="mb-10 scroll-mt-6">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-          Sync Status
+          Trạng thái đồng bộ
         </h2>
         <span className="text-xs text-[var(--ink-muted)]">Google Sheets → Supabase</span>
       </div>
@@ -207,8 +207,8 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
 
               {source.latestRun && (
                 <p className="text-xs text-[var(--ink-secondary)]">
-                  Last run ({source.latestRun.trigger}): {source.latestRun.recordsCreated} created,{" "}
-                  {source.latestRun.recordsUpdated} updated
+                  Lần chạy gần nhất ({source.latestRun.trigger}): {source.latestRun.recordsCreated} mới,{" "}
+                  {source.latestRun.recordsUpdated} cập nhật
                   {source.latestRun.recordsFailed ? `, ${source.latestRun.recordsFailed} failed` : ""}
                 </p>
               )}
@@ -217,7 +217,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
 
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--ink-muted)]">
-                  Last synced: {formatDateTime(source.lastSyncedAt)}
+                  Đồng bộ gần nhất: {formatDateTime(source.lastSyncedAt)}
                 </p>
                 <button
                   type="button"
@@ -225,12 +225,12 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
                   onClick={() => runNow(source.key)}
                   className="shrink-0 rounded-lg border border-[var(--border-hairline)] px-3 py-1.5 text-xs font-medium text-[var(--ink-secondary)] transition-colors hover:border-[var(--accent)]/50 hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {busy ? "Syncing..." : "Run now"}
+                  {busy ? "Đang đồng bộ..." : "Chạy ngay"}
                 </button>
               </div>
 
               {source.scheduleEnabled && source.scheduleIntervalMinutes && (
-                <Badge label={`Scheduled every ${source.scheduleIntervalMinutes}m`} tone="muted" />
+                <Badge label={`Lịch chạy mỗi ${source.scheduleIntervalMinutes} phút`} tone="muted" />
               )}
             </div>
           );

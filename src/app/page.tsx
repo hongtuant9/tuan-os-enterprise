@@ -12,16 +12,26 @@ import { getRequestContainer } from "@/server/container";
 import { channelPolicySnapshot } from "@/server/channels/channel-policy";
 import { buildManagerItems } from "@/server/ai-operations/manager-data";
 
-const MOT_NGAY = 24 * 60 * 60 * 1000;
+const PHUT = 60 * 1000;
+const SYNC_WORKER_GRACE_MINUTES = 5;
 
 function tienViet(value: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value);
 }
 
-function trangThaiNguon(updatedAt?: string | null, status?: string | null): "verified" | "stale" | "unavailable" {
+function trangThaiNguon(
+  updatedAt?: string | null,
+  status?: string | null,
+  intervalMinutes = 15,
+): "verified" | "slow" | "stale" | "unavailable" {
   if (status === "error") return "unavailable";
   if (!updatedAt) return "unavailable";
-  return Date.now() - new Date(updatedAt).getTime() <= MOT_NGAY ? "verified" : "stale";
+  const ageMs = Date.now() - new Date(updatedAt).getTime();
+  const freshMs = (intervalMinutes + SYNC_WORKER_GRACE_MINUTES) * PHUT;
+  const staleMs = (intervalMinutes * 2 + SYNC_WORKER_GRACE_MINUTES) * PHUT;
+  if (ageMs <= freshMs) return "verified";
+  if (ageMs <= staleMs) return "slow";
+  return "stale";
 }
 
 function quaHan(dateText: string, status: string) {
@@ -103,7 +113,7 @@ export default async function Home() {
     container.activityLog.list(12),
     container.db
       .from("sync_sources")
-      .select("key,status,last_synced_at,last_error")
+      .select("key,status,last_synced_at,last_error,schedule_interval_minutes")
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
@@ -159,10 +169,10 @@ export default async function Home() {
   const kiotVietWriteEnabled = process.env.AI_PILOT_KIOTVIET_WRITE_ENABLED?.trim().toLowerCase() === "true";
   const directBookingWriteEnabled = process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true";
 
-  const sourceProblem =
-    trangThaiNguon(latestTask, taskSource?.status) !== "verified" ||
-    trangThaiNguon(latestApproval, approvalSource?.status) !== "verified" ||
-    trangThaiNguon(latestL3, l3Source?.status) !== "verified";
+  const taskFreshness = trangThaiNguon(latestTask, taskSource?.status, taskSource?.schedule_interval_minutes ?? 15);
+  const approvalFreshness = trangThaiNguon(latestApproval, approvalSource?.status, approvalSource?.schedule_interval_minutes ?? 10);
+  const l3Freshness = trangThaiNguon(latestL3, l3Source?.status, l3Source?.schedule_interval_minutes ?? 30);
+  const sourceProblem = [taskFreshness, approvalFreshness, l3Freshness].some((state) => state !== "verified");
   const criticalBlocked = ceoBlockedItems.some((item) => item.priority === "P0");
   const healthStatus = sourceProblem || criticalBlocked ? "can-theo-doi" : "tot";
   const healthLabel = sourceProblem || criticalBlocked ? "Cần theo dõi" : "Ổn định";
@@ -342,10 +352,34 @@ export default async function Home() {
   }));
 
   const authorities: NguonDuLieu[] = [
-    { ten: "TASK-001", trangThai: trangThaiNguon(latestTask, taskSource?.status), capNhatLuc: latestTask, ghiChu: taskSource?.last_error ? `Lỗi đồng bộ: ${taskSource.last_error}` : "Nguồn công việc chính thức trên Google Drive" },
-    { ten: "APPROVAL-001", trangThai: trangThaiNguon(latestApproval, approvalSource?.status), capNhatLuc: latestApproval, ghiChu: approvalSource?.last_error ? `Lỗi đồng bộ: ${approvalSource.last_error}` : "Nguồn quyết định cần CEO duyệt" },
-    { ten: "Dữ liệu chuẩn L3", trangThai: trangThaiNguon(latestL3, l3Source?.status), capNhatLuc: latestL3, ghiChu: l3Source?.last_error ? `Lỗi đồng bộ: ${l3Source.last_error}` : "Thông tin dành cho khách và theo dõi kênh" },
-    { ten: "Runtime VPS", trangThai: "verified", capNhatLuc: now.toISOString(), ghiChu: "Request hiện tại và database đều phản hồi thành công" },
+    {
+      ten: "TASK-001",
+      trangThai: taskFreshness,
+      capNhatLuc: latestTask,
+      nguongPhut: taskSource?.schedule_interval_minutes ?? 15,
+      ghiChu: taskSource?.last_error ? `Lỗi đồng bộ: ${taskSource.last_error}` : "Nguồn công việc chính thức trên Google Drive",
+    },
+    {
+      ten: "APPROVAL-001",
+      trangThai: approvalFreshness,
+      capNhatLuc: latestApproval,
+      nguongPhut: approvalSource?.schedule_interval_minutes ?? 10,
+      ghiChu: approvalSource?.last_error ? `Lỗi đồng bộ: ${approvalSource.last_error}` : "Nguồn quyết định cần CEO duyệt",
+    },
+    {
+      ten: "L3",
+      trangThai: l3Freshness,
+      capNhatLuc: latestL3,
+      nguongPhut: l3Source?.schedule_interval_minutes ?? 30,
+      ghiChu: l3Source?.last_error ? `Lỗi đồng bộ: ${l3Source.last_error}` : "Thông tin dành cho khách và theo dõi kênh",
+    },
+    {
+      ten: "Runtime",
+      trangThai: "verified",
+      capNhatLuc: now.toISOString(),
+      trucTuyen: true,
+      ghiChu: "Môi trường chạy và database đang phản hồi trực tiếp",
+    },
   ];
 
   const controls: KiemSoatHeThong[] = [

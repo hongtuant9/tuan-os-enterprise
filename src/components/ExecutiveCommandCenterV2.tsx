@@ -52,8 +52,10 @@ export type HoatDongGanDay = {
 
 export type NguonDuLieu = {
   ten: string;
-  trangThai: "verified" | "stale" | "unavailable";
+  trangThai: "verified" | "slow" | "stale" | "unavailable";
   capNhatLuc?: string | null;
+  nguongPhut?: number;
+  trucTuyen?: boolean;
   ghiChu: string;
 };
 
@@ -154,9 +156,23 @@ function KpiCard({ item, emphasized = false }: { item: ChiSoDieuHanh; emphasized
 }
 
 function sourceVisual(state: NguonDuLieu["trangThai"]) {
-  if (state === "verified") return { label: "Đã xác minh", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/15" };
-  if (state === "stale") return { label: "Dữ liệu cũ", dot: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/15" };
-  return { label: "Chưa sẵn sàng", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/15" };
+  if (state === "verified") return { label: "Mới", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/20", soft: "bg-emerald-500/[0.055]" };
+  if (state === "slow") return { label: "Chậm", dot: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/20", soft: "bg-amber-500/[0.055]" };
+  if (state === "stale") return { label: "STALE · Không dùng để quyết định", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/25", soft: "bg-rose-500/[0.07]" };
+  return { label: "Không sẵn sàng · Không dùng để quyết định", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/25", soft: "bg-rose-500/[0.07]" };
+}
+
+function relativeUpdate(value?: string | null, online = false) {
+  if (online) return "Trực tuyến";
+  if (!value) return "Chưa có dữ liệu";
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms)) return "Không xác định";
+  const minutes = Math.max(0, Math.floor(ms / 60000));
+  if (minutes < 1) return "Cập nhật vừa xong";
+  if (minutes < 60) return `Cập nhật ${minutes} phút trước`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Cập nhật ${hours} giờ trước`;
+  return `Cập nhật ${Math.floor(hours / 24)} ngày trước`;
 }
 
 function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
@@ -212,6 +228,31 @@ export default function ExecutiveCommandCenterV2(props: Props) {
               <div><p className="text-lg font-semibold text-sky-300">{props.choDuyet}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ duyệt</p></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-3.5">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold text-white">Độ mới dữ liệu điều hành</h2>
+          <p className="text-[9px] text-[var(--ink-muted)]">Xanh: mới · Vàng: chậm · Đỏ: không dùng để quyết định</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {props.nguonDuLieu.map((item) => {
+            const state = sourceVisual(item.trangThai);
+            return (
+              <div key={item.ten} className={`rounded-xl border ${state.border} ${state.soft} px-3 py-2.5`} title={item.ghiChu}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-semibold text-white">{item.ten}</p>
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state.dot}`} />
+                </div>
+                <p className={`mt-1.5 text-xs font-semibold ${state.text}`}>{relativeUpdate(item.capNhatLuc, item.trucTuyen)}</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <span className={`text-[9px] font-semibold ${state.text}`}>{state.label}</span>
+                  {item.nguongPhut ? <span className="text-[8px] text-[var(--ink-muted)]">Chu kỳ {item.nguongPhut} phút</span> : null}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -331,42 +372,21 @@ export default function ExecutiveCommandCenterV2(props: Props) {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
-          <SectionTitle title="Độ tin cậy dữ liệu" />
-          <div className="grid gap-2 sm:grid-cols-2">
-            {props.nguonDuLieu.map((item) => {
-              const state = sourceVisual(item.trangThai);
-              return (
-                <div key={item.ten} className={`rounded-xl border ${state.border} bg-white/[0.02] p-3`} title={item.ghiChu}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-white">{item.ten}</p>
-                    <span className={`h-2 w-2 rounded-full ${state.dot}`} />
-                  </div>
-                  <p className={`mt-2 text-[10px] font-semibold ${state.text}`}>{state.label}</p>
-                  <p className="mt-1 text-[9px] text-[var(--ink-muted)]">{formatTime(item.capNhatLuc)}</p>
+      <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+        <SectionTitle title="Kiểm soát quyền & an toàn" action={<Link href="/ai-manager" className="text-[11px] font-semibold text-sky-300">Chi tiết →</Link>} />
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {props.kiemSoat.slice(0, 8).map((item) => {
+            const state = TINH_TRANG[item.tinhTrang];
+            return (
+              <div key={item.ten} className="flex items-center gap-3 rounded-xl border border-white/[0.055] bg-white/[0.02] px-3 py-2.5" title={item.ghiChu}>
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state.cham}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-medium text-white">{item.ten}</p>
+                  <p className={`mt-0.5 truncate text-[9px] font-semibold ${state.text}`}>{item.giaTri}</p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
-          <SectionTitle title="Kiểm soát quyền & an toàn" action={<Link href="/ai-manager" className="text-[11px] font-semibold text-sky-300">Chi tiết →</Link>} />
-          <div className="grid gap-2 sm:grid-cols-2">
-            {props.kiemSoat.slice(0, 8).map((item) => {
-              const state = TINH_TRANG[item.tinhTrang];
-              return (
-                <div key={item.ten} className="flex items-center gap-3 rounded-xl border border-white/[0.055] bg-white/[0.02] px-3 py-2.5" title={item.ghiChu}>
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state.cham}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] font-medium text-white">{item.ten}</p>
-                    <p className={`mt-0.5 truncate text-[9px] font-semibold ${state.text}`}>{item.giaTri}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

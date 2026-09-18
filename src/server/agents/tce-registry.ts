@@ -8,6 +8,7 @@ export type TceAgentId =
   | "channel_auditor"
   | "website_agent"
   | "manager_agent"
+  | "marketing_manager"
   | "ads_agent"
   | "data_quality"
   | "operations_quality"

@@ -140,16 +140,16 @@ export default async function Home() {
   const conversionRate = conversations.length ? (successfulBookings / conversations.length) * 100 : 0;
   const checkIns = bookings.filter((item) => item.checkIn === today).length;
 
-  const completedTasks = tasks.filter((item) => item.status === "done").length;
-  const openTasks = tasks.filter((item) => item.status !== "done").length;
-  const inProgressTasks = tasks.filter((item) => item.status === "in-progress").length;
   const managerItems = buildManagerItems(managerTaskQuery.data ?? [], syncRecordsQuery.data ?? []);
+  const completedTasks = managerItems.filter((item) => item.status === "DONE").length;
+  const openTasks = managerItems.filter((item) => item.status !== "DONE").length;
+  const inProgressTasks = managerItems.filter((item) => item.status === "IN_PROGRESS").length;
   const ceoBlockedItems = managerItems.filter(
     (item) => item.status !== "DONE" && Boolean(item.pendingCeoApproval),
   );
   const ceoBlockedIds = new Set(ceoBlockedItems.map((item) => item.id));
-  const overdueTasks = tasks.filter((item) => quaHan(item.dueDate, item.status));
-  const completionRate = tasks.length ? (completedTasks / tasks.length) * 100 : 0;
+  const overdueTasks = managerItems.filter((item) => item.dueDate && quaHan(item.dueDate, item.status.toLowerCase()));
+  const completionRate = managerItems.length ? (completedTasks / managerItems.length) * 100 : 0;
   const pendingApprovals = approvals.filter((item) => item.status === "pending");
   const tceAgents = agents.filter((item) => item.unit === "TCE AI");
   const agentsOnline = tceAgents.filter((item) => item.status === "online").length;
@@ -174,7 +174,7 @@ export default async function Home() {
       id: "progress",
       nhan: "Tiến độ công việc",
       giaTri: `${completionRate.toFixed(0)}%`,
-      moTa: `${completedTasks}/${tasks.length} công việc đã hoàn thành`,
+      moTa: `${completedTasks}/${managerItems.length} công việc canonical đã hoàn thành`,
       tinhTrang: completionRate >= 75 ? "tot" : completionRate >= 50 ? "can-theo-doi" : "nguy-co",
       lienKet: "/ai-manager",
       nguon: "TASK-001",
@@ -246,27 +246,25 @@ export default async function Home() {
 
   const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
   const managerItemById = new Map(managerItems.map((item) => [item.id, item]));
-  const priorities: ViecUuTien[] = [...tasks]
-    .filter((item) => item.status !== "done")
-    .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+  const canonicalPriorityRank = { P0: 0, P1: 1, P2: 2, P3: 3 } as const;
+  const priorities: ViecUuTien[] = [...managerItems]
+    .filter((item) => item.status !== "DONE")
+    .sort((a, b) => canonicalPriorityRank[a.priority] - canonicalPriorityRank[b.priority])
     .slice(0, 3)
-    .map((item) => {
-      const governance = managerItemById.get(item.id);
-      return {
-        id: item.id,
-        ten: tieuDeCongViecTiengViet(item.title),
-        chuTri: item.owner || item.unit,
-        mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
-        trangThai: ceoBlockedIds.has(item.id)
-          ? "Bị chặn — chờ CEO"
-          : item.status === "blocked"
-            ? "Vấn đề hệ thống"
-            : tenTrangThaiTask(item.status),
-        canCeoHoTro: governance?.needsCeoSupport ?? false,
-        phuTrachXuLy: governance?.resolutionOwner ?? item.owner ?? item.unit,
-        han: item.dueDate || undefined,
-      };
-    });
+    .map((item) => ({
+      id: item.id,
+      ten: tieuDeCongViecTiengViet(item.title),
+      chuTri: item.owner || item.agent,
+      mucDo: item.priority === "P0" ? "P0 / Cao" : item.priority === "P1" ? "P1 / Vừa" : item.priority,
+      trangThai: ceoBlockedIds.has(item.id)
+        ? "Bị chặn — chờ CEO"
+        : item.status === "BLOCKED"
+          ? "Vấn đề hệ thống"
+          : tenTrangThaiTask(item.status.toLowerCase()),
+      canCeoHoTro: item.needsCeoSupport ?? false,
+      phuTrachXuLy: item.resolutionOwner ?? item.owner ?? item.agent,
+      han: item.dueDate,
+    }));
 
   const alerts: CanhBaoDieuHanh[] = [];
   for (const item of ceoBlockedItems.filter((task) => task.priority === "P0").slice(0, 2)) {
@@ -322,9 +320,9 @@ export default async function Home() {
   ];
 
   const departments: PhongBanDieuHanh[] = departmentDefinitions.map((department) => {
-    const scoped = tasks.filter((item) => nhomPhongBan(item.title, item.unit) === department.id && item.status !== "done");
+    const scoped = managerItems.filter((item) => nhomPhongBan(item.title, item.owner ?? item.agent) === department.id && item.status !== "DONE");
     const blocked = ceoBlockedItems.filter((item) => nhomPhongBan(item.title, item.owner ?? "") === department.id).length;
-    const overdue = scoped.filter((item) => quaHan(item.dueDate, item.status)).length;
+    const overdue = scoped.filter((item) => item.dueDate && quaHan(item.dueDate, item.status.toLowerCase())).length;
     const status: PhongBanDieuHanh["sucKhoe"] = blocked > 0 || overdue > 1 ? "can-theo-doi" : "tot";
     return {
       id: department.id,
@@ -423,7 +421,7 @@ export default async function Home() {
           hoatDong={activities}
           nguonDuLieu={authorities}
           kiemSoat={controls}
-          tongCongViec={tasks.length}
+          tongCongViec={managerItems.length}
           hoanThanh={completedTasks}
           dangLam={inProgressTasks}
           biChan={ceoBlockedItems.length}

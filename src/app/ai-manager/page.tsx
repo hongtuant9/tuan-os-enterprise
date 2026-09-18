@@ -48,19 +48,40 @@ function permissionLabel(permission: string) {
   return permission;
 }
 
-function WorkList({ title, items, empty }: { title: string; items: ManagerWorkItem[]; empty: string }) {
+function WorkList({ title, items, empty, tone = "default" }: { title: string; items: ManagerWorkItem[]; empty: string; tone?: "default" | "ceo" | "waiting" | "system" }) {
+  const toneClass = tone === "ceo"
+    ? "border-rose-500/20"
+    : tone === "waiting"
+      ? "border-slate-500/20"
+      : tone === "system"
+        ? "border-amber-500/20"
+        : "border-white/[0.08]";
+
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-5">
-      <h2 className="text-sm font-semibold text-[var(--ink-primary)]">{title}</h2>
+    <section className={`rounded-2xl border ${toneClass} bg-[var(--surface)] p-5`}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-[var(--ink-primary)]">{title}</h2>
+        <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-muted)]">{items.length}</span>
+      </div>
       <div className="mt-3 space-y-2">
         {items.length === 0 ? <p className="text-sm text-[var(--ink-muted)]">{empty}</p> : items.map((item) => (
           <div key={item.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <span className="text-sm font-medium text-[var(--ink-primary)]">{item.title}</span>
               <span className="rounded-full bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-[var(--ink-muted)]">{item.priority}</span>
             </div>
-            <p className="mt-1 text-xs text-[var(--ink-muted)]">{item.id} · tác nhân: {item.agent}</p>
-            {item.blocker ? <p className="mt-2 rounded-lg bg-amber-500/[0.06] px-2 py-1.5 text-xs text-amber-300">Vướng mắc: {item.blocker}</p> : null}
+            <p className="mt-1 text-[11px] text-[var(--ink-muted)]">{item.id}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${item.needsCeoSupport ? "border-rose-500/20 bg-rose-500/[0.07] text-rose-300" : "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300"}`}>
+                Cần CEO hỗ trợ: {item.needsCeoSupport ? "CÓ" : "KHÔNG"}
+              </span>
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] text-[var(--ink-secondary)]">
+                Phụ trách: {item.resolutionOwner ?? item.owner ?? item.agent}
+              </span>
+            </div>
+            {item.ceoSupportReason ? <p className="mt-2 text-xs leading-5 text-rose-200">{item.ceoSupportReason}</p> : null}
+            {item.blocker ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">Tình trạng: {item.blocker}</p> : null}
+            {item.nextAction ? <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Tiếp theo: {item.nextAction}</p> : null}
           </div>
         ))}
       </div>
@@ -137,13 +158,14 @@ export default async function AiManagerPage() {
                 <p className="mt-1 text-sm text-[var(--ink-secondary)]">
                   {brief.staleAuthorities.length > 0
                     ? `Có nguồn chưa đạt trạng thái xác minh: ${brief.staleAuthorities.join(", ")}. Hệ thống không được mutation dựa trên nguồn này.`
-                    : `Nguồn điều hành đã xác minh. Có ${brief.blockedItems.length} việc bị chặn, ${brief.waitingOwnerItems.length} việc chờ Owner và ${brief.nextItems.length} việc đủ điều kiện tiếp tục.`}
+                    : `Nguồn điều hành đã xác minh. Có ${brief.blockedItems.length} việc bị chặn vì chờ CEO phê duyệt, ${brief.waitingItems.length} việc đang chờ điều kiện, ${brief.systemIssueItems.length} vấn đề hệ thống/kỹ thuật và ${brief.nextItems.length} việc đủ điều kiện tiếp tục.`}
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-white">{brief.nextItems.length}</b><span className="text-[var(--ink-muted)]">Tiếp theo</span></div>
-                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-amber-300">{brief.blockedItems.length}</b><span className="text-[var(--ink-muted)]">Bị chặn</span></div>
-                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-sky-300">{pendingCount}</b><span className="text-[var(--ink-muted)]">Chờ duyệt</span></div>
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-rose-300">{brief.blockedItems.length}</b><span className="text-[var(--ink-muted)]">Bị chặn bởi CEO gate</span></div>
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-slate-300">{brief.waitingItems.length}</b><span className="text-[var(--ink-muted)]">Chờ điều kiện</span></div>
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-amber-300">{brief.systemIssueItems.length}</b><span className="text-[var(--ink-muted)]">Vấn đề hệ thống</span></div>
               </div>
             </div>
           </section>
@@ -196,10 +218,11 @@ export default async function AiManagerPage() {
             </div>
           </section>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            <WorkList title="Bị chặn — cần CEO quyết định/phê duyệt" items={brief.blockedItems} empty="Không có công việc nào đang bị chặn bởi cổng phê duyệt CEO." tone="ceo" />
+            <WorkList title="Đang chờ điều kiện / công việc trước" items={brief.waitingItems} empty="Không có công việc nào đang chờ dependency hoặc sequence." tone="waiting" />
+            <WorkList title="Vấn đề hệ thống / kỹ thuật cần đội phụ trách xử lý" items={brief.systemIssueItems} empty="Không có vấn đề kỹ thuật đang cản trở thực thi." tone="system" />
             <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có công việc đủ điều kiện để đề xuất chạy." />
-            <WorkList title="Công việc bị chặn" items={brief.blockedItems} empty="Không có blocker trong dữ liệu đồng bộ hiện tại." />
-            <WorkList title="Chờ Owner / phê duyệt" items={brief.waitingOwnerItems} empty="Không có công việc được xác định rõ là đang chờ Owner." />
           </div>
 
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr]">

@@ -23,6 +23,7 @@ export interface ManagerWorkItem {
   approvalRequired?: boolean;
   approvalId?: string;
   approvalResolved?: boolean;
+  pendingCeoApproval?: boolean;
   approvalDecision?: "approved" | "rejected" | "pending" | "unknown";
   needsCeoSupport?: boolean;
   ceoSupportReason?: string;
@@ -72,29 +73,28 @@ export function buildManagerBrief(
   const blockedItems = sorted.filter(
     (item) =>
       item.status !== "DONE" &&
-      Boolean(item.approvalRequired) &&
-      !Boolean(item.approvalResolved),
-  );
-
-  const waitingItems = sorted.filter(
-    (item) =>
-      item.status !== "DONE" &&
-      !blockedItems.some((blocked) => blocked.id === item.id) &&
-      (
-        isWaitingStatus(item.status) ||
-        /SEQUENCE|HOLD_SEQUENCE|WAIT|DEPENDENCY/i.test(item.executionGate ?? "") ||
-        /SEQUENCE_GATE|CURRENT MAIN LANE|WAIT FOR|CHỜ/i.test(item.blocker ?? "")
-      ),
+      Boolean(item.pendingCeoApproval),
   );
 
   const systemIssueItems = sorted.filter(
     (item) =>
       item.status !== "DONE" &&
       !blockedItems.some((blocked) => blocked.id === item.id) &&
-      !waitingItems.some((waiting) => waiting.id === item.id) &&
       (
         item.status === "BLOCKED" ||
         /AUTH|QUOTA|ERROR|FAILED|DENIED|UNAVAILABLE|BLOCKED/i.test(item.blocker ?? "")
+      ),
+  );
+
+  const waitingItems = sorted.filter(
+    (item) =>
+      item.status !== "DONE" &&
+      !blockedItems.some((blocked) => blocked.id === item.id) &&
+      !systemIssueItems.some((issue) => issue.id === item.id) &&
+      (
+        isWaitingStatus(item.status) ||
+        /SEQUENCE|HOLD_SEQUENCE|WAIT|DEPENDENCY/i.test(item.executionGate ?? "") ||
+        /SEQUENCE_GATE|CURRENT MAIN LANE|WAIT FOR|CHỜ/i.test(item.blocker ?? "")
       ),
   );
 

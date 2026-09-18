@@ -84,311 +84,298 @@ type Props = {
   tongTacNhan: number;
 };
 
-const TINH_TRANG: Record<TinhTrang, { nhan: string; cham: string; nen: string; chu: string; vien: string }> = {
-  tot: {
-    nhan: "Ổn định",
-    cham: "bg-emerald-400",
-    nen: "bg-emerald-500/10",
-    chu: "text-emerald-300",
-    vien: "border-emerald-500/20",
-  },
-  "can-theo-doi": {
-    nhan: "Cần theo dõi",
-    cham: "bg-amber-400",
-    nen: "bg-amber-500/10",
-    chu: "text-amber-300",
-    vien: "border-amber-500/20",
-  },
-  "nguy-co": {
-    nhan: "Cần xử lý",
-    cham: "bg-rose-400",
-    nen: "bg-rose-500/10",
-    chu: "text-rose-300",
-    vien: "border-rose-500/20",
-  },
-  "trung-tinh": {
-    nhan: "Thông tin",
-    cham: "bg-slate-400",
-    nen: "bg-white/[0.04]",
-    chu: "text-slate-300",
-    vien: "border-white/10",
-  },
+const TINH_TRANG: Record<TinhTrang, { nhan: string; cham: string; text: string; border: string; soft: string; hex: string }> = {
+  tot: { nhan: "Ổn định", cham: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/20", soft: "bg-emerald-500/[0.08]", hex: "#34d399" },
+  "can-theo-doi": { nhan: "Theo dõi", cham: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/20", soft: "bg-amber-500/[0.08]", hex: "#fbbf24" },
+  nguy-co: { nhan: "Xử lý", cham: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/20", soft: "bg-rose-500/[0.08]", hex: "#fb7185" },
+  "trung-tinh": { nhan: "Thông tin", cham: "bg-slate-400", text: "text-slate-300", border: "border-white/10", soft: "bg-white/[0.04]", hex: "#94a3b8" },
 };
 
-function TheTrangThai({ tinhTrang, nhan }: { tinhTrang: TinhTrang; nhan?: string }) {
-  const s = TINH_TRANG[tinhTrang];
-  return (
-    <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${s.nen} ${s.chu} ${s.vien}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${s.cham}`} />
-      {nhan ?? s.nhan}
-    </span>
-  );
-}
-
-function TheChiSo({ item }: { item: ChiSoDieuHanh }) {
-  const s = TINH_TRANG[item.tinhTrang];
-  const inner = (
-    <div className={`group relative h-full overflow-hidden rounded-2xl border bg-[var(--surface)] p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 ${s.vien}`}>
-      <div className={`absolute inset-x-0 top-0 h-px ${s.cham} opacity-80`} />
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-muted)]">{item.nhan}</p>
-        <span className={`mt-0.5 h-2 w-2 rounded-full ${s.cham}`} />
-      </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-[var(--ink-primary)]">{item.giaTri}</p>
-      <p className="mt-1 min-h-[2.5rem] text-xs leading-5 text-[var(--ink-secondary)]">{item.moTa}</p>
-      {item.nguon ? <p className="mt-2 text-[10px] text-[var(--ink-muted)]">Nguồn: {item.nguon}</p> : null}
-    </div>
-  );
-  return item.lienKet ? <Link href={item.lienKet}>{inner}</Link> : inner;
-}
-
-function thanhPhanTram(value: number) {
+function clamp(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
 function formatTime(value?: string | null) {
-  if (!value) return "Chưa có dữ liệu";
+  if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function trangThaiNguon(state: NguonDuLieu["trangThai"]) {
-  if (state === "verified") return { nhan: "Đã xác minh", cls: "text-emerald-300", dot: "bg-emerald-400" };
-  if (state === "stale") return { nhan: "Dữ liệu cũ", cls: "text-amber-300", dot: "bg-amber-400" };
-  return { nhan: "Chưa sẵn sàng", cls: "text-rose-300", dot: "bg-rose-400" };
+function Ring({ value, label, sub, color = "#38bdf8", size = 132 }: { value: number; label: string; sub?: string; color?: string; size?: number }) {
+  const percent = clamp(value);
+  return (
+    <div className="flex flex-col items-center">
+      <div
+        className="grid place-items-center rounded-full"
+        style={{
+          width: size,
+          height: size,
+          background: `conic-gradient(${color} ${percent}%, rgba(255,255,255,.07) 0)`,
+        }}
+      >
+        <div className="grid h-[82%] w-[82%] place-items-center rounded-full bg-[#121419] shadow-inner">
+          <div className="text-center">
+            <div className="text-2xl font-semibold tracking-tight text-white">{Math.round(percent)}%</div>
+            <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--ink-muted)]">{label}</div>
+          </div>
+        </div>
+      </div>
+      {sub ? <p className="mt-2 text-[10px] text-[var(--ink-muted)]">{sub}</p> : null}
+    </div>
+  );
+}
+
+function Dot({ state }: { state: TinhTrang }) {
+  return <span className={`inline-block h-2 w-2 rounded-full ${TINH_TRANG[state].cham}`} />;
+}
+
+function KpiCard({ item, emphasized = false }: { item: ChiSoDieuHanh; emphasized?: boolean }) {
+  const state = TINH_TRANG[item.tinhTrang];
+  const inner = (
+    <div
+      className={`group relative h-full overflow-hidden rounded-2xl border ${state.border} ${emphasized ? "bg-[linear-gradient(145deg,rgba(56,189,248,.08),rgba(255,255,255,.018))]" : "bg-[var(--surface)]"} p-4 transition hover:-translate-y-0.5 hover:border-white/20`}
+      title={item.moTa}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-medium text-[var(--ink-muted)]">{item.nhan}</span>
+        <Dot state={item.tinhTrang} />
+      </div>
+      <div className={`mt-2 font-semibold tracking-tight text-white ${emphasized ? "text-3xl" : "text-2xl"}`}>{item.giaTri}</div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="truncate text-[10px] text-[var(--ink-muted)]">{item.nguon ?? "Hệ thống"}</span>
+        <span className={`text-[10px] font-semibold ${state.text}`}>{state.nhan}</span>
+      </div>
+    </div>
+  );
+  return item.lienKet ? <Link href={item.lienKet}>{inner}</Link> : inner;
+}
+
+function sourceVisual(state: NguonDuLieu["trangThai"]) {
+  if (state === "verified") return { label: "Đã xác minh", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/15" };
+  if (state === "stale") return { label: "Dữ liệu cũ", dot: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/15" };
+  return { label: "Chưa sẵn sàng", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/15" };
+}
+
+function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      {action}
+    </div>
+  );
+}
+
+function taskTone(status: string) {
+  if (status.toLowerCase().includes("chặn")) return "border-rose-500/20 bg-rose-500/[0.06] text-rose-300";
+  if (status.toLowerCase().includes("hoàn")) return "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300";
+  return "border-sky-500/20 bg-sky-500/[0.06] text-sky-300";
 }
 
 export default function ExecutiveCommandCenterV2(props: Props) {
+  const agentRate = props.tongTacNhan ? (props.tacNhanHoatDong / props.tongTacNhan) * 100 : 0;
+  const sourceVerified = props.nguonDuLieu.filter((item) => item.trangThai === "verified").length;
+  const sourceRate = props.nguonDuLieu.length ? (sourceVerified / props.nguonDuLieu.length) * 100 : 0;
+  const riskCount = props.canhBao.length;
+  const primaryKpis = props.chiSo.slice(0, 4);
+  const secondaryKpis = props.chiSo.slice(4, 8);
+
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 pb-10">
-      <section className="overflow-hidden rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(35,91,160,0.22),rgba(21,21,24,0.95)_42%,rgba(18,18,20,0.98))] p-5 shadow-2xl shadow-black/20 md:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+    <div className="mx-auto max-w-[1600px] space-y-4 pb-8">
+      <section className="overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_15%_10%,rgba(56,189,248,.16),transparent_32%),linear-gradient(135deg,#171a20,#101216_58%,#0d0f13)] p-5 shadow-2xl shadow-black/20 md:p-6">
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr] xl:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">Trung tâm điều hành Tam Cốc Experience</p>
-              <span className="text-[10px] italic text-[var(--ink-muted)]">(TCE Command Center)</span>
+              <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${TINH_TRANG[props.sucKhoeTongThe].border} ${TINH_TRANG[props.sucKhoeTongThe].soft} ${TINH_TRANG[props.sucKhoeTongThe].text}`}>
+                <Dot state={props.sucKhoeTongThe} /> {props.sucKhoeNhan}
+              </span>
+              <span className="text-[10px] text-[var(--ink-muted)]">Cập nhật {formatTime(props.capNhatLuc)}</span>
             </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">Bảng điều hành dành cho Tổng giám đốc</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">
-              Tập trung vào kết quả, ngoại lệ và quyền kiểm soát. Số liệu không đủ nguồn sẽ không được trình bày như sự thật.
-            </p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white md:text-3xl">TCE AI Command Center</h1>
+            <p className="mt-1 text-xs text-[var(--ink-muted)]">Bàn điều hành dành cho Tổng giám đốc</p>
+
+            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {primaryKpis.map((item) => <KpiCard key={item.id} item={item} emphasized />)}
+            </div>
           </div>
-          <div className="grid min-w-fit grid-cols-2 gap-2 md:grid-cols-3">
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">Trạng thái</p>
-              <div className="mt-1"><TheTrangThai tinhTrang={props.sucKhoeTongThe} nhan={props.sucKhoeNhan} /></div>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">Tác nhân đang hoạt động</p>
-              <p className="mt-1 text-lg font-semibold text-white">{props.tacNhanHoatDong}/{props.tongTacNhan}</p>
-            </div>
-            <div className="col-span-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 md:col-span-1">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">Cập nhật gần nhất</p>
-              <p className="mt-1 text-xs font-medium text-white">{formatTime(props.capNhatLuc)}</p>
+
+          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-white/[0.07] bg-black/20 p-4">
+            <Ring value={props.tiLeHoanThanh} label="Tiến độ" color="#38bdf8" />
+            <Ring value={agentRate} label="Tác nhân" color="#34d399" />
+            <Ring value={sourceRate} label="Dữ liệu" color={sourceRate === 100 ? "#34d399" : "#fbbf24"} />
+            <div className="col-span-3 grid grid-cols-4 gap-2 border-t border-white/[0.06] pt-3 text-center">
+              <div><p className="text-lg font-semibold text-white">{props.dangLam}</p><p className="text-[9px] text-[var(--ink-muted)]">Đang làm</p></div>
+              <div><p className="text-lg font-semibold text-amber-300">{props.biChan}</p><p className="text-[9px] text-[var(--ink-muted)]">Bị chặn</p></div>
+              <div><p className="text-lg font-semibold text-rose-300">{props.quaHan}</p><p className="text-[9px] text-[var(--ink-muted)]">Quá hạn</p></div>
+              <div><p className="text-lg font-semibold text-sky-300">{props.choDuyet}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ duyệt</p></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section>
-        <div className="mb-2 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-white">Chỉ số điều hành trọng yếu <span className="text-[10px] font-normal italic text-[var(--ink-muted)]">(KPI)</span></h2>
-            <p className="mt-0.5 text-xs text-[var(--ink-muted)]">Chỉ hiển thị số liệu có nguồn hiện hữu trong hệ thống.</p>
-          </div>
-          <Link href="/ai-manager" className="text-xs font-semibold text-sky-300 hover:text-sky-200">Mở điều hành chi tiết →</Link>
-        </div>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
-          {props.chiSo.map((item) => <TheChiSo key={item.id} item={item} />)}
-        </div>
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {secondaryKpis.map((item) => <KpiCard key={item.id} item={item} />)}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-white">Ba ưu tiên điều hành</h2>
-              <p className="mt-1 text-xs text-[var(--ink-muted)]">Các việc cần tạo ra tiến triển rõ ràng trước khi mở thêm quyền tự động.</p>
-            </div>
-            <Link href="/ai-manager" className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-[var(--ink-secondary)] hover:border-white/20 hover:text-white">Xem toàn bộ công việc</Link>
-          </div>
-          <div className="mt-4 space-y-2">
+      <section className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+          <SectionTitle title="3 ưu tiên điều hành" action={<Link href="/ai-manager" className="text-[11px] font-semibold text-sky-300">Chi tiết →</Link>} />
+          <div className="grid gap-2 md:grid-cols-3">
             {props.uuTien.length === 0 ? (
-              <div className="rounded-xl bg-white/[0.03] p-4 text-sm text-[var(--ink-muted)]">Chưa có công việc đủ điều kiện để đưa vào ưu tiên.</div>
+              <div className="md:col-span-3 rounded-xl bg-white/[0.03] p-5 text-center text-xs text-[var(--ink-muted)]">Chưa có ưu tiên đang mở.</div>
             ) : props.uuTien.slice(0, 3).map((item, index) => (
-              <div key={item.id} className="grid gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5 md:grid-cols-[36px_1fr_auto] md:items-center">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sm font-bold text-sky-300">0{index + 1}</div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{item.ten}</p>
-                  <p className="mt-1 text-xs text-[var(--ink-muted)]">{item.id} · Chủ trì: {item.chuTri}{item.han ? ` · Hạn: ${item.han}` : ""}</p>
+              <div key={item.id} className="relative overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5" title={`${item.id} · Chủ trì: ${item.chuTri}${item.han ? ` · Hạn: ${item.han}` : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="grid h-7 w-7 place-items-center rounded-lg bg-sky-500/10 text-xs font-bold text-sky-300">{index + 1}</div>
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${taskTone(item.trangThai)}`}>{item.trangThai}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-white/[0.05] px-2 py-1 text-[10px] font-semibold text-[var(--ink-secondary)]">{item.mucDo}</span>
-                  <span className="rounded-full bg-sky-500/10 px-2 py-1 text-[10px] font-semibold text-sky-300">{item.trangThai}</span>
-                </div>
+                <p className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-white">{item.ten}</p>
+                <p className="mt-2 truncate text-[10px] text-[var(--ink-muted)]">{item.chuTri}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-          <div className="flex items-center justify-between">
+        <Link href="/approvals" className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 ${props.choDuyet > 0 ? "border-amber-500/20 bg-amber-500/[0.06]" : "border-emerald-500/15 bg-emerald-500/[0.05]"}`}>
+          <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-white">Việc cần Tổng giám đốc duyệt</h2>
-              <p className="mt-1 text-xs text-[var(--ink-muted)]">Chỉ các quyết định vượt quyền của hệ thống.</p>
+              <p className="text-[11px] font-medium text-[var(--ink-muted)]">CEO phê duyệt</p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight text-white">{props.choDuyet}</p>
             </div>
-            <div className={`rounded-xl px-3 py-2 text-xl font-semibold ${props.choDuyet > 0 ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>{props.choDuyet}</div>
+            <div className={`grid h-10 w-10 place-items-center rounded-full text-lg ${props.choDuyet > 0 ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>✓</div>
           </div>
-          <div className="mt-4 rounded-xl bg-white/[0.03] p-3">
-            <p className="text-xs leading-5 text-[var(--ink-secondary)]">
-              Hệ thống giữ khóa với ngân sách, giá bán lớn, hoàn tiền, hủy quan trọng, quyền truy cập và thay đổi bảo mật/production rủi ro cao.
-            </p>
-          </div>
-          <Link href="/approvals" className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400">Mở hàng chờ phê duyệt</Link>
-        </div>
+          <p className="mt-4 text-xs font-semibold text-sky-300 group-hover:text-sky-200">Mở hàng chờ →</p>
+        </Link>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
-        <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-          <h2 className="text-sm font-semibold text-white">Ngoại lệ và rủi ro cần chú ý</h2>
-          <p className="mt-1 text-xs text-[var(--ink-muted)]">Ưu tiên nhìn phần này trước khi đi vào chi tiết.</p>
-          <div className="mt-4 space-y-2">
+      <section className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+          <SectionTitle title={`Ngoại lệ · ${riskCount}`} />
+          <div className="space-y-2">
             {props.canhBao.length === 0 ? (
-              <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
-                <p className="text-sm font-semibold text-emerald-300">Không có ngoại lệ nghiêm trọng đang mở</p>
-                <p className="mt-1 text-xs text-[var(--ink-secondary)]">Tiếp tục theo dõi task quá hạn, nguồn dữ liệu cũ và các cổng phê duyệt.</p>
+              <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] p-4 text-center">
+                <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-emerald-500/10 text-emerald-300">✓</div>
+                <p className="mt-2 text-xs font-semibold text-emerald-300">Không có ngoại lệ nghiêm trọng</p>
               </div>
             ) : props.canhBao.slice(0, 5).map((item) => (
-              <div key={item.id} className={`rounded-xl border p-3 ${item.mucDo === "cao" ? "border-rose-500/20 bg-rose-500/[0.06]" : item.mucDo === "vua" ? "border-amber-500/20 bg-amber-500/[0.06]" : "border-white/[0.07] bg-white/[0.025]"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-white">{item.tieuDe}</p>
-                  <span className="text-[10px] font-semibold uppercase text-[var(--ink-muted)]">{item.id}</span>
-                </div>
-                <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{item.moTa}</p>
+              <div
+                key={item.id}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${item.mucDo === "cao" ? "border-rose-500/18 bg-rose-500/[0.05]" : item.mucDo === "vua" ? "border-amber-500/18 bg-amber-500/[0.05]" : "border-white/[0.06] bg-white/[0.025]"}`}
+                title={item.moTa}
+              >
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.mucDo === "cao" ? "bg-rose-400" : item.mucDo === "vua" ? "bg-amber-400" : "bg-slate-400"}`} />
+                <p className="min-w-0 flex-1 truncate text-xs font-medium text-white">{item.tieuDe}</p>
+                <span className="text-[9px] text-[var(--ink-muted)]">{item.id}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-white">Tiến độ thực thi toàn công ty</h2>
-              <p className="mt-1 text-xs text-[var(--ink-muted)]">Đo từ hệ thống task hiện tại, không dùng nhận xét cảm tính.</p>
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+          <SectionTitle title="Tiến độ toàn công ty" />
+          <div className="grid gap-5 md:grid-cols-[180px_1fr] md:items-center">
+            <div className="flex justify-center">
+              <Ring value={props.tiLeHoanThanh} label="Hoàn thành" color="#38bdf8" size={150} />
             </div>
-            <span className="text-2xl font-semibold text-white">{props.tiLeHoanThanh.toFixed(0)}%</span>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full rounded-full bg-sky-400" style={{ width: `${thanhPhanTram(props.tiLeHoanThanh)}%` }} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-            {[
-              ["Tổng số", props.tongCongViec, "text-white"],
-              ["Hoàn thành", props.hoanThanh, "text-emerald-300"],
-              ["Đang làm", props.dangLam, "text-sky-300"],
-              ["Bị chặn", props.biChan, "text-amber-300"],
-              ["Quá hạn", props.quaHan, "text-rose-300"],
-            ].map(([label, value, cls]) => (
-              <div key={String(label)} className="rounded-xl bg-white/[0.03] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">{label}</p>
-                <p className={`mt-1 text-xl font-semibold ${cls}`}>{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-2 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-white">Hiệu suất các phòng ban AI</h2>
-            <p className="mt-0.5 text-xs text-[var(--ink-muted)]">Sức khỏe được suy ra từ task đang mở, blocker và quá hạn của từng nhóm chức năng.</p>
-          </div>
-          <Link href="/ai-manager#executive-org" className="text-xs font-semibold text-sky-300">Xem cơ cấu →</Link>
-        </div>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          {props.phongBan.map((item) => (
-            <div key={item.id} className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">{item.ten}</p>
-                  {item.tenVietTat ? <p className="mt-0.5 text-[10px] italic text-[var(--ink-muted)]">({item.tenVietTat})</p> : null}
-                </div>
-                <TheTrangThai tinhTrang={item.sucKhoe} />
-              </div>
-              <p className="mt-3 text-xs leading-5 text-[var(--ink-secondary)]">{item.moTa}</p>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-white/[0.03] p-2"><p className="text-[9px] uppercase text-[var(--ink-muted)]">Đang làm</p><p className="mt-1 text-sm font-semibold text-white">{item.congViecDangLam}</p></div>
-                <div className="rounded-lg bg-white/[0.03] p-2"><p className="text-[9px] uppercase text-[var(--ink-muted)]">Bị chặn</p><p className="mt-1 text-sm font-semibold text-amber-300">{item.biChan}</p></div>
-                <div className="rounded-lg bg-white/[0.03] p-2"><p className="text-[9px] uppercase text-[var(--ink-muted)]">Quá hạn</p><p className="mt-1 text-sm font-semibold text-rose-300">{item.quaHan}</p></div>
-              </div>
-              <p className="mt-3 border-t border-white/[0.06] pt-3 text-[11px] text-[var(--ink-muted)]">Chỉ số chính: {item.chiSoChinh}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-white">Hoạt động gần đây của hệ thống</h2>
-              <p className="mt-1 text-xs text-[var(--ink-muted)]">Dấu vết giúp kiểm tra AI đang làm gì và có đang vận hành thật hay không.</p>
-            </div>
-            <Link href="/ai-manager" className="text-xs font-semibold text-sky-300">Xem chi tiết →</Link>
-          </div>
-          <div className="mt-4 divide-y divide-white/[0.06]">
-            {props.hoatDong.length === 0 ? <p className="py-4 text-sm text-[var(--ink-muted)]">Chưa có nhật ký hoạt động.</p> : props.hoatDong.slice(0, 8).map((item) => (
-              <div key={item.id} className="grid gap-2 py-3 md:grid-cols-[1fr_auto]">
-                <div>
-                  <p className="text-sm text-[var(--ink-secondary)]">{item.noiDung}</p>
-                  <p className="mt-1 text-[11px] text-[var(--ink-muted)]">{item.tacNhan} · {item.loai}</p>
-                </div>
-                <p className="text-[11px] text-[var(--ink-muted)]">{formatTime(item.thoiGian)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-            <h2 className="text-sm font-semibold text-white">Độ tin cậy của dữ liệu</h2>
-            <p className="mt-1 text-xs text-[var(--ink-muted)]">Nếu nguồn chính bị cũ hoặc chưa sẵn sàng, không nên dùng số liệu đó để ra quyết định.</p>
-            <div className="mt-4 space-y-2">
-              {props.nguonDuLieu.map((item) => {
-                const s = trangThaiNguon(item.trangThai);
-                return (
-                  <div key={item.ten} className="rounded-xl bg-white/[0.025] p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-white">{item.ten}</p>
-                      <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${s.cls}`}><span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />{s.nhan}</span>
-                    </div>
-                    <p className="mt-1 text-[10px] text-[var(--ink-muted)]">{formatTime(item.capNhatLuc)} · {item.ghiChu}</p>
+            <div className="space-y-3">
+              {[
+                ["Hoàn thành", props.hoanThanh, props.tongCongViec ? props.hoanThanh / props.tongCongViec * 100 : 0, "bg-emerald-400"],
+                ["Đang làm", props.dangLam, props.tongCongViec ? props.dangLam / props.tongCongViec * 100 : 0, "bg-sky-400"],
+                ["Bị chặn", props.biChan, props.tongCongViec ? props.biChan / props.tongCongViec * 100 : 0, "bg-amber-400"],
+                ["Quá hạn", props.quaHan, props.tongCongViec ? props.quaHan / props.tongCongViec * 100 : 0, "bg-rose-400"],
+              ].map(([label, value, percent, color]) => (
+                <div key={String(label)}>
+                  <div className="mb-1 flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--ink-muted)]">{label}</span>
+                    <span className="font-semibold text-white">{value as number}</span>
                   </div>
-                );
-              })}
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                    <div className={`h-full rounded-full ${color}`} style={{ width: `${clamp(percent as number)}%` }} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-[var(--surface)] p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-white">Kiểm soát quyền và an toàn hệ thống</h2>
-            <p className="mt-1 text-xs text-[var(--ink-muted)]">Đây là khu vực để kiểm tra hệ thống có vượt quyền hay không.</p>
-          </div>
-          <Link href="/ai-manager" className="text-xs font-semibold text-sky-300">Mở kiểm soát chi tiết →</Link>
-        </div>
-        <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          {props.kiemSoat.map((item) => (
-            <div key={item.ten} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-white">{item.ten}</p>
-                <TheTrangThai tinhTrang={item.tinhTrang} nhan={item.giaTri} />
+      <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+        <SectionTitle title="Sức khỏe các phòng ban AI" action={<Link href="/ai-manager#executive-org" className="text-[11px] font-semibold text-sky-300">Cơ cấu →</Link>} />
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {props.phongBan.map((item) => {
+            const state = TINH_TRANG[item.sucKhoe];
+            return (
+              <div key={item.id} className={`rounded-xl border ${state.border} bg-white/[0.02] p-3.5`} title={`${item.moTa} · KPI: ${item.chiSoChinh}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">{item.ten}</p>
+                    <p className="mt-0.5 text-[9px] italic text-[var(--ink-muted)]">{item.tenVietTat ? `(${item.tenVietTat})` : ""}</p>
+                  </div>
+                  <div className={`flex items-center gap-1.5 text-[10px] font-semibold ${state.text}`}><Dot state={item.sucKhoe} />{state.nhan}</div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
+                  <div className="rounded-lg bg-white/[0.035] px-2 py-2"><p className="text-base font-semibold text-white">{item.congViecDangLam}</p><p className="text-[8px] text-[var(--ink-muted)]">Đang làm</p></div>
+                  <div className="rounded-lg bg-white/[0.035] px-2 py-2"><p className="text-base font-semibold text-amber-300">{item.biChan}</p><p className="text-[8px] text-[var(--ink-muted)]">Bị chặn</p></div>
+                  <div className="rounded-lg bg-white/[0.035] px-2 py-2"><p className="text-base font-semibold text-rose-300">{item.quaHan}</p><p className="text-[8px] text-[var(--ink-muted)]">Quá hạn</p></div>
+                </div>
               </div>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--ink-muted)]">{item.ghiChu}</p>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+          <SectionTitle title="Độ tin cậy dữ liệu" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {props.nguonDuLieu.map((item) => {
+              const state = sourceVisual(item.trangThai);
+              return (
+                <div key={item.ten} className={`rounded-xl border ${state.border} bg-white/[0.02] p-3`} title={item.ghiChu}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-white">{item.ten}</p>
+                    <span className={`h-2 w-2 rounded-full ${state.dot}`} />
+                  </div>
+                  <p className={`mt-2 text-[10px] font-semibold ${state.text}`}>{state.label}</p>
+                  <p className="mt-1 text-[9px] text-[var(--ink-muted)]">{formatTime(item.capNhatLuc)}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+          <SectionTitle title="Kiểm soát quyền & an toàn" action={<Link href="/ai-manager" className="text-[11px] font-semibold text-sky-300">Chi tiết →</Link>} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {props.kiemSoat.slice(0, 8).map((item) => {
+              const state = TINH_TRANG[item.tinhTrang];
+              return (
+                <div key={item.ten} className="flex items-center gap-3 rounded-xl border border-white/[0.055] bg-white/[0.02] px-3 py-2.5" title={item.ghiChu}>
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state.cham}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-medium text-white">{item.ten}</p>
+                    <p className={`mt-0.5 truncate text-[9px] font-semibold ${state.text}`}>{item.giaTri}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-4">
+        <SectionTitle title="Hoạt động gần đây" action={<Link href="/ai-manager" className="text-[11px] font-semibold text-sky-300">Nhật ký →</Link>} />
+        <div className="grid gap-x-5 gap-y-1 md:grid-cols-2">
+          {props.hoatDong.length === 0 ? (
+            <p className="py-4 text-center text-xs text-[var(--ink-muted)] md:col-span-2">Chưa có hoạt động.</p>
+          ) : props.hoatDong.slice(0, 6).map((item) => (
+            <div key={item.id} className="flex items-center gap-3 border-b border-white/[0.05] py-2.5 last:border-0" title={item.noiDung}>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs text-[var(--ink-secondary)]">{item.noiDung}</p>
+                <p className="mt-0.5 truncate text-[9px] text-[var(--ink-muted)]">{item.tacNhan} · {item.loai}</p>
+              </div>
+              <span className="shrink-0 text-[9px] text-[var(--ink-muted)]">{formatTime(item.thoiGian)}</span>
             </div>
           ))}
         </div>

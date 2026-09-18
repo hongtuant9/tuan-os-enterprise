@@ -48,7 +48,32 @@ function permissionLabel(permission: string) {
   return permission;
 }
 
-function WorkList({ title, items, empty, tone = "default" }: { title: string; items: ManagerWorkItem[]; empty: string; tone?: "default" | "ceo" | "waiting" | "system" }) {
+function CollapsibleSection({
+  title,
+  count,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  count?: string | number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-2xl border border-white/[0.08] bg-[var(--surface)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 select-none [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-xs text-[var(--ink-muted)] transition-transform group-open:rotate-90">›</span>
+          <h2 className="truncate text-sm font-semibold text-white">{title}</h2>
+        </div>
+        {count !== undefined ? <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-muted)]">{count}</span> : null}
+      </summary>
+      <div className="border-t border-white/[0.06] px-5 pb-5 pt-4">{children}</div>
+    </details>
+  );
+}
+
+function WorkList({ title, items, empty, tone = "default", defaultOpen = false }: { title: string; items: ManagerWorkItem[]; empty: string; tone?: "default" | "ceo" | "waiting" | "system"; defaultOpen?: boolean }) {
   const toneClass = tone === "ceo"
     ? "border-rose-500/20"
     : tone === "waiting"
@@ -58,12 +83,15 @@ function WorkList({ title, items, empty, tone = "default" }: { title: string; it
         : "border-white/[0.08]";
 
   return (
-    <section className={`rounded-2xl border ${toneClass} bg-[var(--surface)] p-5`}>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--ink-primary)]">{title}</h2>
+    <details open={defaultOpen} className={`group rounded-2xl border ${toneClass} bg-[var(--surface)]`}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 select-none [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-xs text-[var(--ink-muted)] transition-transform group-open:rotate-90">›</span>
+          <h2 className="truncate text-sm font-semibold text-[var(--ink-primary)]">{title}</h2>
+        </div>
         <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-muted)]">{items.length}</span>
-      </div>
-      <div className="mt-3 space-y-2">
+      </summary>
+      <div className="space-y-2 border-t border-white/[0.06] px-5 pb-5 pt-3">
         {items.length === 0 ? <p className="text-sm text-[var(--ink-muted)]">{empty}</p> : items.map((item) => (
           <div key={item.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-3 py-3">
             <div className="flex items-start justify-between gap-3">
@@ -92,7 +120,7 @@ function WorkList({ title, items, empty, tone = "default" }: { title: string; it
           </div>
         ))}
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -177,15 +205,10 @@ export default async function AiManagerPage() {
             </div>
           </section>
 
-          <section id="executive-org" className="mt-5 scroll-mt-6 rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-white">Cơ cấu điều hành TCE + TUAN OS</h2>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">CEO Tuấn → TUAN OS AI CEO Delegate → các AI Trưởng phòng. Đây là lớp điều phối dùng chung runtime 15 tác nhân chuyên môn.</p>
-              </div>
-              <span className="text-xs text-[var(--ink-muted)]">{TCE_EXECUTIVE_ORG.length} vai trò điều hành</span>
-            </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div id="executive-org" className="mt-5 scroll-mt-6">
+            <CollapsibleSection title="Cơ cấu điều hành TCE + TUAN OS" count={`${TCE_EXECUTIVE_ORG.length} vai trò`}>
+              <p className="mb-3 text-xs text-[var(--ink-muted)]">CEO Tuấn → TUAN OS AI CEO Delegate → các AI Trưởng phòng. Mở phần này khi cần xem quyền, nhiệm vụ và quan hệ báo cáo.</p>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {TCE_EXECUTIVE_ORG.map((role) => (
                 <div key={role.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5">
                   <div className="flex items-start justify-between gap-2">
@@ -200,18 +223,14 @@ export default async function AiManagerPage() {
                   <p className="mt-2 text-[10px] text-[var(--ink-muted)]">Tác nhân chuyên môn: {role.mappedAgents.join(", ")}</p>
                 </div>
               ))}
-            </div>
-          </section>
-
-          <section id="agent-registry" className="mt-5 scroll-mt-6 rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-white">Danh mục 15 tác nhân AI</h2>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">Mỗi tác nhân có nhiệm vụ, quyền và nguồn dữ liệu riêng; mã kỹ thuật được giữ nhỏ để phục vụ audit.</p>
               </div>
-              <span className="text-xs text-[var(--ink-muted)]">{TCE_AGENT_REGISTRY.length}/15 đã đăng ký</span>
-            </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            </CollapsibleSection>
+          </div>
+
+          <div id="agent-registry" className="mt-5 scroll-mt-6">
+            <CollapsibleSection title="Danh mục 15 tác nhân AI" count={`${TCE_AGENT_REGISTRY.length}/15`}>
+              <p className="mb-3 text-xs text-[var(--ink-muted)]">Mở khi cần kiểm tra nhiệm vụ, quyền hoặc nguồn dữ liệu của từng tác nhân.</p>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {TCE_AGENT_REGISTRY.map((agent) => (
                 <div key={agent.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5">
                   <div className="flex items-start justify-between gap-2">
@@ -222,30 +241,29 @@ export default async function AiManagerPage() {
                   <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">{agent.mission}</p>
                 </div>
               ))}
-            </div>
-          </section>
+              </div>
+            </CollapsibleSection>
+          </div>
 
           <div className="mt-5">
-            <WorkList title="CEO cần hỗ trợ — hành động cụ thể" items={ceoSupportItems} empty="Hiện không có công việc nào cần CEO thao tác hoặc quyết định." tone="ceo" />
+            <WorkList title="CEO cần hỗ trợ — hành động cụ thể" items={ceoSupportItems} empty="Hiện không có công việc nào cần CEO thao tác hoặc quyết định." tone="ceo" defaultOpen={ceoSupportItems.length > 0} />
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <WorkList title="Bị chặn — cần CEO quyết định/phê duyệt" items={brief.blockedItems} empty="Không có công việc nào đang bị chặn bởi cổng phê duyệt CEO." tone="ceo" />
+            <WorkList title="Bị chặn — cần CEO quyết định/phê duyệt" items={brief.blockedItems} empty="Không có công việc nào đang bị chặn bởi cổng phê duyệt CEO." tone="ceo" defaultOpen={brief.blockedItems.length > 0} />
             <WorkList title="Đang chờ điều kiện / công việc trước" items={brief.waitingItems} empty="Không có công việc nào đang chờ dependency hoặc sequence." tone="waiting" />
             <WorkList title="Vấn đề hệ thống / kỹ thuật cần đội phụ trách xử lý" items={brief.systemIssueItems} empty="Không có vấn đề kỹ thuật đang cản trở thực thi." tone="system" />
-            <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có công việc đủ điều kiện để đề xuất chạy." />
+            <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có công việc đủ điều kiện để đề xuất chạy." defaultOpen />
           </div>
 
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-            <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-5">
-              <h2 className="text-sm font-semibold text-white">Giao việc cho quản lý AI của TCE</h2>
-              <p className="mt-1 text-sm text-[var(--ink-muted)]">Lệnh được định tuyến tới một trong 15 tác nhân theo mục đích. Các thay đổi L2/L3 tiếp tục đi qua hàng chờ phê duyệt và guardrail hiện hành.</p>
-              <div className="mt-4"><TceManagerChat /></div>
-            </section>
+            <CollapsibleSection title="Giao việc cho quản lý AI của TCE" defaultOpen>
+              <p className="mb-3 text-sm text-[var(--ink-muted)]">Giao việc trực tiếp tại đây. Các thay đổi L2/L3 vẫn đi qua cổng phê duyệt.</p>
+              <TceManagerChat />
+            </CollapsibleSection>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[var(--surface)] p-5">
-              <h2 className="text-sm font-semibold text-white">Hoạt động gần đây</h2>
-              <div className="mt-3 space-y-3">
+            <CollapsibleSection title="Hoạt động gần đây" count={(activityRows ?? []).length}>
+              <div className="space-y-3">
                 {(activityRows ?? []).length === 0 ? <p className="text-sm text-[var(--ink-muted)]">Chưa có nhật ký hoạt động.</p> : (activityRows ?? []).map((row) => (
                   <div key={row.id} className="border-b border-white/[0.06] pb-2 last:border-0">
                     <p className="text-sm text-[var(--ink-secondary)]">{row.message}</p>
@@ -253,7 +271,7 @@ export default async function AiManagerPage() {
                   </div>
                 ))}
               </div>
-            </section>
+            </CollapsibleSection>
           </div>
         </div>
       </main>

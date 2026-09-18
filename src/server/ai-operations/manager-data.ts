@@ -73,6 +73,7 @@ function ownerSupportReason(blocker: string, nextAction: string) {
 export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLite[]): ManagerWorkItem[] {
   const metadataByTarget = new Map<string, Record<string, string>>();
   const approvalByCanonicalId = new Map<string, Record<string, string>>();
+  const approvalsByTaskId = new Map<string, Record<string, string>[]>();
 
   for (const record of records) {
     const fields = asFields(record.data);
@@ -81,7 +82,13 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     }
     if (record.source_key === "approval-001") {
       const approvalId = first(fields, "APPROVAL_ID");
+      const taskId = first(fields, "TASK_ID");
       if (approvalId) approvalByCanonicalId.set(approvalId, fields);
+      if (taskId) {
+        const list = approvalsByTaskId.get(taskId) ?? [];
+        list.push(fields);
+        approvalsByTaskId.set(taskId, list);
+      }
     }
   }
 
@@ -97,19 +104,25 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     const nextAction = first(fields, "NEXT_ACTION");
     const executionGate = first(fields, "EXECUTION_GATE");
     const owner = first(fields, "OWNER");
-    const approvalId = first(fields, "APPROVAL_ID");
+    const taskApprovalId = first(fields, "APPROVAL_ID");
     const approvalRequiredRaw = first(fields, "APPROVAL_REQUIRED").trim().toUpperCase();
     const approvalRequired = ["YES", "TRUE", "REQUIRED"].includes(approvalRequiredRaw);
-    const approvalDecision = approvalId
-      ? normalizedApprovalDecision(approvalByCanonicalId.get(approvalId))
-      : approvalRequired
-        ? "pending"
-        : "unknown";
+    const relatedApprovals = approvalsByTaskId.get(canonicalId) ?? [];
+    const pendingApproval = relatedApprovals.find((approval) => normalizedApprovalDecision(approval) === "pending");
+    const explicitApproval = taskApprovalId ? approvalByCanonicalId.get(taskApprovalId) : undefined;
+    const approvalDecision = pendingApproval
+      ? "pending"
+      : explicitApproval
+        ? normalizedApprovalDecision(explicitApproval)
+        : relatedApprovals.length > 0
+          ? normalizedApprovalDecision(relatedApprovals[0])
+          : "unknown";
     const approvalResolved = approvalDecision === "approved" || approvalDecision === "rejected";
+    const pendingCeoApproval = Boolean(pendingApproval);
 
     const supportReasonFromApproval =
-      approvalRequired && !approvalResolved
-        ? "Cần CEO quyết định/phê duyệt. Sau quyết định, tác nhân phụ trách tiếp tục thực thi."
+      pendingCeoApproval
+        ? "Cần CEO quyết định/phê duyệt yêu cầu đang chờ. Sau quyết định, tác nhân phụ trách tiếp tục thực thi."
         : "";
     const supportReasonFromAuth = ownerSupportReason(blocker, nextAction);
     const ceoSupportReason = supportReasonFromApproval || supportReasonFromAuth;
@@ -126,12 +139,13 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       executionGate: executionGate || undefined,
       owner: owner || undefined,
       approvalRequired,
-      approvalId: approvalId || undefined,
+      approvalId: first(pendingApproval ?? {}, "APPROVAL_ID") || taskApprovalId || undefined,
       approvalResolved,
+      pendingCeoApproval,
       approvalDecision,
       needsCeoSupport,
       ceoSupportReason: ceoSupportReason || undefined,
-      resolutionOwner: approvalRequired && !approvalResolved
+      resolutionOwner: pendingCeoApproval
         ? "CEO Tuấn: quyết định; tác nhân phụ trách: thực thi sau phê duyệt"
         : owner || agentFor(title, unit),
       agent: agentFor(title, unit),

@@ -245,22 +245,28 @@ export default async function Home() {
   ];
 
   const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
+  const managerItemById = new Map(managerItems.map((item) => [item.id, item]));
   const priorities: ViecUuTien[] = [...tasks]
     .filter((item) => item.status !== "done")
     .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
     .slice(0, 3)
-    .map((item) => ({
-      id: item.id,
-      ten: tieuDeCongViecTiengViet(item.title),
-      chuTri: item.owner || item.unit,
-      mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
-      trangThai: ceoBlockedIds.has(item.id)
-        ? "Bị chặn — chờ CEO"
-        : item.status === "blocked"
-          ? "Vấn đề hệ thống"
-          : tenTrangThaiTask(item.status),
-      han: item.dueDate || undefined,
-    }));
+    .map((item) => {
+      const governance = managerItemById.get(item.id);
+      return {
+        id: item.id,
+        ten: tieuDeCongViecTiengViet(item.title),
+        chuTri: item.owner || item.unit,
+        mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
+        trangThai: ceoBlockedIds.has(item.id)
+          ? "Bị chặn — chờ CEO"
+          : item.status === "blocked"
+            ? "Vấn đề hệ thống"
+            : tenTrangThaiTask(item.status),
+        canCeoHoTro: governance?.needsCeoSupport ?? false,
+        phuTrachXuLy: governance?.resolutionOwner ?? item.owner ?? item.unit,
+        han: item.dueDate || undefined,
+      };
+    });
 
   const alerts: CanhBaoDieuHanh[] = [];
   for (const item of ceoBlockedItems.filter((task) => task.priority === "P0").slice(0, 2)) {

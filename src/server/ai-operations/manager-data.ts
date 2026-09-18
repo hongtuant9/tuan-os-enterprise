@@ -62,12 +62,34 @@ function normalizedApprovalDecision(fields?: Record<string, string>): ManagerWor
   return "unknown";
 }
 
-function ownerSupportReason(blocker: string, nextAction: string) {
-  const text = `${blocker} ${nextAction}`;
-  if (/OWNER.*(AUTH|UNLOCK|LOGIN)|MFA|PASSWORD|ĐĂNG NHẬP|XÁC THỰC.*OWNER|OWNER VẮNG MẶT/i.test(text)) {
-    return "Cần CEO hỗ trợ xác thực/đăng nhập; tác nhân phụ trách vẫn chịu trách nhiệm xử lý kỹ thuật.";
+function ownerSupportDetails(title: string, blocker: string, nextAction: string, executionGate: string) {
+  const text = `${title} ${blocker} ${nextAction} ${executionGate}`;
+
+  if (/TENTEN|MAIL PRO|GMAIL/i.test(text)) {
+    return {
+      reason: "Cần CEO hỗ trợ xác thực phiên Tenten Mail Pro và Gmail khi task được đưa vào WP-F05.",
+      action: "Khi hệ thống báo task đã vào WP-F05: mở Tenten Mail Pro và Gmail trên máy đang dùng, tự đăng nhập và hoàn tất MFA nếu có; không gửi password/OTP/token vào chat. Sau đó để nguyên phiên đăng nhập và báo “đã đăng nhập xong”.",
+      timing: "CHƯA CẦN LÀM NGAY. Chỉ thực hiện khi WP-F05 trở thành CURRENT MAIN LANE.",
+    };
   }
-  return "";
+
+  if (/SSH|PUBLICKEY|AUTHORIZED-KEY|OVH/i.test(text)) {
+    return {
+      reason: "Cần CEO hỗ trợ một thao tác human-only để mở phiên/quyền xác thực VPS.",
+      action: "Khi được yêu cầu: mở control plane/VPS console hoặc phiên SSH trên máy của anh, tự xác thực/unlock key nếu hệ thống hỏi; không gửi private key/password/token vào chat. Sau đó báo “đã xác thực xong”.",
+      timing: "Chỉ khi task backup/restore hoặc VPS re-acceptance được đưa vào main lane.",
+    };
+  }
+
+  if (/OWNER.*(AUTH|UNLOCK|LOGIN)|MFA|PASSWORD|ĐĂNG NHẬP|XÁC THỰC.*OWNER|OWNER VẮNG MẶT/i.test(text)) {
+    return {
+      reason: "Cần CEO hỗ trợ xác thực/đăng nhập; tác nhân phụ trách vẫn chịu trách nhiệm xử lý kỹ thuật.",
+      action: "Mở đúng hệ thống được yêu cầu, tự đăng nhập/hoàn tất MFA trên thiết bị của anh, không chia sẻ password/OTP/token; sau đó báo “đã đăng nhập xong”.",
+      timing: "Chỉ thực hiện khi task được đưa vào lane thực thi và hệ thống yêu cầu xác thực.",
+    };
+  }
+
+  return { reason: "", action: "", timing: "" };
 }
 
 export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLite[]): ManagerWorkItem[] {
@@ -124,8 +146,14 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       pendingCeoApproval
         ? "Cần CEO quyết định/phê duyệt yêu cầu đang chờ. Sau quyết định, tác nhân phụ trách tiếp tục thực thi."
         : "";
-    const supportReasonFromAuth = ownerSupportReason(blocker, nextAction);
-    const ceoSupportReason = supportReasonFromApproval || supportReasonFromAuth;
+    const authSupport = ownerSupportDetails(title, blocker, nextAction, executionGate);
+    const ceoSupportReason = supportReasonFromApproval || authSupport.reason;
+    const ceoSupportAction = pendingCeoApproval
+      ? "Mở mục Việc cần phê duyệt, đọc phạm vi/ảnh hưởng/rollback và chọn APPROVE, REJECT hoặc HOLD. Không cần tự thực hiện phần kỹ thuật."
+      : authSupport.action;
+    const ceoSupportTiming = pendingCeoApproval
+      ? "Cần xử lý trước khi task được phép tiếp tục."
+      : authSupport.timing;
     const needsCeoSupport = Boolean(ceoSupportReason);
 
     return {
@@ -145,6 +173,8 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       approvalDecision,
       needsCeoSupport,
       ceoSupportReason: ceoSupportReason || undefined,
+      ceoSupportAction: ceoSupportAction || undefined,
+      ceoSupportTiming: ceoSupportTiming || undefined,
       resolutionOwner: pendingCeoApproval
         ? "CEO Tuấn: quyết định; tác nhân phụ trách: thực thi sau phê duyệt"
         : owner || agentFor(title, unit),

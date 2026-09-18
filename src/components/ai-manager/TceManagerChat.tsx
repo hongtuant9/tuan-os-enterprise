@@ -53,7 +53,7 @@ export default function TceManagerChat() {
           onChange={(event) => setMessage(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }}
           rows={3}
-          placeholder="Giao việc cho TCE AI Manager…"
+          placeholder="Giao việc cho quản lý AI của TCE…"
           className="min-w-0 flex-1 resize-none rounded-lg border border-[var(--border-hairline)] bg-white px-3 py-2 text-sm outline-none"
         />
         <button onClick={submit} disabled={pending || !message.trim()} className="self-end rounded-lg bg-[var(--ink-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">

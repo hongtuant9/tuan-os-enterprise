@@ -12,6 +12,8 @@ const staffOpsWorkerEnabled = process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true
 const staffOpsIntervalMs = Math.max(60_000, Number(process.env.TCE_STAFF_OPS_WORKER_INTERVAL_MS || 300_000));
 const executiveWorkerEnabled = process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const executiveIntervalMs = Math.max(300_000, Number(process.env.TCE_EXECUTIVE_WORKER_INTERVAL_MS || 900_000));
+const syncWorkerEnabled = process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const syncWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_SYNC_WORKER_INTERVAL_MS || 300_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -29,6 +31,7 @@ function deriveToken(suffix) {
 const cmiToken = deriveToken("cmi-worker-v1");
 const staffOpsToken = deriveToken("tce-staff-ops-worker-v1");
 const executiveToken = deriveToken("tce-executive-worker-v1");
+const syncWorkerToken = deriveToken("tce-sync-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -111,6 +114,45 @@ async function executiveTick() {
   }
 }
 
+async function syncWorkerTick() {
+  if (!syncWorkerEnabled || !syncWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/sync/worker",
+      "x-tce-sync-worker-token",
+      syncWorkerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE Sync] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped && payload?.ran > 0) {
+      console.log(`[TCE Sync] checked=${payload?.checked ?? 0} ran=${payload?.ran ?? 0}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE Sync] ${message}`);
+  }
+}
+
+async function syncWorkerLoop() {
+  if (!syncWorkerEnabled) {
+    console.log("[TCE Sync] disabled");
+    return;
+  }
+  if (!syncWorkerToken) {
+    console.error("[TCE Sync] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE Sync] enabled interval_ms=${syncWorkerIntervalMs}`);
+  await sleep(10000);
+  while (!stopping) {
+    await syncWorkerTick();
+    await sleep(syncWorkerIntervalMs);
+  }
+}
+
 async function executiveWorkerLoop() {
   if (!executiveWorkerEnabled) {
     console.log("[TCE Executive] disabled");
@@ -185,3 +227,4 @@ server.on("exit", (code, signal) => {
 void cmiWorkerLoop();
 void staffOpsWorkerLoop();
 void executiveWorkerLoop();
+void syncWorkerLoop();

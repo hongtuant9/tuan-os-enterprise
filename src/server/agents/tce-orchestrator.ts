@@ -2,6 +2,8 @@ import "server-only";
 import { getAdminContainer } from "@/server/container";
 import { TCE_AGENT_REGISTRY, agentSummary, type TceAgentDefinition } from "./tce-registry";
 import { assertTceAiBudget, estimatePreflightCostUsd, recordTceAiUsage } from "./tce-cost-guard";
+import { buildManagerItems } from "@/server/ai-operations/manager-data";
+import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
 
 export type TceAgentReply = {
   agent: string;
@@ -13,10 +15,15 @@ export type TceAgentReply = {
 
 type RuntimeContext = {
   generatedAt: string;
-  openTasks: Array<{ title: string; status: string; priority: string }>;
-  pendingApprovals: Array<{ title: string; unit: string }>;
+  workItems: ManagerWorkItem[];
+  blockedItems: ManagerWorkItem[];
+  waitingItems: ManagerWorkItem[];
+  systemIssueItems: ManagerWorkItem[];
+  nextItems: ManagerWorkItem[];
+  ceoSupportItems: ManagerWorkItem[];
+  pendingApprovalCount: number;
   agentStates: Array<{ name: string; status: string; currentTask: string }>;
-  authorities: Array<{ source: string; syncedAt: string | null }>;
+  authorities: AuthoritySnapshot[];
   hospitality?: { conversations: number; bookings: number; missingKnowledge: number };
 };
 
@@ -59,37 +66,68 @@ function financialIntent(message: string): boolean {
 }
 async function loadRuntimeContext(agent: TceAgentDefinition): Promise<RuntimeContext> {
   const container = getAdminContainer();
-  const [tasks, approvals, agents, syncResult] = await Promise.all([
-    container.tasks.list(),
-    container.approvals.list(),
+  const [taskRows, syncRecords, syncSources, agents, receptionist] = await Promise.all([
+    container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
+    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
+    container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.agents.list(),
-    container.db.from("sync_records").select("source_key,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
+    agent.domain === "customer" || agent.domain === "growth" || agent.id === "manager_agent"
+      ? container.aiReceptionist.dashboard()
+      : Promise.resolve(null),
   ]);
 
-  const latest = new Map<string, string>();
-  for (const row of syncResult.data ?? []) {
-    const current = latest.get(row.source_key);
-    if (!current || row.synced_at > current) latest.set(row.source_key, row.synced_at);
-  }
-
-  const context: RuntimeContext = {
-    generatedAt: new Date().toISOString(),
-    openTasks: tasks.filter((item) => item.status !== "done").slice(0, 12).map((item) => ({ title: item.title, status: item.status, priority: item.priority })),
-    pendingApprovals: approvals.filter((item) => item.status === "pending").slice(0, 10).map((item) => ({ title: item.title, unit: item.unit })),
-    agentStates: agents.filter((item) => item.unit === "TCE AI").slice(0, 20).map((item) => ({ name: item.name, status: item.status, currentTask: item.currentTask })),
-    authorities: ["task-001", "approval-001", "l3-channel-tracking"].map((source) => ({ source, syncedAt: latest.get(source) ?? null })),
-  };
-
-  if (agent.domain === "customer" || agent.domain === "growth" || agent.id === "manager_agent") {
-    const dashboard = await container.aiReceptionist.dashboard();
-    context.hospitality = {
-      conversations: dashboard.conversations.length,
-      bookings: dashboard.bookings.length,
-      missingKnowledge: dashboard.missingDataBacklog.length,
+  const workItems = buildManagerItems(taskRows.data ?? [], syncRecords.data ?? []);
+  const sourceByKey = new Map((syncSources.data ?? []).map((item) => [item.key, item]));
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const authority = (key: "task-001" | "approval-001" | "l3-channel-tracking", label: AuthoritySnapshot["authority"]): AuthoritySnapshot => {
+    const source = sourceByKey.get(key);
+    const updatedAt = source?.last_synced_at ?? null;
+    let state: AuthoritySnapshot["state"] = "unavailable";
+    if (source?.status !== "error" && updatedAt) {
+      state = now.getTime() - new Date(updatedAt).getTime() <= dayMs ? "verified" : "stale";
+    }
+    return {
+      authority: label,
+      state,
+      checkedAt: now.toISOString(),
+      lastUpdatedAt: updatedAt ?? undefined,
+      note: source?.last_error ?? undefined,
     };
-  }
-  return context;
+  };
+  const authorities: AuthoritySnapshot[] = [
+    authority("task-001", "TASK-001"),
+    authority("approval-001", "APPROVAL-001"),
+    authority("l3-channel-tracking", "L3"),
+    { authority: "RUNTIME", state: "verified", checkedAt: now.toISOString() },
+  ];
+
+  const brief = buildManagerBrief(workItems, authorities, now.toISOString());
+  const ceoSupportItems = workItems
+    .filter((item) => item.status !== "DONE" && item.needsCeoSupport)
+    .sort((a, b) => (a.pendingCeoApproval === b.pendingCeoApproval ? 0 : a.pendingCeoApproval ? -1 : 1));
+
+  return {
+    generatedAt: now.toISOString(),
+    workItems,
+    blockedItems: brief.blockedItems,
+    waitingItems: brief.waitingItems,
+    systemIssueItems: brief.systemIssueItems,
+    nextItems: brief.nextItems,
+    ceoSupportItems,
+    pendingApprovalCount: brief.blockedItems.length,
+    agentStates: agents.filter((item) => item.unit === "TCE AI").slice(0, 20).map((item) => ({ name: item.name, status: item.status, currentTask: item.currentTask })),
+    authorities,
+    hospitality: receptionist
+      ? {
+          conversations: receptionist.conversations.length,
+          bookings: receptionist.bookings.length,
+          missingKnowledge: receptionist.missingDataBacklog.length,
+        }
+      : undefined,
+  };
 }
+
 function extractText(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const root = payload as Record<string, unknown>;
@@ -109,12 +147,79 @@ function extractText(payload: unknown): string {
   return chunks.join("\n").trim();
 }
 
+function pct(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function authorityLabel(source: AuthoritySnapshot) {
+  if (source.state === "verified") return "VERIFIED";
+  if (source.state === "stale") return "STALE";
+  return "UNAVAILABLE";
+}
+
+function compactItem(item: ManagerWorkItem) {
+  return `${item.id} — ${item.title}`;
+}
+
+function isExecutiveOverview(message: string) {
+  return /tình hình.*tce|tce.*hôm nay|kiểm tra.*tình hình|tổng quan.*tce|báo cáo.*tce|tình trạng.*tce/i.test(message);
+}
+
 function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, message: string): string {
+  const total = context.workItems.length;
+  const done = context.workItems.filter((item) => item.status === "DONE").length;
+  const inProgress = context.workItems.filter((item) => item.status === "IN_PROGRESS").length;
+  const agentOnline = context.agentStates.filter((item) => item.status === "online").length;
+  const staleAuthorities = context.authorities.filter((item) => item.state !== "verified");
   const finance = financialIntent(message)
-    ? " Yêu cầu này có yếu tố tài chính/chi phí nên mọi mutation phải chờ Owner duyệt."
+    ? "Yêu cầu có yếu tố tài chính/chi phí: mọi mutation tài chính vẫn phải qua CEO approval."
     : "";
-  return `Đã route tới ${agent.name}. AI generation chưa bật trên runtime.${finance} ` +
-    `Hiện có ${context.openTasks.length} task mở, ${context.pendingApprovals.length} approval pending và ${context.agentStates.length} TCE agent state trong runtime.`;
+
+  if (isExecutiveOverview(message)) {
+    const health = staleAuthorities.length > 0 || context.blockedItems.length > 0 ? "CẦN THEO DÕI" : "ỔN ĐỊNH";
+    const supportNow = context.ceoSupportItems.filter((item) => item.pendingCeoApproval);
+    const supportLater = context.ceoSupportItems.filter((item) => !item.pendingCeoApproval);
+    const topNext = context.nextItems.slice(0, 3).map(compactItem);
+    const systemIssues = context.systemIssueItems.slice(0, 3).map(compactItem);
+    const authorityText = context.authorities.map((item) => `${item.authority}=${authorityLabel(item)}`).join(" · ");
+
+    const lines = [
+      `TÌNH HÌNH TCE HÔM NAY — ${health}`,
+      `Tiến độ: ${done}/${total} task canonical hoàn thành (${pct(done,total)}%). Đang thực thi: ${inProgress}. Chờ điều kiện: ${context.waitingItems.length}. Vấn đề hệ thống/kỹ thuật: ${context.systemIssueItems.length}. Chờ CEO phê duyệt: ${context.blockedItems.length}.`,
+      `Tác nhân AI: ${agentOnline}/${context.agentStates.length} đang online trong runtime.`,
+      `Dữ liệu điều hành: ${authorityText}.`,
+    ];
+
+    if (context.hospitality) {
+      lines.push(`Khách hàng/runtime: ${context.hospitality.conversations} hội thoại, ${context.hospitality.bookings} booking AI, ${context.hospitality.missingKnowledge} mục dữ liệu cần xác minh.`);
+    }
+    if (topNext.length) lines.push(`Ưu tiên tiếp theo: ${topNext.join(" | ")}.`);
+    if (systemIssues.length) lines.push(`Cần đội kỹ thuật xử lý: ${systemIssues.join(" | ")}.`);
+    if (supportNow.length) {
+      lines.push(`CEO cần hành động NGAY: ${supportNow.map((item) => `${item.id}: ${item.ceoSupportAction ?? item.ceoSupportReason ?? "cần quyết định"}`).join(" | ")}.`);
+    } else if (supportLater.length) {
+      lines.push(`CEO chưa cần hành động ngay. Có ${supportLater.length} việc sẽ cần hỗ trợ human-only khi đến đúng lane; dashboard đã ghi rõ thời điểm và thao tác.`);
+    } else {
+      lines.push("CEO cần hành động ngay: KHÔNG.");
+    }
+    if (finance) lines.push(finance);
+    lines.push("Nguồn: TASK-001 / APPROVAL-001 / L3 / runtime. Đây là báo cáo deterministic từ dữ liệu hiện có; không dùng AI tạo sinh để bịa hoặc suy diễn.");
+    return lines.join("\n\n");
+  }
+
+  const next = context.nextItems.slice(0, 3).map(compactItem).join(" | ");
+  const system = context.systemIssueItems.slice(0, 3).map(compactItem).join(" | ");
+  const support = context.ceoSupportItems.slice(0, 3).map((item) => `${item.id}: ${item.ceoSupportAction ?? item.ceoSupportReason ?? "cần CEO hỗ trợ"}`).join(" | ");
+
+  return [
+    `Đã chuyển yêu cầu tới ${agent.name}.`,
+    `Tình trạng điều hành hiện tại: ${done}/${total} task canonical hoàn thành; ${inProgress} đang thực thi; ${context.waitingItems.length} chờ điều kiện; ${context.systemIssueItems.length} vấn đề hệ thống/kỹ thuật; ${context.blockedItems.length} chờ CEO phê duyệt.`,
+    next ? `Ưu tiên có thể tiếp tục: ${next}.` : "",
+    system ? `Vấn đề kỹ thuật đang mở: ${system}.` : "",
+    support ? `Việc cần CEO hỗ trợ: ${support}.` : "CEO cần hỗ trợ ngay: KHÔNG.",
+    finance,
+    "AI tạo sinh chưa bật; phản hồi này chỉ dùng dữ liệu canonical/runtime đã có. Với yêu cầu cần phân tích sâu hơn, hệ thống sẽ không tự suy diễn khi thiếu bằng chứng.",
+  ].filter(Boolean).join("\n\n");
 }
 export async function runTceAgent(message: string): Promise<TceAgentReply> {
   const agent = pickAgent(message);

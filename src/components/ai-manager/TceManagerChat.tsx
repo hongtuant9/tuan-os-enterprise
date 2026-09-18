@@ -39,14 +39,19 @@ export default function TceManagerChat() {
         {items.length === 0 ? (
           <p className="text-sm text-[var(--ink-muted)]">Ví dụ: “Kiểm tra tình hình TCE hôm nay” hoặc “Audit OTA đang có mismatch gì?”</p>
         ) : items.map((item) => (
-          <div key={item.id} className={item.role === "user" ? "ml-10 rounded-lg bg-white p-3" : "mr-10 rounded-lg bg-[var(--surface)] p-3"}>
-            <p className="whitespace-pre-wrap text-sm text-[var(--ink-secondary)]">{item.text}</p>
+          <div key={item.id} className={item.role === "user"
+            ? "ml-10 rounded-lg border border-sky-500/20 bg-sky-500/[0.10] p-3"
+            : "mr-10 rounded-lg border border-white/[0.06] bg-[var(--surface)] p-3"}>
+            <p className={`whitespace-pre-wrap text-sm ${item.role === "user" ? "text-sky-50" : "text-[var(--ink-secondary)]"}`}>{item.text}</p>
             {item.meta ? <p className="mt-2 text-[11px] text-[var(--ink-muted)]">{item.meta}</p> : null}
           </div>
         ))}
         {pending ? <p className="text-xs text-[var(--ink-muted)]">Đang xử lý…</p> : null}
       </div>
       {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
+      <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[11px] leading-5 text-[var(--ink-muted)]">
+        Sau khi hoàn tất một thao tác CEO hỗ trợ, báo lại ngay trong ô dưới theo mẫu: <span className="font-semibold text-sky-300">“Đã hoàn tất hỗ trợ TASK-ID — nội dung đã làm”</span>. Không gửi mật khẩu, OTP, private key hoặc token.
+      </div>
       <div className="mt-3 flex gap-2">
         <textarea
           value={message}
@@ -54,9 +59,13 @@ export default function TceManagerChat() {
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }}
           rows={3}
           placeholder="Giao việc cho quản lý AI của TCE…"
-          className="min-w-0 flex-1 resize-none rounded-lg border border-[var(--border-hairline)] bg-white px-3 py-2 text-sm outline-none"
+          className="min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-white px-3 py-2 text-sm text-slate-950 caret-sky-600 outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
         />
-        <button onClick={submit} disabled={pending || !message.trim()} className="self-end rounded-lg bg-[var(--ink-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+        <button
+          onClick={submit}
+          disabled={pending || !message.trim()}
+          className="self-end rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+        >
           Gửi
         </button>
       </div>

@@ -67,24 +67,40 @@ function ownerSupportDetails(title: string, blocker: string, nextAction: string,
 
   if (/TENTEN|MAIL PRO|GMAIL/i.test(text)) {
     return {
-      reason: "Cần CEO hỗ trợ xác thực phiên Tenten Mail Pro và Gmail khi task được đưa vào WP-F05.",
-      action: "Khi hệ thống báo task đã vào WP-F05: mở Tenten Mail Pro và Gmail trên máy đang dùng, tự đăng nhập và hoàn tất MFA nếu có; không gửi password/OTP/token vào chat. Sau đó để nguyên phiên đăng nhập và báo “đã đăng nhập xong”.",
-      timing: "CHƯA CẦN LÀM NGAY. Chỉ thực hiện khi WP-F05 trở thành CURRENT MAIN LANE.",
+      reason: "Cần CEO hỗ trợ đăng nhập hai hệ thống mà AI không được tự nhập credential: Tenten Mail Pro và Gmail.",
+      action: "Khi WP-F05 được kích hoạt: (1) mở trang quản trị Tenten Mail Pro của tamcocexperience.com và tự đăng nhập/MFA; (2) mở Gmail của hongtuant9@gmail.com và tự đăng nhập/MFA; (3) giữ nguyên hai tab đã đăng nhập. Sau đó báo ngay trong ô “Giao việc cho quản lý AI của TCE”: “Đã hoàn tất hỗ trợ TASK-TCE-FND-023 — đã đăng nhập Tenten Mail Pro và Gmail”. Không gửi password/OTP/token.",
+      timing: "CHƯA CẦN LÀM NGAY. Chỉ làm khi dashboard báo WP-F05 đã vào CURRENT MAIN LANE.",
+    };
+  }
+
+  if (/FND-020|CONTROL CENTER|LOGGING RECHECK/i.test(text)) {
+    return {
+      reason: "Phần CEO có thể cần hỗ trợ là xác thực quyền quản trị OVH VPS; các mục Supabase Pro và Paid OpenAI là quyết định chi phí riêng, chưa được tự mua/nâng cấp.",
+      action: "Khi WP-F07 được kích hoạt và hệ thống yêu cầu: mở OVHcloud Control Panel/VPS console cho máy chủ TCE, tự đăng nhập/MFA và giữ phiên mở. Nếu console yêu cầu unlock/authorize SSH key, anh chỉ thực hiện bước xác thực trên giao diện; không gửi private key/password/token. Sau đó báo trong ô “Giao việc cho quản lý AI của TCE”: “Đã hoàn tất hỗ trợ TASK-TCE-FND-020 — đã xác thực OVH VPS”. Các quyết định nâng Supabase Pro hoặc bật Paid OpenAI sẽ xuất hiện riêng ở hàng chờ phê duyệt nếu thật sự cần.",
+      timing: "CHƯA CẦN LÀM NGAY nếu WP-F07 chưa là main lane. Khi cần, hệ thống phải báo đúng hệ thống cần mở và lý do.",
+    };
+  }
+
+  if (/FND-019|VPS FOUNDATION|BACKUP.*SSH|SSH.*BACKUP/i.test(text)) {
+    return {
+      reason: "Cần CEO hỗ trợ xác thực phiên OVH VPS để AI CTO kiểm tra backup/checksum/restore qua SSH.",
+      action: "Khi WP-F06 được kích hoạt: mở OVHcloud Control Panel hoặc VPS console cho máy chủ TCE, tự đăng nhập/MFA và giữ phiên mở. Nếu cần unlock/authorize SSH key, chỉ xác thực trên máy của anh; không gửi private key/password/token. Sau đó báo trong ô “Giao việc cho quản lý AI của TCE”: “Đã hoàn tất hỗ trợ TASK-TCE-FND-019 — đã xác thực OVH VPS/SSH”. AI CTO sẽ tiếp tục kiểm tra backup/checksum/restore.",
+      timing: "CHƯA CẦN LÀM NGAY nếu WP-F06 chưa là main lane.",
     };
   }
 
   if (/SSH|PUBLICKEY|AUTHORIZED-KEY|OVH/i.test(text)) {
     return {
-      reason: "Cần CEO hỗ trợ một thao tác human-only để mở phiên/quyền xác thực VPS.",
-      action: "Khi được yêu cầu: mở control plane/VPS console hoặc phiên SSH trên máy của anh, tự xác thực/unlock key nếu hệ thống hỏi; không gửi private key/password/token vào chat. Sau đó báo “đã xác thực xong”.",
-      timing: "Chỉ khi task backup/restore hoặc VPS re-acceptance được đưa vào main lane.",
+      reason: "Cần CEO hỗ trợ xác thực phiên OVH VPS/SSH; AI CTO vẫn chịu trách nhiệm xử lý kỹ thuật.",
+      action: "Mở OVHcloud Control Panel hoặc VPS console đúng máy chủ TCE, tự đăng nhập/MFA và giữ phiên mở; không gửi private key/password/token. Sau đó báo trong ô “Giao việc cho quản lý AI của TCE”: “Đã hoàn tất hỗ trợ [TASK-ID] — đã xác thực OVH VPS/SSH”.",
+      timing: "Chỉ làm khi task tương ứng được đưa vào lane thực thi và dashboard yêu cầu.",
     };
   }
 
   if (/OWNER.*(AUTH|UNLOCK|LOGIN)|MFA|PASSWORD|ĐĂNG NHẬP|XÁC THỰC.*OWNER|OWNER VẮNG MẶT/i.test(text)) {
     return {
       reason: "Cần CEO hỗ trợ xác thực/đăng nhập; tác nhân phụ trách vẫn chịu trách nhiệm xử lý kỹ thuật.",
-      action: "Mở đúng hệ thống được yêu cầu, tự đăng nhập/hoàn tất MFA trên thiết bị của anh, không chia sẻ password/OTP/token; sau đó báo “đã đăng nhập xong”.",
+      action: "Mở đúng hệ thống được nêu trong task, tự đăng nhập/hoàn tất MFA trên thiết bị của anh và giữ phiên mở. Sau đó báo ngay trong ô “Giao việc cho quản lý AI của TCE” theo mẫu: “Đã hoàn tất hỗ trợ [TASK-ID] — đã đăng nhập/xác thực [tên hệ thống]”. Không chia sẻ password/OTP/token.",
       timing: "Chỉ thực hiện khi task được đưa vào lane thực thi và hệ thống yêu cầu xác thực.",
     };
   }

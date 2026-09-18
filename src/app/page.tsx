@@ -49,6 +49,30 @@ function tenTrangThaiTask(status: string) {
   return "Chờ thực hiện";
 }
 
+function tieuDeCongViecTiengViet(title: string) {
+  return title
+    .replace("AI Operations Stability Gate", "Cổng ổn định vận hành AI")
+    .replace("Computer Operator task runner stabilization", "Ổn định trình chạy tác vụ điều khiển máy tính")
+    .replace("Google Ads Agent read-only", "Tác nhân Google Ads chỉ đọc")
+    .replace("Channel Auditor read-only", "Kiểm toán kênh chỉ đọc")
+    .replace("Website Agent audit/shadow", "Tác nhân Website kiểm toán / chạy bóng")
+    .replace("Manager Agent Control Plane baseline", "Nền tảng điều phối của tác nhân quản lý")
+    .replace("Social profile cleanup", "Chuẩn hóa hồ sơ mạng xã hội")
+    .replace("Public channel re-audit", "Kiểm toán lại các kênh công khai")
+    .replace("Critical Master Data audit", "Kiểm toán dữ liệu chủ quan trọng")
+    .replace("Foundation Gate Review", "Đánh giá cổng nền tảng");
+}
+
+function vietHoaNhatKy(message: string) {
+  const synced = message.match(/^Synced (.+): (\d+) created, (\d+) updated(?:, (\d+) failed)?\.$/);
+  if (synced) {
+    return `Đã đồng bộ ${synced[1]}: ${synced[2]} bản ghi mới, ${synced[3]} bản ghi cập nhật${synced[4] ? `, ${synced[4]} lỗi` : ""}.`;
+  }
+  const failed = message.match(/^Sync failed for (.+): (.+)$/);
+  if (failed) return `Đồng bộ thất bại với ${failed[1]}: ${failed[2]}`;
+  return message;
+}
+
 export default async function Home() {
   const container = await getRequestContainer();
   const now = new Date();
@@ -171,7 +195,7 @@ export default async function Home() {
       moTa: "Trạng thái tác nhân TCE ghi nhận trong hệ thống",
       tinhTrang: tceAgents.length > 0 && agentsOnline === tceAgents.length ? "tot" : "can-theo-doi",
       lienKet: "/agents",
-      nguon: "Runtime",
+      nguon: "Môi trường chạy (Runtime)",
     },
     {
       id: "booking",
@@ -189,7 +213,7 @@ export default async function Home() {
       moTa: "Chỉ gồm đặt phòng đã xác minh + bán thêm có attribution; không phải tổng doanh thu công ty",
       tinhTrang: "trung-tinh",
       lienKet: "/upsell",
-      nguon: "Booking AI + Upsell",
+      nguon: "Đặt phòng AI + Bán thêm (Upsell)",
     },
     {
       id: "customer",
@@ -198,7 +222,7 @@ export default async function Home() {
       moTa: `${conversations.length} hội thoại · ${checkIns} check-in hôm nay`,
       tinhTrang: "trung-tinh",
       lienKet: "/customers",
-      nguon: "CRM Hospitality",
+      nguon: "Quản lý khách hàng (CRM)",
     },
     {
       id: "knowledge",
@@ -207,7 +231,7 @@ export default async function Home() {
       moTa: "Không dùng làm cam kết với khách cho tới khi được xác minh",
       tinhTrang: receptionist.missingDataBacklog.length > 0 ? "can-theo-doi" : "tot",
       lienKet: "/ai-le-tan",
-      nguon: "Knowledge backlog",
+      nguon: "Danh sách dữ liệu cần bổ sung",
     },
   ];
 
@@ -218,7 +242,7 @@ export default async function Home() {
     .slice(0, 3)
     .map((item) => ({
       id: item.id,
-      ten: item.title,
+      ten: tieuDeCongViecTiengViet(item.title),
       chuTri: item.owner || item.unit,
       mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
       trangThai: tenTrangThaiTask(item.status),
@@ -227,7 +251,7 @@ export default async function Home() {
 
   const alerts: CanhBaoDieuHanh[] = [];
   for (const item of blockedTasks.filter((task) => task.priority === "high").slice(0, 2)) {
-    alerts.push({ id: item.id, tieuDe: "Công việc ưu tiên cao đang bị chặn", moTa: item.title, mucDo: "cao" });
+    alerts.push({ id: item.id, tieuDe: "Công việc ưu tiên cao đang bị chặn", moTa: tieuDeCongViecTiengViet(item.title), mucDo: "cao" });
   }
   if (sourceProblem) {
     alerts.push({
@@ -241,7 +265,7 @@ export default async function Home() {
     alerts.push({
       id: "OVERDUE",
       tieuDe: `${overdueTasks.length} công việc đã quá hạn`,
-      moTa: "Chief of Staff cần xác định nguyên nhân, blocker và next action cho từng công việc.",
+      moTa: "AI Chánh văn phòng cần xác định nguyên nhân, vướng mắc và hành động tiếp theo cho từng công việc.",
       mucDo: "vua",
     });
   }
@@ -249,28 +273,28 @@ export default async function Home() {
     alerts.push({
       id: "APPROVAL",
       tieuDe: `${pendingApprovals.length} quyết định đang chờ phê duyệt`,
-      moTa: "Các tác vụ liên quan tiếp tục giữ fail-closed cho tới khi có quyết định hợp lệ.",
+      moTa: "Các tác vụ liên quan tiếp tục khóa an toàn (fail-closed) cho tới khi có quyết định hợp lệ.",
       mucDo: "vua",
     });
   }
   if (receptionist.missingDataBacklog.length > 0) {
     alerts.push({
       id: "KNOWLEDGE",
-      tieuDe: "Còn dữ liệu customer-facing chưa xác minh",
+      tieuDe: "Còn dữ liệu dành cho khách chưa xác minh",
       moTa: `${receptionist.missingDataBacklog.length} mục đang bị khóa an toàn, không được dùng để cam kết với khách.`,
       mucDo: "thap",
     });
   }
 
   const departmentDefinitions = [
-    { id: "marketing", ten: "Marketing và tăng trưởng", vietTat: "CMO", kpi: "Traffic đủ điều kiện, lead, hiệu quả nội dung, CAC/ROAS khi tracking tin cậy", moTa: "Thương hiệu, nội dung, social, quảng cáo và tăng trưởng." },
-    { id: "sales", ten: "Bán hàng và doanh thu", vietTat: "CCO", kpi: "Lead → booking, direct booking, doanh thu/khách, upsell", moTa: "Lead, booking, revenue pipeline và bán thêm." },
-    { id: "operations", ten: "Vận hành", vietTat: "COO", kpi: "Checklist, quá hạn, lỗi chất lượng, sự cố vận hành", moTa: "Homestay, Cozy, checklist, SOP và chất lượng hằng ngày." },
-    { id: "finance", ten: "Tài chính và kế hoạch", vietTat: "CFO", kpi: "Dòng tiền, biên lợi nhuận, variance ngân sách, cảnh báo chi phí", moTa: "Phân tích tài chính; không tự thực hiện giao dịch." },
-    { id: "customer", ten: "Trải nghiệm khách hàng", vietTat: "CXO", kpi: "SLA phản hồi, complaint, review, lỗi cam kết", moTa: "FAQ, chăm sóc khách, review và escalation." },
-    { id: "product", ten: "Sản phẩm và trải nghiệm", vietTat: "CPO", kpi: "Attach rate, margin, satisfaction, khả năng lặp lại", moTa: "Cooking class, coffee, tour và gói trải nghiệm." },
-    { id: "hr", ten: "Nhân sự và văn hóa", vietTat: "CHRO", kpi: "Chấm công, đào tạo, checklist, năng suất", moTa: "Ca làm, năng lực, đào tạo và kỷ luật theo policy." },
-    { id: "tech", ten: "Công nghệ và dữ liệu", vietTat: "CTO", kpi: "Uptime, deploy, lỗi hệ thống, backup, security", moTa: "VPS, GitHub/Coolify, dữ liệu, tích hợp, logging và backup." },
+    { id: "marketing", ten: "Marketing và tăng trưởng", vietTat: "CMO", kpi: "Lượng truy cập đủ điều kiện, khách tiềm năng, hiệu quả nội dung, chi phí thu hút khách (CAC), hiệu quả chi quảng cáo (ROAS) khi đo lường tin cậy", moTa: "Thương hiệu, nội dung, mạng xã hội, quảng cáo và tăng trưởng." },
+    { id: "sales", ten: "Bán hàng và doanh thu", vietTat: "CCO", kpi: "Khách tiềm năng → đặt phòng, tỷ lệ đặt trực tiếp, doanh thu/khách, bán thêm", moTa: "Khách tiềm năng, đặt phòng, luồng doanh thu và bán thêm." },
+    { id: "operations", ten: "Vận hành", vietTat: "COO", kpi: "Tỷ lệ hoàn thành checklist, quá hạn, lỗi chất lượng, sự cố vận hành", moTa: "Homestay, Cozy, checklist, quy trình chuẩn (SOP) và chất lượng hằng ngày." },
+    { id: "finance", ten: "Tài chính và kế hoạch", vietTat: "CFO", kpi: "Dòng tiền, biên lợi nhuận, chênh lệch ngân sách, cảnh báo chi phí", moTa: "Phân tích tài chính; không tự thực hiện giao dịch." },
+    { id: "customer", ten: "Trải nghiệm khách hàng", vietTat: "CXO", kpi: "Thời gian phản hồi theo cam kết (SLA), khiếu nại, đánh giá, lỗi cam kết", moTa: "Câu hỏi thường gặp (FAQ), chăm sóc khách, đánh giá và chuyển cấp ngoại lệ." },
+    { id: "product", ten: "Sản phẩm và trải nghiệm", vietTat: "CPO", kpi: "Tỷ lệ khách dùng thêm trải nghiệm, biên lợi nhuận, mức hài lòng, khả năng lặp lại", moTa: "Lớp nấu ăn, trải nghiệm cà phê, tour và các gói trải nghiệm." },
+    { id: "hr", ten: "Nhân sự và văn hóa", vietTat: "CHRO", kpi: "Chấm công, hoàn thành đào tạo, chất lượng checklist, năng suất", moTa: "Ca làm, năng lực, đào tạo và kỷ luật theo chính sách." },
+    { id: "tech", ten: "Công nghệ và dữ liệu", vietTat: "CTO", kpi: "Thời gian hoạt động, triển khai, lỗi hệ thống, sao lưu/khôi phục, bảo mật", moTa: "VPS, GitHub/Coolify, dữ liệu, tích hợp, nhật ký hệ thống và sao lưu." },
   ];
 
   const departments: PhongBanDieuHanh[] = departmentDefinitions.map((department) => {
@@ -294,7 +318,7 @@ export default async function Home() {
   const activities: HoatDongGanDay[] = activity.map((item) => ({
     id: item.id,
     tacNhan: item.agent,
-    noiDung: item.message,
+    noiDung: vietHoaNhatKy(item.message),
     thoiGian: item.timestamp,
     loai: item.type === "approval" ? "Phê duyệt" : item.type === "alert" ? "Cảnh báo" : item.type === "action" ? "Hành động" : "Thông tin",
   }));
@@ -311,31 +335,31 @@ export default async function Home() {
       ten: "Điều hành AI 24/7",
       giaTri: executiveWorkerEnabled ? "Đang bật" : "Đang tắt",
       tinhTrang: executiveWorkerEnabled ? "tot" : "nguy-co",
-      ghiChu: "TUAN OS — AI CEO Delegate chạy trên VPS, không phụ thuộc thiết bị cá nhân.",
+      ghiChu: "TUAN OS — Đại diện CEO bằng AI chạy trên VPS, không phụ thuộc thiết bị cá nhân.",
     },
     {
-      ten: "Worker vận hành nhân sự",
+      ten: "Tiến trình vận hành nhân sự",
       giaTri: staffWorkerEnabled ? "Đang bật" : "Đang tắt",
       tinhTrang: staffWorkerEnabled ? "tot" : "can-theo-doi",
       ghiChu: "Theo dõi checklist, quá hạn và ngoại lệ vận hành.",
     },
     {
       ten: "Kênh giao tiếp với khách",
-      giaTri: openChannels.length === 1 && openChannels[0]?.id === "facebook" ? "Chỉ Facebook pilot" : `${openChannels.length} kênh mở`,
+      giaTri: openChannels.length === 1 && openChannels[0]?.id === "facebook" ? "Chỉ Facebook thử nghiệm" : `${openChannels.length} kênh mở`,
       tinhTrang: openChannels.length === 1 && openChannels[0]?.id === "facebook" ? "tot" : "can-theo-doi",
-      ghiChu: "Các kênh khác tiếp tục đóng cho tới khi từng gate được nghiệm thu.",
+      ghiChu: "Các kênh khác tiếp tục đóng cho tới khi từng cổng kiểm soát được nghiệm thu.",
     },
     {
-      ten: "Ghi booking KiotViet",
+      ten: "Ghi đặt phòng vào KiotViet",
       giaTri: kiotVietWriteEnabled ? "Đang mở" : "Đang khóa",
       tinhTrang: kiotVietWriteEnabled ? "nguy-co" : "tot",
-      ghiChu: "Giai đoạn đầu giữ khóa để tránh mutation booking ngoài approval.",
+      ghiChu: "Giai đoạn đầu giữ khóa để tránh thay đổi đặt phòng ngoài phạm vi được phê duyệt.",
     },
     {
-      ten: "Tạo booking trực tiếp tự động",
+      ten: "Tạo đặt phòng trực tiếp tự động",
       giaTri: directBookingWriteEnabled ? "Đang mở" : "Đang khóa",
       tinhTrang: directBookingWriteEnabled ? "nguy-co" : "tot",
-      ghiChu: "Chỉ mở sau Safety Gate, idempotency và read-back verification.",
+      ghiChu: "Chỉ mở sau cổng an toàn (Safety Gate), chống tạo trùng và kiểm tra lại trạng thái sau ghi.",
     },
     {
       ten: "AI trả phí",
@@ -343,19 +367,19 @@ export default async function Home() {
       tinhTrang: aiBudgetApproved ? "can-theo-doi" : "tot",
       ghiChu: aiBudgetApproved
         ? `Đã cấu hình ngưỡng kỹ thuật. Hôm nay dùng $${aiCostToday.toFixed(4)}, tháng này $${aiCostMonth.toFixed(4)}.`
-        : "Chưa có ngân sách paid AI được duyệt; không tự phát sinh chi phí.",
+        : "Chưa có ngân sách AI trả phí được duyệt; không tự phát sinh chi phí.",
     },
     {
       ten: "Phê duyệt tài chính / bảo mật",
       giaTri: "Khóa bắt buộc",
       tinhTrang: "tot",
-      ghiChu: "Chi tiền, refund lớn, giá lớn, quyền truy cập và security-critical mutation phải có CEO approval.",
+      ghiChu: "Chi tiền, hoàn tiền lớn, thay đổi giá lớn, quyền truy cập và thay đổi bảo mật quan trọng phải có CEO phê duyệt.",
     },
     {
-      ten: "Tự động triển khai production",
+      ten: "Tự động triển khai môi trường thật",
       giaTri: "Đã xác minh",
       tinhTrang: "tot",
-      ghiChu: "GitHub push → Coolify webhook → VPS đã được kiểm thử bằng deployment thành công.",
+      ghiChu: "GitHub đẩy mã → Coolify nhận webhook → VPS đã được kiểm thử bằng một lần triển khai thành công.",
     },
   ];
 

@@ -87,7 +87,7 @@ type Props = {
 const TINH_TRANG: Record<TinhTrang, { nhan: string; cham: string; text: string; border: string; soft: string; hex: string }> = {
   tot: { nhan: "Ổn định", cham: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/20", soft: "bg-emerald-500/[0.08]", hex: "#34d399" },
   "can-theo-doi": { nhan: "Theo dõi", cham: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/20", soft: "bg-amber-500/[0.08]", hex: "#fbbf24" },
-  nguy-co: { nhan: "Xử lý", cham: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/20", soft: "bg-rose-500/[0.08]", hex: "#fb7185" },
+  "nguy-co": { nhan: "Xử lý", cham: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/20", soft: "bg-rose-500/[0.08]", hex: "#fb7185" },
   "trung-tinh": { nhan: "Thông tin", cham: "bg-slate-400", text: "text-slate-300", border: "border-white/10", soft: "bg-white/[0.04]", hex: "#94a3b8" },
 };
 

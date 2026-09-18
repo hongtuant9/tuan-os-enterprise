@@ -30,6 +30,7 @@ function first(fields: Record<string, string>, ...keys: string[]) {
   }
   return "";
 }
+
 function agentFor(title: string, unit: string): AiOpsAgent {
   const text = `${title} ${unit}`.toLowerCase();
   if (/google ads|utm|tracking|campaign/.test(text)) return "google_ads_agent";
@@ -51,12 +52,39 @@ function normalizedStatus(raw: string) {
   return raw.trim().toUpperCase().replaceAll("-", "_").replaceAll(" ", "_");
 }
 
+function normalizedApprovalDecision(fields?: Record<string, string>): ManagerWorkItem["approvalDecision"] {
+  if (!fields) return "unknown";
+  const status = first(fields, "STATUS").trim().toUpperCase();
+  const decision = first(fields, "DECISION").trim().toUpperCase();
+  if (status === "APPROVED" || /^APPROV/.test(decision)) return "approved";
+  if (status === "REJECTED" || /^REJECT/.test(decision) || /^DENY/.test(decision)) return "rejected";
+  if (status === "PENDING" || !status) return "pending";
+  return "unknown";
+}
+
+function ownerSupportReason(blocker: string, nextAction: string) {
+  const text = `${blocker} ${nextAction}`;
+  if (/OWNER.*(AUTH|UNLOCK|LOGIN)|MFA|PASSWORD|ĐĂNG NHẬP|XÁC THỰC.*OWNER|OWNER VẮNG MẶT/i.test(text)) {
+    return "Cần CEO hỗ trợ xác thực/đăng nhập; tác nhân phụ trách vẫn chịu trách nhiệm xử lý kỹ thuật.";
+  }
+  return "";
+}
+
 export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLite[]): ManagerWorkItem[] {
   const metadataByTarget = new Map<string, Record<string, string>>();
+  const approvalByCanonicalId = new Map<string, Record<string, string>>();
+
   for (const record of records) {
-    if (record.source_key !== "task-001" || !record.target_id) continue;
-    metadataByTarget.set(record.target_id, asFields(record.data));
+    const fields = asFields(record.data);
+    if (record.source_key === "task-001" && record.target_id) {
+      metadataByTarget.set(record.target_id, fields);
+    }
+    if (record.source_key === "approval-001") {
+      const approvalId = first(fields, "APPROVAL_ID");
+      if (approvalId) approvalByCanonicalId.set(approvalId, fields);
+    }
   }
+
   return tasks.map((task) => {
     const fields = metadataByTarget.get(task.id) ?? {};
     const title = first(fields, "TASK_NAME") || task.title;
@@ -65,8 +93,27 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     const canonicalPriority = first(fields, "PRIORITY") || task.priority;
     const canonicalStatus = first(fields, "STATUS") || task.status;
     const blocker = first(fields, "BLOCKER");
-    const approvalRequired = first(fields, "APPROVAL_REQUIRED").trim().toUpperCase() === "YES";
-    const approvalApproved = Boolean(first(fields, "APPROVAL_ID"));
+    const dependency = first(fields, "DEPENDENCY");
+    const nextAction = first(fields, "NEXT_ACTION");
+    const executionGate = first(fields, "EXECUTION_GATE");
+    const owner = first(fields, "OWNER");
+    const approvalId = first(fields, "APPROVAL_ID");
+    const approvalRequiredRaw = first(fields, "APPROVAL_REQUIRED").trim().toUpperCase();
+    const approvalRequired = ["YES", "TRUE", "REQUIRED"].includes(approvalRequiredRaw);
+    const approvalDecision = approvalId
+      ? normalizedApprovalDecision(approvalByCanonicalId.get(approvalId))
+      : approvalRequired
+        ? "pending"
+        : "unknown";
+    const approvalResolved = approvalDecision === "approved" || approvalDecision === "rejected";
+
+    const supportReasonFromApproval =
+      approvalRequired && !approvalResolved
+        ? "Cần CEO quyết định/phê duyệt. Sau quyết định, tác nhân phụ trách tiếp tục thực thi."
+        : "";
+    const supportReasonFromAuth = ownerSupportReason(blocker, nextAction);
+    const ceoSupportReason = supportReasonFromApproval || supportReasonFromAuth;
+    const needsCeoSupport = Boolean(ceoSupportReason);
 
     return {
       id: canonicalId,
@@ -74,8 +121,19 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       priority: priority(canonicalPriority),
       status: normalizedStatus(canonicalStatus),
       blocker: blocker || undefined,
+      dependency: dependency || undefined,
+      nextAction: nextAction || undefined,
+      executionGate: executionGate || undefined,
+      owner: owner || undefined,
       approvalRequired,
-      approvalApproved,
+      approvalId: approvalId || undefined,
+      approvalResolved,
+      approvalDecision,
+      needsCeoSupport,
+      ceoSupportReason: ceoSupportReason || undefined,
+      resolutionOwner: approvalRequired && !approvalResolved
+        ? "CEO Tuấn: quyết định; tác nhân phụ trách: thực thi sau phê duyệt"
+        : owner || agentFor(title, unit),
       agent: agentFor(title, unit),
     };
   });

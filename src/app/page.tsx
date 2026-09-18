@@ -10,6 +10,7 @@ import ExecutiveCommandCenterV2, {
 } from "@/components/ExecutiveCommandCenterV2";
 import { getRequestContainer } from "@/server/container";
 import { channelPolicySnapshot } from "@/server/channels/channel-policy";
+import { buildManagerItems } from "@/server/ai-operations/manager-data";
 
 const MOT_NGAY = 24 * 60 * 60 * 1000;
 
@@ -90,6 +91,8 @@ export default async function Home() {
     dayUsage,
     activity,
     syncQuery,
+    managerTaskQuery,
+    syncRecordsQuery,
   ] = await Promise.all([
     container.tasks.list(),
     container.approvals.list(),
@@ -104,6 +107,8 @@ export default async function Home() {
       .from("sync_sources")
       .select("key,status,last_synced_at,last_error")
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
+    container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
+    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
   ]);
 
   const syncSources = syncQuery.data ?? [];
@@ -138,7 +143,11 @@ export default async function Home() {
   const completedTasks = tasks.filter((item) => item.status === "done").length;
   const openTasks = tasks.filter((item) => item.status !== "done").length;
   const inProgressTasks = tasks.filter((item) => item.status === "in-progress").length;
-  const blockedTasks = tasks.filter((item) => item.status === "blocked");
+  const managerItems = buildManagerItems(managerTaskQuery.data ?? [], syncRecordsQuery.data ?? []);
+  const ceoBlockedItems = managerItems.filter(
+    (item) => item.status !== "DONE" && Boolean(item.approvalRequired) && !Boolean(item.approvalResolved),
+  );
+  const ceoBlockedIds = new Set(ceoBlockedItems.map((item) => item.id));
   const overdueTasks = tasks.filter((item) => quaHan(item.dueDate, item.status));
   const completionRate = tasks.length ? (completedTasks / tasks.length) * 100 : 0;
   const pendingApprovals = approvals.filter((item) => item.status === "pending");
@@ -156,7 +165,7 @@ export default async function Home() {
     trangThaiNguon(latestTask, taskSource?.status) !== "verified" ||
     trangThaiNguon(latestApproval, approvalSource?.status) !== "verified" ||
     trangThaiNguon(latestL3, l3Source?.status) !== "verified";
-  const criticalBlocked = blockedTasks.some((item) => item.priority === "high");
+  const criticalBlocked = ceoBlockedItems.some((item) => item.priority === "P0");
   const healthStatus = sourceProblem || criticalBlocked ? "can-theo-doi" : "tot";
   const healthLabel = sourceProblem || criticalBlocked ? "Cần theo dõi" : "Ổn định";
 
@@ -174,8 +183,8 @@ export default async function Home() {
       id: "open",
       nhan: "Công việc đang mở",
       giaTri: openTasks,
-      moTa: `${inProgressTasks} đang thực hiện · ${blockedTasks.length} bị chặn`,
-      tinhTrang: blockedTasks.length > 0 ? "can-theo-doi" : "trung-tinh",
+      moTa: `${inProgressTasks} đang thực hiện · ${ceoBlockedItems.length} chờ CEO phê duyệt`,
+      tinhTrang: ceoBlockedItems.length > 0 ? "can-theo-doi" : "trung-tinh",
       lienKet: "/ai-manager",
       nguon: "TASK-001",
     },
@@ -236,22 +245,37 @@ export default async function Home() {
   ];
 
   const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
+  const managerItemById = new Map(managerItems.map((item) => [item.id, item]));
   const priorities: ViecUuTien[] = [...tasks]
     .filter((item) => item.status !== "done")
     .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
     .slice(0, 3)
-    .map((item) => ({
-      id: item.id,
-      ten: tieuDeCongViecTiengViet(item.title),
-      chuTri: item.owner || item.unit,
-      mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
-      trangThai: tenTrangThaiTask(item.status),
-      han: item.dueDate || undefined,
-    }));
+    .map((item) => {
+      const governance = managerItemById.get(item.id);
+      return {
+        id: item.id,
+        ten: tieuDeCongViecTiengViet(item.title),
+        chuTri: item.owner || item.unit,
+        mucDo: item.priority === "high" ? "P0 / Cao" : item.priority === "medium" ? "P1 / Vừa" : "Thấp",
+        trangThai: ceoBlockedIds.has(item.id)
+          ? "Bị chặn — chờ CEO"
+          : item.status === "blocked"
+            ? "Vấn đề hệ thống"
+            : tenTrangThaiTask(item.status),
+        canCeoHoTro: governance?.needsCeoSupport ?? false,
+        phuTrachXuLy: governance?.resolutionOwner ?? item.owner ?? item.unit,
+        han: item.dueDate || undefined,
+      };
+    });
 
   const alerts: CanhBaoDieuHanh[] = [];
-  for (const item of blockedTasks.filter((task) => task.priority === "high").slice(0, 2)) {
-    alerts.push({ id: item.id, tieuDe: "Công việc ưu tiên cao đang bị chặn", moTa: tieuDeCongViecTiengViet(item.title), mucDo: "cao" });
+  for (const item of ceoBlockedItems.filter((task) => task.priority === "P0").slice(0, 2)) {
+    alerts.push({
+      id: item.id,
+      tieuDe: "Công việc đang chờ CEO quyết định",
+      moTa: item.ceoSupportReason ?? "Hệ thống không được phép tiếp tục cho tới khi CEO phê duyệt.",
+      mucDo: "cao",
+    });
   }
   if (sourceProblem) {
     alerts.push({
@@ -299,7 +323,7 @@ export default async function Home() {
 
   const departments: PhongBanDieuHanh[] = departmentDefinitions.map((department) => {
     const scoped = tasks.filter((item) => nhomPhongBan(item.title, item.unit) === department.id && item.status !== "done");
-    const blocked = scoped.filter((item) => item.status === "blocked").length;
+    const blocked = ceoBlockedItems.filter((item) => nhomPhongBan(item.title, item.owner ?? "") === department.id).length;
     const overdue = scoped.filter((item) => quaHan(item.dueDate, item.status)).length;
     const status: PhongBanDieuHanh["sucKhoe"] = blocked > 0 || overdue > 1 ? "can-theo-doi" : "tot";
     return {
@@ -402,7 +426,7 @@ export default async function Home() {
           tongCongViec={tasks.length}
           hoanThanh={completedTasks}
           dangLam={inProgressTasks}
-          biChan={blockedTasks.length}
+          biChan={ceoBlockedItems.length}
           quaHan={overdueTasks.length}
           tiLeHoanThanh={completionRate}
           tacNhanHoatDong={agentsOnline}

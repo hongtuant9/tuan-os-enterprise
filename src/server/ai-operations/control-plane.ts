@@ -16,8 +16,17 @@ export interface ManagerWorkItem {
   priority: "P0" | "P1" | "P2" | "P3";
   status: string;
   blocker?: string;
+  dependency?: string;
+  nextAction?: string;
+  executionGate?: string;
+  owner?: string;
   approvalRequired?: boolean;
-  approvalApproved?: boolean;
+  approvalId?: string;
+  approvalResolved?: boolean;
+  approvalDecision?: "approved" | "rejected" | "pending" | "unknown";
+  needsCeoSupport?: boolean;
+  ceoSupportReason?: string;
+  resolutionOwner?: string;
   agent: AiOpsAgent;
 }
 
@@ -29,7 +38,8 @@ export interface ManagerBrief {
   canMutate: false;
   staleAuthorities: string[];
   blockedItems: ManagerWorkItem[];
-  waitingOwnerItems: ManagerWorkItem[];
+  waitingItems: ManagerWorkItem[];
+  systemIssueItems: ManagerWorkItem[];
   nextItems: ManagerWorkItem[];
   summary: string;
 }
@@ -41,6 +51,10 @@ const priorityRank: Record<ManagerWorkItem["priority"], number> = {
   P3: 3,
 };
 
+function isWaitingStatus(status: string) {
+  return ["HOLD", "TODO", "WAITING", "PENDING"].includes(status);
+}
+
 export function buildManagerBrief(
   items: ManagerWorkItem[],
   authorities: AuthoritySnapshot[],
@@ -51,23 +65,53 @@ export function buildManagerBrief(
     .map((source) => source.authority);
 
   const sorted = [...items].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
-  const blockedItems = sorted.filter((item) => item.status === "BLOCKED" || Boolean(item.blocker));
-  const waitingOwnerItems = sorted.filter(
-    (item) => item.approvalRequired && !item.approvalApproved && item.status !== "DONE",
+
+  // CEO semantics:
+  // "Bị chặn" = hệ thống không được phép tiếp tục vì đang chờ một quyết định/phê duyệt chưa được giải quyết.
+  // Sequence/dependency waits và technical/tool issues không được gọi là "bị chặn".
+  const blockedItems = sorted.filter(
+    (item) =>
+      item.status !== "DONE" &&
+      Boolean(item.approvalRequired) &&
+      !Boolean(item.approvalResolved),
   );
+
+  const waitingItems = sorted.filter(
+    (item) =>
+      item.status !== "DONE" &&
+      !blockedItems.some((blocked) => blocked.id === item.id) &&
+      (
+        isWaitingStatus(item.status) ||
+        /SEQUENCE|HOLD_SEQUENCE|WAIT|DEPENDENCY/i.test(item.executionGate ?? "") ||
+        /SEQUENCE_GATE|CURRENT MAIN LANE|WAIT FOR|CHỜ/i.test(item.blocker ?? "")
+      ),
+  );
+
+  const systemIssueItems = sorted.filter(
+    (item) =>
+      item.status !== "DONE" &&
+      !blockedItems.some((blocked) => blocked.id === item.id) &&
+      !waitingItems.some((waiting) => waiting.id === item.id) &&
+      (
+        item.status === "BLOCKED" ||
+        /AUTH|QUOTA|ERROR|FAILED|DENIED|UNAVAILABLE|BLOCKED/i.test(item.blocker ?? "")
+      ),
+  );
+
   const nextItems = sorted
     .filter(
       (item) =>
         item.status !== "DONE" &&
         !blockedItems.some((blocked) => blocked.id === item.id) &&
-        !waitingOwnerItems.some((waiting) => waiting.id === item.id),
+        !waitingItems.some((waiting) => waiting.id === item.id) &&
+        !systemIssueItems.some((issue) => issue.id === item.id),
     )
     .slice(0, 5);
 
   const status: OperationStatus = staleAuthorities.length > 0 ? "blocked" : "succeeded";
   const summary = staleAuthorities.length > 0
     ? `Shadow brief generated; non-authoritative/stale sources detected: ${staleAuthorities.join(", ")}. No mutation allowed.`
-    : `Shadow brief generated from verified authorities. ${blockedItems.length} blocked, ${waitingOwnerItems.length} waiting owner, ${nextItems.length} next.`;
+    : `Shadow brief generated from verified authorities. ${blockedItems.length} CEO-blocked, ${waitingItems.length} waiting dependency, ${systemIssueItems.length} system issues, ${nextItems.length} next.`;
 
   return {
     mode: "shadow",
@@ -77,7 +121,8 @@ export function buildManagerBrief(
     canMutate: false,
     staleAuthorities,
     blockedItems,
-    waitingOwnerItems,
+    waitingItems,
+    systemIssueItems,
     nextItems,
     summary,
   };

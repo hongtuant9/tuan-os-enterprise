@@ -181,6 +181,7 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       blocker: blocker || undefined,
       dependency: dependency || undefined,
       nextAction: nextAction || undefined,
+      dueDate: dueDate || undefined,
       executionGate: executionGate || undefined,
       owner: owner || undefined,
       approvalRequired,

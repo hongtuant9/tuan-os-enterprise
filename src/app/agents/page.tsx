@@ -5,7 +5,8 @@ import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 export default async function AgentsPage() {
   const container = await getRequestContainer();
   const live = await container.agents.list();
-  const byName = new Map(live.map((item) => [item.name, item]));\n  const statusLabel = (status: string) => status === "online" ? "Đang hoạt động" : status === "offline" ? "Ngoại tuyến" : "Chờ";
+  const byName = new Map(live.map((item) => [item.name, item]));
+  const statusLabel = (status: string) => status === "online" ? "Đang hoạt động" : status === "offline" ? "Ngoại tuyến" : "Chờ";
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">

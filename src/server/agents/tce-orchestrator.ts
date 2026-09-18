@@ -171,7 +171,6 @@ function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, messa
   const inProgress = context.workItems.filter((item) => item.status === "IN_PROGRESS").length;
   const agentOnline = context.agentStates.filter((item) => item.status === "online").length;
   const staleAuthorities = context.authorities.filter((item) => item.state !== "verified");
-  const requiresCeoNow = context.blockedItems.length > 0;
   const finance = financialIntent(message)
     ? "Yêu cầu có yếu tố tài chính/chi phí: mọi mutation tài chính vẫn phải qua CEO approval."
     : "";

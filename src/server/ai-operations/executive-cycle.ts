@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { getAdminContainer } from "@/server/container";
 import { buildManagerBrief, type AuthoritySnapshot } from "./control-plane";
 import { buildManagerItems } from "./manager-data";
+import { runMarketingCoordinationCycle, type MarketingCoordinationResult } from "@/server/marketing-manager/coordination-cycle";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -22,10 +23,12 @@ export type ExecutiveCycleResult = {
   pendingApprovals: number;
   staleAuthorities: string[];
   changed: boolean;
+  marketing: MarketingCoordinationResult;
 };
 
 export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycleResult> {
   const container = getAdminContainer();
+  const marketing = await runMarketingCoordinationCycle(now);
   const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
@@ -92,5 +95,6 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     pendingApprovals,
     staleAuthorities: brief.staleAuthorities,
     changed,
+    marketing,
   };
 }

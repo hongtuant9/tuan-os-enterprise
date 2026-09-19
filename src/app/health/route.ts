@@ -38,7 +38,12 @@ function runtimeSignals() {
     kiotVietWriteEnabled: process.env.AI_PILOT_KIOTVIET_WRITE_ENABLED?.trim().toLowerCase() === "true",
     directBookingAutoCreateEnabled: process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true",
     openAiApiKey: process.env.OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
+    receptionistOpenAiApiKey: process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
     receptionistConversationModel: process.env.AI_RECEPTIONIST_CONVERSATION_MODEL?.trim() ? "SET=yes" : "SET=no",
+    receptionistDailyBudget: process.env.AI_RECEPTIONIST_DAILY_BUDGET_USD?.trim() ? "SET=yes" : "SET=no",
+    receptionistMonthlyBudget: process.env.AI_RECEPTIONIST_MONTHLY_BUDGET_USD?.trim() ? "SET=yes" : "SET=no",
+    tceAgentAiEnabled: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() === "true",
+    cmiAiEnabled: process.env.CMI_AI_ENABLED?.trim().toLowerCase() === "true",
   };
 }
 

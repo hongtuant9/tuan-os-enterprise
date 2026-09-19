@@ -42,6 +42,9 @@ Runbook hiện hành: `docs/AI_RECEPTIONIST_PRIVATE_PILOT_V1.md` (giữ tên fil
 - `AI_PILOT_KIOTVIET_WRITE_ENABLED=false`
 - `KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false`
 - `TCE_CUSTOMER_CHANNEL_STAGE=facebook_only`
+- `AI_RECEPTIONIST_OPENAI_API_KEY=SET` — key riêng cho Receptionist; không chia sẻ giá trị trong chat/log.
+- `AI_RECEPTIONIST_DAILY_BUDGET_USD=SET` và `AI_RECEPTIONIST_MONTHLY_BUDGET_USD=SET` — bắt buộc >0 sau Owner approval.
+- `AI_RECEPTIONIST_CONVERSATION_MODEL` có thể để trống; mặc định `gpt-5.6-luna`.
 
 Không dùng `AI_PILOT_KNOWLEDGE_CAPTURE_ENABLED`; knowledge candidate lifecycle được quản lý bằng database status + Manager review + canonical SSOT sync.
 Không đặt secret vào tài liệu hoặc biến `NEXT_PUBLIC_*`.

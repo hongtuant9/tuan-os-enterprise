@@ -1,6 +1,7 @@
 import "server-only";
 import { buildMarketingPlan } from "./planning-engine";
 import { dispatchMarketingPlan, type DispatchResult } from "./task-dispatcher";
+import { persistSpecialistBacklog, type SpecialistBacklogResult } from "./specialist-backlog";
 import type { MarketingPlan, MarketingPlanInput, SpecialistRequirement } from "./types";
 
 export type MarketingManagerCycleOptions = {
@@ -12,6 +13,7 @@ export type MarketingManagerCycleResult = {
   plan: MarketingPlan;
   dispatch?: DispatchResult;
   specialistBacklog: SpecialistRequirement[];
+  specialistBacklogPersistence?: SpecialistBacklogResult;
 };
 
 function uniqueSpecialists(items: SpecialistRequirement[]): SpecialistRequirement[] {
@@ -36,12 +38,16 @@ export async function runMarketingManagerCycle(
   const dispatch = options.dispatch
     ? await dispatchMarketingPlan(plan)
     : undefined;
+  const shouldCreateSpecialistBacklog = options.createSpecialistBacklog !== false;
+  const specialistBacklogPersistence = shouldCreateSpecialistBacklog && specialistBacklog.length
+    ? await persistSpecialistBacklog(specialistBacklog)
+    : undefined;
 
   return {
     plan,
     dispatch,
-    specialistBacklog:
-      options.createSpecialistBacklog === false ? [] : specialistBacklog,
+    specialistBacklog: shouldCreateSpecialistBacklog ? specialistBacklog : [],
+    specialistBacklogPersistence,
   };
 }
 

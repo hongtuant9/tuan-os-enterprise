@@ -134,6 +134,16 @@ export class AiReceptionistRepository {
     return data;
   }
 
+  async findMessageById(id: string): Promise<MessageRow | null> {
+    const { data, error } = await this.db
+      .from("ai_messages")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   async createMessage(input: MessageInsert): Promise<MessageRow> {
     const { data, error } = await this.db.from("ai_messages").insert(input).select("*").single();
     if (error) throw error;
@@ -313,6 +323,34 @@ export class AiReceptionistRepository {
       .maybeSingle();
     if (error) throw error;
     return data?.id ?? null;
+  }
+
+  async findKnowledgeSyncRecords(sourceKeys: string[]): Promise<Array<{
+    source_key: string;
+    external_id: string;
+    data: Json;
+    synced_at: string;
+  }>> {
+    if (sourceKeys.length === 0) return [];
+    const { data, error } = await this.db
+      .from("sync_records")
+      .select("source_key,external_id,data,synced_at")
+      .in("source_key", sourceKeys)
+      .order("synced_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async findReusableStyleGuidance(limit = 20): Promise<CandidateRow[]> {
+    const { data, error } = await this.db
+      .from("ai_knowledge_candidates")
+      .select("*")
+      .eq("field_key", "conversation_style_feedback")
+      .in("status", ["approved", "published"])
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data ?? [];
   }
 
   static toObject(value: Json): Record<string, Json> {

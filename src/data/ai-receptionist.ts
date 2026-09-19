@@ -14,6 +14,8 @@ export type ReceptionistMessage = {
   direction: "inbound" | "outbound" | "internal";
   senderType: "guest" | "ai" | "manager" | "system";
   content: string;
+  translatedVi: string;
+  detectedLanguage?: string;
   status: "received" | "draft" | "simulated" | "sent" | "failed";
   createdAt: string;
 };
@@ -114,6 +116,7 @@ export type PilotMessageInput = {
   utmSource?: string;
   utmCampaign?: string;
   referralSource?: string;
+  pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
   testerUserId?: string | null;
 };
 

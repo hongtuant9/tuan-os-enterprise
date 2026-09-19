@@ -18,6 +18,10 @@ import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDr
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
 import { buildIdentityCandidates } from "@/server/ai-receptionist/customer-identity";
 import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
+import { detectGuestLanguage } from "@/server/ai-receptionist/language";
+import { getPagePersona } from "@/server/ai-receptionist/page-persona";
+import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
+import { renderSalesConversation, translateToVietnamese } from "@/server/ai-receptionist/conversation-renderer";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -25,32 +29,26 @@ import {
   isPilotOutboundEnabled,
 } from "@/server/ai-receptionist/config";
 
-export const MISSING_DATA_BACKLOG = [
-  "Chính sách trẻ em",
-  "Phụ thu nhận sớm, trả muộn và thêm người",
-  "Giá, điều kiện và quy định hủy taxi",
-  "Chính sách xe đạp, xe máy",
-  "Cooking class",
-  "Danh sách trải nghiệm được phép bán",
-  "Bảng giá hoặc hoa hồng dịch vụ",
-  "Quy định voucher Cozy Garden",
-  "Ảnh được phép gửi cho từng loại phòng",
-  "Nội dung về vị trí Cozy Garden trong khuôn viên homestay",
-] as const;
-
 function toMessage(row: {
   id: string;
   direction: string;
   sender_type: string;
   content: string;
   status: string;
+  metadata: Json;
   created_at: string;
 }): ReceptionistMessage {
+  const metadata = AiReceptionistRepository.toObject(row.metadata);
+  const translatedVi = typeof metadata.translated_vi === "string"
+    ? metadata.translated_vi
+    : row.content;
   return {
     id: row.id,
     direction: row.direction as ReceptionistMessage["direction"],
     senderType: row.sender_type as ReceptionistMessage["senderType"],
     content: row.content,
+    translatedVi,
+    detectedLanguage: typeof metadata.detected_language === "string" ? metadata.detected_language : undefined,
     status: row.status as ReceptionistMessage["status"],
     createdAt: row.created_at,
   };
@@ -228,7 +226,7 @@ export class AiReceptionistService {
         verifiedAiBookings: bookings.filter((item) => item.verificationStatus === "verified").length,
         pendingKnowledgeCandidates: knowledgeCandidates.filter((item) => item.status === "pending").length,
       },
-      missingDataBacklog: [...MISSING_DATA_BACKLOG],
+      missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),
     };
   }
 
@@ -299,8 +297,8 @@ export class AiReceptionistService {
         decision = {
           ...decision,
           reply: availableRooms.length > 0
-            ? `KiotViet hiện ghi nhận ${availableRooms.length} hạng phòng còn trống cho khoảng ngày yêu cầu. Giá live từ API hiện chưa đủ tin cậy để báo khách, nên em chuyển Quản lý xác nhận giá trước khi trả lời chính thức.`
-            : "KiotViet hiện chưa ghi nhận hạng phòng còn trống cho khoảng ngày yêu cầu. Em chuyển Quản lý kiểm tra lại trước khi trả lời chính thức.",
+            ? "Mình đã kiểm tra tình trạng phòng cho khoảng ngày anh/chị hỏi. Cho mình xác nhận thêm mức giá hiện hành trước khi gửi thông tin chính thức nhé."
+            : "Mình chưa thấy phương án phòng phù hợp cho khoảng ngày này. Cho mình kiểm tra lại một lần nữa trước khi xác nhận với anh/chị nhé.",
           evidence: { ...decision.evidence, kiotviet_read_status: availability.status, kiotviet_availability: availabilityEvidence },
           review: decision.review ? {
             ...decision.review,
@@ -316,6 +314,49 @@ export class AiReceptionistService {
       }
     }
 
+    const guestLanguage = detectGuestLanguage(input.content);
+    const pageEntity = input.pageEntity
+      ?? (typeof existingMetadata.page_entity === "string" ? existingMetadata.page_entity : "unknown");
+    const persona = getPagePersona(pageEntity);
+    const priorMessages = existing
+      ? (await this.repo.findMessages([existing.id])).map(toMessage)
+      : [];
+    const knowledge = await resolveKnowledge(
+      this.repo,
+      input.content,
+      typeof decision.metadataPatch.property_hint === "string"
+        ? decision.metadataPatch.property_hint
+        : persona.displayName
+    );
+    const styleRows = await this.repo.findReusableStyleGuidance();
+    const styleGuidance = styleRows
+      .map((row) => AiReceptionistRepository.toObject(row.proposed_value).guidance)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    const rendered = await renderSalesConversation({
+      guestText: input.content.trim(),
+      decision,
+      knowledge,
+      language: guestLanguage,
+      persona,
+      history: priorMessages,
+      styleGuidance,
+    });
+    decision = {
+      ...decision,
+      reply: rendered.reply,
+      metadataPatch: {
+        ...decision.metadataPatch,
+        language: rendered.detectedLanguage,
+      },
+      evidence: {
+        ...decision.evidence,
+        knowledge_sources: knowledge.checkedSources,
+        knowledge_fact_count: knowledge.facts.length,
+        conversation_renderer: rendered.usedGenerativeRenderer ? "generative" : "fallback",
+        conversation_qa: rendered.qa as unknown as Json,
+      },
+    };
+
     const mergedMetadata: Record<string, Json> = {
       ...existingMetadata,
       ...decision.metadataPatch,
@@ -324,6 +365,17 @@ export class AiReceptionistService {
       utm_source: input.utmSource ?? existingMetadata.utm_source ?? null,
       utm_campaign: input.utmCampaign ?? existingMetadata.utm_campaign ?? null,
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
+      page_entity: pageEntity,
+      preferred_language: rendered.detectedLanguage,
+      conversation_memory: {
+        customer_name: decision.metadataPatch.customer_name ?? null,
+        customer_contact: decision.metadataPatch.customer_contact ?? null,
+        check_in: decision.metadataPatch.check_in ?? null,
+        check_out: decision.metadataPatch.check_out ?? null,
+        guest_count: decision.metadataPatch.guest_count ?? null,
+        property_hint: decision.metadataPatch.property_hint ?? null,
+        primary_intent: decision.metadataPatch.primary_intent ?? "general",
+      },
     };
 
     const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: input.customerName ?? existing?.customer_name ?? null, customerContact: input.customerContact ?? existing?.customer_contact ?? null, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
@@ -381,6 +433,9 @@ export class AiReceptionistService {
       },
       metadata: {
         scenario_tag: input.scenarioTag ?? null,
+        translated_vi: rendered.guestTranslationVi,
+        detected_language: rendered.detectedLanguage,
+        page_entity: pageEntity,
       },
     });
 
@@ -397,6 +452,11 @@ export class AiReceptionistService {
         mode,
         outbound_enabled: outboundEnabled,
         pilot_conversation_allowed: pilotConversationAllowed,
+        translated_vi: rendered.replyTranslationVi,
+        detected_language: rendered.detectedLanguage,
+        page_entity: pageEntity,
+        qa_pass: rendered.qa.pass,
+        qa_reasons: rendered.qa.reasons,
       },
     });
 
@@ -452,10 +512,16 @@ export class AiReceptionistService {
 
 
   async markOutboundDelivery(messageId: string, input: { status: "sent" | "failed"; externalMessageId?: string | null; detail?: string | null }): Promise<void> {
+    const existing = await this.repo.findMessageById(messageId);
+    const metadata = existing ? AiReceptionistRepository.toObject(existing.metadata) : {};
     await this.repo.updateMessage(messageId, {
       status: input.status,
       external_message_id: input.externalMessageId ?? undefined,
-      metadata: { delivery_status: input.status, delivery_detail: input.detail ?? null },
+      metadata: {
+        ...metadata,
+        delivery_status: input.status,
+        delivery_detail: input.detail ?? null,
+      },
     });
   }
 
@@ -591,19 +657,62 @@ export class AiReceptionistService {
       nextStatus = "active";
     }
 
-    await this.repo.createMessage({
-      conversation_id: review.conversation_id,
-      direction: "outbound",
-      sender_type: "ai",
-      content: aiReply,
-      status: isPilotOutboundEnabled() && getReceptionistMode() !== "simulation" ? "draft" : "simulated",
+    const conversation = await this.repo.findConversationById(review.conversation_id);
+    const conversationMetadata = conversation
+      ? AiReceptionistRepository.toObject(conversation.metadata)
+      : {};
+    const history = (await this.repo.findMessages([review.conversation_id])).map(toMessage);
+    const guestLanguage = detectGuestLanguage(review.guest_request);
+    const persona = getPagePersona(
+      typeof conversationMetadata.page_entity === "string" ? conversationMetadata.page_entity : "unknown"
+    );
+    const knowledge = await resolveKnowledge(
+      this.repo,
+      review.guest_request,
+      typeof conversationMetadata.property_hint === "string"
+        ? conversationMetadata.property_hint
+        : persona.displayName
+    );
+    const styleRows = await this.repo.findReusableStyleGuidance();
+    const styleGuidance = styleRows
+      .map((row) => AiReceptionistRepository.toObject(row.proposed_value).guidance)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    const resumedDecision = {
+      reply: aiReply,
+      conversationStatus: nextStatus,
+      metadataPatch: conversationMetadata,
       evidence: {
         manager_review_id: review.id,
         manager_decision: input.decision,
         manager_note: input.note.trim(),
       },
+    } as const;
+    const rendered = await renderSalesConversation({
+      guestText: review.guest_request,
+      decision: resumedDecision,
+      knowledge,
+      language: guestLanguage,
+      persona,
+      history,
+      styleGuidance,
+    });
+
+    await this.repo.createMessage({
+      conversation_id: review.conversation_id,
+      direction: "outbound",
+      sender_type: "ai",
+      content: rendered.reply,
+      status: isPilotOutboundEnabled() && getReceptionistMode() !== "simulation" ? "draft" : "simulated",
+      evidence: {
+        manager_review_id: review.id,
+        manager_decision: input.decision,
+        manager_note: input.note.trim(),
+        conversation_qa: rendered.qa as unknown as Json,
+      },
       metadata: {
         resumed_after_manager_review: true,
+        translated_vi: rendered.replyTranslationVi,
+        detected_language: rendered.detectedLanguage,
       },
     });
 
@@ -644,6 +753,78 @@ export class AiReceptionistService {
             : "yêu cầu bổ sung"
       } yêu cầu AI Lễ tân: ${review.title}.`,
       type: "approval",
+    });
+  }
+
+  async backfillConversationTranslations(conversationId: string): Promise<{ updated: number; skipped: number }> {
+    const conversation = await this.repo.findConversationById(conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const messages = await this.repo.findMessages([conversationId]);
+    let updated = 0;
+    let skipped = 0;
+
+    for (const message of messages) {
+      const metadata = AiReceptionistRepository.toObject(message.metadata);
+      if (typeof metadata.translated_vi === "string" && metadata.translated_vi.trim()) {
+        skipped++;
+        continue;
+      }
+      const detected = typeof metadata.detected_language === "string"
+        ? metadata.detected_language
+        : detectGuestLanguage(message.content).code;
+      const translated = await translateToVietnamese(message.content, detected);
+      await this.repo.updateMessage(message.id, {
+        metadata: {
+          ...metadata,
+          translated_vi: translated,
+          detected_language: detected,
+          translation_backfilled: true,
+        },
+      });
+      updated++;
+    }
+
+    return { updated, skipped };
+  }
+
+  async captureConversationStyleFeedback(input: {
+    conversationId: string;
+    guidance: string;
+    actorUserId: string;
+    actorLabel: string;
+  }): Promise<void> {
+    const guidance = input.guidance.trim();
+    if (!guidance) throw new Error("Nội dung feedback không được để trống.");
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+
+    await this.repo.createKnowledgeCandidate({
+      conversation_id: input.conversationId,
+      manager_review_id: null,
+      field_key: "conversation_style_feedback",
+      title: "Đề xuất học phong cách giao tiếp từ hội thoại",
+      current_value: null,
+      proposed_value: {
+        guidance,
+        page_entity: AiReceptionistRepository.toObject(conversation.metadata).page_entity ?? "unknown",
+        language: conversation.language,
+        actor_label: input.actorLabel,
+      },
+      source_evidence: {
+        conversation_id: input.conversationId,
+        source: "manager_conversation_feedback",
+      },
+      scope: "reusable",
+      status: "pending",
+      reviewed_by: null,
+      reviewed_at: null,
+    });
+
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: "Đã tạo đề xuất học phong cách giao tiếp từ hội thoại; chưa dùng cho production cho tới khi được duyệt.",
+      type: "info",
     });
   }
 

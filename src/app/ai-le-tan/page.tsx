@@ -6,7 +6,6 @@ import { getRequestContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import { getReceptionistMode, isKiotVietDirectBookingWriteEnabled } from "@/server/ai-receptionist/config";
-import { MISSING_DATA_BACKLOG } from "@/server/services/ai-receptionist.service";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +23,7 @@ function emptyDashboard(): ReceptionistDashboard {
       verifiedAiBookings: 0,
       pendingKnowledgeCandidates: 0,
     },
-    missingDataBacklog: [...MISSING_DATA_BACKLOG],
+    missingDataBacklog: [],
   };
 }
 

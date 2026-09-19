@@ -14,6 +14,11 @@ export const SYNC_SOURCE_KEYS = [
   "tce-checklist-daily",
   "approval-001",
   "l3-channel-tracking",
+  "l3-property-info",
+  "l3-pricing",
+  "l3-policy",
+  "l3-services",
+  "l3-products",
   "fin-001",
   "business-portfolio",
   "family",
@@ -47,6 +52,11 @@ export function getMapperForSource(key: SyncSourceKey, db: SupabaseClient<Databa
     case "approval-001":
       return new ApprovalsImportMapper(new ApprovalsRepository(db));
     case "l3-channel-tracking":
+    case "l3-property-info":
+    case "l3-pricing":
+    case "l3-policy":
+    case "l3-services":
+    case "l3-products":
       return new GenericRecordMapper();
     case "fin-001":
     case "business-portfolio":

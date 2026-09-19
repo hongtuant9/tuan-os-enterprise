@@ -40,10 +40,10 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
   },
   {
     id: "receptionist", name: "AI Receptionist", domain: "customer", mode: "active", permission: "L1_SAFE",
-    mission: "Trả lời FAQ, thu ngày ở/số khách và đọc dữ liệu VERIFIED để hỗ trợ khách.",
-    sources: ["L3 Master", "KiotViet Hotel read-only", "verified policy records"],
-    capabilities: ["FAQ", "language detection", "stay intake", "availability read"],
-    guardrails: ["fail closed on NEED VERIFY/HOLD", "no fabricated price or availability"],
+    mission: "Trả lời khách tự nhiên như nhân viên sales/reception, giữ ngữ cảnh hội thoại và chỉ dùng dữ liệu VERIFIED để hỗ trợ khách.",
+    sources: ["L3 Master", "Domain SSOT/runtime read-only", "conversation memory", "verified policy records"],
+    capabilities: ["FAQ", "multilingual language detection and same-language reply", "Vietnamese owner translation", "conversation memory", "human-style sales conversation", "stay intake", "availability read"],
+    guardrails: ["fail closed on NEED VERIFY/HOLD", "LLM controls wording only, not business truth", "no fabricated price or availability", "no internal-system language in customer replies"],
   },
   {
     id: "concierge", name: "AI Concierge", domain: "customer", mode: "shadow", permission: "L1_SAFE",

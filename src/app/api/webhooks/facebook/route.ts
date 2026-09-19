@@ -126,6 +126,7 @@ export async function POST(request: Request) {
           content: text,
           acquisitionSource: `facebook_${entity}_messenger`,
           utmSource: "facebook",
+          pageEntity: entity,
           testerUserId: null,
         });
         if (!result.duplicate) {

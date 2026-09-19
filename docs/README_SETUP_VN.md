@@ -24,59 +24,42 @@ Tạo nền tảng tối thiểu gồm PostgreSQL, Redis, Qdrant và n8n trên V
 3. Tạo workflow Telegram sau.
 4. Kết nối Google Drive sau.
 
-## AI Agent Lễ tân — Private Pilot
+## AI Agent Lễ tân — Facebook Private Pilot V2
 
-### 1. Chạy migration
+Runbook hiện hành: `docs/AI_RECEPTIONIST_PRIVATE_PILOT_V1.md` (giữ tên file cũ để không phá liên kết).
 
-Thực hiện trong **Supabase SQL Editor**:
+### Migration bắt buộc
 
-```text
-supabase/migrations/0012_ai_receptionist.sql
-```
+- `0012_ai_receptionist.sql` — conversation/review/knowledge candidate nền tảng.
+- `0034_receptionist_l3_knowledge_sources.sql` — 5 nguồn L3 read-only cho Knowledge Resolver.
 
-Migration tạo các bảng:
+### Trạng thái runtime mong đợi
 
-- `ai_conversations`
-- `ai_messages`
-- `ai_booking_records`
-- `ai_manager_reviews`
-- `ai_knowledge_candidates`
-- `ai_pilot_sessions`
+- `AI_RECEPTIONIST_MODE=limited_auto`
+- `AI_PILOT_ALLOWLIST_ENABLED=true`
+- `AI_PILOT_ALLOWED_CONVERSATION_IDS=SET`
+- `AI_PILOT_OUTBOUND_ENABLED=true` chỉ cho private pilot Facebook allowlist
+- `AI_PILOT_KIOTVIET_WRITE_ENABLED=false`
+- `KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false`
+- `TCE_CUSTOMER_CHANNEL_STAGE=facebook_only`
 
-### 2. Cấu hình trong Coolify
+Không dùng `AI_PILOT_KNOWLEDGE_CAPTURE_ENABLED`; knowledge candidate lifecycle được quản lý bằng database status + Manager review + canonical SSOT sync.
+Không đặt secret vào tài liệu hoặc biến `NEXT_PUBLIC_*`.
 
-Thực hiện tại **Coolify → Application → Environment Variables**. Chỉ kiểm tra trạng thái tồn tại, không chia sẻ giá trị secret.
+### Kiểm tra sau deploy
 
-```text
-AI_RECEPTIONIST_MODE=SIMULATION
-AI_PILOT_ALLOWLIST_ENABLED=true
-AI_PILOT_ALLOWED_CONVERSATION_IDS=<comma-separated conversation IDs>
-AI_PILOT_KNOWLEDGE_CAPTURE_ENABLED=true
-AI_PILOT_OUTBOUND_ENABLED=false
-AI_PILOT_KIOTVIET_WRITE_ENABLED=false
-KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false
-KIOTVIET_HOTEL_API_BASE_URL=https://api-integration-hotel.kiotviet.vn
-KIOTVIET_HOTEL_PUBLIC_API_KEY=<server-only>
-KIOTVIET_HOTEL_WEBHOOK_SECRET=<server-only>
-```
+1. `/health` phải HTTP 200, app/database `ok`, chỉ Facebook mở.
+2. `knowledgeRuntime.expectedSources=5`; sau initial sync cần `configuredSources=5`, `syncedSources=5`, `errorSources=0`.
+3. `/ai-le-tan` phải hiển thị hội thoại với **Nội dung gốc** + **Bản dịch tiếng Việt**.
+4. Test ít nhất VI/EN/FR: AI reply cùng ngôn ngữ khách.
+5. Không được lộ `Master Data`, `SSOT`, `KiotViet`, `rule engine` trong customer reply.
+6. Feedback huấn luyện tạo `conversation_style_feedback`; chỉ dùng sau khi được duyệt.
+7. Business knowledge candidate APPROVED vẫn chưa phải production fact; phải cập nhật đúng L3/L4 và sync read-back trước.
 
-Không đặt KiotViet key trong biến có tiền tố `NEXT_PUBLIC_`.
+### Rollback
 
-### 3. Kiểm tra sau deploy
-
-1. Đăng nhập `https://app.tamcocexperience.com/`.
-2. Mở **AI Lễ tân**.
-3. Xác nhận banner hiển thị **Mô phỏng** và **KiotViet write: Đang khóa**.
-4. Mở **Phòng kiểm thử**, gửi một câu hỏi thiếu dữ liệu.
-5. Kiểm tra hội thoại được lưu và yêu cầu xuất hiện ở **Cần Quản lý xác nhận**.
-6. Quản lý nhập ghi chú, chọn quyết định và xác nhận AI tạo phản hồi tiếp theo.
-7. Kiểm tra `knowledge_candidate` xuất hiện nhưng chưa được publish.
-
-### 4. Rollback
-
-- Đặt `AI_RECEPTIONIST_MODE=OFF` để dừng toàn bộ xử lý AI Lễ tân.
-- Giữ `AI_PILOT_OUTBOUND_ENABLED=false`.
-- Giữ `AI_PILOT_KIOTVIET_WRITE_ENABLED=false`.
-- Giữ `KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false`.
-- Rollback deployment về commit trước nếu giao diện hoặc API lỗi.
-- Không xóa dữ liệu hội thoại/audit trong quá trình rollback.
+- `AI_RECEPTIONIST_MODE=OFF`
+- `AI_PILOT_OUTBOUND_ENABLED=false`
+- `AI_PILOT_KIOTVIET_WRITE_ENABLED=false`
+- `KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false`
+- Rollback deployment về commit trước; không xóa conversation/message/review/knowledge/audit log.

@@ -4,6 +4,14 @@ import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/c
 
 export const dynamic = "force-dynamic";
 
+const RECEPTIONIST_KNOWLEDGE_KEYS = [
+  "l3-property-info",
+  "l3-pricing",
+  "l3-policy",
+  "l3-services",
+  "l3-products",
+] as const;
+
 function runtimeSignals() {
   const snapshot = channelPolicySnapshot();
   const facebook = snapshot.channels.find((channel) => channel.id === "facebook");
@@ -36,7 +44,12 @@ export async function GET() {
   const checkedAt = new Date().toISOString();
   try {
     const { db } = getAdminContainer();
-    const { error } = await db.from("sync_sources").select("id").limit(1);
+    const [{ error }, { data: knowledgeRows, error: knowledgeError }] = await Promise.all([
+      db.from("sync_sources").select("id").limit(1),
+      db.from("sync_sources")
+        .select("key,status,last_synced_at,last_error")
+        .in("key", [...RECEPTIONIST_KNOWLEDGE_KEYS]),
+    ]);
     if (error) {
       return NextResponse.json(
         {
@@ -65,8 +78,14 @@ export async function GET() {
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
         runtimeSignals: runtimeSignals(),
+        knowledgeRuntime: {
+          expectedSources: RECEPTIONIST_KNOWLEDGE_KEYS.length,
+          configuredSources: knowledgeError ? 0 : (knowledgeRows?.length ?? 0),
+          syncedSources: knowledgeError ? 0 : (knowledgeRows ?? []).filter((row) => Boolean(row.last_synced_at)).length,
+          errorSources: knowledgeError ? RECEPTIONIST_KNOWLEDGE_KEYS.length : (knowledgeRows ?? []).filter((row) => row.status === "error").length,
+        },
         checkedAt,
-        checks: { app: "ok", database: "ok" },
+        checks: { app: "ok", database: "ok", knowledge: knowledgeError ? "error" : "observed" },
       },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     );

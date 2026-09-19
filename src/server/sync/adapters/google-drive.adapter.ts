@@ -84,10 +84,17 @@ export class GoogleDriveAdapter implements SyncAdapter {
 
     if (metadata.mimeType === SPREADSHEET_MIME_TYPE) {
       const values = await getSheetValues(this.sheetId, canonicalSheetRange(this.sourceKey, this.sheetRange), auth);
-      // L3 12_CHANNEL_TRACKING has a human-readable title row above the canonical header row.
-      // All other sync sources keep the first row as the header.
-      const headerRowIndex = this.sourceKey === "l3-channel-tracking" ? 1 : 0;
-      rows = rowsFromSheetValues(values, headerRowIndex);
+      // L3 tabs contain human-readable title rows above their canonical headers.
+      // Keep the mapping explicit so sync_records receives real field names rather than Column B/C...
+      const headerRowIndexBySource: Record<string, number> = {
+        "l3-channel-tracking": 1,
+        "l3-property-info": 2,
+        "l3-pricing": 2,
+        "l3-policy": 2,
+        "l3-services": 2,
+        "l3-products": 1,
+      };
+      rows = rowsFromSheetValues(values, headerRowIndexBySource[this.sourceKey] ?? 0);
       if (this.sourceKey === "tce-checklist-daily") {
         rows = rows.filter((row) => row.fields["CHECKLIST_ID"]?.trim());
       }

@@ -6,7 +6,17 @@ import type { SyncSourceStatus } from "@/server/sync/sync-status.service";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MANAGED_SOURCES = new Set(["task-001", "approval-001", "l3-channel-tracking", "l3-ota-change-review"]);
+const MANAGED_SOURCES = new Set([
+  "task-001",
+  "approval-001",
+  "l3-channel-tracking",
+  "l3-ota-change-review",
+  "l3-property-info",
+  "l3-pricing",
+  "l3-policy",
+  "l3-services",
+  "l3-products",
+]);
 
 function workerToken(): string | null {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();

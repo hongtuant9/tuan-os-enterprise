@@ -115,6 +115,50 @@ export async function decideManagerReviewAction(input: {
   }
 }
 
+export async function backfillConversationTranslationsAction(
+  conversationId: string
+): Promise<ActionResult<{ updated: number; skipped: number }>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để dịch lịch sử hội thoại." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được chạy backfill bản dịch." };
+  }
+  try {
+    const data = await getAdminContainer().aiReceptionist.backfillConversationTranslations(conversationId);
+    revalidatePath("/ai-le-tan");
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể dịch lịch sử hội thoại." };
+  }
+}
+
+export async function captureConversationStyleFeedbackAction(input: {
+  conversationId: string;
+  guidance: string;
+}): Promise<ActionResult> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để ghi feedback." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được ghi feedback huấn luyện." };
+  }
+  if (!input.guidance.trim()) return { ok: false, error: "Feedback không được để trống." };
+
+  try {
+    await getAdminContainer().aiReceptionist.captureConversationStyleFeedback({
+      conversationId: input.conversationId,
+      guidance: input.guidance.trim(),
+      actorUserId: session.userId,
+      actorLabel: session.email ?? "Quản lý Homestay",
+    });
+    revalidatePath("/ai-le-tan");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể lưu feedback." };
+  }
+}
+
 export async function decideKnowledgeCandidateAction(input: {
   candidateId: string;
   decision: "approved" | "rejected";

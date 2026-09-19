@@ -43,10 +43,15 @@ function terminal(status: string): boolean {
 
 function isMarketingTask(data: Record<string, unknown>): boolean {
   if (text(data, "BUSINESS_UNIT").toUpperCase() !== "TAM COC EXPERIENCE") return false;
+  const taskId = text(data, "TASK_ID").toLowerCase();
+  const owner = text(data, "OWNER").toLowerCase();
+  if (/cmo ai|marketing manager/.test(owner) || taskId.startsWith("task-tce-soc-")) return true;
+  // Foundation/Operations remain owned by their executive lanes even when they mention Ads/website/channel.
+  if (taskId.startsWith("task-tce-fnd-") || taskId.startsWith("task-tce-ops-")) return false;
   const haystack = [
-    text(data, "TASK_ID"), text(data, "TASK_NAME"), text(data, "DEPARTMENT"), text(data, "OWNER"),
+    taskId, text(data, "TASK_NAME"), text(data, "DEPARTMENT"), owner,
   ].join(" ").toLowerCase();
-  return /soc-|marketing|growth|content|social|reputation|seo|cro|funnel|brand|campaign|ads/.test(haystack);
+  return /marketing|growth|content|social|reputation|seo|cro|funnel|brand|campaign|ads/.test(haystack);
 }
 
 function priorityRank(priority: string): number {

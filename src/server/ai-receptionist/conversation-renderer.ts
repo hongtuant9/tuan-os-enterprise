@@ -186,9 +186,15 @@ export async function renderSalesConversation(input: {
     const responsePayload = await response.json();
     const raw = parseJson(extractText(responsePayload));
     const reply = String(raw.reply ?? "").trim();
-    const guestTranslationVi = String(raw.guestTranslationVi ?? "").trim();
+    const rawGuestTranslationVi = String(raw.guestTranslationVi ?? "").trim();
     const replyTranslationVi = String(raw.replyTranslationVi ?? "").trim();
     const detectedLanguage = String(raw.detectedLanguage ?? input.language.code).trim() || input.language.code;
+
+    // Do not trust a multi-field sales-render response as the canonical inbound translation.
+    // Translate the guest's original text independently so guest/reply translations cannot bleed into each other.
+    const guestTranslationVi = detectedLanguage === "vi"
+      ? input.guestText
+      : await translateToVietnamese(input.guestText, detectedLanguage);
 
     const usage = responsePayload && typeof responsePayload === "object"
       ? (responsePayload as Record<string, unknown>).usage
@@ -217,7 +223,7 @@ export async function renderSalesConversation(input: {
 
     return {
       reply,
-      guestTranslationVi: guestTranslationVi || (detectedLanguage === "vi" ? input.guestText : "Chưa có bản dịch."),
+      guestTranslationVi: guestTranslationVi || rawGuestTranslationVi || (detectedLanguage === "vi" ? input.guestText : "Chưa có bản dịch."),
       replyTranslationVi: replyTranslationVi || (detectedLanguage === "vi" ? reply : "Chưa có bản dịch."),
       detectedLanguage,
       qa,

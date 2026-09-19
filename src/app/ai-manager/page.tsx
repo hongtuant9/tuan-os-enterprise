@@ -228,7 +228,7 @@ export default async function AiManagerPage() {
           </div>
 
           <div id="agent-registry" className="mt-5 scroll-mt-6">
-            <CollapsibleSection title="Danh mục 15 tác nhân AI" count={`${TCE_AGENT_REGISTRY.length}/15`}>
+            <CollapsibleSection title="Danh mục tác nhân AI" count={`${TCE_AGENT_REGISTRY.length}`}>
               <p className="mb-3 text-xs text-[var(--ink-muted)]">Mở khi cần kiểm tra nhiệm vụ, quyền hoặc nguồn dữ liệu của từng tác nhân.</p>
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {TCE_AGENT_REGISTRY.map((agent) => (

@@ -20,6 +20,10 @@ export type Approval = {
   sourceChannel?: string | null;
   evidenceUrl?: string | null;
   severity?: string | null;
+  changeClass?: string | null;
+  confidence?: string | null;
+  impactSummary?: string | null;
+  rollbackPlan?: string | null;
   aiRecommendation?: string | null;
   executionStatus?: string | null;
   executionNote?: string | null;

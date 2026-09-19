@@ -14,7 +14,7 @@ const navigation = [
   { href: "/master-changes", label: "Thay đổi Master Data", sub: "AI đề xuất → CEO duyệt" },
   { href: "/channel-health", label: "Sức khỏe các kênh", sub: "OTA / Online consistency" },
   { href: "/sync-history", label: "Lịch sử đồng bộ", sub: "Sync / Audit trail" },
-  { href: "/agents", label: "15 tác nhân AI", sub: "Agent Registry" },
+  { href: "/agents", label: "Tác nhân AI", sub: "Agent Registry" },
 ];
 
 export default function Sidebar() {

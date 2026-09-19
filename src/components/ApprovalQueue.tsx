@@ -101,9 +101,14 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
 
   return (
     <section id="approval-queue" className="mb-10 scroll-mt-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hàng chờ phê duyệt</h2>
-        <span className="text-xs text-[var(--ink-muted)]">{pendingCount} quyết định đang chờ anh</span>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hàng chờ phê duyệt</h2>
+          <span className="text-xs text-[var(--ink-muted)]">{pendingCount} quyết định đang chờ anh</span>
+        </div>
+        <a href="/api/integrations/google/oauth/start" className="inline-flex w-fit items-center rounded-lg border border-sky-500/30 bg-sky-500/[0.08] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/[0.14]">
+          Kết nối lại Google
+        </a>
       </div>
 
       <div className="flex flex-col gap-3">

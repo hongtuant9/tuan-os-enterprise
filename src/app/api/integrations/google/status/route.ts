@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient as createRequestClient } from "@/lib/supabase/server";
 import { getCurrentSession } from "@/server/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
 
 export type GoogleStatusResponse = {
   connected: boolean;
   googleEmail?: string;
   connectedAt?: string;
   lastError?: string;
+  analyticsReadScope?: boolean;
 };
 
 /**
@@ -41,11 +44,14 @@ export async function GET() {
     return NextResponse.json(body);
   }
 
+  const secureConnection = await new GoogleOAuthConnectionsRepository(createAdminClient()).findByUserId(session.userId);
+  const scopes = new Set((secureConnection?.scope ?? "").split(/[\s,]+/).filter(Boolean));
   const body: GoogleStatusResponse = {
     connected: true,
     googleEmail: data.google_email ?? undefined,
     connectedAt: data.connected_at,
     lastError: data.last_error ?? undefined,
+    analyticsReadScope: scopes.has("https://www.googleapis.com/auth/analytics.readonly"),
   };
   return NextResponse.json(body);
 }

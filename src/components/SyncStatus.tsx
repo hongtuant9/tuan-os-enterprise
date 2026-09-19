@@ -78,6 +78,7 @@ function GoogleConnection() {
       </div>
 
       <div className="flex flex-col items-start gap-1 sm:items-end">
+        {status?.connected && status.analyticsReadScope === false ? <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-3 text-xs text-amber-200">CMO Growth đã được duyệt quyền GA4 read-only nhưng kết nối Google hiện chưa có <code>analytics.readonly</code>. Bấm Kết nối lại Google một lần; sau đó VPS sẽ tự đọc GA4 Actual.</div> : null}
         <a
           href="/api/integrations/google/oauth/start"
           className="text-xs font-medium text-[var(--accent)] hover:underline"

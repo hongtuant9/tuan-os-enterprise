@@ -21,6 +21,13 @@ export class GoogleNotConnectedError extends Error {
   }
 }
 
+export class GoogleAnalyticsReadScopeError extends Error {
+  constructor() {
+    super("Google Analytics read-only scope is missing. Reconnect Google once to grant analytics.readonly.");
+    this.name = "GoogleAnalyticsReadScopeError";
+  }
+}
+
 export class GoogleSheetsWriteScopeError extends Error {
   constructor() {
     super("Tài khoản Google hiện chỉ có quyền đọc. Hãy kết nối lại Google một lần để cấp quyền cập nhật Master Sheet, rồi bấm Duyệt lại.");
@@ -29,6 +36,7 @@ export class GoogleSheetsWriteScopeError extends Error {
 }
 
 const GOOGLE_SHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const GOOGLE_ANALYTICS_READ_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 
 const REFRESH_BUFFER_MS = 60_000; // refresh a minute early to avoid racing expiry
 
@@ -76,10 +84,18 @@ export class GoogleOAuthTokenStore {
     return this.getAuthorizedClient(connection);
   }
 
+  async getSystemAuthorizedClientForAnalyticsRead(): Promise<Auth.OAuth2Client> {
+    const connection = await this.repo.findMostRecent();
+    if (!connection) throw new GoogleNotConnectedError();
+    const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
+    if (!scopes.has(GOOGLE_ANALYTICS_READ_SCOPE)) throw new GoogleAnalyticsReadScopeError();
+    return this.getAuthorizedClient(connection);
+  }
+
   async getSystemAuthorizedClientForSheetsWrite(): Promise<Auth.OAuth2Client> {
     const connection = await this.repo.findMostRecent();
     if (!connection) throw new GoogleNotConnectedError();
-    const scopes = new Set((connection.scope ?? "").split(/\s+/).filter(Boolean));
+    const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
     if (!scopes.has(GOOGLE_SHEETS_WRITE_SCOPE)) throw new GoogleSheetsWriteScopeError();
     return this.getAuthorizedClient(connection);
   }

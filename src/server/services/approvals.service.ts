@@ -1,16 +1,9 @@
 import { ApprovalsRepository } from "@/server/repositories/approvals.repository";
 import { ActivityLogService } from "@/server/services/activity-log.service";
+import type { Database } from "@/lib/supabase/types";
 import type { Approval, ApprovalStatus } from "@/data/approvals";
 
-function toApproval(row: {
-  id: string;
-  title: string;
-  summary: string | null;
-  unit: string;
-  requested_by: string;
-  created_at: string;
-  status: string;
-}): Approval {
+function toApproval(row: Database["public"]["Tables"]["approvals"]["Row"]): Approval {
   return {
     id: row.id,
     title: row.title,
@@ -19,6 +12,21 @@ function toApproval(row: {
     requestedBy: row.requested_by,
     submittedAt: row.created_at,
     status: row.status as ApprovalStatus,
+    requestType: row.request_type === "master_data_change" ? "master_data_change" : "general",
+    changeKey: row.change_key,
+    entity: row.entity,
+    targetFile: row.target_file,
+    targetSheet: row.target_sheet,
+    targetCell: row.target_cell,
+    currentValue: row.current_value,
+    proposedValue: row.proposed_value,
+    sourceChannel: row.source_channel,
+    evidenceUrl: row.evidence_url,
+    severity: row.severity,
+    aiRecommendation: row.ai_recommendation,
+    executionStatus: row.execution_status,
+    executionNote: row.execution_note,
+    sourceQueueRow: row.source_queue_row,
   };
 }
 

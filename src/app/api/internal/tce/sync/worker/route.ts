@@ -16,6 +16,7 @@ const MANAGED_SOURCES = new Set([
   "l3-policy",
   "l3-services",
   "l3-products",
+  "marketing-shadow-content",
 ]);
 
 function workerToken(): string | null {

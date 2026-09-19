@@ -4,6 +4,8 @@ import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/c
 
 export const dynamic = "force-dynamic";
 
+const MARKETING_GROWTH_SOURCE = "marketing-shadow-content";
+
 const RECEPTIONIST_KNOWLEDGE_KEYS = [
   "l3-property-info",
   "l3-pricing",
@@ -51,11 +53,12 @@ export async function GET() {
   const checkedAt = new Date().toISOString();
   try {
     const { db } = getAdminContainer();
-    const [{ error }, { data: knowledgeRows, error: knowledgeError }] = await Promise.all([
+    const [{ error }, { data: knowledgeRows, error: knowledgeError }, { data: marketingGrowthSource, error: marketingGrowthError }] = await Promise.all([
       db.from("sync_sources").select("id").limit(1),
       db.from("sync_sources")
         .select("key,status,last_synced_at,last_error")
         .in("key", [...RECEPTIONIST_KNOWLEDGE_KEYS]),
+      db.from("sync_sources").select("key,status,last_synced_at,last_error,schedule_enabled,schedule_interval_minutes").eq("key", MARKETING_GROWTH_SOURCE).maybeSingle(),
     ]);
     if (error) {
       return NextResponse.json(
@@ -63,7 +66,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
-          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", marketingGrowthLoop: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
           agentRegistry: 16,
           executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
@@ -80,7 +83,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", marketingGrowthLoop: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
         agentRegistry: 16,
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
@@ -90,6 +93,14 @@ export async function GET() {
           configuredSources: knowledgeError ? 0 : (knowledgeRows?.length ?? 0),
           syncedSources: knowledgeError ? 0 : (knowledgeRows ?? []).filter((row) => Boolean(row.last_synced_at)).length,
           errorSources: knowledgeError ? RECEPTIONIST_KNOWLEDGE_KEYS.length : (knowledgeRows ?? []).filter((row) => row.status === "error").length,
+        },
+        marketingGrowthRuntime: {
+          key: MARKETING_GROWTH_SOURCE,
+          configured: !marketingGrowthError && Boolean(marketingGrowthSource),
+          synced: !marketingGrowthError && Boolean(marketingGrowthSource?.last_synced_at),
+          status: marketingGrowthError ? "error" : (marketingGrowthSource?.status ?? "missing"),
+          scheduleEnabled: Boolean(marketingGrowthSource?.schedule_enabled),
+          scheduleIntervalMinutes: marketingGrowthSource?.schedule_interval_minutes ?? null,
         },
         checkedAt,
         checks: { app: "ok", database: "ok", knowledge: knowledgeError ? "error" : "observed" },
@@ -102,7 +113,7 @@ export async function GET() {
         status: "degraded",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", marketingGrowthLoop: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
         agentRegistry: 16,
           executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),

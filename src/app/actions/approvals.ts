@@ -18,7 +18,7 @@ function q(name: string) {
 
 async function writeQueueDecision(row: number | null, values: { status: string; by: string; at: string; execution: string; note: string }) {
   if (!row) return;
-  const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
+  const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
   await Promise.all([
     setSheetValue(MASTER_SHEET_ID, `${q(REVIEW_TAB)}!N${row}`, values.status, auth),
     setSheetValue(MASTER_SHEET_ID, `${q(REVIEW_TAB)}!O${row}`, values.by, auth),
@@ -53,7 +53,7 @@ async function decideMasterChange(id: string, status: "approved" | "rejected", a
     return { ok: false, error: "Đề xuất thiếu vị trí tab/ô cần cập nhật." };
   }
 
-  const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
+  const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
   const range = `${q(approval.target_sheet)}!${approval.target_cell}`;
   const current = (await getSheetValues(MASTER_SHEET_ID, range, auth))[0]?.[0] ?? "";
   if (String(current).trim() !== String(approval.current_value ?? "").trim()) {

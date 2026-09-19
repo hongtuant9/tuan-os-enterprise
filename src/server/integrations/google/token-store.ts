@@ -79,7 +79,7 @@ export class GoogleOAuthTokenStore {
   async getSystemAuthorizedClientForSheetsWrite(): Promise<Auth.OAuth2Client> {
     const connection = await this.repo.findMostRecent();
     if (!connection) throw new GoogleNotConnectedError();
-    const scopes = new Set((connection.scope ?? "").split(/\\s+/).filter(Boolean));
+    const scopes = new Set((connection.scope ?? "").split(/\s+/).filter(Boolean));
     if (!scopes.has(GOOGLE_SHEETS_WRITE_SCOPE)) throw new GoogleSheetsWriteScopeError();
     return this.getAuthorizedClient(connection);
   }

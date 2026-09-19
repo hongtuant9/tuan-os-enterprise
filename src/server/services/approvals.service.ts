@@ -11,6 +11,7 @@ function toApproval(row: Database["public"]["Tables"]["approvals"]["Row"]): Appr
     unit: row.unit,
     requestedBy: row.requested_by,
     submittedAt: row.created_at,
+    decidedAt: row.decided_at,
     status: row.status as ApprovalStatus,
     requestType: row.request_type === "master_data_change" ? "master_data_change" : "general",
     changeKey: row.change_key,

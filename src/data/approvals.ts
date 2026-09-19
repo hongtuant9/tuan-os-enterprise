@@ -8,6 +8,7 @@ export type Approval = {
   unit: string;
   requestedBy: string;
   submittedAt: string;
+  decidedAt?: string | null;
   status: ApprovalStatus;
   requestType: ApprovalRequestType;
   changeKey?: string | null;

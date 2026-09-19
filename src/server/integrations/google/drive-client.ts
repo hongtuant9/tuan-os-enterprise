@@ -29,6 +29,21 @@ export async function getSheetValues(spreadsheetId: string, range: string, auth:
   return (data.values as string[][] | undefined) ?? [];
 }
 
+export async function setSheetValue(
+  spreadsheetId: string,
+  range: string,
+  value: string,
+  auth: Auth.OAuth2Client
+): Promise<void> {
+  const sheets = google.sheets({ version: "v4", auth });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[value]] },
+  });
+}
+
 /** Flattens a Google Doc's body into one string per non-empty paragraph. */
 export async function getDocParagraphs(documentId: string, auth: Auth.OAuth2Client): Promise<string[]> {
   const docs = google.docs({ version: "v1", auth });

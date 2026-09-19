@@ -33,10 +33,16 @@ export class ApprovalsRepository {
     return data;
   }
 
+  async findByChangeKey(changeKey: string): Promise<Row | null> {
+    const { data, error } = await this.db.from("approvals").select("*").eq("change_key", changeKey).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   async updateStatus(id: string, status: string, approvedBy: string | null): Promise<Row> {
     const { data, error } = await this.db
       .from("approvals")
-      .update({ status, approved_by: approvedBy })
+      .update({ status, approved_by: approvedBy, decided_at: new Date().toISOString() })
       .eq("id", id)
       .select("*")
       .single();

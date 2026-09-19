@@ -5,6 +5,7 @@ import { GoogleDriveAdapter } from "@/server/sync/adapters/google-drive.adapter"
 import { TasksImportMapper } from "@/server/sync/mappers/tasks.mapper";
 import { ApprovalsImportMapper } from "@/server/sync/mappers/approvals.mapper";
 import { GenericRecordMapper } from "@/server/sync/mappers/generic-record.mapper";
+import { MasterChangeImportMapper } from "@/server/sync/mappers/master-change.mapper";
 import { TasksRepository } from "@/server/repositories/tasks.repository";
 import { ApprovalsRepository } from "@/server/repositories/approvals.repository";
 
@@ -14,6 +15,7 @@ export const SYNC_SOURCE_KEYS = [
   "tce-checklist-daily",
   "approval-001",
   "l3-channel-tracking",
+  "l3-ota-change-review",
   "fin-001",
   "business-portfolio",
   "family",
@@ -48,6 +50,8 @@ export function getMapperForSource(key: SyncSourceKey, db: SupabaseClient<Databa
       return new ApprovalsImportMapper(new ApprovalsRepository(db));
     case "l3-channel-tracking":
       return new GenericRecordMapper();
+    case "l3-ota-change-review":
+      return new MasterChangeImportMapper(new ApprovalsRepository(db));
     case "fin-001":
     case "business-portfolio":
     case "family":

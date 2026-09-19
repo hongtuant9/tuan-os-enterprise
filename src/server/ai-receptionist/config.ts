@@ -1,4 +1,5 @@
 import type { ReceptionistMode } from "@/data/ai-receptionist";
+import { isCustomerChannelEnabled, isCustomerConversationChannel } from "@/server/channels/channel-policy";
 
 function enabled(name: string): boolean {
   return process.env[name]?.toLowerCase() === "true";
@@ -28,8 +29,9 @@ export function isPilotAllowlistEnabled(): boolean {
 }
 
 export function isPilotConversationAllowed(channel: string, externalConversationId?: string): boolean {
-  if (!isPilotAllowlistEnabled()) return true;
   if (channel === "pilot") return true;
+  if (!isCustomerConversationChannel(channel) || !isCustomerChannelEnabled(channel)) return false;
+  if (!isPilotAllowlistEnabled()) return true;
   if (!externalConversationId) return false;
   const allowlist = (process.env.AI_PILOT_ALLOWED_CONVERSATION_IDS ?? "")
     .split(",")

@@ -29,6 +29,20 @@ export default async function AgentsPage() {
                   <span className="rounded-full bg-[var(--surface-raised)] px-2 py-1 text-[11px] font-semibold uppercase text-[var(--ink-secondary)]">{statusLabel(status)}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-[var(--ink-secondary)]">{agent.mission}</p>
+                <div className="mt-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Việc đang làm</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{runtime?.currentTask || "Chưa có task runtime chuyên biệt."}</p>
+                </div>
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kết quả / kế hoạch / bằng chứng</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {agent.outputs.map((output) => (
+                      <a key={`${agent.id}-${output.label}`} href={output.href} target={output.href.startsWith("http") ? "_blank" : undefined} rel={output.href.startsWith("http") ? "noreferrer" : undefined} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2.5 py-1.5 text-xs font-medium text-[var(--accent)] hover:border-[var(--accent)]/40">
+                        {output.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
                 <p className="mt-3 text-xs leading-5 text-[var(--ink-muted)]"><b>Nguồn dữ liệu:</b> {agent.sources.join(" · ")}</p>
               </article>
             );

@@ -37,6 +37,8 @@ function runtimeSignals() {
     pilotOutboundEnabled: process.env.AI_PILOT_OUTBOUND_ENABLED?.trim().toLowerCase() === "true",
     kiotVietWriteEnabled: process.env.AI_PILOT_KIOTVIET_WRITE_ENABLED?.trim().toLowerCase() === "true",
     directBookingAutoCreateEnabled: process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true",
+    openAiApiKey: process.env.OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
+    receptionistConversationModel: process.env.AI_RECEPTIONIST_CONVERSATION_MODEL?.trim() ? "SET=yes" : "SET=no",
   };
 }
 

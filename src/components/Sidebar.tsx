@@ -11,6 +11,9 @@ const navigation = [
   { href: "/customers", label: "Khách hàng", sub: "Hồ sơ & lịch sử" },
   { href: "/upsell", label: "Bán thêm", sub: "Upsell / Cross-sell" },
   { href: "/approvals", label: "Việc cần phê duyệt", sub: "CEO Approval" },
+  { href: "/master-changes", label: "Thay đổi Master Data", sub: "AI đề xuất → CEO duyệt" },
+  { href: "/channel-health", label: "Sức khỏe các kênh", sub: "OTA / Online consistency" },
+  { href: "/sync-history", label: "Lịch sử đồng bộ", sub: "Sync / Audit trail" },
   { href: "/agents", label: "15 tác nhân AI", sub: "Agent Registry" },
 ];
 

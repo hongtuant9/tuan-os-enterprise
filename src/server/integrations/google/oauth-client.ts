@@ -15,6 +15,7 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/documents.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/analytics.readonly",
 ];
 
 export class GoogleOAuthConfigError extends Error {

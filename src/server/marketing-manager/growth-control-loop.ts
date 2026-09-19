@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { getAdminContainer } from "@/server/container";
+import { collectGa4TrafficSnapshot } from "@/server/integrations/google/analytics-client";
 
 export type GrowthDecision =
   | "INSUFFICIENT_DATA"
@@ -79,6 +80,7 @@ function testDecision(value: unknown): "SCALE" | "STOP" | null {
 
 export async function runMarketingGrowthCycle(now = new Date()): Promise<MarketingGrowthCycleResult> {
   const container = getAdminContainer();
+  const ga4Collection = await collectGa4TrafficSnapshot();
   const untypedDb = container.db as unknown as UntypedDb;
   const [
     { data: contentSource },
@@ -162,6 +164,11 @@ export async function runMarketingGrowthCycle(now = new Date()): Promise<Marketi
   const reasons: string[] = [];
   const nextActions: string[] = [];
   let decision: GrowthDecision = "OBSERVE";
+
+  if (ga4Collection.status === "NEEDS_REAUTH") {
+    reasons.push("GA4 analytics.readonly is approved but the stored Google connection has not been re-authorized with the new scope yet.");
+    nextActions.push("Reconnect Google once from Sync History to grant analytics.readonly; VPS collection then continues automatically.");
+  }
 
   if (contentAuthority !== "VERIFIED") {
     decision = "INSUFFICIENT_DATA";

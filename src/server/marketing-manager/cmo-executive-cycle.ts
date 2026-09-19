@@ -38,6 +38,13 @@ export type CmoExecutiveResult = {
     customerVoiceAvailable: boolean;
     competitorFeedConnected: boolean;
     reviewFeedConnected: boolean;
+    cmi: {
+      jobs: number;
+      sources: number;
+      verifiedEvidence: number;
+      competitors: number;
+      verifiedInsights: number;
+    };
   };
   campaignTests: {
     active: number;
@@ -50,6 +57,11 @@ export type CmoExecutiveResult = {
 };
 
 type MarketingTestRow = { status: string | null };
+type CmiJobRow = { id: string; business_line: string | null };
+type CmiSourceRow = { id: string; research_job_id: string; status: string | null };
+type CmiEvidenceRow = { source_id: string; is_verified: boolean | null };
+type CmiCompetitorRow = { research_job_id: string; selection_status: string | null };
+type CmiInsightRow = { research_job_id: string; verification_status: string | null };
 
 function sourceHealthy(rows: Array<{ key: string; status: string | null; last_synced_at: string | null }>, pattern: RegExp): boolean {
   return rows.some((row) => pattern.test(row.key) && row.status !== "error" && Boolean(row.last_synced_at));
@@ -64,7 +76,7 @@ async function writeWorkbookSnapshot(result: Omit<CmoExecutiveResult, "workbookW
       ["Generated At", result.generatedAt, "Decision", result.decision, "Workbook", "AUTO-UPDATED"],
       ["Workstream", "State", "Evidence / Signal", "", "", ""],
       ["Brand & Portfolio", result.workstreams.brand, "TCE master brand / STAY-EAT-EXPERIENCE-EXPLORE", "", "", ""],
-      ["Market Intelligence", result.workstreams.marketIntelligence, `competitor_feed=${result.intelligence.competitorFeedConnected}; customer_voice=${result.intelligence.customerVoiceAvailable}`, "", "", ""],
+      ["Market Intelligence", result.workstreams.marketIntelligence, `CMI jobs=${result.intelligence.cmi.jobs}; sources=${result.intelligence.cmi.sources}; verified_evidence=${result.intelligence.cmi.verifiedEvidence}; competitors=${result.intelligence.cmi.competitors}; verified_insights=${result.intelligence.cmi.verifiedInsights}; customer_voice=${result.intelligence.customerVoiceAvailable}`, "", "", ""],
       ["Channel Strategy", result.workstreams.channelStrategy, `open=${result.channels.customerFacingOpen.join(",") || "none"}; ready=${result.channels.providerReady}; need_verify=${result.channels.providerNeedVerify}`, "", "", ""],
       ["Campaigns / Content", result.workstreams.campaigns, `tests active=${result.campaignTests.active}; completed=${result.campaignTests.completed}`, "", "", ""],
       ["Paid Media", result.workstreams.paidMedia, "recommend/propose only; no autonomous spend", "", "", ""],
@@ -99,13 +111,32 @@ export async function runCmoExecutiveCycle(
 ): Promise<CmoExecutiveResult> {
   const container = getAdminContainer();
   const channelSnapshot = channelPolicySnapshot();
-  const [{ data: syncSources, error: syncError }, { data: tests, error: testError }, { data: latestLogs }] = await Promise.all([
+  const [
+    { data: syncSources, error: syncError },
+    { data: tests, error: testError },
+    { data: cmiJobs, error: cmiJobsError },
+    { data: cmiSources, error: cmiSourcesError },
+    { data: cmiEvidence, error: cmiEvidenceError },
+    { data: cmiCompetitors, error: cmiCompetitorsError },
+    { data: cmiInsights, error: cmiInsightsError },
+    { data: latestLogs },
+  ] = await Promise.all([
     container.db.from("sync_sources").select("key,status,last_synced_at"),
     container.db.from("marketing_tests").select("status"),
+    container.db.from("cmi_research_jobs").select("id,business_line"),
+    container.db.from("cmi_sources").select("id,research_job_id,status"),
+    container.db.from("cmi_evidence").select("source_id,is_verified"),
+    container.db.from("cmi_competitors").select("research_job_id,selection_status"),
+    container.db.from("cmi_insights").select("research_job_id,verification_status"),
     container.db.from("activity_logs").select("message,created_at").eq("unit", "TCE CMO").order("created_at", { ascending: false }).limit(1),
   ]);
   if (syncError) throw syncError;
   if (testError) throw testError;
+  if (cmiJobsError) throw cmiJobsError;
+  if (cmiSourcesError) throw cmiSourcesError;
+  if (cmiEvidenceError) throw cmiEvidenceError;
+  if (cmiCompetitorsError) throw cmiCompetitorsError;
+  if (cmiInsightsError) throw cmiInsightsError;
 
   const sources = (syncSources ?? []) as Array<{ key: string; status: string | null; last_synced_at: string | null }>;
   const marketingTests = (tests ?? []) as MarketingTestRow[];
@@ -116,7 +147,26 @@ export async function runCmoExecutiveCycle(
   const providerReady = channelSnapshot.channels.filter((row) => row.providerVerification === "VERIFIED_PILOT" || row.providerVerification === "NOT_REQUIRED").length;
   const providerNeedVerify = channelSnapshot.channels.filter((row) => row.providerVerification === "NEED_VERIFY").length;
   const ga4Available = sourceHealthy(sources, /ga4|google-analytics/i);
-  const competitorFeedConnected = sourceHealthy(sources, /competitor|market-intel|market_intel|search-trends|destination-demand/i);
+  const jobs = (cmiJobs ?? []) as unknown as CmiJobRow[];
+  const cmiSourceRows = (cmiSources ?? []) as unknown as CmiSourceRow[];
+  const cmiEvidenceRows = (cmiEvidence ?? []) as unknown as CmiEvidenceRow[];
+  const cmiCompetitorRows = (cmiCompetitors ?? []) as unknown as CmiCompetitorRow[];
+  const cmiInsightRows = (cmiInsights ?? []) as unknown as CmiInsightRow[];
+  const relevantBusinessLines = new Set(["homestay", "cozy_garden", "cross_business"]);
+  const relevantJobIds = new Set(jobs.filter((row) => relevantBusinessLines.has(row.business_line ?? "")).map((row) => row.id));
+  const relevantSources = cmiSourceRows.filter((row) => relevantJobIds.has(row.research_job_id));
+  const relevantSourceIds = new Set(relevantSources.map((row) => row.id));
+  const verifiedEvidence = cmiEvidenceRows.filter((row) => relevantSourceIds.has(row.source_id) && row.is_verified === true).length;
+  const relevantCompetitors = cmiCompetitorRows.filter((row) => relevantJobIds.has(row.research_job_id));
+  const verifiedInsights = cmiInsightRows.filter((row) => relevantJobIds.has(row.research_job_id) && ["verified", "approved"].includes((row.verification_status ?? "").toLowerCase())).length;
+  const cmi = {
+    jobs: relevantJobIds.size,
+    sources: relevantSources.length,
+    verifiedEvidence,
+    competitors: relevantCompetitors.length,
+    verifiedInsights,
+  };
+  const competitorFeedConnected = cmi.competitors > 0 && cmi.verifiedEvidence > 0;
   const reviewFeedConnected = sourceHealthy(sources, /review|reputation|tripadvisor|maps-review/i);
   const customerVoiceAvailable = sales.funnel.realConversations > 0;
 
@@ -144,7 +194,15 @@ export async function runCmoExecutiveCycle(
     decision = "BUILD_DATA";
     if (!competitorFeedConnected) {
       reasons.push("No recurring market/competitor intelligence feed is connected yet.");
-      nextActions.push("Establish a dated competitor/search/destination intelligence cycle and store evidence, not opinions.");
+      if (cmi.jobs === 0) {
+        nextActions.push("Create CMI research jobs for Homestay, Cozy Garden and cross-business demand/competitor research.");
+      } else if (cmi.competitors === 0) {
+        nextActions.push(`CMI has ${cmi.jobs} relevant job(s), ${cmi.sources} source(s) and ${cmi.verifiedEvidence} verified evidence item(s), but 0 competitor records. Run competitor discovery/selection before CMO competitor conclusions.`);
+      } else if (cmi.verifiedInsights === 0) {
+        nextActions.push(`CMI has ${cmi.competitors} competitor record(s) but 0 verified insight. Capture/verify evidence and approve insight before changing strategy.`);
+      } else {
+        nextActions.push("Refresh dated competitor/search/destination evidence on the defined cadence; do not rely on stale observations.");
+      }
     }
     if (!customerVoiceAvailable) {
       reasons.push("No real customer conversation signal exists yet; pilot/internal traffic is excluded.");
@@ -174,7 +232,7 @@ export async function runCmoExecutiveCycle(
       providerNeedVerify,
     },
     workstreams,
-    intelligence: { ga4Available, customerVoiceAvailable, competitorFeedConnected, reviewFeedConnected },
+    intelligence: { ga4Available, customerVoiceAvailable, competitorFeedConnected, reviewFeedConnected, cmi },
     campaignTests: { active: activeTests, completed: completedTests },
     reasons,
     nextActions: [...new Set(nextActions)],

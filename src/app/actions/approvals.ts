@@ -16,6 +16,45 @@ function q(name: string) {
   return `'${name.replaceAll("'", "''")}'`;
 }
 
+function isUnknownMasterValue(value: string) {
+  const normalized = value.trim();
+  return normalized === "" || normalized === "?";
+}
+
+function isExplicitNo(value: string) {
+  return value.trim().toLocaleLowerCase("vi").startsWith("không");
+}
+
+async function syncAmenityVerificationRow(row: number, auth: Awaited<ReturnType<GoogleOAuthTokenStore["getSystemAuthorizedClientForSheetsWrite"]>>) {
+  const tab = "13_OTA_AMENITIES_MASTER";
+  const values = (await getSheetValues(MASTER_SHEET_ID, `${q(tab)}!E${row}:N${row}`, auth))[0] ?? [];
+  const lavender = String(values[0] ?? "");
+  const ruby = String(values[1] ?? "");
+  const lavenderOta = values.slice(2, 6).map((value) => String(value ?? "").trim());
+  const rubyOta = values.slice(6, 10).map((value) => String(value ?? "").trim());
+  const unresolved = isUnknownMasterValue(lavender) || isUnknownMasterValue(ruby);
+  const otaMismatch =
+    (isExplicitNo(lavender) && lavenderOta.includes("✓")) ||
+    (isExplicitNo(ruby) && rubyOta.includes("✓"));
+
+  const verificationStatus = unresolved
+    ? "PARTIAL VERIFIED — OWNER"
+    : otaMismatch
+      ? "VERIFIED — OWNER / OTA MISMATCH"
+      : "VERIFIED — OWNER";
+  const aiReadGate = unresolved ? "BLOCKED_VERIFY" : "AI_RESPONSE_OK";
+
+  await Promise.all([
+    setSheetValue(MASTER_SHEET_ID, `${q(tab)}!O${row}`, verificationStatus, auth),
+    setSheetValue(MASTER_SHEET_ID, `${q(tab)}!W${row}`, aiReadGate, auth),
+  ]);
+  const verify = (await getSheetValues(MASTER_SHEET_ID, `${q(tab)}!O${row}:W${row}`, auth))[0] ?? [];
+  if (String(verify[0] ?? "").trim() !== verificationStatus || String(verify[8] ?? "").trim() !== aiReadGate) {
+    throw new Error("Không thể đồng bộ Trạng thái xác minh / AI Read Gate sau khi cập nhật amenity.");
+  }
+  return { verificationStatus, aiReadGate };
+}
+
 async function writeQueueDecision(row: number | null, values: { status: string; by: string; at: string; execution: string; note: string }) {
   if (!row) return;
   const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
@@ -73,7 +112,27 @@ async function decideMasterChange(id: string, status: "approved" | "rejected", a
     return { ok: false, error: note };
   }
 
-  const note = `Đã cập nhật ${approval.target_sheet}!${approval.target_cell} và xác minh lại giá trị sau ghi.`;
+  let amenitySync: { verificationStatus: string; aiReadGate: string } | null = null;
+  if (approval.target_sheet === "13_OTA_AMENITIES_MASTER") {
+    const amenityTarget = /^([A-Z]+)(\d+)$/.exec(approval.target_cell.trim().toUpperCase());
+    if (amenityTarget && (amenityTarget[1] === "E" || amenityTarget[1] === "F")) {
+      try {
+        amenitySync = await syncAmenityVerificationRow(Number(amenityTarget[2]), auth);
+      } catch (syncError) {
+        await setSheetValue(MASTER_SHEET_ID, range, String(current), auth);
+        const rollbackReadBack = (await getSheetValues(MASTER_SHEET_ID, range, auth))[0]?.[0] ?? "";
+        const rollbackOk = String(rollbackReadBack).trim() === String(current).trim();
+        const note = rollbackOk
+          ? "Không thể đồng bộ Trạng thái xác minh / AI Read Gate; đã rollback giá trị Master về trước khi duyệt."
+          : "Không thể đồng bộ Trạng thái xác minh / AI Read Gate và rollback cũng không xác minh được. Cần kiểm tra Master ngay.";
+        await admin.db.from("approvals").update({ execution_status: rollbackOk ? "failed_rolled_back" : "critical_sync_error", execution_note: note }).eq("id", id);
+        return { ok: false, error: syncError instanceof Error ? `${note} ${syncError.message}` : note };
+      }
+    }
+  }
+
+  const statusNote = amenitySync ? ` Trạng thái dòng: ${amenitySync.verificationStatus}; AI Read Gate: ${amenitySync.aiReadGate}.` : "";
+  const note = `Đã cập nhật ${approval.target_sheet}!${approval.target_cell} và xác minh lại giá trị sau ghi.${statusNote}`;
   await admin.db.from("approvals").update({
     status: "approved", approved_by: actor, decided_at: now,
     execution_status: "applied", execution_note: note, applied_at: now,

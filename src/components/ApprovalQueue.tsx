@@ -41,6 +41,20 @@ function MasterChangeDetails({ approval }: { approval: Approval }) {
       <div className="md:col-span-2">
         <p className="text-[var(--ink-muted)]">Đề xuất xử lý</p>
         <p className="mt-1 leading-5 text-[var(--ink-secondary)]">{approval.aiRecommendation || approval.summary}</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <div className="rounded-lg bg-white/[0.04] p-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Phân loại & độ tin cậy</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.changeClass || "BUSINESS_TRUTH"} · Confidence: {approval.confidence || "chưa chấm"}</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.04] p-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Tác động</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.impactSummary || "Chưa có mô tả tác động chi tiết."}</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.04] p-2 md:col-span-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kế hoạch rollback</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.rollbackPlan || "Khôi phục giá trị trước thay đổi và xác minh read-back."}</p>
+          </div>
+        </div>
         <p className="mt-2 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
           Change ID: {approval.changeKey || approval.id} · Mức độ: {approval.severity || "medium"} · Thực thi: {approval.executionStatus || "awaiting_approval"}
         </p>

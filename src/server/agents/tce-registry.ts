@@ -105,11 +105,11 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
     guardrails: ["no spend mutation without explicit approval", "tracking must be trusted"],
   },
   {
-    id: "data_quality", name: "Data Quality Agent", domain: "operations", mode: "active", permission: "L1_SAFE",
-    mission: "Bảo vệ SSOT, phát hiện conflict, stale data và record thiếu verification metadata.",
-    sources: ["L3 Master", "Domain SSOT", "runtime evidence"],
-    capabilities: ["conflict detection", "verification audit", "blocker creation"],
-    guardrails: ["do not auto-resolve authority conflict", "fail closed"],
+    id: "data_quality", name: "AI Master Data Steward", domain: "operations", mode: "active", permission: "L2_APPROVAL",
+    mission: "Bảo vệ L3 Master như SSOT chính thức; audit định kỳ, phát hiện thiếu/sai/cũ/trùng/mismatch và tạo báo cáo thay đổi chi tiết trước mọi mutation quan trọng.",
+    sources: ["L3 Master", "15_MASTER_DATA_AUDIT", "14_OTA_CHANGE_REVIEW_QUEUE", "Domain SSOT", "OTA/Website/Channel evidence", "runtime evidence"],
+    capabilities: ["scheduled full-workbook audit", "conflict/stale/duplicate detection", "verification audit", "change proposal", "impact classification", "compare-before-write", "read-back verification", "audit trail"],
+    guardrails: ["no silent business mutation", "business truth/customer-facing/AI-read-governance changes require CEO approval", "safe metadata only may auto-update", "do not auto-resolve authority conflict", "compare-before-write", "read-back after write", "fail closed on conflict", "preserve history and rollback evidence"],
   },
   {
     id: "operations_quality", name: "Operations Quality Agent", domain: "operations", mode: "shadow", permission: "L1_SAFE",

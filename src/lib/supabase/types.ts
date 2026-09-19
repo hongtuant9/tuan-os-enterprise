@@ -210,6 +210,10 @@ export interface Database {
           source_channel: string | null;
           evidence_url: string | null;
           severity: string;
+          change_class: string | null;
+          confidence: string | null;
+          impact_summary: string | null;
+          rollback_plan: string | null;
           ai_recommendation: string | null;
           execution_status: string;
           execution_note: string | null;
@@ -239,6 +243,10 @@ export interface Database {
           source_channel?: string | null;
           evidence_url?: string | null;
           severity?: string;
+          change_class?: string | null;
+          confidence?: string | null;
+          impact_summary?: string | null;
+          rollback_plan?: string | null;
           ai_recommendation?: string | null;
           execution_status?: string;
           execution_note?: string | null;
@@ -268,6 +276,10 @@ export interface Database {
           source_channel?: string | null;
           evidence_url?: string | null;
           severity?: string;
+          change_class?: string | null;
+          confidence?: string | null;
+          impact_summary?: string | null;
+          rollback_plan?: string | null;
           ai_recommendation?: string | null;
           execution_status?: string;
           execution_note?: string | null;

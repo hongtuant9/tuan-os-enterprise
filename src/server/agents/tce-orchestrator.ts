@@ -276,5 +276,5 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
 }
 
 export function tceAgentStatusText(): string {
-  return `TCE AI Agents: ${TCE_AGENT_REGISTRY.length}/15 registered\n${agentSummary()}`;
+  return `TCE AI Agents: ${TCE_AGENT_REGISTRY.length} registered\n${agentSummary()}`;
 }

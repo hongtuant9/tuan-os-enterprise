@@ -70,10 +70,15 @@ export function customerChannelStage(): CustomerChannelStage {
 function configuredPilotChannels(): Set<CustomerChannelId> {
   const stage = customerChannelStage();
   if (stage === "closed") return new Set();
-  if (stage === "facebook_only") return new Set(["facebook"]);
+  if (stage === "facebook_only") {
+    return providerEvidence("facebook").providerVerification === "VERIFIED_PILOT" ? new Set(["facebook"]) : new Set();
+  }
   const raw = process.env.TCE_ENABLED_CUSTOMER_CHANNELS?.trim() || "facebook";
   const requested = raw.split(",").map((item) => item.trim()).filter(Boolean) as CustomerChannelId[];
-  return new Set(requested.filter((item) => CUSTOMER_CHANNELS.some((channel) => channel.id === item)));
+  return new Set(requested.filter((item) => {
+    if (!CUSTOMER_CHANNELS.some((channel) => channel.id === item)) return false;
+    return providerEvidence(item).providerVerification !== "NEED_VERIFY";
+  }));
 }
 
 export function customerChannelMode(id: CustomerChannelId): ChannelMode {

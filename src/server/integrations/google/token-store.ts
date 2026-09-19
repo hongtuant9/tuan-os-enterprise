@@ -21,6 +21,15 @@ export class GoogleNotConnectedError extends Error {
   }
 }
 
+export class GoogleSheetsWriteScopeError extends Error {
+  constructor() {
+    super("Tài khoản Google hiện chỉ có quyền đọc. Hãy kết nối lại Google một lần để cấp quyền cập nhật Master Sheet, rồi bấm Duyệt lại.");
+    this.name = "GoogleSheetsWriteScopeError";
+  }
+}
+
+const GOOGLE_SHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+
 const REFRESH_BUFFER_MS = 60_000; // refresh a minute early to avoid racing expiry
 
 function isExpired(connection: ConnectionRow): boolean {
@@ -64,6 +73,14 @@ export class GoogleOAuthTokenStore {
     if (!connection) {
       throw new GoogleNotConnectedError();
     }
+    return this.getAuthorizedClient(connection);
+  }
+
+  async getSystemAuthorizedClientForSheetsWrite(): Promise<Auth.OAuth2Client> {
+    const connection = await this.repo.findMostRecent();
+    if (!connection) throw new GoogleNotConnectedError();
+    const scopes = new Set((connection.scope ?? "").split(/\\s+/).filter(Boolean));
+    if (!scopes.has(GOOGLE_SHEETS_WRITE_SCOPE)) throw new GoogleSheetsWriteScopeError();
     return this.getAuthorizedClient(connection);
   }
 

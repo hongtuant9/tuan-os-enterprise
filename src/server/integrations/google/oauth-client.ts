@@ -6,14 +6,13 @@ import { GaxiosError } from "gaxios";
 export const GOOGLE_OAUTH_STATE_COOKIE = "google_oauth_state";
 
 /**
- * Least-privilege, read-only scopes for the Drive/Sheets/Docs sync framework,
- * plus the minimal `userinfo.email` scope — Google has no way to identify the
- * connected account without it, and the Sync Status UI needs to show which
- * Google account is connected.
+ * Least-privilege scopes for the Drive/Sheets/Docs sync framework.
+ * Sheets needs write access because approved Master Data changes are applied
+ * server-side and then verified with a read-back. Drive metadata and Docs stay read-only.
  */
 export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/documents.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
 ];

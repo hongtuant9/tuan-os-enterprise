@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  assertTceAiBudget,
+  assertReceptionistAiBudget,
   estimatePreflightCostUsd,
   recordTceAiUsage,
 } from "@/server/agents/tce-cost-guard";
@@ -20,6 +20,12 @@ export type ConversationRenderResult = {
   qa: { pass: boolean; reasons: string[] };
   usedGenerativeRenderer: boolean;
 };
+
+function receptionistApiKey(): string | null {
+  return process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim()
+    || process.env.OPENAI_API_KEY?.trim()
+    || null;
+}
 
 function selectedModel(): string {
   return process.env.AI_RECEPTIONIST_CONVERSATION_MODEL?.trim()
@@ -109,7 +115,8 @@ export async function renderSalesConversation(input: {
   history: ReceptionistMessage[];
   styleGuidance?: string[];
 }): Promise<ConversationRenderResult> {
-  if (!process.env.OPENAI_API_KEY) return fallback(input.decision, input.language, input.guestText);
+  const apiKey = receptionistApiKey();
+  if (!apiKey) return fallback(input.decision, input.language, input.guestText);
 
   const model = selectedModel();
   const factPack = input.knowledge.facts.map((fact) => ({
@@ -154,7 +161,7 @@ export async function renderSalesConversation(input: {
   const inputText = JSON.stringify(payload);
   const maxOutputTokens = 700;
 
-  await assertTceAiBudget(
+  await assertReceptionistAiBudget(
     estimatePreflightCostUsd(model, Math.ceil((instructions.length + inputText.length) / 4), maxOutputTokens)
   );
 
@@ -163,7 +170,7 @@ export async function renderSalesConversation(input: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -225,7 +232,8 @@ export async function translateToVietnamese(text: string, languageCode?: string)
   const input = text.trim();
   if (!input) return "";
   if (languageCode === "vi") return input;
-  if (!process.env.OPENAI_API_KEY) return input;
+  const apiKey = receptionistApiKey();
+  if (!apiKey) return input;
 
   const model = selectedModel();
   const instructions = [
@@ -234,7 +242,7 @@ export async function translateToVietnamese(text: string, languageCode?: string)
     "Do not add, remove or interpret business facts.",
     "Return only the Vietnamese translation, no quotes or explanation.",
   ].join("\n");
-  await assertTceAiBudget(
+  await assertReceptionistAiBudget(
     estimatePreflightCostUsd(model, Math.ceil((instructions.length + input.length) / 4), 500)
   );
 
@@ -243,7 +251,7 @@ export async function translateToVietnamese(text: string, languageCode?: string)
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ model, instructions, input, max_output_tokens: 500, store: false }),
       signal: AbortSignal.timeout(20_000),

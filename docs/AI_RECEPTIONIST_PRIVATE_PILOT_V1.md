@@ -31,6 +31,7 @@ NEED VERIFY / HOLD luôn fail closed.
 - KiotViet write: khóa trừ Safety Gate riêng.
 - Direct Booking auto-create: khóa nếu write gate chưa PASS.
 - Hội thoại, message, review, knowledge candidate và audit log được lưu trong Supabase.
+- Generative renderer dùng `AI_RECEPTIONIST_OPENAI_API_KEY` + budget riêng `AI_RECEPTIONIST_DAILY_BUDGET_USD` / `AI_RECEPTIONIST_MONTHLY_BUDGET_USD`; thiếu key/budget thì fail-safe về fallback, không tự phát sinh phí.
 
 ## 3. Kiến trúc trả lời V2
 

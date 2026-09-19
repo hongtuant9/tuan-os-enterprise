@@ -17,22 +17,50 @@ export function estimateCostUsd(model: string, usage: Usage): number {
   const output = Math.max(0, usage.output_tokens ?? 0);
   return (uncached * price.input + cached * price.cached + output * price.output) / 1_000_000;
 }
-export async function assertTceAiBudget(reservedCostUsd = 0): Promise<void> {
-  const monthly = numberEnv("TCE_AI_MONTHLY_BUDGET_USD");
-  const daily = numberEnv("TCE_AI_DAILY_BUDGET_USD");
-  if (monthly <= 0 || daily <= 0) throw new Error("HOLD_COST_APPROVAL: TCE AI budget chưa được duyệt.");
+async function assertBudget(input: {
+  monthly: number;
+  daily: number;
+  reservedCostUsd?: number;
+  agentId?: string;
+  approvalError: string;
+}): Promise<void> {
+  if (input.monthly <= 0 || input.daily <= 0) throw new Error(input.approvalError);
   const { db } = getAdminContainer();
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-  const [{ data: monthRows }, { data: dayRows }] = await Promise.all([
-    db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", monthStart),
-    db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", dayStart),
-  ]);
+
+  let monthQuery = db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", monthStart);
+  let dayQuery = db.from("tce_ai_usage_ledger").select("estimated_cost_usd").gte("created_at", dayStart);
+  if (input.agentId) {
+    monthQuery = monthQuery.eq("agent_id", input.agentId);
+    dayQuery = dayQuery.eq("agent_id", input.agentId);
+  }
+
+  const [{ data: monthRows }, { data: dayRows }] = await Promise.all([monthQuery, dayQuery]);
   const sum = (rows: Array<{ estimated_cost_usd: number | string }> | null) => (rows ?? []).reduce((a, r) => a + Number(r.estimated_cost_usd ?? 0), 0);
-  const reserve = Math.max(0, reservedCostUsd);
-  if (sum(monthRows) + reserve > monthly) throw new Error("HOLD_COST: monthly OpenAI budget would be exceeded.");
-  if (sum(dayRows) + reserve > daily) throw new Error("HOLD_COST: daily OpenAI budget would be exceeded.");
+  const reserve = Math.max(0, input.reservedCostUsd ?? 0);
+  if (sum(monthRows) + reserve > input.monthly) throw new Error("HOLD_COST: monthly OpenAI budget would be exceeded.");
+  if (sum(dayRows) + reserve > input.daily) throw new Error("HOLD_COST: daily OpenAI budget would be exceeded.");
+}
+
+export async function assertTceAiBudget(reservedCostUsd = 0): Promise<void> {
+  return assertBudget({
+    monthly: numberEnv("TCE_AI_MONTHLY_BUDGET_USD"),
+    daily: numberEnv("TCE_AI_DAILY_BUDGET_USD"),
+    reservedCostUsd,
+    approvalError: "HOLD_COST_APPROVAL: TCE AI budget chưa được duyệt.",
+  });
+}
+
+export async function assertReceptionistAiBudget(reservedCostUsd = 0): Promise<void> {
+  return assertBudget({
+    monthly: numberEnv("AI_RECEPTIONIST_MONTHLY_BUDGET_USD"),
+    daily: numberEnv("AI_RECEPTIONIST_DAILY_BUDGET_USD"),
+    reservedCostUsd,
+    agentId: "receptionist",
+    approvalError: "HOLD_COST_APPROVAL: AI Receptionist budget chưa được duyệt.",
+  });
 }
 export async function recordTceAiUsage(agentId: string, model: string, usage: Usage, requestSource = "control-center") {
   const { db } = getAdminContainer();

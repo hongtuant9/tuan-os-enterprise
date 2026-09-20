@@ -1,6 +1,6 @@
 # TCE — Migration OVH-only + DNS Tenten
 
-**Quyết định:** `DEC-TCE-OVH-ONLY-20260920-001`  
+**Quyết định hiện hành:** `DEC-TCE-NO-COOLIFY-20260920-003`  
 **Đích:** OVH VPS `57.128.186.45` là production host duy nhất. Tenten là DNS authority duy nhất.  
 **Hostinger:** HẾT HIỆU LỰC (SUPERSEDED); chỉ được dùng tạm để thu hồi dữ liệu/config nếu cần trước khi đóng dịch vụ.
 
@@ -114,4 +114,10 @@ Chỉ sau stability window:
 
 ## Coolify
 
-Coolify không còn là dependency bắt buộc của production. Có thể cài sau trên chính OVH như một lớp quản trị tùy chọn, nhưng không được trở thành single point of failure. OVH đang dùng Ubuntu 26.04; cần xác minh compatibility trước khi cài Coolify automated installer.
+Coolify đã bị **LOẠI KHỎI KIẾN TRÚC TCE** theo quyết định `DEC-TCE-NO-COOLIFY-20260920-003`.
+
+- Không cài Coolify trên OVH.
+- Không tạo `coolify.tamcocexperience.com`.
+- Không mở cổng quản trị `:8000`.
+- Deploy, health, rollback và worker được quản lý trực tiếp bằng Docker + Caddy + systemd + GitHub Actions.
+- Nếu sau này cần một UI quản trị cho con người, đó phải là một quyết định kiến trúc mới, không phải dependency mặc định.

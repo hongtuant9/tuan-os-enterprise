@@ -30,11 +30,10 @@ git fetch origin "$BRANCH" --prune
 git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-chmod +x "$PREFLIGHT_SCRIPT" "$DEPLOY_SCRIPT"
-"$PREFLIGHT_SCRIPT"
+bash "$PREFLIGHT_SCRIPT"
 
 echo "[OVH autodeploy] deploying sha=$remote_short"
-"$DEPLOY_SCRIPT"
+bash "$DEPLOY_SCRIPT"
 
 caddy_ids="$(docker ps -q --filter label=com.docker.compose.service=caddy || true)"
 if [ -n "$caddy_ids" ]; then

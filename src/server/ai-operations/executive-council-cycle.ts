@@ -183,7 +183,8 @@ export async function runExecutiveCouncilCycle(
   ]);
   const agentRows = agentsResult.data ?? [];
   const online = agentRows.filter((row) => row.status === "online").length;
-  const syncErrors = (syncResult.data ?? []).filter((row) => row.status === "error").length;
+  const tceSyncRows = (syncResult.data ?? []).filter((row) => /^(task-001|approval-001|l3-|marketing-|ga4-|tce-|task-tce-|l3)/i.test(row.key));
+  const syncErrors = tceSyncRows.filter((row) => row.status === "error").length;
   const tasks = (taskResult.data ?? []).map((row) => asFields(row.data));
   const openP0 = tasks.filter((row) => row.PRIORITY === "P0" && !["DONE","CLOSED","SUPERSEDED"].includes((row.STATUS ?? "").toUpperCase())).length;
 

@@ -29,7 +29,11 @@ type RuntimeContext = {
 };
 
 function enabled(): boolean {
-  return (process.env.TCE_AGENT_AI_ENABLED ?? "false").toLowerCase() === "true" && Boolean(process.env.OPENAI_API_KEY);
+  const explicitlyDisabled = process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() === "false";
+  const dailyBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0");
+  const monthlyBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0");
+  const budgetApproved = Number.isFinite(dailyBudget) && dailyBudget > 0 && Number.isFinite(monthlyBudget) && monthlyBudget > 0;
+  return !explicitlyDisabled && budgetApproved && Boolean(process.env.OPENAI_API_KEY);
 }
 
 function selectModel(agent: TceAgentDefinition, message: string): string {

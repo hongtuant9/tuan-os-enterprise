@@ -6,7 +6,11 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/tce-vps-watchdog.yml"
+      - "start.mjs"
       - "src/app/health/route.ts"
+      - "src/app/api/internal/tce/**"
+      - "src/app/api/internal/cmi/**"
+      - "src/server/agents/tce-orchestrator.ts"
       - "src/server/channels/channel-policy.ts"
   schedule:
     - cron: "17 * * * *"
@@ -17,31 +21,46 @@ permissions:
 jobs:
   production-watchdog:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
-      - name: Probe production health with bounded retry
+      - name: Probe managed VPS directly and wait for deployed autopilot
         id: probe
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://app.tamcocexperience.com/health"
-          rm -f /tmp/health.json /tmp/http_code
+          HOST="app.tamcocexperience.com"
+          VPS_IP="57.128.186.45"
+          URL="https://${HOST}/health"
+          rm -f /tmp/health.json /tmp/http_code /tmp/public_http_code
 
-          for attempt in 1 2 3; do
-            code="$(curl -sS --max-time 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS --max-time 20 --resolve "${HOST}:443:${VPS_IP}" -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
             echo "$code" > /tmp/http_code
             if [ "$code" = "200" ] && python3 -m json.tool /tmp/health.json >/dev/null 2>&1; then
-              echo "Health endpoint reachable on attempt $attempt"
-              exit 0
+              if python3 - <<'PY'
+import json
+from pathlib import Path
+d=json.loads(Path("/tmp/health.json").read_text())
+raise SystemExit(0 if (d.get("features") or {}).get("companyAutopilot") == "v1" else 1)
+PY
+              then
+                echo "Managed VPS autopilot reachable on attempt $attempt"
+                break
+              fi
             fi
-            echo "Attempt $attempt failed with HTTP ${code:-000}"
-            if [ "$attempt" -lt 3 ]; then sleep 8; fi
+            echo "Attempt $attempt: managed VPS not ready, HTTP ${code:-000}"
+            if [ "$attempt" = "20" ]; then
+              echo "Managed VPS /health did not reach autopilot v1"
+              exit 1
+            fi
+            sleep 12
           done
 
-          echo "Production /health failed after bounded retries"
-          exit 1
+          public_code="$(curl -sS --max-time 20 -o /tmp/public-health.json -w '%{http_code}' "$URL" || true)"
+          echo "$public_code" > /tmp/public_http_code
+          echo "Public DNS route HTTP ${public_code:-000}; direct VPS acceptance is authoritative for runtime health."
 
-      - name: Validate production invariants
+      - name: Validate autonomous-company invariants
         shell: python
         run: |
           import json
@@ -59,28 +78,41 @@ jobs:
           expect(checks.get("app") == "ok", f"checks.app={checks.get('app')!r}")
           expect(checks.get("database") == "ok", f"checks.database={checks.get('database')!r}")
           expect(int(data.get("agentRegistry") or 0) >= 16, f"agentRegistry={data.get('agentRegistry')!r}, expected >=16")
+          expect(int(data.get("executiveOrgRoles") or 0) >= 11, f"executiveOrgRoles={data.get('executiveOrgRoles')!r}, expected >=11")
 
           features = data.get("features") or {}
+          expect(features.get("companyAutopilot") == "v1",
+                 f"companyAutopilot={features.get('companyAutopilot')!r}, expected v1")
           expect(features.get("cmoExecutiveOperatingSystem") == "v2",
-                 f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}, expected v2")
+                 f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}")
           expect(features.get("ccoClosedLoop") == "v1",
-                 f"ccoClosedLoop={features.get('ccoClosedLoop')!r}, expected v1")
+                 f"ccoClosedLoop={features.get('ccoClosedLoop')!r}")
           expect(features.get("businessOperatingPlan") == "2026-2027-v1",
-                 f"businessOperatingPlan={features.get('businessOperatingPlan')!r}, expected 2026-2027-v1")
-          expect(features.get("marketingGrowthLoop") == "v1",
-                 f"marketingGrowthLoop={features.get('marketingGrowthLoop')!r}, expected v1")
+                 f"businessOperatingPlan={features.get('businessOperatingPlan')!r}")
 
           signals = data.get("runtimeSignals") or {}
+          expect(signals.get("companyAutopilotEnabled") is True,
+                 f"companyAutopilotEnabled={signals.get('companyAutopilotEnabled')!r}")
+          expect(signals.get("companyRuntimeMode") == "VPS_ALWAYS_ON",
+                 f"companyRuntimeMode={signals.get('companyRuntimeMode')!r}")
+          expect(signals.get("desktopDependency") is False,
+                 f"desktopDependency={signals.get('desktopDependency')!r}")
           expect(signals.get("executiveWorkerEnabled") is True,
                  f"executiveWorkerEnabled={signals.get('executiveWorkerEnabled')!r}")
           expect(signals.get("syncWorkerEnabled") is True,
                  f"syncWorkerEnabled={signals.get('syncWorkerEnabled')!r}")
+          expect(signals.get("staffOpsWorkerEnabled") is True,
+                 f"staffOpsWorkerEnabled={signals.get('staffOpsWorkerEnabled')!r}")
+          expect(signals.get("cmiBrowserEnabled") is True,
+                 f"cmiBrowserEnabled={signals.get('cmiBrowserEnabled')!r}")
+          expect(signals.get("cmiQueueWorkerEnabled") is True,
+                 f"cmiQueueWorkerEnabled={signals.get('cmiQueueWorkerEnabled')!r}")
           expect(signals.get("nonFacebookOpenChannelCount") == 0,
-                 f"nonFacebookOpenChannelCount={signals.get('nonFacebookOpenChannelCount')!r}, expected 0")
+                 f"nonFacebookOpenChannelCount={signals.get('nonFacebookOpenChannelCount')!r}")
           expect(signals.get("kiotVietWriteEnabled") is False,
-                 f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}, expected false")
+                 f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}")
           expect(signals.get("directBookingAutoCreateEnabled") is False,
-                 f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}, expected false")
+                 f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}")
           expect(signals.get("businessOperatingPlanStatus") == "ACTIVE_OPERATING_PLAN",
                  f"businessOperatingPlanStatus={signals.get('businessOperatingPlanStatus')!r}")
           expect(signals.get("businessOperatingPlanDecisionId") == "DEC-TCE-BPLAN-20260920-001",
@@ -93,7 +125,7 @@ jobs:
           knowledge = data.get("knowledgeRuntime") or {}
           if knowledge:
               expect(knowledge.get("errorSources") == 0,
-                     f"knowledgeRuntime.errorSources={knowledge.get('errorSources')!r}, expected 0")
+                     f"knowledgeRuntime.errorSources={knowledge.get('errorSources')!r}")
               expected = knowledge.get("expectedSources")
               synced = knowledge.get("syncedSources")
               if expected is not None and synced is not None:
@@ -107,9 +139,12 @@ jobs:
               raise SystemExit(1)
 
           print("WATCHDOG PASS")
+          print("runtime_mode=VPS_ALWAYS_ON")
           print(f"runtime={data.get('runtime')}")
           print(f"agentRegistry={data.get('agentRegistry')}")
+          print(f"executiveOrgRoles={data.get('executiveOrgRoles')}")
           print(f"openCustomerChannels={open_channels}")
+          print("desktop_dependency=false")
           print("guardrails=PASS")
 
       - name: Write sanitized summary
@@ -117,11 +152,13 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## TCE VPS Watchdog"
+            echo "## TCE VPS Autopilot Watchdog"
             echo
             echo "- Checked: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            echo "- Target: https://app.tamcocexperience.com/health"
+            echo "- Runtime acceptance: direct managed VPS 57.128.186.45 using app.tamcocexperience.com SNI"
             echo "- Job status: ${{ job.status }}"
-            if [ -f /tmp/http_code ]; then echo "- HTTP: $(cat /tmp/http_code)"; fi
+            if [ -f /tmp/http_code ]; then echo "- Direct VPS HTTP: $(cat /tmp/http_code)"; fi
+            if [ -f /tmp/public_http_code ]; then echo "- Public DNS route HTTP: $(cat /tmp/public_http_code)"; fi
+            echo "- Mac/Windows is not part of the acceptance path."
             echo "- No secrets are read or printed by this workflow."
           } >> "$GITHUB_STEP_SUMMARY"

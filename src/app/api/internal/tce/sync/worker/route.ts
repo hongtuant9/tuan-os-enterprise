@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  if (process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() === "false") {
+  if (process.env.TCE_COMPANY_AUTOPILOT_ENABLED?.trim().toLowerCase() === "false" || process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() === "false") {
     return NextResponse.json({ ok: true, skipped: "worker_disabled" });
   }
 

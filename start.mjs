@@ -3,16 +3,17 @@ import { spawn } from "node:child_process";
 
 const port = Number(process.env.PORT || 3000);
 
-const cmiBrowserEnabled = process.env.CMI_BROWSER_ENABLED === "true";
-const cmiWorkerExplicitlyDisabled = process.env.CMI_QUEUE_WORKER_ENABLED === "false";
+const companyAutopilotEnabled = process.env.TCE_COMPANY_AUTOPILOT_ENABLED?.trim().toLowerCase() !== "false";
+const cmiBrowserEnabled = companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false";
+const cmiWorkerExplicitlyDisabled = process.env.CMI_QUEUE_WORKER_ENABLED?.trim().toLowerCase() === "false";
 const cmiWorkerEnabled = cmiBrowserEnabled && !cmiWorkerExplicitlyDisabled;
 const cmiIntervalMs = Math.max(5000, Number(process.env.CMI_QUEUE_WORKER_INTERVAL_MS || 15000));
 
-const staffOpsWorkerEnabled = process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true";
+const staffOpsWorkerEnabled = companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const staffOpsIntervalMs = Math.max(60_000, Number(process.env.TCE_STAFF_OPS_WORKER_INTERVAL_MS || 300_000));
-const executiveWorkerEnabled = process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
-const executiveIntervalMs = Math.max(300_000, Number(process.env.TCE_EXECUTIVE_WORKER_INTERVAL_MS || 900_000));
-const syncWorkerEnabled = process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const executiveWorkerEnabled = companyAutopilotEnabled && process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const executiveIntervalMs = Math.max(300_000, Number(process.env.TCE_EXECUTIVE_WORKER_INTERVAL_MS || 300_000));
+const syncWorkerEnabled = companyAutopilotEnabled && process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const syncWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_SYNC_WORKER_INTERVAL_MS || 300_000));
 
 const server = spawn(process.execPath, ["server.js"], {
@@ -21,6 +22,8 @@ const server = spawn(process.execPath, ["server.js"], {
 });
 
 let stopping = false;
+
+console.log(`[TCE Autopilot] enabled=${companyAutopilotEnabled} runtime=VPS_ALWAYS_ON no_desktop_dependency=true`);
 
 function deriveToken(suffix) {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();

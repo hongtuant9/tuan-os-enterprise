@@ -4,6 +4,7 @@ import { TCE_AGENT_REGISTRY, agentSummary, type TceAgentDefinition } from "./tce
 import { assertTceAiBudget, estimatePreflightCostUsd, recordTceAiUsage } from "./tce-cost-guard";
 import { buildManagerItems } from "@/server/ai-operations/manager-data";
 import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
+import { DOCUMENT_GOVERNANCE_PROMPT } from "@/server/ai-governance/document-governance";
 
 export type TceAgentReply = {
   agent: string;
@@ -245,6 +246,7 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
     "Owner directive 2026-09-16: non-financial technical/operational mutation có thể tự chạy khi source verified, có read-back/evidence/rollback; financial/cost/budget/payment/refund/price mutation phải chờ Owner approval.",
     "Không bao giờ hiển thị password, private key, API key, access token, refresh token hoặc service-role secret.",
     "Trả lời tiếng Việt có dấu, trực tiếp, nêu status/evidence/blocker rõ ràng.",
+    DOCUMENT_GOVERNANCE_PROMPT,
   ].join("\n");
 
   const input = `YÊU CẦU:\n${message}\n\nRUNTIME CONTEXT (trusted internal snapshot):\n${JSON.stringify(context)}`;

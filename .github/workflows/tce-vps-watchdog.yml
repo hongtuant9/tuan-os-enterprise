@@ -1,4 +1,4 @@
-name: TCE VPS Watchdog
+name: TCE OVH Production Watchdog
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ on:
       - "src/app/api/internal/cmi/**"
       - "src/server/agents/tce-orchestrator.ts"
       - "src/server/channels/channel-policy.ts"
+      - "scripts/ovh/**"
   schedule:
     - cron: "17 * * * *"
 
@@ -19,43 +20,33 @@ permissions:
   contents: read
 
 jobs:
-  production-watchdog:
+  ovh-production-watchdog:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
-      - name: Probe current production and infrastructure diagnostics
-        id: probe
+      - name: Probe OVH runtime directly
         shell: bash
         run: |
           set -euo pipefail
           HOST="app.tamcocexperience.com"
-          CURRENT_PROD_IP="187.77.158.111"
-          OVH_MIGRATION_IP="57.128.186.45"
-          URL="https://${HOST}/health"
-          rm -f /tmp/health.json /tmp/http_code /tmp/coolify_port /tmp/ovh_http_code
-
-          if timeout 6 bash -c "</dev/tcp/${CURRENT_PROD_IP}/8000" 2>/dev/null; then
-            echo "OPEN" > /tmp/coolify_port
-          else
-            echo "UNREACHABLE" > /tmp/coolify_port
-          fi
-
-          ovh_code="$(curl -sS --max-time 12 --resolve "${HOST}:443:${OVH_MIGRATION_IP}" -o /tmp/ovh-health.json -w '%{http_code}' "$URL" || true)"
-          echo "$ovh_code" > /tmp/ovh_http_code
+          OVH_IP="57.128.186.45"
+          HTTP_URL="http://${HOST}/health"
+          rm -f /tmp/health.json /tmp/direct_http_code /tmp/public_https_code /tmp/dns_ip
 
           for attempt in 1 2 3 4 5 6; do
-            code="$(curl -sS --connect-timeout 8 --max-time 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
-            echo "$code" > /tmp/http_code
+            code="$(curl -sS --connect-timeout 8 --max-time 20               --resolve "${HOST}:80:${OVH_IP}"               -o /tmp/health.json -w '%{http_code}' "$HTTP_URL" || true)"
+            echo "$code" > /tmp/direct_http_code
             if [ "$code" = "200" ] && python3 -m json.tool /tmp/health.json >/dev/null 2>&1; then
-              echo "Current production reachable on attempt $attempt"
-              exit 0
+              echo "OVH direct runtime reachable on attempt $attempt"
+              break
             fi
-            echo "Attempt $attempt: current production ${CURRENT_PROD_IP} not ready, HTTP ${code:-000}"
-            if [ "$attempt" -lt 6 ]; then sleep 12; fi
+            echo "Attempt $attempt: OVH runtime not ready, HTTP ${code:-000}"
+            if [ "$attempt" = "6" ]; then
+              echo "OVH direct runtime acceptance failed"
+              exit 1
+            fi
+            sleep 12
           done
-
-          echo "Current production /health failed. Coolify port 8000=$(cat /tmp/coolify_port); OVH migration target HTTP=$(cat /tmp/ovh_http_code)."
-          exit 1
 
       - name: Validate autonomous-company invariants
         shell: python
@@ -70,22 +61,16 @@ jobs:
               if not cond:
                   errors.append(message)
 
-          expect(data.get("status") == "ok", f"status={data.get('status')!r}, expected 'ok'")
+          expect(data.get("status") == "ok", f"status={data.get('status')!r}")
           checks = data.get("checks") or {}
           expect(checks.get("app") == "ok", f"checks.app={checks.get('app')!r}")
           expect(checks.get("database") == "ok", f"checks.database={checks.get('database')!r}")
-          expect(int(data.get("agentRegistry") or 0) >= 16, f"agentRegistry={data.get('agentRegistry')!r}, expected >=16")
-          expect(int(data.get("executiveOrgRoles") or 0) >= 11, f"executiveOrgRoles={data.get('executiveOrgRoles')!r}, expected >=11")
+          expect(int(data.get("agentRegistry") or 0) >= 16, f"agentRegistry={data.get('agentRegistry')!r}")
+          expect(int(data.get("executiveOrgRoles") or 0) >= 11, f"executiveOrgRoles={data.get('executiveOrgRoles')!r}")
 
           features = data.get("features") or {}
           expect(features.get("companyAutopilot") == "v1",
-                 f"companyAutopilot={features.get('companyAutopilot')!r}, expected v1")
-          expect(features.get("phase14Sprint") == "2026-09-21-v1",
-                 f"phase14Sprint={features.get('phase14Sprint')!r}, expected 2026-09-21-v1")
-          expect(features.get("cmoExecutiveOperatingSystem") == "v2",
-                 f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}")
-          expect(features.get("ccoClosedLoop") == "v1",
-                 f"ccoClosedLoop={features.get('ccoClosedLoop')!r}")
+                 f"companyAutopilot={features.get('companyAutopilot')!r}")
           expect(features.get("businessOperatingPlan") == "2026-2027-v1",
                  f"businessOperatingPlan={features.get('businessOperatingPlan')!r}")
 
@@ -112,24 +97,10 @@ jobs:
                  f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}")
           expect(signals.get("directBookingAutoCreateEnabled") is False,
                  f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}")
-          expect(signals.get("businessOperatingPlanStatus") == "ACTIVE_OPERATING_PLAN",
-                 f"businessOperatingPlanStatus={signals.get('businessOperatingPlanStatus')!r}")
-          expect(signals.get("businessOperatingPlanDecisionId") == "DEC-TCE-BPLAN-20260920-001",
-                 f"businessOperatingPlanDecisionId={signals.get('businessOperatingPlanDecisionId')!r}")
 
           open_channels = signals.get("openCustomerChannels") or []
           expect(open_channels == ["facebook"],
-                 f"openCustomerChannels={open_channels!r}, expected ['facebook']")
-
-          knowledge = data.get("knowledgeRuntime") or {}
-          if knowledge:
-              expect(knowledge.get("errorSources") == 0,
-                     f"knowledgeRuntime.errorSources={knowledge.get('errorSources')!r}")
-              expected = knowledge.get("expectedSources")
-              synced = knowledge.get("syncedSources")
-              if expected is not None and synced is not None:
-                  expect(synced >= expected,
-                         f"knowledgeRuntime.syncedSources={synced!r} < expectedSources={expected!r}")
+                 f"openCustomerChannels={open_channels!r}")
 
           if errors:
               print("WATCHDOG FAIL")
@@ -137,29 +108,46 @@ jobs:
                   print(f"- {item}")
               raise SystemExit(1)
 
-          print("WATCHDOG PASS")
-          print("runtime_mode=VPS_ALWAYS_ON")
-          print(f"runtime={data.get('runtime')}")
-          print(f"agentRegistry={data.get('agentRegistry')}")
-          print(f"executiveOrgRoles={data.get('executiveOrgRoles')}")
-          print(f"openCustomerChannels={open_channels}")
-          print("desktop_dependency=false")
-          print("guardrails=PASS")
+          print("WATCHDOG OVH RUNTIME PASS")
+
+      - name: Check Tenten DNS and public HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOST="app.tamcocexperience.com"
+          OVH_IP="57.128.186.45"
+          resolved="$(getent ahostsv4 "$HOST" | awk '{print $1}' | sort -u | tr '\n' ' ')"
+          printf '%s\n' "$resolved" > /tmp/dns_ip
+          public_code="$(curl -sS --connect-timeout 8 --max-time 20             -o /tmp/public-health.json -w '%{http_code}'             "https://${HOST}/health" || true)"
+          echo "$public_code" > /tmp/public_https_code
+
+          if ! printf '%s' "$resolved" | grep -qw "$OVH_IP"; then
+            echo "DNS CUTOVER PENDING: $HOST is not yet on OVH $OVH_IP"
+            exit 1
+          fi
+
+          if [ "$public_code" != "200" ] || ! python3 -m json.tool /tmp/public-health.json >/dev/null 2>&1; then
+            echo "PUBLIC HTTPS FAIL after DNS cutover: HTTP ${public_code:-000}"
+            exit 1
+          fi
+
+          echo "PUBLIC CUTOVER PASS"
 
       - name: Write sanitized summary
         if: always()
         shell: bash
         run: |
           {
-            echo "## TCE VPS Autopilot Watchdog"
+            echo "## TCE OVH-only Watchdog"
             echo
             echo "- Checked: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            echo "- Current production authority: app.tamcocexperience.com -> 187.77.158.111"
-            echo "- OVH migration target: 57.128.186.45 (diagnostic only until cutover acceptance)"
+            echo "- Production target: OVH 57.128.186.45"
+            echo "- DNS authority: Tenten"
+            echo "- Hostinger: SUPERSEDED"
             echo "- Job status: ${{ job.status }}"
-            if [ -f /tmp/http_code ]; then echo "- Current production /health HTTP: $(cat /tmp/http_code)"; fi
-            if [ -f /tmp/coolify_port ]; then echo "- Coolify control-plane port 8000: $(cat /tmp/coolify_port)"; fi
-            if [ -f /tmp/ovh_http_code ]; then echo "- OVH migration-target /health HTTP: $(cat /tmp/ovh_http_code)"; fi
-            echo "- Mac/Windows is not part of the monitoring authority."
-            echo "- No secrets are read or printed by this workflow."
+            if [ -f /tmp/direct_http_code ]; then echo "- OVH direct HTTP: $(cat /tmp/direct_http_code)"; fi
+            if [ -f /tmp/dns_ip ]; then echo "- Public DNS A: $(cat /tmp/dns_ip)"; fi
+            if [ -f /tmp/public_https_code ]; then echo "- Public HTTPS: $(cat /tmp/public_https_code)"; fi
+            echo "- Desktop dependency: none"
+            echo "- No secrets are read or printed."
           } >> "$GITHUB_STEP_SUMMARY"

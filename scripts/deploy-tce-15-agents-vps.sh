@@ -10,6 +10,7 @@ CANDIDATE_CONTAINER="${CANDIDATE_CONTAINER:-tce-control-center-candidate}"
 APP_PORT="${APP_PORT:-3000}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-3300}"
 STATE_DIR="${STATE_DIR:-/opt/tuan-ai/deploy-state}"
+APP_DOCKER_NETWORK="${APP_DOCKER_NETWORK:-}"
 EXPECTED_RUNTIME="tce-executive-org-v1"
 EXPECTED_AUTOPILOT="v1"
 
@@ -22,6 +23,12 @@ command -v curl >/dev/null 2>&1 || fail "curl missing"
 [ -f "$ENV_FILE" ] || fail "env file missing: $ENV_FILE"
 
 mkdir -p "$APP_ROOT" "$STATE_DIR"
+
+NETWORK_ARGS=()
+if [ -n "$APP_DOCKER_NETWORK" ]; then
+  docker network inspect "$APP_DOCKER_NETWORK" >/dev/null 2>&1 || fail "docker network missing: $APP_DOCKER_NETWORK"
+  NETWORK_ARGS+=(--network "$APP_DOCKER_NETWORK")
+fi
 if [ ! -d "$APP_ROOT/.git" ]; then
   log "Cloning repository"
   rm -rf "$APP_ROOT"/*
@@ -43,6 +50,7 @@ log "Starting candidate on 127.0.0.1:$CANDIDATE_PORT"
 docker run -d --name "$CANDIDATE_CONTAINER" \
   --restart no \
   --env-file "$ENV_FILE" \
+  "${NETWORK_ARGS[@]}" \
   -p "127.0.0.1:${CANDIDATE_PORT}:3000" \
   "$IMAGE" >/dev/null
 candidate_ok=false
@@ -72,6 +80,7 @@ docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$APP_CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
+  "${NETWORK_ARGS[@]}" \
   -p "127.0.0.1:${APP_PORT}:3000" \
   "$IMAGE" >/dev/null
 
@@ -89,7 +98,7 @@ if [ "$primary_ok" != true ]; then
   log "Primary health failed; attempting rollback"
   docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
   if [ -n "$PREVIOUS_IMAGE" ]; then
-    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
+    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" "${NETWORK_ARGS[@]}" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
   fi
   docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
   fail "primary verification failed; rollback attempted"

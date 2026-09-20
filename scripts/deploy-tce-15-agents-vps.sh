@@ -11,6 +11,7 @@ APP_PORT="${APP_PORT:-3000}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-3300}"
 STATE_DIR="${STATE_DIR:-/opt/tuan-ai/deploy-state}"
 EXPECTED_RUNTIME="tce-executive-org-v1"
+EXPECTED_AUTOPILOT="v1"
 
 log() { printf '[TCE deploy] %s\n' "$*"; }
 fail() { log "FAIL: $*"; exit 1; }
@@ -96,4 +97,4 @@ fi
 
 docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
 printf '%s\n' "$SHA" > "$STATE_DIR/current-sha"
-log "PASS sha=$SHA runtime=$EXPECTED_RUNTIME"
+log "PASS sha=$SHA runtime=$EXPECTED_RUNTIME autopilot=$EXPECTED_AUTOPILOT desktop_dependency=false"

@@ -83,6 +83,8 @@ PY
           features = data.get("features") or {}
           expect(features.get("companyAutopilot") == "v1",
                  f"companyAutopilot={features.get('companyAutopilot')!r}, expected v1")
+          expect(features.get("phase14Sprint") == "2026-09-21-v1",
+                 f"phase14Sprint={features.get('phase14Sprint')!r}, expected 2026-09-21-v1")
           expect(features.get("cmoExecutiveOperatingSystem") == "v2",
                  f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}")
           expect(features.get("ccoClosedLoop") == "v1",

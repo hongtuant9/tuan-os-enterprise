@@ -49,12 +49,22 @@ async function appendEvidence(rows: string[][]) {
   if (rows.length === 0) return;
   const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
   const sheets = google.sheets({ version: "v4", auth });
+  const recent = await sheets.spreadsheets.values.get({
+    spreadsheetId: FIN_ID,
+    range: "'" + LIVE_SHEET + "'!A1:L5000",
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+  const existing = ((recent.data.values ?? []) as string[][]).slice(-120);
+  const key = (row: string[]) => [row[1], row[2], row[3], row[4], row[6], row[7]].join("|");
+  const seen = new Set(existing.map(key));
+  const changed = rows.filter((row) => !seen.has(key(row)));
+  if (changed.length === 0) return;
   await sheets.spreadsheets.values.append({
     spreadsheetId: FIN_ID,
     range: "'" + LIVE_SHEET + "'!A:L",
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: rows },
+    requestBody: { values: changed },
   });
 }
 

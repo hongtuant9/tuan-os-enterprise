@@ -8,6 +8,7 @@ import { runMarketingGrowthCycle, type MarketingGrowthCycleResult } from "@/serv
 import { runCcoClosedLoop, type CcoClosedLoopResult } from "@/server/sales/cco-cycle";
 import { runCmoExecutiveCycle, type CmoExecutiveResult } from "@/server/marketing-manager/cmo-executive-cycle";
 import { runSeptemberExecutionPlan, type SeptemberExecutionPlanResult } from "./september-execution-plan";
+import { runExecutiveCouncilCycle, type ExecutiveCouncilResult } from "./executive-council-cycle";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +33,7 @@ export type ExecutiveCycleResult = {
   sales: CcoClosedLoopResult;
   cmo: CmoExecutiveResult;
   septemberPlan: SeptemberExecutionPlanResult;
+  council: ExecutiveCouncilResult;
 };
 
 export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycleResult> {
@@ -41,6 +43,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const sales = await runCcoClosedLoop(now);
   const cmo = await runCmoExecutiveCycle(growth, sales, now);
   const septemberPlan = await runSeptemberExecutionPlan(now);
+  const council = await runExecutiveCouncilCycle(cmo, sales, septemberPlan, now);
   const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
@@ -112,5 +115,6 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     sales,
     cmo,
     septemberPlan,
+    council,
   };
 }

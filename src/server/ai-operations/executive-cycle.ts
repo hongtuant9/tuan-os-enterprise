@@ -9,6 +9,7 @@ import { runCcoClosedLoop, type CcoClosedLoopResult } from "@/server/sales/cco-c
 import { runCmoExecutiveCycle, type CmoExecutiveResult } from "@/server/marketing-manager/cmo-executive-cycle";
 import { runSeptemberExecutionPlan, type SeptemberExecutionPlanResult } from "./september-execution-plan";
 import { runExecutiveCouncilCycle, type ExecutiveCouncilResult } from "./executive-council-cycle";
+import { runRealityPulse, type RealityPulseResult } from "./reality-pulse";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,15 +35,19 @@ export type ExecutiveCycleResult = {
   cmo: CmoExecutiveResult;
   septemberPlan: SeptemberExecutionPlanResult;
   council: ExecutiveCouncilResult;
+  reality: RealityPulseResult;
 };
 
 export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycleResult> {
   const container = getAdminContainer();
-  const marketing = await runMarketingCoordinationCycle(now);
-  const growth = await runMarketingGrowthCycle(now);
-  const sales = await runCcoClosedLoop(now);
+  const [marketing, growth, sales, septemberPlan, reality] = await Promise.all([
+    runMarketingCoordinationCycle(now),
+    runMarketingGrowthCycle(now),
+    runCcoClosedLoop(now),
+    runSeptemberExecutionPlan(now),
+    runRealityPulse(now),
+  ]);
   const cmo = await runCmoExecutiveCycle(growth, sales, now);
-  const septemberPlan = await runSeptemberExecutionPlan(now);
   const council = await runExecutiveCouncilCycle(cmo, sales, septemberPlan, now);
   const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
@@ -116,5 +121,6 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     cmo,
     septemberPlan,
     council,
+    reality,
   };
 }

@@ -1,0 +1,69 @@
+import "server-only";
+
+export type KiotVietFnbResult<T = unknown> = {
+  ok: boolean;
+  status: number;
+  data: T | null;
+};
+
+const TOKEN_URL = "https://api.fnb.kiotviet.vn/identity/connect/token";
+const API_BASE = "https://publicfnb.kiotapi.com";
+
+export class KiotVietFnbClient {
+  private readonly clientId = process.env.KIOTVIET_CLIENT_ID;
+  private readonly clientSecret = process.env.KIOTVIET_CLIENT_SECRET;
+  private readonly retailer = process.env.KIOTVIET_RETAILER;
+
+  isConfigured() {
+    return Boolean(this.clientId && this.clientSecret && this.retailer);
+  }
+
+  private async token(): Promise<string> {
+    if (!this.clientId || !this.clientSecret) throw new Error("KIOTVIET FNB credentials chưa cấu hình.");
+    const body = new URLSearchParams({
+      scope: "PublicApi.Access.FNB",
+      grant_type: "client_credentials",
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+    });
+    const res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error("KiotViet FNB token HTTP " + res.status);
+    const data = await res.json() as { access_token?: string };
+    if (!data.access_token) throw new Error("KiotViet FNB token thiếu access_token.");
+    return data.access_token;
+  }
+
+  private async request<T>(path: string): Promise<KiotVietFnbResult<T>> {
+    if (!this.retailer) throw new Error("KIOTVIET_RETAILER chưa cấu hình.");
+    const accessToken = await this.token();
+    const res = await fetch(API_BASE + path, {
+      headers: {
+        Accept: "application/json",
+        Retailer: this.retailer,
+        Authorization: "Bearer " + accessToken,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+    const text = await res.text();
+    let data: T | null = null;
+    if (text) {
+      try { data = JSON.parse(text) as T; } catch { data = null; }
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  listInvoices(query = "") {
+    return this.request("/invoices" + (query ? "?" + query : ""));
+  }
+
+  listBranches() {
+    return this.request("/branches?pageSize=100&currentItem=0");
+  }
+}

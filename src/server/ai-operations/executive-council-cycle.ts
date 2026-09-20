@@ -33,6 +33,7 @@ type FinanceSnapshot = {
   debtBalanceMillion: number | null;
   debtMaturity: string | null;
   actualPnlAvailable: boolean;
+  actualLiveEvidence: string[];
 };
 type CozySnapshot = {
   available: boolean;
@@ -99,19 +100,20 @@ async function readFinance(): Promise<FinanceSnapshot> {
     available: false,
     sepDec2026: { revenue: 0, operatingProfit: 0, distributableAfterTax: 0 },
     year2027: { revenue: 0, operatingProfit: 0, distributableAfterTax: 0 },
-    debtBalanceMillion: null, debtMaturity: null, actualPnlAvailable: false,
+    debtBalanceMillion: null, debtMaturity: null, actualPnlAvailable: false, actualLiveEvidence: [],
   };
   try {
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
     const sheets = google.sheets({ version: "v4", auth });
     const res = await sheets.spreadsheets.values.batchGet({
       spreadsheetId: FIN_ID,
-      ranges: ["LÃI LỖ HOMESTAY!A3:T21", "LÃI LỖ COZY GARDEN!A3:T21", "BẢNG ĐIỀU HÀNH!A1:C30"],
+      ranges: ["LÃI LỖ HOMESTAY!A3:T21", "LÃI LỖ COZY GARDEN!A3:T21", "BẢNG ĐIỀU HÀNH!A1:C30", "'ACTUAL LIVE — 2026-09'!A1:L500"],
       valueRenderOption: "UNFORMATTED_VALUE",
     });
     const home = (res.data.valueRanges?.[0]?.values ?? []) as unknown[][];
     const cozy = (res.data.valueRanges?.[1]?.values ?? []) as unknown[][];
     const dashboard = (res.data.valueRanges?.[2]?.values ?? []) as unknown[][];
+    const live = (res.data.valueRanges?.[3]?.values ?? []) as unknown[][];
     const h26 = sumFinancialRows(home, (p) => p.year === 2026 && p.month >= 9);
     const c26 = sumFinancialRows(cozy, (p) => p.year === 2026 && p.month >= 9);
     const h27 = sumFinancialRows(home, (p) => p.year === 2027);
@@ -134,6 +136,9 @@ async function readFinance(): Promise<FinanceSnapshot> {
       debtBalanceMillion: debt ? asNumber(debt[1]) : null,
       debtMaturity: maturity ? String(maturity[1] ?? "") || null : null,
       actualPnlAvailable: actual,
+      actualLiveEvidence: live.slice(-12).map((row) =>
+        [row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]].filter((v) => v != null && String(v).trim() !== "").join(" · ")
+      ),
     };
   } catch {
     return fallback;
@@ -305,11 +310,12 @@ export async function runExecutiveCouncilCycle(
         "Plan 09–12/2026: revenue=" + million(finance.sepDec2026.revenue) + "; operating profit=" + million(finance.sepDec2026.operatingProfit) + "; after-tax distributable=" + million(finance.sepDec2026.distributableAfterTax),
         "Plan 2027: revenue=" + million(finance.year2027.revenue) + "; operating profit=" + million(finance.year2027.operatingProfit) + "; after-tax distributable=" + million(finance.year2027.distributableAfterTax),
         "Actual P&L=" + finance.actualPnlAvailable + "; debt=" + String(finance.debtBalanceMillion ?? "n/a") + " triệu; maturity=" + String(finance.debtMaturity ?? "n/a"),
+        "Actual Live staging rows=" + finance.actualLiveEvidence.length + (finance.actualLiveEvidence[finance.actualLiveEvidence.length - 1] ? "; latest=" + finance.actualLiveEvidence[finance.actualLiveEvidence.length - 1] : ""),
       ] : ["FIN-HOSPITALITY-001 unavailable"],
       assessment: "Plan tài chính chưa phải Actual; phải khóa P&L thật và quỹ vận hành trước scale spend/distribution.",
       challenge: "Không gọi model 2027 là forecast đã xác minh nếu chưa có Actual đủ.",
       asks: ["COO nhập actual cost.", "CCO cung cấp verified revenue.", "CMO chỉ đề xuất paid test khi attribution đủ."],
-      action: "Actual P&L monthly + debt/refinance scenario + after-tax cash discipline.",
+      action: "Reality First: reconcile Actual Live → monthly P&L + debt/refinance scenario + after-tax cash discipline.",
     },
     chro: {
       roleId: "chro", role: "CHRO AI — HR & Culture", state: "BUILD_DATA",
@@ -342,7 +348,7 @@ export async function runExecutiveCouncilCycle(
       assessment: "Giữ Big 3/dependency/due date; blocker một lane không dừng company.",
       challenge: "Không mở quá nhiều workstream trước DoD.",
       asks: ["CxO cập nhật evidence vào TASK-001."],
-      action: "Big 3: online consistency, Actual P&L/data baseline, CCO/COO closure.",
+      action: "Parallel Reality Ops: independent lanes run concurrently; Big 3 = Actual business state, revenue/operations action, Foundation reliability.",
     },
     audit_risk: {
       roleId: "audit_risk", role: "AI Audit & Risk", state: syncErrors > 0 ? "HOLD" : "ACTIVE",
@@ -362,7 +368,8 @@ export async function runExecutiveCouncilCycle(
   const consensus = [
     "ACTIVE OPERATING PLAN " + TCE_BUSINESS_OPERATING_PLAN.version + " · Decision " + TCE_BUSINESS_OPERATING_PLAN.decisionId + " · current period=" + (activePlanPeriod?.id ?? "OUTSIDE_PLAN_WINDOW") + ".",
     "P0 Online consistency: TCE/Homestay/Cozy content, images and business facts across public touchpoints.",
-    "P0 Actual P&L + Traffic→Lead→Booking→Revenue attribution; Plan/Estimate must remain separate from Actual.",
+    "P0 Reality First: live Actual business state from KiotViet/OTA/PMS/finance; Plan/Estimate must remain separate from Actual.",
+    "P0 Parallel execution: independent safe/read-only/internal workstreams run concurrently; dependency gates only block final activation/mutation.",
     "P1 Complete CCO and COO closed loops before aggressive scale.",
     "P1 Cozy/Experience scale only after product economics and verification gates.",
     "P1 Direct growth without damaging OTA occupancy/pricing; paid media only after tracking + approval.",

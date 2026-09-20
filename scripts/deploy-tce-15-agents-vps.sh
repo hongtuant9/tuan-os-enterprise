@@ -105,5 +105,19 @@ if [ "$primary_ok" != true ]; then
 fi
 
 docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
+
+CADDY_SOURCE="$APP_ROOT/scripts/ovh/Caddyfile"
+CADDY_TARGET="/opt/tuan-ai/caddy/Caddyfile"
+if [ -f "$CADDY_SOURCE" ]; then
+  mkdir -p "$(dirname "$CADDY_TARGET")"
+  install -m 0644 "$CADDY_SOURCE" "$CADDY_TARGET"
+  if docker ps --format '{{.Names}}' | grep -qx 'tce-caddy'; then
+    docker restart tce-caddy >/dev/null
+    log "Synced canonical Caddyfile and restarted tce-caddy"
+  else
+    log "WARN: tce-caddy container not running; Caddyfile synced only"
+  fi
+fi
+
 printf '%s\n' "$SHA" > "$STATE_DIR/current-sha"
 log "PASS sha=$SHA runtime=$EXPECTED_RUNTIME autopilot=$EXPECTED_AUTOPILOT desktop_dependency=false"

@@ -1,0 +1,121 @@
+name: TCE VPS Watchdog
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tce-vps-watchdog.yml"
+      - "src/app/health/route.ts"
+      - "src/server/channels/channel-policy.ts"
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  production-watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe production health with bounded retry
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://app.tamcocexperience.com/health"
+          rm -f /tmp/health.json /tmp/http_code
+
+          for attempt in 1 2 3; do
+            code="$(curl -sS --max-time 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
+            echo "$code" > /tmp/http_code
+            if [ "$code" = "200" ] && python3 -m json.tool /tmp/health.json >/dev/null 2>&1; then
+              echo "Health endpoint reachable on attempt $attempt"
+              exit 0
+            fi
+            echo "Attempt $attempt failed with HTTP ${code:-000}"
+            if [ "$attempt" -lt 3 ]; then sleep 8; fi
+          done
+
+          echo "Production /health failed after bounded retries"
+          exit 1
+
+      - name: Validate production invariants
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("/tmp/health.json").read_text())
+          errors = []
+
+          def expect(cond, message):
+              if not cond:
+                  errors.append(message)
+
+          expect(data.get("status") == "ok", f"status={data.get('status')!r}, expected 'ok'")
+          checks = data.get("checks") or {}
+          expect(checks.get("app") == "ok", f"checks.app={checks.get('app')!r}")
+          expect(checks.get("database") == "ok", f"checks.database={checks.get('database')!r}")
+          expect(int(data.get("agentRegistry") or 0) >= 16, f"agentRegistry={data.get('agentRegistry')!r}, expected >=16")
+
+          features = data.get("features") or {}
+          expect(features.get("cmoExecutiveOperatingSystem") == "v2",
+                 f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}, expected v2")
+          expect(features.get("ccoClosedLoop") == "v1",
+                 f"ccoClosedLoop={features.get('ccoClosedLoop')!r}, expected v1")
+          expect(features.get("marketingGrowthLoop") == "v1",
+                 f"marketingGrowthLoop={features.get('marketingGrowthLoop')!r}, expected v1")
+
+          signals = data.get("runtimeSignals") or {}
+          expect(signals.get("executiveWorkerEnabled") is True,
+                 f"executiveWorkerEnabled={signals.get('executiveWorkerEnabled')!r}")
+          expect(signals.get("syncWorkerEnabled") is True,
+                 f"syncWorkerEnabled={signals.get('syncWorkerEnabled')!r}")
+          expect(signals.get("nonFacebookOpenChannelCount") == 0,
+                 f"nonFacebookOpenChannelCount={signals.get('nonFacebookOpenChannelCount')!r}, expected 0")
+          expect(signals.get("kiotVietWriteEnabled") is False,
+                 f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}, expected false")
+          expect(signals.get("directBookingAutoCreateEnabled") is False,
+                 f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}, expected false")
+
+          open_channels = signals.get("openCustomerChannels") or []
+          expect(open_channels == ["facebook"],
+                 f"openCustomerChannels={open_channels!r}, expected ['facebook']")
+
+          knowledge = data.get("knowledgeRuntime") or {}
+          if knowledge:
+              expect(knowledge.get("errorSources") == 0,
+                     f"knowledgeRuntime.errorSources={knowledge.get('errorSources')!r}, expected 0")
+              expected = knowledge.get("expectedSources")
+              synced = knowledge.get("syncedSources")
+              if expected is not None and synced is not None:
+                  expect(synced >= expected,
+                         f"knowledgeRuntime.syncedSources={synced!r} < expectedSources={expected!r}")
+
+          if errors:
+              print("WATCHDOG FAIL")
+              for item in errors:
+                  print(f"- {item}")
+              raise SystemExit(1)
+
+          print("WATCHDOG PASS")
+          print(f"runtime={data.get('runtime')}")
+          print(f"agentRegistry={data.get('agentRegistry')}")
+          print(f"openCustomerChannels={open_channels}")
+          print("guardrails=PASS")
+
+      - name: Write sanitized summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## TCE VPS Watchdog"
+            echo
+            echo "- Checked: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "- Target: https://app.tamcocexperience.com/health"
+            echo "- Job status: ${{ job.status }}"
+            if [ -f /tmp/http_code ]; then echo "- HTTP: $(cat /tmp/http_code)"; fi
+            echo "- No secrets are read or printed by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

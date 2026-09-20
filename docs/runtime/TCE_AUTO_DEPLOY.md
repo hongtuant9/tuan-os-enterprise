@@ -1,10 +1,11 @@
 # TCE — OVH-only VPS Autopilot
 
-**Authority:** DEC-TCE-OVH-ONLY-20260920-001  
+**Authority:** DEC-TCE-NO-COOLIFY-20260920-003  
 **Production host:** OVH 57.128.186.45  
 **DNS authority:** Tenten  
 **Hostinger:** HẾT HIỆU LỰC (SUPERSEDED)  
-**Desktop dependency:** none
+**Desktop dependency:** none  
+**Coolify:** removed from architecture
 
 ## Chuỗi triển khai
 

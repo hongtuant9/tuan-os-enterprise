@@ -12,6 +12,7 @@ import type { SeptemberExecutionPlanResult } from "./september-execution-plan";
 
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const COST_ID = "17J1_9FzcmirYxPVlacz3wnS6iBNSWbMrJbjVC4XdSbw";
+const TASK_CENTER_ID = "1uVG0L9FzcPBgOCk5IyWNuYVneCCgupqg-SH0TcERSjM";
 
 type DepartmentState = "ACTIVE" | "BUILD_DATA" | "HOLD" | "NEED_VERIFY";
 type Brief = {
@@ -43,7 +44,7 @@ export type ExecutiveCouncilResult = {
   ok: boolean;
   generatedAt: string;
   meetingId: string;
-  meetingType: "DAILY_EXECUTIVE_COUNCIL" | "WEEKLY_STRATEGY_COUNCIL";
+  meetingType: "DAILY_EXECUTIVE_COUNCIL" | "WEEKLY_STRATEGY_COUNCIL" | "MONTHLY_BUSINESS_REVIEW";
   briefs: Brief[];
   consensus: string[];
   conflicts: string[];
@@ -161,6 +162,64 @@ async function readCozy(): Promise<CozySnapshot> {
   }
 }
 
+async function appendCouncilMeetingToDrive(
+  result: {
+    meetingId: string;
+    date: string;
+    meetingType: ExecutiveCouncilResult["meetingType"];
+    briefs: Brief[];
+    consensus: string[];
+    conflicts: string[];
+    ownerDecisionsRequired: string[];
+    digest: string;
+  },
+): Promise<"PASS" | "DEGRADED"> {
+  try {
+    const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const sheets = google.sheets({ version: "v4", auth });
+    const rows = result.briefs.map((brief) => [
+      result.meetingId,
+      result.date,
+      result.meetingType,
+      brief.role,
+      brief.state,
+      brief.evidence.join(" | "),
+      brief.assessment,
+      brief.challenge,
+      brief.asks.join(" | "),
+      brief.action,
+      brief.role,
+      "L0/L1 AUTO unless action hits approval gate",
+      "Executive Council runtime · digest=" + result.digest,
+    ]);
+    rows.push([
+      result.meetingId,
+      result.date,
+      result.meetingType,
+      "TUAN OS CONSENSUS",
+      "ACTIVE",
+      result.consensus.join(" | "),
+      "Cross-department consensus",
+      result.conflicts.join(" | "),
+      result.ownerDecisionsRequired.join(" | "),
+      "Execute safe work automatically; route L2/L3 decisions to APPROVAL-001.",
+      "TUAN OS — AI CEO Delegate",
+      "L2/L3 OWNER APPROVAL",
+      "Executive Council runtime · digest=" + result.digest,
+    ]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: TASK_CENTER_ID,
+      range: "AI_EXEC_COUNCIL!A:M",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: rows },
+    });
+    return "PASS";
+  } catch {
+    return "DEGRADED";
+  }
+}
+
 export async function runExecutiveCouncilCycle(
   cmo: CmoExecutiveResult,
   sales: CcoClosedLoopResult,
@@ -170,6 +229,7 @@ export async function runExecutiveCouncilCycle(
   const container = getAdminContainer();
   const date = localDateKey(now);
   const meetingType: ExecutiveCouncilResult["meetingType"] =
+    date.endsWith("-01") ? "MONTHLY_BUSINESS_REVIEW" :
     localWeekday(now) === "Mon" ? "WEEKLY_STRATEGY_COUNCIL" : "DAILY_EXECUTIVE_COUNCIL";
   const meetingId = "COUNCIL-" + date.replaceAll("-", "");
 
@@ -345,12 +405,23 @@ export async function runExecutiveCouncilCycle(
         type: brief.state === "HOLD" ? "alert" : "info",
       });
     }
+    const driveWrite = await appendCouncilMeetingToDrive({
+      meetingId,
+      date,
+      meetingType,
+      briefs,
+      consensus,
+      conflicts,
+      ownerDecisionsRequired,
+      digest,
+    });
     await container.activityLog.record({
       agent: "TUAN OS — AI CEO Delegate",
       unit: "TCE Executive Council",
       message: "meeting=" + meetingId + " · type=" + meetingType + " · digest=" + digest +
+        " · council_sheet=" + driveWrite +
         " · consensus=" + consensus.join(" | ") + " · conflicts=" + conflicts.join(" | "),
-      type: conflicts.some((item) => /NEED_VERIFY|0 GO|no real|not verified/i.test(item)) ? "alert" : "info",
+      type: conflicts.some((item) => /NEED_VERIFY|0 GO|no real|not verified/i.test(item)) || driveWrite === "DEGRADED" ? "alert" : "info",
     });
   }
 

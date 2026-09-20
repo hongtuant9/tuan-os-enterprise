@@ -23,36 +23,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
-      - name: Probe managed VPS directly and wait for deployed autopilot
+      - name: Probe current production and infrastructure diagnostics
         id: probe
         shell: bash
         run: |
           set -euo pipefail
           HOST="app.tamcocexperience.com"
-          VPS_IP="57.128.186.45"
+          CURRENT_PROD_IP="187.77.158.111"
+          OVH_MIGRATION_IP="57.128.186.45"
           URL="https://${HOST}/health"
-          rm -f /tmp/health.json /tmp/http_code /tmp/public_http_code
+          rm -f /tmp/health.json /tmp/http_code /tmp/coolify_port /tmp/ovh_http_code
 
-          for attempt in $(seq 1 20); do
-            code="$(curl -sS --max-time 20 --resolve "${HOST}:443:${VPS_IP}" -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
+          if timeout 6 bash -c "</dev/tcp/${CURRENT_PROD_IP}/8000" 2>/dev/null; then
+            echo "OPEN" > /tmp/coolify_port
+          else
+            echo "UNREACHABLE" > /tmp/coolify_port
+          fi
+
+          ovh_code="$(curl -sS --max-time 12 --resolve "${HOST}:443:${OVH_MIGRATION_IP}" -o /tmp/ovh-health.json -w '%{http_code}' "$URL" || true)"
+          echo "$ovh_code" > /tmp/ovh_http_code
+
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -sS --connect-timeout 8 --max-time 20 -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
             echo "$code" > /tmp/http_code
             if [ "$code" = "200" ] && python3 -m json.tool /tmp/health.json >/dev/null 2>&1; then
-              if python3 -c 'import json,pathlib; d=json.loads(pathlib.Path("/tmp/health.json").read_text()); raise SystemExit(0 if (d.get("features") or {}).get("companyAutopilot") == "v1" else 1)'; then
-                echo "Managed VPS autopilot reachable on attempt $attempt"
-                break
-              fi
+              echo "Current production reachable on attempt $attempt"
+              exit 0
             fi
-            echo "Attempt $attempt: managed VPS not ready, HTTP ${code:-000}"
-            if [ "$attempt" = "20" ]; then
-              echo "Managed VPS /health did not reach autopilot v1"
-              exit 1
-            fi
-            sleep 12
+            echo "Attempt $attempt: current production ${CURRENT_PROD_IP} not ready, HTTP ${code:-000}"
+            if [ "$attempt" -lt 6 ]; then sleep 12; fi
           done
 
-          public_code="$(curl -sS --max-time 20 -o /tmp/public-health.json -w '%{http_code}' "$URL" || true)"
-          echo "$public_code" > /tmp/public_http_code
-          echo "Public DNS route HTTP ${public_code:-000}; direct VPS acceptance is authoritative for runtime health."
+          echo "Current production /health failed. Coolify port 8000=$(cat /tmp/coolify_port); OVH migration target HTTP=$(cat /tmp/ovh_http_code)."
+          exit 1
 
       - name: Validate autonomous-company invariants
         shell: python
@@ -151,10 +154,12 @@ jobs:
             echo "## TCE VPS Autopilot Watchdog"
             echo
             echo "- Checked: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            echo "- Runtime acceptance: direct managed VPS 57.128.186.45 using app.tamcocexperience.com SNI"
+            echo "- Current production authority: app.tamcocexperience.com -> 187.77.158.111"
+            echo "- OVH migration target: 57.128.186.45 (diagnostic only until cutover acceptance)"
             echo "- Job status: ${{ job.status }}"
-            if [ -f /tmp/http_code ]; then echo "- Direct VPS HTTP: $(cat /tmp/http_code)"; fi
-            if [ -f /tmp/public_http_code ]; then echo "- Public DNS route HTTP: $(cat /tmp/public_http_code)"; fi
-            echo "- Mac/Windows is not part of the acceptance path."
+            if [ -f /tmp/http_code ]; then echo "- Current production /health HTTP: $(cat /tmp/http_code)"; fi
+            if [ -f /tmp/coolify_port ]; then echo "- Coolify control-plane port 8000: $(cat /tmp/coolify_port)"; fi
+            if [ -f /tmp/ovh_http_code ]; then echo "- OVH migration-target /health HTTP: $(cat /tmp/ovh_http_code)"; fi
+            echo "- Mac/Windows is not part of the monitoring authority."
             echo "- No secrets are read or printed by this workflow."
           } >> "$GITHUB_STEP_SUMMARY"

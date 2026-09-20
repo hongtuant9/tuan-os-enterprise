@@ -37,13 +37,7 @@ jobs:
             code="$(curl -sS --max-time 20 --resolve "${HOST}:443:${VPS_IP}" -o /tmp/health.json -w '%{http_code}' "$URL" || true)"
             echo "$code" > /tmp/http_code
             if [ "$code" = "200" ] && python3 -m json.tool /tmp/health.json >/dev/null 2>&1; then
-              if python3 - <<'PY'
-import json
-from pathlib import Path
-d=json.loads(Path("/tmp/health.json").read_text())
-raise SystemExit(0 if (d.get("features") or {}).get("companyAutopilot") == "v1" else 1)
-PY
-              then
+              if python3 -c 'import json,pathlib; d=json.loads(pathlib.Path("/tmp/health.json").read_text()); raise SystemExit(0 if (d.get("features") or {}).get("companyAutopilot") == "v1" else 1)'; then
                 echo "Managed VPS autopilot reachable on attempt $attempt"
                 break
               fi

@@ -65,6 +65,7 @@ Chạy:
 systemctl start tce-autodeploy.service
 journalctl -u tce-autodeploy.service -n 100 --no-pager
 curl -fsS http://127.0.0.1:3000/health
+systemctl enable --now tce-autodeploy.timer
 ```
 
 ## Giai đoạn 4 — Nghiệm thu trước DNS
@@ -95,6 +96,7 @@ IPv4: 57.128.186.45
 ```
 
 Sau thay đổi:
+- không dùng tính năng “cấu hình theo IP” của Tenten vì có thể làm mất các bản ghi hiện hữu;
 - kiểm tra DNS nhiều resolver;
 - kiểm tra HTTPS certificate;
 - kiểm tra `https://app.tamcocexperience.com/health`;

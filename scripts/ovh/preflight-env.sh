@@ -26,6 +26,12 @@ if ! grep -Eq '^APP_URL=https://app\.tamcocexperience\.com/?$' "$ENV_FILE" \
   missing+=("APP_URL_or_NEXT_PUBLIC_APP_URL=https://app.tamcocexperience.com")
 fi
 
+for key in TCE_COMPANY_AUTOPILOT_ENABLED TCE_EXECUTIVE_WORKER_ENABLED TCE_SYNC_WORKER_ENABLED TCE_STAFF_OPS_WORKER_ENABLED CMI_BROWSER_ENABLED CMI_QUEUE_WORKER_ENABLED; do
+  if grep -Eqi "^${key}=false$" "$ENV_FILE"; then
+    missing+=("${key}=must_not_be_false")
+  fi
+done
+
 if [ "${#missing[@]}" -gt 0 ]; then
   echo "[OVH preflight] FAIL — missing required configuration names:"
   printf ' - %s\n' "${missing[@]}"

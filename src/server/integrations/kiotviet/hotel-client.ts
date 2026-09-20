@@ -20,7 +20,7 @@ export type SafeDirectBookingPayload = Record<string, unknown> & {
 const DEFAULT_BASE_URL = "https://api-integration-hotel.kiotviet.vn";
 export class KiotVietHotelClient {
   private readonly baseUrl = (process.env.KIOTVIET_HOTEL_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
-  private readonly publicApiKey = process.env.KIOTVIET_HOTEL_PUBLIC_API_KEY;
+  private readonly publicApiKey = process.env.KIOTVIET_HOTEL_PUBLIC_API_KEY || process.env.KIOTVIET_CLIENT_SECRET;
 
   isConfigured(): boolean {
     return Boolean(this.publicApiKey);
@@ -73,6 +73,10 @@ export class KiotVietHotelClient {
 
   listSaleChannels(): Promise<KiotVietRequestResult> {
     return this.request("/public/sale-channels");
+  }
+
+  listInvoices(query = ""): Promise<KiotVietRequestResult> {
+    return this.request(`/public/invoice${query ? `?${query}` : ""}`);
   }
 
   private async assertSecondAvailability(guard: AvailabilityGuard): Promise<KiotVietRequestResult> {

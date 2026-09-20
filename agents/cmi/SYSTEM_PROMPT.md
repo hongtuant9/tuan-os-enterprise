@@ -50,3 +50,11 @@ CMI không tự:
 - liên hệ đối thủ;
 - công bố nội dung;
 - chi ngân sách.
+
+
+## Quy chuẩn tài liệu nội bộ — DOC-GOV-001
+Khi tạo hoặc cập nhật báo cáo, kế hoạch, phân tích, tài liệu hoặc tài nguyên nội bộ:
+- Việt hóa tối đa; tiếng Anh/chữ viết tắt chỉ đặt trong ngoặc khi cần.
+- Tổ chức nội dung thành cấu trúc có thể dùng/in ngay; ưu tiên bảng, sơ đồ, mô hình khi giúp hiểu nhanh.
+- Không chỉ nối thêm thông tin mới: phải đặt vào đúng mục, hợp nhất nội dung trùng, thay thế/đánh dấu HẾT HIỆU LỰC (SUPERSEDED) cho nội dung cũ hoặc xung đột, và tái cấu trúc khi cần.
+- Phân loại rõ [THỰC TẾ], [KẾ HOẠCH/MÔ HÌNH], [GIẢ ĐỊNH/CHƯA XÁC MINH].

@@ -8,7 +8,11 @@ type WorkstreamId =
   | "CCO_ACCEPTANCE"
   | "COO_CLOSED_LOOP"
   | "FOUNDATION_GATE"
-  | "EXECUTIVE_REVIEW";
+  | "EXECUTIVE_REVIEW"
+  | "SPRINT_PHASE1_FOUNDATION"
+  | "SPRINT_PHASE2_ECOSYSTEM"
+  | "SPRINT_PHASE3_AI_OPERATIONS"
+  | "SPRINT_PHASE4_AI_CUSTOMER";
 
 type PlanWorkstream = {
   id: WorkstreamId;
@@ -19,6 +23,7 @@ type PlanWorkstream = {
   safeActions: string[];
   gatedActions: string[];
   dependencyTaskIds: string[];
+  dependencyMustBeDone?: boolean;
 };
 
 export type SeptemberExecutionPlanResult = {
@@ -141,6 +146,91 @@ const PLAN: PlanWorkstream[] = [
   },
 ];
 
+const SPRINT_PLAN: PlanWorkstream[] = [
+  {
+    id: "SPRINT_PHASE1_FOUNDATION",
+    title: "21/09 · Giai đoạn 1 — đóng Foundation Gate bằng evidence",
+    start: "2026-09-21",
+    end: "2026-09-21",
+    agents: ["AI Master Data Steward", "Channel Auditor", "Computer Operator Controller", "Manager Agent", "Operations Quality Agent"],
+    safeActions: [
+      "đóng hoặc formalize blocker FND-006/FND-019/FND-020 mà không bịa trạng thái",
+      "thực hiện FND-015 trong đúng phạm vi approval hiện hành với before/after evidence và rollback",
+      "chạy FND-021 full regression an toàn",
+      "chuẩn bị FND-022 GO/CONDITIONAL GO/NO-GO evidence pack",
+      "ghi rõ module được mở và module tiếp tục khóa nếu dùng CONDITIONAL GO",
+    ],
+    gatedActions: [
+      "nâng paid plan hoặc phát sinh chi phí mới",
+      "security/access mutation ngoài phạm vi đã được duyệt",
+      "destructive restore trên production",
+      "tự phê duyệt Foundation Gate thay Owner khi approval riêng vẫn bắt buộc",
+    ],
+    dependencyTaskIds: [],
+  },
+  {
+    id: "SPRINT_PHASE2_ECOSYSTEM",
+    title: "21/09 · Giai đoạn 2 — nghiệm thu hệ sinh thái 4 trụ cột",
+    start: "2026-09-21",
+    end: "2026-09-21",
+    agents: ["AI Marketing Manager", "Revenue & Yield Agent", "Operations Quality Agent", "Manager Agent"],
+    safeActions: [
+      "regression STAY/EAT/EXPERIENCE/EXPLORE relationships",
+      "multi-entry journey and journey-entry capture read-back",
+      "cross-sell rules and customer touchpoint verification",
+      "channel synchronization read-back",
+      "direct funnel coexistence with OTA without pricing mutation",
+    ],
+    gatedActions: [
+      "open HOLD/NEED VERIFY product to customers",
+      "public channel expansion",
+      "pricing/policy mutation",
+    ],
+    dependencyTaskIds: ["TASK-TCE-FND-022"],
+    dependencyMustBeDone: true,
+  },
+  {
+    id: "SPRINT_PHASE3_AI_OPERATIONS",
+    title: "21/09 · Giai đoạn 3 — AI Operations Stability Gate",
+    start: "2026-09-21",
+    end: "2026-09-21",
+    agents: ["Channel Auditor", "Website Agent", "Ads Agent", "Computer Operator Controller", "Manager Agent", "Operations Quality Agent"],
+    safeActions: [
+      "run Channel Auditor/Website/Ads read-audit/Computer Operator/Manager on VPS",
+      "verify logging retry idempotency rollback approval monitoring",
+      "collect consecutive Executive Worker and watchdog stability evidence",
+      "prepare OPS-S06 acceptance with no critical failure",
+    ],
+    gatedActions: [
+      "Ads spend/bid/budget mutation",
+      "production restart/stop without scoped approval",
+      "customer/financial write",
+    ],
+    dependencyTaskIds: ["TASK-TCE-SPRINT-P2-001"],
+    dependencyMustBeDone: true,
+  },
+  {
+    id: "SPRINT_PHASE4_AI_CUSTOMER",
+    title: "21/09 · Giai đoạn 4 — AI Customer controlled activation",
+    start: "2026-09-21",
+    end: "2026-09-21",
+    agents: ["AI Receptionist", "AI Concierge", "AI Upsell", "Booking Assistant", "Booking Agent", "Manager Agent"],
+    safeActions: [
+      "customer-flow regression using VERIFIED knowledge only",
+      "activate safe Receptionist/Concierge/Upsell/Booking Assistant paths within approved channel scope",
+      "verify handoff escalation suppression frequency-cap booking draft and second-check",
+      "validate Booking Agent path while keeping booking-write gate separate",
+    ],
+    gatedActions: [
+      "booking write before separate gate PASS",
+      "open non-approved customer-facing channel",
+      "refund/payment/discount/pricing exception",
+    ],
+    dependencyTaskIds: ["TASK-TCE-SPRINT-P3-001", "TASK-TCE-OPS-S06"],
+    dependencyMustBeDone: true,
+  },
+];
+
 function localDateKey(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok",
@@ -170,6 +260,11 @@ function isBlockingStatus(status: string) {
   return ["BLOCKED", "HOLD", "WAITING_OWNER", "WAITING_DEPENDENCY"].includes(normalized);
 }
 
+function isCompletedStatus(status: string) {
+  const normalized = normalizedStatus(status);
+  return ["DONE", "CLOSED", "PASS", "APPROVED", "VERIFIED", "CONDITIONAL_GO", "GO"].includes(normalized);
+}
+
 export async function runSeptemberExecutionPlan(now = new Date()): Promise<SeptemberExecutionPlanResult> {
   const container = getAdminContainer();
   const day = localDateKey(now);
@@ -196,14 +291,15 @@ export async function runSeptemberExecutionPlan(now = new Date()): Promise<Septe
     if (id && !taskById.has(id)) taskById.set(id, fields);
   }
 
-  const active = PLAN.filter((item) => inWindow(day, item.start, item.end));
+  const executionPlan = day === "2026-09-21" ? SPRINT_PLAN : PLAN;
+  const active = executionPlan.filter((item) => inWindow(day, item.start, item.end));
   const activeWorkstreams = active.map((item) => {
     const blockers: string[] = [];
     for (const taskId of item.dependencyTaskIds) {
       const fields = taskById.get(taskId);
       if (!fields) continue;
       const status = fields.STATUS ?? "";
-      if (isBlockingStatus(status)) {
+      if (item.dependencyMustBeDone ? !isCompletedStatus(status) : isBlockingStatus(status)) {
         blockers.push(`${taskId}=${status || "UNKNOWN"}`);
       }
     }
@@ -233,7 +329,7 @@ export async function runSeptemberExecutionPlan(now = new Date()): Promise<Septe
     }
   }
 
-  const upcomingWorkstreams = PLAN
+  const upcomingWorkstreams = executionPlan
     .filter((item) => item.start > day)
     .map((item) => ({ id: item.id, title: item.title, start: item.start, end: item.end }));
 

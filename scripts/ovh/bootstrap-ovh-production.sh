@@ -45,21 +45,31 @@ ufw --force enable
 
 docker volume create tce_caddy_data >/dev/null
 docker volume create tce_caddy_config >/dev/null
-docker rm -f tce-caddy >/dev/null 2>&1 || true
 
-docker run -d \
-  --name tce-caddy \
-  --restart unless-stopped \
-  --network host \
-  -v "$CADDY_DIR/Caddyfile:/etc/caddy/Caddyfile:ro" \
-  -v tce_caddy_data:/data \
-  -v tce_caddy_config:/config \
-  caddy:2-alpine >/dev/null
+# Foundation used a bridge-network Caddy container. Stop any legacy Caddy
+# before the canonical host-network Caddy takes ownership of :80/:443.
+legacy_caddies="$(docker ps --format '{{.Names}}' | grep -E '(^|[-_])caddy([-_]|$)' | grep -v '^tce-caddy$' || true)"
+if [ -n "$legacy_caddies" ]; then
+  echo "[OVH bootstrap] stopping legacy Caddy container(s): $legacy_caddies"
+  # shellcheck disable=SC2086
+  docker stop $legacy_caddies >/dev/null || true
+fi
+
+docker rm -f tce-caddy >/dev/null 2>&1 || true
+docker run -d   --name tce-caddy   --restart unless-stopped   --network host   -v "$CADDY_DIR/Caddyfile:/etc/caddy/Caddyfile:ro"   -v tce_caddy_data:/data   -v tce_caddy_config:/config   caddy:2-alpine >/dev/null
 
 systemctl daemon-reload
-systemctl enable tce-autodeploy.timer
+
+ENV_FILE="$SECRETS_DIR/tce-app.env"
+if [ -f "$ENV_FILE" ]; then
+  ENV_FILE="$ENV_FILE" "$APP_ROOT/scripts/ovh/preflight-env.sh"
+  systemctl start tce-autodeploy.service
+  systemctl enable --now tce-autodeploy.timer
+  echo "[OVH bootstrap] app deploy + autodeploy timer PASS"
+else
+  systemctl enable tce-autodeploy.timer
+  echo "[OVH bootstrap] env missing; app deploy held fail-closed"
+fi
 
 echo "[OVH bootstrap] PASS"
-echo "[OVH bootstrap] Next gate: create $SECRETS_DIR/tce-app.env without printing secrets, then run:"
-echo "  systemctl start tce-autodeploy.service"
 echo "[OVH bootstrap] After local /health PASS, change only the Tenten A record for app to 57.128.186.45."

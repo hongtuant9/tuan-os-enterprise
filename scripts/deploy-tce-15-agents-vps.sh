@@ -16,6 +16,16 @@ EXPECTED_AUTOPILOT="v1"
 log() { printf '[TCE deploy] %s\n' "$*"; }
 fail() { log "FAIL: $*"; exit 1; }
 
+health_passes() {
+  local body="$1"
+  printf '%s' "$body" | grep -q '"status":"ok"' &&
+    printf '%s' "$body" | grep -q "\"runtime\":\"$EXPECTED_RUNTIME\"" &&
+    printf '%s' "$body" | grep -q "\"companyAutopilot\":\"$EXPECTED_AUTOPILOT\"" &&
+    printf '%s' "$body" | grep -q '"companyAutopilotEnabled":true' &&
+    printf '%s' "$body" | grep -q '"companyRuntimeMode":"VPS_ALWAYS_ON"' &&
+    printf '%s' "$body" | grep -q '"desktopDependency":false'
+}
+
 command -v git >/dev/null 2>&1 || fail "git missing"
 command -v docker >/dev/null 2>&1 || fail "docker missing"
 command -v curl >/dev/null 2>&1 || fail "curl missing"
@@ -40,15 +50,11 @@ docker build --pull -t "$IMAGE" .
 
 docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
 log "Starting candidate on 127.0.0.1:$CANDIDATE_PORT"
-docker run -d --name "$CANDIDATE_CONTAINER" \
-  --restart no \
-  --env-file "$ENV_FILE" \
-  -p "127.0.0.1:${CANDIDATE_PORT}:3000" \
-  "$IMAGE" >/dev/null
+docker run -d --name "$CANDIDATE_CONTAINER"   --restart no   --env-file "$ENV_FILE"   -p "127.0.0.1:${CANDIDATE_PORT}:3000"   "$IMAGE" >/dev/null
 candidate_ok=false
 for _ in $(seq 1 30); do
   body="$(curl -fsS "http://127.0.0.1:${CANDIDATE_PORT}/health" 2>/dev/null || true)"
-  if printf '%s' "$body" | grep -q '"status":"ok"' && printf '%s' "$body" | grep -q "\"runtime\":\"$EXPECTED_RUNTIME\""; then
+  if health_passes "$body"; then
     candidate_ok=true
     break
   fi
@@ -58,7 +64,7 @@ done
 if [ "$candidate_ok" != true ]; then
   docker logs "$CANDIDATE_CONTAINER" --tail 80 || true
   docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
-  fail "candidate health/runtime verification failed"
+  fail "candidate health/autopilot verification failed"
 fi
 
 PREVIOUS_IMAGE="$(docker inspect -f '{{.Config.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
@@ -69,16 +75,12 @@ printf '%s\n' "$SHA" > "$STATE_DIR/candidate-sha"
 
 log "Candidate PASS; switching primary container"
 docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
-docker run -d --name "$APP_CONTAINER" \
-  --restart unless-stopped \
-  --env-file "$ENV_FILE" \
-  -p "127.0.0.1:${APP_PORT}:3000" \
-  "$IMAGE" >/dev/null
+docker run -d --name "$APP_CONTAINER"   --restart unless-stopped   --env-file "$ENV_FILE"   -p "127.0.0.1:${APP_PORT}:3000"   "$IMAGE" >/dev/null
 
 primary_ok=false
 for _ in $(seq 1 30); do
   body="$(curl -fsS "http://127.0.0.1:${APP_PORT}/health" 2>/dev/null || true)"
-  if printf '%s' "$body" | grep -q '"status":"ok"' && printf '%s' "$body" | grep -q "\"runtime\":\"$EXPECTED_RUNTIME\""; then
+  if health_passes "$body"; then
     primary_ok=true
     break
   fi

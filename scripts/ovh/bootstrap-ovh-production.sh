@@ -45,6 +45,7 @@ ufw --force enable
 
 docker volume create tce_caddy_data >/dev/null
 docker volume create tce_caddy_config >/dev/null
+docker ps -aq --filter "ancestor=caddy:2-alpine" | xargs -r docker rm -f >/dev/null 2>&1 || true
 docker rm -f tce-caddy >/dev/null 2>&1 || true
 
 docker run -d \
@@ -57,9 +58,12 @@ docker run -d \
   caddy:2-alpine >/dev/null
 
 systemctl daemon-reload
-systemctl enable tce-autodeploy.timer
+systemctl enable --now tce-autodeploy.timer
+
+if [ -s "$SECRETS_DIR/tce-app.env" ]; then
+  systemctl start tce-autodeploy.service
+fi
 
 echo "[OVH bootstrap] PASS"
-echo "[OVH bootstrap] Next gate: create $SECRETS_DIR/tce-app.env without printing secrets, then run:"
-echo "  systemctl start tce-autodeploy.service"
+echo "[OVH bootstrap] Autodeploy timer is active; if the env file is present, the first deployment has been triggered."
 echo "[OVH bootstrap] After local /health PASS, change only the Tenten A record for app to 57.128.186.45."

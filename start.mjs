@@ -106,9 +106,9 @@ async function executiveTick() {
       console.error(`[TCE Executive] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
       return;
     }
-    if (!payload?.skipped && payload?.changed) {
+    if (!payload?.skipped) {
       console.log(
-        `[TCE Executive] next=${payload?.next ?? 0} blocked=${payload?.blocked ?? 0} waiting_owner=${payload?.waitingOwner ?? 0} open_p0=${payload?.openP0 ?? 0}`,
+        `[TCE Executive] next=${payload?.next ?? 0} blocked=${payload?.blocked ?? 0} waiting_owner=${payload?.waitingOwner ?? 0} open_p0=${payload?.openP0 ?? 0} reality_fnb=${payload?.reality?.fnb?.state ?? "n/a"} reality_hotel=${payload?.reality?.hotel?.state ?? "n/a"} fnb_invoices=${payload?.reality?.fnb?.invoiceCount ?? 0} hotel_bookings=${payload?.reality?.hotel?.bookingCount ?? 0}`,
       );
     }
   } catch (error) {

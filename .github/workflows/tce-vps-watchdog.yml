@@ -65,6 +65,8 @@ jobs:
                  f"cmoExecutiveOperatingSystem={features.get('cmoExecutiveOperatingSystem')!r}, expected v2")
           expect(features.get("ccoClosedLoop") == "v1",
                  f"ccoClosedLoop={features.get('ccoClosedLoop')!r}, expected v1")
+          expect(features.get("businessOperatingPlan") == "2026-2027-v1",
+                 f"businessOperatingPlan={features.get('businessOperatingPlan')!r}, expected 2026-2027-v1")
           expect(features.get("marketingGrowthLoop") == "v1",
                  f"marketingGrowthLoop={features.get('marketingGrowthLoop')!r}, expected v1")
 
@@ -79,6 +81,10 @@ jobs:
                  f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}, expected false")
           expect(signals.get("directBookingAutoCreateEnabled") is False,
                  f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}, expected false")
+          expect(signals.get("businessOperatingPlanStatus") == "ACTIVE_OPERATING_PLAN",
+                 f"businessOperatingPlanStatus={signals.get('businessOperatingPlanStatus')!r}")
+          expect(signals.get("businessOperatingPlanDecisionId") == "DEC-TCE-BPLAN-20260920-001",
+                 f"businessOperatingPlanDecisionId={signals.get('businessOperatingPlanDecisionId')!r}")
 
           open_channels = signals.get("openCustomerChannels") or []
           expect(open_channels == ["facebook"],

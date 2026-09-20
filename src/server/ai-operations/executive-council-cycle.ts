@@ -9,6 +9,7 @@ import { TCE_AGENT_REGISTRY } from "@/server/agents/tce-registry";
 import type { CmoExecutiveResult } from "@/server/marketing-manager/cmo-executive-cycle";
 import type { CcoClosedLoopResult } from "@/server/sales/cco-cycle";
 import type { SeptemberExecutionPlanResult } from "./september-execution-plan";
+import { TCE_BUSINESS_OPERATING_PLAN, activeBusinessPlanPeriod } from "./tce-business-plan";
 
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const COST_ID = "17J1_9FzcmirYxPVlacz3wnS6iBNSWbMrJbjVC4XdSbw";
@@ -51,6 +52,7 @@ export type ExecutiveCouncilResult = {
   ownerDecisionsRequired: string[];
   finance: FinanceSnapshot;
   cozy: CozySnapshot;
+  businessPlan: { version: string; status: string; decisionId: string; activePeriodId: string | null };
   changed: boolean;
 };
 
@@ -232,6 +234,7 @@ export async function runExecutiveCouncilCycle(
     date.endsWith("-01") ? "MONTHLY_BUSINESS_REVIEW" :
     localWeekday(now) === "Mon" ? "WEEKLY_STRATEGY_COUNCIL" : "DAILY_EXECUTIVE_COUNCIL";
   const meetingId = "COUNCIL-" + date.replaceAll("-", "");
+  const activePlanPeriod = activeBusinessPlanPeriod(now);
 
   const [finance, cozy, agentsResult, syncResult, taskResult, latestResult] = await Promise.all([
     readFinance(),
@@ -357,6 +360,7 @@ export async function runExecutiveCouncilCycle(
     .filter((brief): brief is Brief => Boolean(brief));
 
   const consensus = [
+    "ACTIVE OPERATING PLAN " + TCE_BUSINESS_OPERATING_PLAN.version + " · Decision " + TCE_BUSINESS_OPERATING_PLAN.decisionId + " · current period=" + (activePlanPeriod?.id ?? "OUTSIDE_PLAN_WINDOW") + ".",
     "P0 Online consistency: TCE/Homestay/Cozy content, images and business facts across public touchpoints.",
     "P0 Actual P&L + Traffic→Lead→Booking→Revenue attribution; Plan/Estimate must remain separate from Actual.",
     "P1 Complete CCO and COO closed loops before aggressive scale.",
@@ -387,7 +391,7 @@ export async function runExecutiveCouncilCycle(
   ];
 
   const digest = createHash("sha256").update(JSON.stringify({
-    date, meetingType, briefs, consensus, conflicts, finance, cozy,
+    date, meetingType, activePlanPeriod: activePlanPeriod?.id ?? null, briefs, consensus, conflicts, finance, cozy,
   })).digest("hex").slice(0, 16);
   const previous = latestResult.data ?? [];
   const alreadyLogged = previous.some((row) =>
@@ -444,7 +448,7 @@ export async function runExecutiveCouncilCycle(
     const runtimeName = runtimeNameAlias.get(agent.id) ?? agent.name;
     const items = assignments.get(runtimeName) ?? ["COUNCIL: Giữ guardrails; cung cấp runtime evidence."];
     await container.db.from("agents").update({
-      current_task: "EXEC COUNCIL " + meetingId + " · " + items.slice(0, 2).join(" | "),
+      current_task: "BPLAN " + (activePlanPeriod?.id ?? "OUTSIDE_PLAN_WINDOW") + " · EXEC COUNCIL " + meetingId + " · " + items.slice(0, 2).join(" | "),
       updated_at: now.toISOString(),
     }).eq("unit", "TCE AI").eq("name", runtimeName);
   }
@@ -460,6 +464,12 @@ export async function runExecutiveCouncilCycle(
     ownerDecisionsRequired,
     finance,
     cozy,
+    businessPlan: {
+      version: TCE_BUSINESS_OPERATING_PLAN.version,
+      status: TCE_BUSINESS_OPERATING_PLAN.status,
+      decisionId: TCE_BUSINESS_OPERATING_PLAN.decisionId,
+      activePeriodId: activePlanPeriod?.id ?? null,
+    },
     changed,
   };
 }

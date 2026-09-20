@@ -17,6 +17,9 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Kiểm tra shell migration OVH
+        run: bash -n scripts/deploy-tce-15-agents-vps.sh scripts/ovh/*.sh
+
       - name: Cài dependencies
         run: npm ci
 

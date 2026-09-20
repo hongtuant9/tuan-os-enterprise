@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  if (process.env.CMI_BROWSER_ENABLED !== "true") {
+  if (process.env.TCE_COMPANY_AUTOPILOT_ENABLED?.trim().toLowerCase() === "false" || process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() === "false") {
     return NextResponse.json({ ok: true, skipped: "browser_disabled", processed: 0 });
   }
 

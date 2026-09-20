@@ -26,10 +26,20 @@ function runtimeSignals() {
     .map((value) => value.trim())
     .filter(Boolean).length;
 
+  const companyAutopilotEnabled = process.env.TCE_COMPANY_AUTOPILOT_ENABLED?.trim().toLowerCase() !== "false";
+  const dailyAiBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0");
+  const monthlyAiBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0");
+  const tceAiBudgetApproved = Number.isFinite(dailyAiBudget) && dailyAiBudget > 0 && Number.isFinite(monthlyAiBudget) && monthlyAiBudget > 0;
+
   return {
-    staffOpsWorkerEnabled: process.env.TCE_STAFF_OPS_WORKER_ENABLED === "true",
-    executiveWorkerEnabled: process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
-    syncWorkerEnabled: process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    companyAutopilotEnabled,
+    companyRuntimeMode: companyAutopilotEnabled ? "VPS_ALWAYS_ON" : "PAUSED",
+    desktopDependency: false,
+    cmiBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
+    cmiQueueWorkerEnabled: companyAutopilotEnabled && process.env.CMI_QUEUE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    staffOpsWorkerEnabled: companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    executiveWorkerEnabled: companyAutopilotEnabled && process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    syncWorkerEnabled: companyAutopilotEnabled && process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
     openCustomerChannels,
@@ -45,8 +55,9 @@ function runtimeSignals() {
     receptionistConversationModel: process.env.AI_RECEPTIONIST_CONVERSATION_MODEL?.trim() ? "SET=yes" : "SET=no",
     receptionistDailyBudget: process.env.AI_RECEPTIONIST_DAILY_BUDGET_USD?.trim() ? "SET=yes" : "SET=no",
     receptionistMonthlyBudget: process.env.AI_RECEPTIONIST_MONTHLY_BUDGET_USD?.trim() ? "SET=yes" : "SET=no",
-    tceAgentAiEnabled: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() === "true",
-    cmiAiEnabled: process.env.CMI_AI_ENABLED?.trim().toLowerCase() === "true",
+    tceAgentAiEnabled: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() !== "false" && tceAiBudgetApproved && Boolean(process.env.OPENAI_API_KEY?.trim()),
+    tceAiBudgetApproved,
+    cmiAiEnabled: process.env.CMI_AI_ENABLED?.trim().toLowerCase() !== "false" && Boolean(process.env.OPENAI_API_KEY?.trim()),
     businessOperatingPlanStatus: TCE_BUSINESS_OPERATING_PLAN.status,
     businessOperatingPlanDecisionId: TCE_BUSINESS_OPERATING_PLAN.decisionId,
   };
@@ -69,7 +80,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
-          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
           agentRegistry: 16,
           executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
@@ -86,7 +97,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
         agentRegistry: 16,
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
@@ -116,7 +127,7 @@ export async function GET() {
         status: "degraded",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1" },
         agentRegistry: 16,
           executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),

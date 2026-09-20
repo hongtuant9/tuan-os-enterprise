@@ -9,5 +9,6 @@ User=root
 Environment=APP_ROOT=/opt/tuan-ai/tce-control-center
 Environment=ENV_FILE=/opt/tuan-ai/secrets/tce-app.env
 Environment=STATE_DIR=/opt/tuan-ai/deploy-state
+Environment=APP_DOCKER_NETWORK=compose_backend
 ExecStart=/opt/tuan-ai/tce-control-center/scripts/ovh/autodeploy.sh
 TimeoutStartSec=1800

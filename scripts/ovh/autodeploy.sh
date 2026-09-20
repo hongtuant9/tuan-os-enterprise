@@ -35,4 +35,11 @@ chmod +x "$PREFLIGHT_SCRIPT" "$DEPLOY_SCRIPT"
 
 echo "[OVH autodeploy] deploying sha=$remote_short"
 "$DEPLOY_SCRIPT"
+
+caddy_ids="$(docker ps -q --filter label=com.docker.compose.service=caddy || true)"
+if [ -n "$caddy_ids" ]; then
+  docker restart $caddy_ids >/dev/null
+  echo "[OVH autodeploy] reloaded existing Caddy container(s)"
+fi
+
 echo "[OVH autodeploy] PASS sha=$remote_short"

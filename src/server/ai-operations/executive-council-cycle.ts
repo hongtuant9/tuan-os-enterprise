@@ -354,7 +354,8 @@ export async function runExecutiveCouncilCycle(
     });
   }
 
-  const agentNameById = new Map(TCE_AGENT_REGISTRY.map((agent) => [agent.id, agent.name]));
+  const runtimeNameAlias = new Map([["data_quality", "Data Quality Agent"]]);
+  const agentNameById = new Map(TCE_AGENT_REGISTRY.map((agent) => [agent.id, runtimeNameAlias.get(agent.id) ?? agent.name]));
   const assignments = new Map<string, string[]>();
   for (const role of TCE_EXECUTIVE_ORG) {
     if (role.id === "ai_ceo_delegate") continue;
@@ -369,11 +370,12 @@ export async function runExecutiveCouncilCycle(
     }
   }
   for (const agent of TCE_AGENT_REGISTRY) {
-    const items = assignments.get(agent.name) ?? ["COUNCIL: Giữ guardrails; cung cấp runtime evidence."];
+    const runtimeName = runtimeNameAlias.get(agent.id) ?? agent.name;
+    const items = assignments.get(runtimeName) ?? ["COUNCIL: Giữ guardrails; cung cấp runtime evidence."];
     await container.db.from("agents").update({
       current_task: "EXEC COUNCIL " + meetingId + " · " + items.slice(0, 2).join(" | "),
       updated_at: now.toISOString(),
-    }).eq("unit", "TCE AI").eq("name", agent.name);
+    }).eq("unit", "TCE AI").eq("name", runtimeName);
   }
 
   return {

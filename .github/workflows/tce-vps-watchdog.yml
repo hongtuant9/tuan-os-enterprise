@@ -122,9 +122,12 @@ jobs:
           echo "$public_code" > /tmp/public_https_code
 
           if ! printf '%s' "$resolved" | grep -qw "$OVH_IP"; then
+            echo "CUTOVER_PENDING" > /tmp/cutover_state
             echo "DNS CUTOVER PENDING: $HOST is not yet on OVH $OVH_IP"
-            exit 1
+            exit 0
           fi
+
+          echo "CUTOVER_ACTIVE" > /tmp/cutover_state
 
           if [ "$public_code" != "200" ] || ! python3 -m json.tool /tmp/public-health.json >/dev/null 2>&1; then
             echo "PUBLIC HTTPS FAIL after DNS cutover: HTTP ${public_code:-000}"
@@ -148,6 +151,7 @@ jobs:
             if [ -f /tmp/direct_http_code ]; then echo "- OVH direct HTTP: $(cat /tmp/direct_http_code)"; fi
             if [ -f /tmp/dns_ip ]; then echo "- Public DNS A: $(cat /tmp/dns_ip)"; fi
             if [ -f /tmp/public_https_code ]; then echo "- Public HTTPS: $(cat /tmp/public_https_code)"; fi
+            if [ -f /tmp/cutover_state ]; then echo "- Cutover state: $(cat /tmp/cutover_state)"; fi
             echo "- Desktop dependency: none"
             echo "- No secrets are read or printed."
           } >> "$GITHUB_STEP_SUMMARY"

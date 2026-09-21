@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/lavender/feedback",
   "/ruby/review",
   "/ruby/feedback",
+  "/zalo_verifierVFIbDv_oTHD5vU0de-rp8M3JndgCfHqaCZaq.html",
 ];
 
 // API routes authenticate themselves (see src/server/auth/api-auth.ts) since

@@ -16,12 +16,26 @@ type TokenResponse = {
   refresh_token_expires_in?: string | number;
 };
 
-function appBaseUrl() {
-  return (
-    process.env.APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    "https://app.tamcocexperience.com"
-  ).replace(/\/$/, "");
+export function getPublicAppBaseUrl() {
+  const candidates = [
+    process.env.TCE_PUBLIC_BASE_URL?.trim(),
+    process.env.NEXT_PUBLIC_APP_URL?.trim(),
+    process.env.APP_URL?.trim(),
+    "https://app.tamcocexperience.com",
+  ].filter(Boolean) as string[];
+
+  for (const value of candidates) {
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase();
+      if (host !== "0.0.0.0" && host !== "127.0.0.1" && host !== "localhost") {
+        return value.replace(/\/$/, "");
+      }
+    } catch {
+      // Ignore invalid internal/base URL candidates.
+    }
+  }
+  return "https://app.tamcocexperience.com";
 }
 
 export function getZaloAppId() {
@@ -29,7 +43,7 @@ export function getZaloAppId() {
 }
 
 export function getZaloOAuthCallbackUrl() {
-  return appBaseUrl() + "/api/integrations/zalo/oauth/callback";
+  return getPublicAppBaseUrl() + "/api/integrations/zalo/oauth/callback";
 }
 
 function safeFutureIso(seconds: string | number | undefined, fallbackSeconds: number): string {

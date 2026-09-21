@@ -140,7 +140,7 @@ export function parseZaloOpsEvent(payload: unknown): ZaloOpsEvent {
     groupId,
     messageId,
     text,
-    attachments: countAttachments(p),
+    attachments: countAttachments(root),
     raw: payload,
   };
 }

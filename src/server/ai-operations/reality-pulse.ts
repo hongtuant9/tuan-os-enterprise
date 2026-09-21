@@ -2,8 +2,7 @@ import "server-only";
 import { google } from "googleapis";
 import { getAdminContainer } from "@/server/container";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
-import { KiotVietFnbClient } from "@/server/integrations/kiotviet/fnb-client";
-import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
+import { fetchFnbRevenueActual, fetchHotelRevenueActual } from "@/server/integrations/kiotviet/revenue-actual";
 
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const LIVE_SHEET = "ACTUAL LIVE — 2026-09";
@@ -24,7 +23,8 @@ function vnPeriod(now: Date) {
     .formatToParts(now);
   const year = parts.find((p) => p.type === "year")?.value ?? "2026";
   const month = parts.find((p) => p.type === "month")?.value ?? "09";
-  return { year, month, key: year + "-" + month, from: year + "-" + month + "-01T00:00:00", to: year + "-" + month + "-31T23:59:59" };
+  const lastDay = String(new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate()).padStart(2, "0");
+  return { year, month, key: year + "-" + month, from: year + "-" + month + "-01T00:00:00", to: year + "-" + month + "-" + lastDay + "T23:59:59" };
 }
 
 function arrayFromPayload(payload: unknown): Record<string, unknown>[] {
@@ -43,6 +43,33 @@ function arrayFromPayload(payload: unknown): Record<string, unknown>[] {
 function num(v: unknown) {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+async function updateRevenueBridge(hotel: { state: SourceState; revenue: number }, fnb: { state: SourceState; revenue: number }, generatedAt: string) {
+  const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+  const sheets = google.sheets({ version: "v4", auth });
+  const values = [
+    [
+      hotel.state === "VERIFIED" ? hotel.revenue / 1_000_000 : "",
+      hotel.state === "VERIFIED" ? "VERIFIED" : "CẦN VERIFY KIOTVIET HOTEL",
+      "KiotViet Hotel API invoice-first · " + generatedAt,
+    ],
+    [
+      fnb.state === "VERIFIED" ? fnb.revenue / 1_000_000 : "",
+      fnb.state === "VERIFIED" ? "VERIFIED" : "ACCESS_GAP_KIOTVIET_FNB",
+      "KiotViet F&B API invoice-first · " + generatedAt,
+    ],
+  ];
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: FIN_ID,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: [
+        { range: "'" + LIVE_SHEET + "'!B54:C55", values: values.map((row) => row.slice(0, 2)) },
+        { range: "'" + LIVE_SHEET + "'!G54:G55", values: values.map((row) => [row[2]]) },
+      ],
+    },
+  });
 }
 
 async function appendEvidence(rows: string[][]) {
@@ -71,9 +98,6 @@ async function appendEvidence(rows: string[][]) {
 export async function runRealityPulse(now = new Date()): Promise<RealityPulseResult> {
   const container = getAdminContainer();
   const p = vnPeriod(now);
-  const fnbClient = new KiotVietFnbClient();
-  const hotelClient = new KiotVietHotelClient();
-
   const result: RealityPulseResult = {
     ok: true,
     generatedAt: now.toISOString(),
@@ -83,80 +107,57 @@ export async function runRealityPulse(now = new Date()): Promise<RealityPulseRes
     notes: [],
   };
 
-  const [fnb, hotel] = await Promise.allSettled([
-    fnbClient.isConfigured()
-      ? fnbClient.listInvoices(new URLSearchParams({
-          fromPurchaseDate: p.from,
-          toPurchaseDate: p.to,
-          pageSize: "100",
-          currentItem: "0",
-          includePayment: "true",
-        }).toString())
-      : Promise.reject(new Error("FNB_NOT_CONFIGURED")),
-    hotelClient.isConfigured()
-      ? hotelClient.listOrders(new URLSearchParams({
-          createdDateFrom: p.from,
-          createdDateTo: p.to,
-          pageIndex: "1",
-          pageSize: "50",
-        }).toString())
-      : Promise.reject(new Error("HOTEL_NOT_CONFIGURED")),
+  const [fnb, hotel] = await Promise.all([
+    fetchFnbRevenueActual(p.from, p.to),
+    fetchHotelRevenueActual(p.from, p.to),
   ]);
+
+  result.fnb = {
+    state: fnb.state,
+    invoiceCount: fnb.invoiceCount,
+    grossRevenue: fnb.revenue,
+    httpStatus: fnb.httpStatus,
+  };
+  result.hotel = {
+    state: hotel.state,
+    bookingCount: hotel.invoiceCount,
+    bookingValue: hotel.revenue,
+    cancelledCount: hotel.excludedCount,
+    cancelledValue: 0,
+    httpStatus: hotel.httpStatus,
+  };
+
+  if (fnb.state !== "VERIFIED") result.ok = false;
+  if (hotel.state !== "VERIFIED") result.ok = false;
+  result.notes.push(...fnb.notes.map((x) => "F&B: " + x), ...hotel.notes.map((x) => "Hotel: " + x));
 
   const evidence: string[][] = [];
   const stamp = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
   }).format(now).replace(",", "");
 
-  if (fnb.status === "fulfilled") {
-    result.fnb.httpStatus = fnb.value.status;
-    if (fnb.value.ok) {
-      const invoices = arrayFromPayload(fnb.value.data);
-      result.fnb.state = "VERIFIED";
-      result.fnb.invoiceCount = invoices.length;
-      result.fnb.grossRevenue = invoices.reduce((s, x) => s + num(x.totalPayment ?? x.total), 0);
-      evidence.push([stamp,"KiotViet F&B API","Cozy Garden / retailer configured","F&B invoices gross receipts",String(result.fnb.grossRevenue / 1_000_000),"triệu VNĐ","MTD " + p.key,"ACTUAL — SOURCE VERIFIED","STAGING","MEDIUM","Read-only API; reconcile refunds/voids/costs before P&L.","CFO/COO"]);
-    } else {
-      result.fnb.state = "ERROR";
-      result.ok = false;
-      result.notes.push("KiotViet F&B HTTP " + fnb.value.status);
-    }
-  } else {
-    result.fnb.state = "UNAVAILABLE";
-    result.notes.push("KiotViet F&B unavailable/config missing.");
+  if (fnb.state === "VERIFIED") {
+    evidence.push([
+      stamp, "KiotViet F&B API", "Cozy Garden", "Doanh thu hóa đơn MTD",
+      String(fnb.revenue / 1_000_000), "triệu VNĐ", "MTD " + p.key, "ACTUAL — SOURCE VERIFIED",
+      "STAGING", "LOW", "Invoice-first; collected=" + String(fnb.collected / 1_000_000) + " triệu; excluded=" + fnb.excludedCount + ".", "CFO/COO",
+    ]);
   }
 
-  if (hotel.status === "fulfilled") {
-    result.hotel.httpStatus = hotel.value.status;
-    if (hotel.value.ok) {
-      const bookings = arrayFromPayload(hotel.value.data);
-      result.hotel.state = "VERIFIED";
-      result.hotel.bookingCount = bookings.length;
-      for (const b of bookings) {
-        const value = num(b.totalPayment ?? b.total ?? b.subTotal);
-        result.hotel.bookingValue += value;
-        if (Number(b.status) === 3) {
-          result.hotel.cancelledCount += 1;
-          result.hotel.cancelledValue += value;
-        }
-      }
-      evidence.push([stamp,"KiotViet Hotel API","Homestay / retailer configured","Bookings created MTD",String(result.hotel.bookingCount),"booking","MTD " + p.key,"ACTUAL — SOURCE VERIFIED","STAGING","HIGH","Read-only API; booking value may overlap OTA/PMS revenue.","CCO/CFO"]);
-      evidence.push([stamp,"KiotViet Hotel API","Homestay / retailer configured","Cancelled booking value MTD",String(result.hotel.cancelledValue / 1_000_000),"triệu VNĐ","MTD " + p.key,"ACTUAL — SOURCE VERIFIED","STAGING","LOW","Cancellation signal for CCO/CXO; not revenue.","CCO/CXO"]);
-    } else {
-      result.hotel.state = "ERROR";
-      result.ok = false;
-      result.notes.push("KiotViet Hotel HTTP " + hotel.value.status);
-    }
-  } else {
-    result.hotel.state = "UNAVAILABLE";
-    result.notes.push("KiotViet Hotel unavailable/config missing.");
+  if (hotel.state === "VERIFIED") {
+    evidence.push([
+      stamp, "KiotViet Hotel API", "Homestay", "Doanh thu hóa đơn MTD",
+      String(hotel.revenue / 1_000_000), "triệu VNĐ", "MTD " + p.key, "ACTUAL — SOURCE VERIFIED",
+      "STAGING", "LOW", "Invoice-first; collected=" + String(hotel.collected / 1_000_000) + " triệu; excluded=" + hotel.excludedCount + ".", "CFO/CCO",
+    ]);
   }
 
   try {
     await appendEvidence(evidence);
+    await updateRevenueBridge(hotel, fnb, result.generatedAt);
   } catch {
     result.ok = false;
-    result.notes.push("Actual Live sheet append failed.");
+    result.notes.push("Actual Live sheet/bridge update failed.");
   }
 
   await container.activityLog.record({
@@ -165,8 +166,7 @@ export async function runRealityPulse(now = new Date()): Promise<RealityPulseRes
     message:
       "REALITY period=" + p.key +
       " · FNB=" + result.fnb.state + ":" + result.fnb.invoiceCount + ":" + Math.round(result.fnb.grossRevenue) +
-      " · HOTEL=" + result.hotel.state + ":" + result.hotel.bookingCount + ":" + Math.round(result.hotel.bookingValue) +
-      " · CANCEL=" + result.hotel.cancelledCount + ":" + Math.round(result.hotel.cancelledValue) +
+      " · HOTEL_INVOICE=" + result.hotel.state + ":" + result.hotel.bookingCount + ":" + Math.round(result.hotel.bookingValue) +
       (result.notes.length ? " · notes=" + result.notes.join(" | ") : ""),
     type: result.ok ? "info" : "alert",
   });

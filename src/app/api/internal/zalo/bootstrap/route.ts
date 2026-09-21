@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiRequest, principalHasMinimumRole } from "@/server/auth/api-auth";
-import { ZaloOAuthService, getZaloAppId } from "@/server/integrations/zalo/oauth-service";
+import { ZaloOAuthService, getPublicAppBaseUrl, getZaloAppId } from "@/server/integrations/zalo/oauth-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,5 +48,5 @@ export async function POST(request: NextRequest) {
 
   const service = new ZaloOAuthService();
   await service.saveAppSecret(appSecret);
-  return NextResponse.redirect(new URL("/api/internal/zalo/oauth/start", request.url), 303);
+  return NextResponse.redirect(new URL("/api/internal/zalo/oauth/start", getPublicAppBaseUrl()), 303);
 }

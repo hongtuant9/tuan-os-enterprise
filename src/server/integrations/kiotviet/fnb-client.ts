@@ -6,19 +6,31 @@ export type KiotVietFnbResult<T = unknown> = {
   data: T | null;
 };
 
+type TokenCache = { value: string; expiresAt: number } | null;
+
 const TOKEN_URL = "https://api.fnb.kiotviet.vn/identity/connect/token";
 const API_BASE = "https://publicfnb.kiotapi.com";
 
 export class KiotVietFnbClient {
-  private readonly clientId = process.env.KIOTVIET_CLIENT_ID;
-  private readonly clientSecret = process.env.KIOTVIET_CLIENT_SECRET;
-  private readonly retailer = process.env.KIOTVIET_RETAILER;
+  private readonly clientId = process.env.KIOTVIET_FNB_CLIENT_ID || process.env.KIOTVIET_CLIENT_ID;
+  private readonly clientSecret = process.env.KIOTVIET_FNB_CLIENT_SECRET || process.env.KIOTVIET_CLIENT_SECRET;
+  private readonly retailer = process.env.KIOTVIET_FNB_RETAILER || process.env.KIOTVIET_RETAILER;
+  private tokenCache: TokenCache = null;
 
   isConfigured() {
     return Boolean(this.clientId && this.clientSecret && this.retailer);
   }
 
+  configState() {
+    return {
+      clientId: Boolean(this.clientId),
+      clientSecret: Boolean(this.clientSecret),
+      retailer: Boolean(this.retailer),
+    };
+  }
+
   private async token(): Promise<string> {
+    if (this.tokenCache && Date.now() < this.tokenCache.expiresAt) return this.tokenCache.value;
     if (!this.clientId || !this.clientSecret) throw new Error("KIOTVIET FNB credentials chưa cấu hình.");
     const body = new URLSearchParams({
       scope: "PublicApi.Access.FNB",
@@ -33,14 +45,16 @@ export class KiotVietFnbClient {
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
-    if (!res.ok) throw new Error("KiotViet FNB token HTTP " + res.status);
-    const data = await res.json() as { access_token?: string };
-    if (!data.access_token) throw new Error("KiotViet FNB token thiếu access_token.");
+    if (!res.ok) throw new Error("KiotViet F&B token HTTP " + res.status);
+    const data = await res.json() as { access_token?: string; expires_in?: number };
+    if (!data.access_token) throw new Error("KiotViet F&B token thiếu access_token.");
+    const ttlMs = Math.max(60, Number(data.expires_in ?? 3600) - 60) * 1000;
+    this.tokenCache = { value: data.access_token, expiresAt: Date.now() + ttlMs };
     return data.access_token;
   }
 
   private async request<T>(path: string): Promise<KiotVietFnbResult<T>> {
-    if (!this.retailer) throw new Error("KIOTVIET_RETAILER chưa cấu hình.");
+    if (!this.retailer) throw new Error("KIOTVIET_FNB_RETAILER chưa cấu hình.");
     const accessToken = await this.token();
     const res = await fetch(API_BASE + path, {
       headers: {

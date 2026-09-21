@@ -15,6 +15,8 @@ const executiveWorkerEnabled = companyAutopilotEnabled && process.env.TCE_EXECUT
 const executiveIntervalMs = Math.max(300_000, Number(process.env.TCE_EXECUTIVE_WORKER_INTERVAL_MS || 300_000));
 const syncWorkerEnabled = companyAutopilotEnabled && process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const syncWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_SYNC_WORKER_INTERVAL_MS || 300_000));
+const cozyPurchaseWorkerEnabled = companyAutopilotEnabled && process.env.TCE_COZY_PURCHASE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const cozyPurchaseWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_COZY_PURCHASE_WORKER_INTERVAL_MS || 900_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -35,6 +37,7 @@ const cmiToken = deriveToken("cmi-worker-v1");
 const staffOpsToken = deriveToken("tce-staff-ops-worker-v1");
 const executiveToken = deriveToken("tce-executive-worker-v1");
 const syncWorkerToken = deriveToken("tce-sync-worker-v1");
+const cozyPurchaseWorkerToken = deriveToken("tce-cozy-purchase-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -139,6 +142,47 @@ async function syncWorkerTick() {
   }
 }
 
+async function cozyPurchaseWorkerTick() {
+  if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/cozy-purchase/worker",
+      "x-tce-cozy-purchase-worker-token",
+      cozyPurchaseWorkerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(`[Cozy Purchase] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped && (payload?.changed > 0 || payload?.state !== "READY_FOR_EXTRACTION")) {
+      console.log(
+        `[Cozy Purchase] state=${payload?.state ?? "n/a"} scanned=${payload?.scanned ?? 0} changed=${payload?.changed ?? 0} drive_content=${payload?.driveContentReadable ?? false} vision=${payload?.visionEnabled ?? false} kiot_probe=${payload?.kiotVietPurchaseProbeStatus ?? 0}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[Cozy Purchase] ${message}`);
+  }
+}
+
+async function cozyPurchaseWorkerLoop() {
+  if (!cozyPurchaseWorkerEnabled) {
+    console.log("[Cozy Purchase] disabled");
+    return;
+  }
+  if (!cozyPurchaseWorkerToken) {
+    console.error("[Cozy Purchase] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[Cozy Purchase] enabled interval_ms=${cozyPurchaseWorkerIntervalMs}`);
+  await sleep(30000);
+  while (!stopping) {
+    await cozyPurchaseWorkerTick();
+    await sleep(cozyPurchaseWorkerIntervalMs);
+  }
+}
+
 async function syncWorkerLoop() {
   if (!syncWorkerEnabled) {
     console.log("[TCE Sync] disabled");
@@ -231,3 +275,4 @@ void cmiWorkerLoop();
 void staffOpsWorkerLoop();
 void executiveWorkerLoop();
 void syncWorkerLoop();
+void cozyPurchaseWorkerLoop();

@@ -10,6 +10,7 @@ type TokenCache = { value: string; expiresAt: number } | null;
 
 const TOKEN_URL = "https://api.fnb.kiotviet.vn/identity/connect/token";
 const API_BASE = "https://publicfnb.kiotapi.com";
+const RETAIL_API_BASE = "https://public.kiotapi.com";
 
 export class KiotVietFnbClient {
   private readonly clientId = process.env.KIOTVIET_FNB_CLIENT_ID || process.env.KIOTVIET_CLIENT_ID;
@@ -53,10 +54,10 @@ export class KiotVietFnbClient {
     return data.access_token;
   }
 
-  private async request<T>(path: string): Promise<KiotVietFnbResult<T>> {
+  private async requestBase<T>(base: string, path: string): Promise<KiotVietFnbResult<T>> {
     if (!this.retailer) throw new Error("KIOTVIET_FNB_RETAILER chưa cấu hình.");
     const accessToken = await this.token();
-    const res = await fetch(API_BASE + path, {
+    const res = await fetch(base + path, {
       headers: {
         Accept: "application/json",
         Retailer: this.retailer,
@@ -73,11 +74,28 @@ export class KiotVietFnbClient {
     return { ok: res.ok, status: res.status, data };
   }
 
+  private request<T>(path: string): Promise<KiotVietFnbResult<T>> {
+    return this.requestBase<T>(API_BASE, path);
+  }
+
   listInvoices(query = "") {
     return this.request("/invoices" + (query ? "?" + query : ""));
   }
 
   listBranches() {
     return this.request("/branches?pageSize=100&currentItem=0");
+  }
+
+  listProducts(query = "") {
+    return this.request("/products" + (query ? "?" + query : ""));
+  }
+
+  /**
+   * Read-only compatibility probe only.
+   * KiotViet documents purchaseorders for Retail Public API, not F&B Public API.
+   * Never infer write compatibility from docs alone; worker must see HTTP 200 first.
+   */
+  probeRetailPurchaseOrders() {
+    return this.requestBase(RETAIL_API_BASE, "/purchaseorders?pageSize=1&currentItem=0");
   }
 }

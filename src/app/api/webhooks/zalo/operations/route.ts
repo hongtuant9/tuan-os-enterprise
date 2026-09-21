@@ -13,14 +13,26 @@ function signatureConfigured() {
   );
 }
 
-function verifySignature(rawBody: string, req: NextRequest, payload: any): boolean {
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function nested(record: UnknownRecord, key: string): UnknownRecord {
+  return asRecord(record[key]);
+}
+
+function verifySignature(rawBody: string, req: NextRequest, payload: unknown): boolean {
   const mode = process.env.TCE_ZALO_WEBHOOK_SIGNATURE_MODE?.trim();
   if (mode !== "sha256_appid_data_timestamp_secret") return false;
 
   const appId = process.env.ZALO_APP_ID?.trim();
   const secret = process.env.ZALO_OA_SECRET_KEY?.trim();
   const received = req.headers.get("x-zevent-signature")?.trim().toLowerCase();
-  const timestamp = String(payload?.timestamp ?? payload?.time ?? payload?.data?.timestamp ?? "");
+  const root = asRecord(payload);
+  const data = nested(root, "data");
+  const timestamp = String(root.timestamp ?? root.time ?? data.timestamp ?? "");
   if (!appId || !secret || !received || !timestamp) return false;
 
   // Zalo community/support references this composition for X-ZEvent-Signature.

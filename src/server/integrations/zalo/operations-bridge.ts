@@ -45,62 +45,82 @@ export type ZaloOpsResult = {
   responseText: string;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function nested(record: UnknownRecord, key: string): UnknownRecord {
+  return asRecord(record[key]);
+}
+
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function findText(payload: any): string {
+function findText(payload: unknown): string {
+  const root = asRecord(payload);
+  const message = nested(root, "message");
+  const data = nested(root, "data");
+  const dataMessage = nested(data, "message");
   return (
-    normalizeText(payload?.message?.text) ||
-    normalizeText(payload?.data?.message?.text) ||
-    normalizeText(payload?.message?.content) ||
-    normalizeText(payload?.data?.text) ||
-    normalizeText(payload?.text)
+    normalizeText(message.text) ||
+    normalizeText(dataMessage.text) ||
+    normalizeText(message.content) ||
+    normalizeText(data.text) ||
+    normalizeText(root.text)
   );
 }
 
-function countAttachments(payload: any): number {
-  const candidates = [
-    payload?.message?.attachments,
-    payload?.data?.message?.attachments,
-    payload?.attachments,
-  ];
+function countAttachments(payload: unknown): number {
+  const root = asRecord(payload);
+  const message = nested(root, "message");
+  const data = nested(root, "data");
+  const dataMessage = nested(data, "message");
+  const candidates = [message.attachments, dataMessage.attachments, root.attachments];
   for (const value of candidates) if (Array.isArray(value)) return value.length;
   return 0;
 }
 
 export function parseZaloOpsEvent(payload: unknown): ZaloOpsEvent {
-  const p = payload as any;
-  const text = findText(p);
-  const timestampRaw = p?.timestamp ?? p?.time ?? p?.data?.timestamp ?? null;
+  const root = asRecord(payload);
+  const message = nested(root, "message");
+  const data = nested(root, "data");
+  const dataMessage = nested(data, "message");
+  const sender = nested(root, "sender");
+  const dataSender = nested(data, "sender");
+  const recipient = nested(root, "recipient");
+  const text = findText(root);
+  const timestampRaw = root.timestamp ?? root.time ?? data.timestamp ?? null;
   const timestamp = Number.isFinite(Number(timestampRaw)) ? Number(timestampRaw) : null;
   const senderId =
-    normalizeText(p?.sender?.id) ||
-    normalizeText(p?.sender?.user_id) ||
-    normalizeText(p?.data?.sender?.id) ||
-    normalizeText(p?.user_id) ||
+    normalizeText(sender.id) ||
+    normalizeText(sender.user_id) ||
+    normalizeText(dataSender.id) ||
+    normalizeText(root.user_id) ||
     null;
   const senderName =
-    normalizeText(p?.sender?.name) ||
-    normalizeText(p?.sender?.display_name) ||
-    normalizeText(p?.data?.sender?.name) ||
+    normalizeText(sender.name) ||
+    normalizeText(sender.display_name) ||
+    normalizeText(dataSender.name) ||
     null;
   const groupId =
-    normalizeText(p?.group_id) ||
-    normalizeText(p?.recipient?.group_id) ||
-    normalizeText(p?.data?.group_id) ||
-    normalizeText(p?.conversation_id) ||
+    normalizeText(root.group_id) ||
+    normalizeText(recipient.group_id) ||
+    normalizeText(data.group_id) ||
+    normalizeText(root.conversation_id) ||
     null;
   const messageId =
-    normalizeText(p?.message?.msg_id) ||
-    normalizeText(p?.message?.id) ||
-    normalizeText(p?.data?.message?.msg_id) ||
-    normalizeText(p?.msg_id) ||
+    normalizeText(message.msg_id) ||
+    normalizeText(message.id) ||
+    normalizeText(dataMessage.msg_id) ||
+    normalizeText(root.msg_id) ||
     null;
   const eventName =
-    normalizeText(p?.event_name) ||
-    normalizeText(p?.event) ||
-    normalizeText(p?.type) ||
+    normalizeText(root.event_name) ||
+    normalizeText(root.event) ||
+    normalizeText(root.type) ||
     "unknown";
   const eventId = [
     eventName,

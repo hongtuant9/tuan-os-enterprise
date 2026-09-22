@@ -7,7 +7,7 @@ import {
   captureConversationStyleFeedbackAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
-  getLavenderRoomOptionsAction,
+  getHomestayRoomOptionsAction,
   prepareBookingDraftAction,
   requestBookingExecutionApprovalAction,
   submitPilotMessage,
@@ -422,22 +422,128 @@ function KnowledgeCard({ candidate, canManage }: { candidate: KnowledgeCandidate
 
 function BookingDraftLab({ conversations, canManage }: { conversations: ReceptionistConversation[]; canManage: boolean }) {
   const router = useRouter();
+  type PropertyName = "Lavender Homestay" | "Ruby Homestay";
+  const firstProperty: PropertyName = conversations[0]?.propertyName === "Ruby Homestay" ? "Ruby Homestay" : "Lavender Homestay";
   const [conversationId, setConversationId] = useState(conversations[0]?.id ?? "");
-  const [guestName, setGuestName] = useState(""); const [guestContact, setGuestContact] = useState("");
-  const [checkIn, setCheckIn] = useState(""); const [checkOut, setCheckOut] = useState("");
-  const [adults, setAdults] = useState(2); const [children, setChildren] = useState(0); const [roomCount, setRoomCount] = useState(1);
+  const [propertyName, setPropertyName] = useState<PropertyName>(firstProperty);
+  const [guestName, setGuestName] = useState("");
+  const [guestContact, setGuestContact] = useState("");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [adults, setAdults] = useState(2);
+  const [children, setChildren] = useState(0);
+  const [roomCount, setRoomCount] = useState(1);
   const [roomOptions, setRoomOptions] = useState<Array<{id:string;code:string;name:string;available:number;version:number;branchId:number;checkedAt:string;requestId:string|null}>>([]);
-  const [roomClassId, setRoomClassId] = useState(""); const [quotedPrice, setQuotedPrice] = useState(""); const [priceSource, setPriceSource] = useState("");
-  const [feedback, setFeedback] = useState(""); const [lastBookingId, setLastBookingId] = useState(""); const [pending, startTransition] = useTransition();
-  const selectedConversation = conversations.find((item) => item.id === conversationId); const selectedRoom = roomOptions.find((item) => item.id === roomClassId);
-  function loadRooms() { setFeedback(""); startTransition(async () => { const result = await getLavenderRoomOptionsAction(checkIn, checkOut); if (!result.ok) return setFeedback(result.error); setRoomOptions(result.data ?? []); setRoomClassId(result.data?.[0]?.id ?? ""); setFeedback(`Đã đọc ${result.data?.length ?? 0} hạng phòng Lavender còn trống từ KiotViet.`); }); }
-  function createDraft() { setFeedback(""); if (!selectedRoom) return setFeedback("Hãy tải và chọn hạng phòng trực tiếp từ KiotViet."); startTransition(async () => { const result = await prepareBookingDraftAction({ conversationId, propertyId: selectedConversation?.propertyId ?? null, guestName, guestContact, checkIn, checkOut, adults, children, roomCount, roomClassId: selectedRoom.id, roomClassName: selectedRoom.name, quotedPrice: quotedPrice ? Number(quotedPrice) : null, priceSource: priceSource || null, availabilityEvidence: { branchId: selectedRoom.branchId, roomClassVersion: selectedRoom.version, available: selectedRoom.available, checkedAt: selectedRoom.checkedAt, requestId: selectedRoom.requestId } }); if (!result.ok) return setFeedback(result.error); setLastBookingId(result.data?.bookingId ?? ""); setFeedback(result.data?.duplicate ? "Bản nháp đặt phòng trùng đã tồn tại; không tạo bản ghi mới." : "Đã tạo bản nháp đặt phòng nội bộ. Chưa ghi KiotViet, chưa gửi khách."); router.refresh(); }); }
-  function requestApproval() { if (!lastBookingId) return; setFeedback(""); startTransition(async () => { const result = await requestBookingExecutionApprovalAction(lastBookingId); if (!result.ok) return setFeedback(result.error); setFeedback(`Đã tạo yêu cầu phê duyệt ${result.data?.reviewId?.slice(0,8) ?? ""}. Quyền ghi KiotViet vẫn khóa.`); router.refresh(); }); }
-  return <div className="mb-6 rounded-xl border border-[var(--accent)]/25 bg-[var(--surface)] p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-[var(--ink-primary)]">Phòng thử nghiệm bản nháp đặt phòng</h3><p className="mt-1 text-sm text-[var(--ink-muted)]">Chỉ quản lý · KiotViet chỉ đọc · bản nháp CRM nội bộ · chưa gửi xác nhận cho khách.</p></div><Pill label="GHI DỮ LIỆU: KHÓA" tone="warn" /></div>
-    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><select value={conversationId} onChange={(e)=>setConversationId(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"><option value="">Chọn hội thoại</option>{conversations.map((c)=><option key={c.id} value={c.id}>{c.customerName} · {c.intent}</option>)}</select><input value={guestName} onChange={(e)=>setGuestName(e.target.value)} placeholder="Tên khách" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input value={guestContact} onChange={(e)=>setGuestContact(e.target.value)} placeholder="Liên hệ" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><div className="grid grid-cols-2 gap-2"><input type="date" value={checkIn} onChange={(e)=>setCheckIn(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2 py-2 text-sm"/><input type="date" value={checkOut} onChange={(e)=>setCheckOut(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2 py-2 text-sm"/></div></div>
-    <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!canManage||pending||!checkIn||!checkOut} onClick={loadRooms} className="rounded-lg border border-[var(--accent)]/40 px-3 py-2 text-sm font-medium text-[var(--accent)] disabled:opacity-40">Đọc phòng trống KiotViet</button><select value={roomClassId} onChange={(e)=>setRoomClassId(e.target.value)} className="min-w-72 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"><option value="">Chọn hạng phòng trực tiếp</option>{roomOptions.map((r)=><option key={r.id} value={r.id}>{r.name} · còn {r.available}</option>)}</select><input type="number" min="1" value={roomCount} onChange={(e)=>setRoomCount(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input type="number" min="1" value={adults} onChange={(e)=>setAdults(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input type="number" min="0" value={children} onChange={(e)=>setChildren(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/></div>
-    <div className="mt-3 grid gap-3 md:grid-cols-2"><input value={quotedPrice} onChange={(e)=>setQuotedPrice(e.target.value)} placeholder="Giá đã xác minh (VERIFIED) (để trống nếu chưa có)" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input value={priceSource} onChange={(e)=>setPriceSource(e.target.value)} placeholder="Nguồn giá đã xác minh (VERIFIED), ví dụ Master Sheet 03_GIA..." className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/></div>
-    <button type="button" disabled={!canManage||pending||!conversationId||!guestName||!selectedRoom} onClick={createDraft} className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{pending?"Đang xử lý...":"Tạo bản nháp đặt phòng nội bộ"}</button>{lastBookingId&&<button type="button" disabled={!canManage||pending} onClick={requestApproval} className="ml-2 mt-4 rounded-lg border border-[var(--accent)]/40 px-4 py-2.5 text-sm font-semibold text-[var(--accent)] disabled:opacity-40">Gửi phê duyệt A2 thử nghiệm</button>}{feedback&&<p className="mt-3 text-sm text-[var(--ink-secondary)]">{feedback}</p>}</div>;
+  const [roomClassId, setRoomClassId] = useState("");
+  const [quotedPrice, setQuotedPrice] = useState("");
+  const [priceSource, setPriceSource] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [lastBookingId, setLastBookingId] = useState("");
+  const [pending, startTransition] = useTransition();
+  const selectedConversation = conversations.find((item) => item.id === conversationId);
+  const selectedRoom = roomOptions.find((item) => item.id === roomClassId);
+
+  function onConversationChange(nextId: string) {
+    setConversationId(nextId);
+    const conversation = conversations.find((item) => item.id === nextId);
+    if (conversation?.propertyName === "Lavender Homestay" || conversation?.propertyName === "Ruby Homestay") {
+      setPropertyName(conversation.propertyName);
+    }
+    setRoomOptions([]);
+    setRoomClassId("");
+  }
+
+  function loadRooms() {
+    setFeedback("");
+    startTransition(async () => {
+      const result = await getHomestayRoomOptionsAction(propertyName, checkIn, checkOut);
+      if (!result.ok) return setFeedback(result.error);
+      setRoomOptions(result.data ?? []);
+      setRoomClassId(result.data?.[0]?.id ?? "");
+      setFeedback("Đã đọc " + (result.data?.length ?? 0) + " hạng phòng " + propertyName + " còn trống từ KiotViet Hotel.");
+    });
+  }
+
+  function createDraft() {
+    setFeedback("");
+    if (!selectedRoom) return setFeedback("Hãy tải và chọn hạng phòng trực tiếp từ KiotViet Hotel.");
+    startTransition(async () => {
+      const propertyMatchesConversation = selectedConversation?.propertyName === propertyName;
+      const result = await prepareBookingDraftAction({
+        conversationId,
+        propertyId: propertyMatchesConversation ? selectedConversation?.propertyId ?? null : null,
+        guestName,
+        guestContact,
+        checkIn,
+        checkOut,
+        adults,
+        children,
+        roomCount,
+        roomClassId: selectedRoom.id,
+        roomClassName: propertyName + " · " + selectedRoom.name,
+        quotedPrice: quotedPrice ? Number(quotedPrice) : null,
+        priceSource: priceSource || null,
+        availabilityEvidence: {
+          branchId: selectedRoom.branchId,
+          roomClassVersion: selectedRoom.version,
+          available: selectedRoom.available,
+          checkedAt: selectedRoom.checkedAt,
+          requestId: selectedRoom.requestId,
+        },
+      });
+      if (!result.ok) return setFeedback(result.error);
+      setLastBookingId(result.data?.bookingId ?? "");
+      setFeedback(result.data?.duplicate ? "Bản nháp đặt phòng trùng đã tồn tại; không tạo bản ghi mới." : "Đã tạo bản nháp đặt phòng nội bộ. Chưa ghi KiotViet, chưa gửi khách.");
+      router.refresh();
+    });
+  }
+
+  function requestApproval() {
+    if (!lastBookingId) return;
+    setFeedback("");
+    startTransition(async () => {
+      const result = await requestBookingExecutionApprovalAction(lastBookingId);
+      if (!result.ok) return setFeedback(result.error);
+      setFeedback("Đã tạo yêu cầu phê duyệt " + (result.data?.reviewId?.slice(0,8) ?? "") + ". Quyền ghi KiotViet vẫn khóa.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-[var(--accent)]/25 bg-[var(--surface)] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-[var(--ink-primary)]">Phòng thử nghiệm bản nháp đặt phòng</h3>
+          <p className="mt-1 text-sm text-[var(--ink-muted)]">Lavender + Ruby · KiotViet Hotel chỉ đọc · bản nháp CRM nội bộ · chưa gửi xác nhận cho khách.</p>
+        </div>
+        <Pill label="GHI DỮ LIỆU: KHÓA" tone="warn" />
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <select value={conversationId} onChange={(e)=>onConversationChange(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+          <option value="">Chọn hội thoại</option>
+          {conversations.map((conversation)=><option key={conversation.id} value={conversation.id}>{conversation.customerName} · {conversation.intent}</option>)}
+        </select>
+        <select value={propertyName} onChange={(e)=>{ setPropertyName(e.target.value as PropertyName); setRoomOptions([]); setRoomClassId(""); }} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+          <option value="Lavender Homestay">Lavender Homestay</option>
+          <option value="Ruby Homestay">Ruby Homestay</option>
+        </select>
+        <input value={guestName} onChange={(e)=>setGuestName(e.target.value)} placeholder="Tên khách" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
+        <input value={guestContact} onChange={(e)=>setGuestContact(e.target.value)} placeholder="Liên hệ" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
+        <div className="grid grid-cols-2 gap-2"><input type="date" value={checkIn} onChange={(e)=>setCheckIn(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2 py-2 text-sm"/><input type="date" value={checkOut} onChange={(e)=>setCheckOut(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2 py-2 text-sm"/></div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={!canManage||pending||!checkIn||!checkOut} onClick={loadRooms} className="rounded-lg border border-[var(--accent)]/40 px-3 py-2 text-sm font-medium text-[var(--accent)] disabled:opacity-40">Đọc phòng trống KiotViet Hotel</button>
+        <select value={roomClassId} onChange={(e)=>setRoomClassId(e.target.value)} className="min-w-72 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"><option value="">Chọn hạng phòng trực tiếp</option>{roomOptions.map((room)=><option key={room.id} value={room.id}>{propertyName} · {room.name} · còn {room.available}</option>)}</select>
+        <input type="number" min="1" value={roomCount} onChange={(e)=>setRoomCount(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
+        <input type="number" min="1" value={adults} onChange={(e)=>setAdults(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
+        <input type="number" min="0" value={children} onChange={(e)=>setChildren(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2"><input value={quotedPrice} onChange={(e)=>setQuotedPrice(e.target.value)} placeholder="Giá đã xác minh (VERIFIED) (để trống nếu chưa có)" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input value={priceSource} onChange={(e)=>setPriceSource(e.target.value)} placeholder="Nguồn giá đã xác minh (VERIFIED), ví dụ Master Sheet 03_GIA..." className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/></div>
+      <button type="button" disabled={!canManage||pending||!conversationId||!guestName||!selectedRoom} onClick={createDraft} className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{pending?"Đang xử lý...":"Tạo bản nháp đặt phòng nội bộ"}</button>
+      {lastBookingId&&<button type="button" disabled={!canManage||pending} onClick={requestApproval} className="ml-2 mt-4 rounded-lg border border-[var(--accent)]/40 px-4 py-2.5 text-sm font-semibold text-[var(--accent)] disabled:opacity-40">Gửi phê duyệt A2 thử nghiệm</button>}
+      {feedback&&<p className="mt-3 text-sm text-[var(--ink-secondary)]">{feedback}</p>}
+    </div>
+  );
 }
 
 function PilotLab({ backlog, mode }: { backlog: string[]; mode: ReceptionistDashboard["mode"] }) {
@@ -483,7 +589,7 @@ function PilotLab({ backlog, mode }: { backlog: string[]; mode: ReceptionistDash
           <input value={scenarioTag} onChange={(e) => setScenarioTag(e.target.value)} placeholder="Nhãn tình huống" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60" />
           <input value={conversationId} onChange={(e) => setConversationId(e.target.value)} placeholder="Mã hội thoại để tiếp tục nhiều lượt" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60" />
         </div>
-        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Ví dụ: Cuối tuần này Lavender còn phòng cho 2 người không? Giá có bao gồm bữa sáng không?" className="mt-4 min-h-36 w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-3 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60" />
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Ví dụ: Cuối tuần này Ruby còn phòng cho 2 người không? Hoặc Lavender còn phòng Family không?" className="mt-4 min-h-36 w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-3 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60" />
         <button type="button" onClick={submit} disabled={pending || !content.trim()} className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{pending ? "AI đang xử lý..." : "Gửi tin nhắn thử nghiệm"}</button>
         {reply && <div className="mt-5 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Phản hồi dự kiến</p><p className="mt-2 text-sm leading-6 text-[var(--ink-primary)]">{reply}</p></div>}
         {error && <p className="mt-4 text-sm text-[var(--status-bad)]">{error}</p>}

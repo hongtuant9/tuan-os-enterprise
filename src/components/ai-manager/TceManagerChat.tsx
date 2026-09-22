@@ -36,8 +36,8 @@ function permissionLabel(permission: string) {
   return permission;
 }
 
-export default function TceManagerChat() {
-  const [message, setMessage] = useState("");
+export default function TceManagerChat({ initialMessage = "" }: { initialMessage?: string }) {
+  const [message, setMessage] = useState(initialMessage);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();

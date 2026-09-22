@@ -68,13 +68,10 @@ function Kpi({ label, value, icon, tone, note }: { label: string; value: string;
 }
 
 function TinyChart() {
-  const heights=[46,55,60,52,61,64,70];
   return (
     <div className="relative h-[105px]">
-      <div className="absolute inset-x-[16px] bottom-[18px] top-[10px] grid grid-rows-3 border-b border-[#dae6f2]">{[0,1,2].map(i=><span key={i} className="border-t border-[#e5edf6]"/>)}</div>
-      <div className="absolute inset-x-[18px] bottom-[18px] top-[10px] flex items-end gap-[3px]">{heights.map((h,i)=><div key={i} className="flex h-full flex-1 items-end gap-[2px]"><span className="w-1/2 rounded-t bg-[#4a86ef]" style={{height:h+"%"}}/><span className="w-1/2 rounded-t bg-[#ff6874]" style={{height:Math.max(23,h-18)+"%"}}/></div>)}</div>
-      <svg className="absolute left-[24px] top-[18px] h-[60px] w-[calc(100%-48px)]" viewBox="0 0 700 60" preserveAspectRatio="none"><polyline points="0,40 115,41 230,34 345,39 460,26 575,30 700,18" fill="none" stroke="#14b768" strokeWidth="3"/>{[0,115,230,345,460,575,700].map((x,i)=><circle key={i} cx={x} cy={[40,41,34,39,26,30,18][i]} r="4" fill="#14b768"/>)}</svg>
-      <div className="absolute bottom-[2px] left-[22px] right-[22px] flex justify-around text-[5.5px] text-[#7186a7]">{["15","16","17","18","19","20","21"].map(x=><span key={x}>{x}</span>)}</div>
+      <div className="absolute inset-x-[16px] bottom-[18px] top-[10px] grid grid-rows-3 border-b border-l border-[#dae6f2]">{[0,1,2].map(i=><span key={i} className="border-t border-[#e5edf6]"/>)}</div>
+      <div className="absolute inset-0 grid place-items-center"><span className="rounded-[6px] border border-[#dce8f4] bg-white/95 px-[8px] py-[5px] text-[6px] font-bold text-[#6f83a5]">Daily series · NEED VERIFY</span></div>
     </div>
   );
 }
@@ -89,12 +86,12 @@ export default function MobileExecutiveDashboard(props: ExecutiveDashboardProps)
           <div className="flex items-center gap-2"><span className="relative grid h-[24px] w-[24px] place-items-center rounded-full bg-[#f2f5fa] text-[10px] font-extrabold text-[#ff4354]">!<span className="absolute -right-1 -top-1 grid h-[14px] w-[14px] place-items-center rounded-full bg-[#ff4354] text-[7px] font-bold text-white">3</span></span><span className="grid h-[24px] w-[24px] place-items-center rounded-full bg-[#eef3fb] text-[10px] font-bold text-[#2f7cf4]">T</span></div>
         </div>
         <h1 className="mt-[3px] whitespace-nowrap text-[13px] font-extrabold leading-[16px] tracking-[-0.01em] text-[#071b45]">Executive Dashboard – Tổng quan điều hành</h1>
-        <p className="mt-[3px] truncate text-[7px] text-[#7185a8]">Lavender Homestay · Cozy Garden · Hệ thống vận hành</p>
+        <p className="mt-[3px] truncate text-[7px] text-[#7185a8]">Lavender Homestay · Ruby Homestay · Cozy Garden · Hệ thống vận hành</p>
       </header>
       <div className="border-y border-[#d9e6f4] bg-[#f4f8fd] px-[10px] py-[6px]">
         <div className="flex h-[26px] items-center gap-1 rounded-[8px] border border-[#d9e5f2] bg-white px-[6px]">
-          {["Hôm nay","7 ngày","Tháng"].map((x,i)=><button key={x} type="button" className={"h-[18px] min-w-[52px] rounded-[5px] px-2 text-[7px] font-semibold " + (i===0?"bg-[#2d7ef4] text-white":"border border-[#dbe6f2] bg-white text-[#2a436c]")}>{x}</button>)}
-          <button type="button" className="h-[18px] min-w-[82px] rounded-[5px] border border-[#dbe6f2] bg-white px-2 text-[7px] font-semibold text-[#2a436c]">Tất cả cơ sở</button>
+          {([["today","Hôm nay"],["7d","7 ngày"],["month","Tháng"]] as const).map(([key,label])=><Link key={key} href={key==="today"?"/":"/?period="+key} className={"grid h-[18px] min-w-[52px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (props.period===key?"bg-[#2d7ef4] text-white":"border border-[#dbe6f2] bg-white text-[#2a436c]")}>{label}</Link>)}
+          <span className="grid h-[18px] min-w-[82px] place-items-center rounded-[5px] border border-[#dbe6f2] bg-white px-2 text-[7px] font-semibold text-[#2a436c]">Tất cả cơ sở</span>
         </div>
       </div>
 
@@ -116,12 +113,13 @@ export default function MobileExecutiveDashboard(props: ExecutiveDashboardProps)
               ["Q","Quá hạn",props.actionCenter.overdue,"bg-[#ffa20e]"],
             ].map(([icon,label,value,bg])=><div key={String(label)} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[5px]"><div className="flex items-center gap-[4px]"><span className={"grid h-[21px] w-[21px] place-items-center rounded-[6px] text-[9px] font-bold text-white " + bg}>{icon}</span><span><small className="block truncate text-[5.5px] text-[#7084a7]">{label}</small><b className="text-[9px]">{String(value)}</b></span></div></div>)}
           </div>
-          <div className="mt-[7px] space-y-[2px]">{props.actionCenter.items.slice(0,3).map((x,i)=><div key={x.id} className={"grid min-h-[23px] grid-cols-[1fr_60px_55px] items-center rounded-[5px] px-[5px] text-[6.5px] " + (i%2===0?"bg-[#f6f9fd]":"bg-white")}><b className="truncate">{x.title}</b><span className="truncate">{x.priority==="P0"?"Critical":x.priority==="P1"?"High":"Medium"}</span><span className="truncate">{x.due?.slice(-5) || "—"}</span></div>)}</div>
+          <div className="mt-[7px] space-y-[2px]">{props.actionCenter.items.slice(0,3).map((x,i)=><Link href={"/ai-manager?taskId="+encodeURIComponent(x.id)} key={x.id} className={"grid min-h-[23px] grid-cols-[1fr_60px_55px] items-center rounded-[5px] px-[5px] text-[6.5px] " + (i%2===0?"bg-[#f6f9fd]":"bg-white")}><b className="truncate">{x.title}</b><span className="truncate">{x.priority==="P0"?"Critical":x.priority==="P1"?"High":"Medium"}</span><span className="truncate">{x.due?.slice(-5) || "—"}</span></Link>)}</div>
         </Card>
 
         <Card>
           <h2 className="text-[11px] font-extrabold">2. Hoạt động kinh doanh</h2><p className="mt-[2px] text-[6.5px] text-[#7185a7]">KiotViet Actual · Verified</p>
           <div className="mt-[7px] grid grid-cols-2 gap-[5px]">{[["Doanh thu",money(props.revenue.total)],["Chi phí",money(props.finance.costEstimate)],["Lợi nhuận",money(props.finance.profitEstimate)],["Biên LN",props.finance.marginEstimate.toFixed(1).replace(".",",")+"%"]].map(([l,v])=><div key={l} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><small className="text-[6px] text-[#7084a7]">{l}</small><b className="mt-[2px] block text-[9px]">{v}</b></div>)}</div>
+          <div className="mt-[6px] grid grid-cols-3 gap-[4px]">{[["Lavender",props.revenue.lavender],["Ruby",props.revenue.ruby],["Cozy",props.revenue.cozy]].map(([name,value])=><div key={String(name)} className="rounded-[6px] bg-[#f6f9fd] p-[5px] text-center"><small className="block text-[5.5px] text-[#6f83a5]">{name}</small><b className="mt-[2px] block text-[7px]">{money(Number(value))}</b></div>)}</div>
           <div className="mt-[7px]"><TinyChart/></div>
         </Card>
 

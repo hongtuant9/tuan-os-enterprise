@@ -45,17 +45,26 @@ export async function submitPilotMessage(input: {
   }
 }
 
-export async function getLavenderRoomOptionsAction(checkIn: string, checkOut: string): Promise<ActionResult<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }[]>> {
+export async function getHomestayRoomOptionsAction(
+  propertyName: "Lavender Homestay" | "Ruby Homestay",
+  checkIn: string,
+  checkOut: string,
+): Promise<ActionResult<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }[]>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
   if (!session) return { ok: false, error: "Anh cần đăng nhập để đọc phòng trống." };
+  if (!['Lavender Homestay', 'Ruby Homestay'].includes(propertyName)) return { ok: false, error: "Cơ sở không hợp lệ." };
   if (!checkIn || !checkOut || checkOut <= checkIn) return { ok: false, error: "Khoảng ngày không hợp lệ." };
   try {
-    const data = await getAdminContainer().aiReceptionist.getLavenderRoomOptions(checkIn, checkOut);
+    const data = await getAdminContainer().aiReceptionist.getHomestayRoomOptions(propertyName, checkIn, checkOut);
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Không thể đọc phòng trống KiotViet." };
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể đọc phòng trống KiotViet Hotel." };
   }
+}
+
+export async function getLavenderRoomOptionsAction(checkIn: string, checkOut: string) {
+  return getHomestayRoomOptionsAction("Lavender Homestay", checkIn, checkOut);
 }
 
 export async function prepareBookingDraftAction(input: {

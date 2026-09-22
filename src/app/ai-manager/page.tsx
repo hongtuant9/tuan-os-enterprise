@@ -93,7 +93,7 @@ function WorkList({ title, items, empty, tone = "default", defaultOpen = false }
       </summary>
       <div className="space-y-2 border-t border-white/[0.06] px-5 pb-5 pt-3">
         {items.length === 0 ? <p className="text-sm text-[var(--ink-muted)]">{empty}</p> : items.map((item) => (
-          <div key={item.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-3 py-3">
+          <div id={"task-" + item.id} key={item.id} className="scroll-mt-6 rounded-xl border border-white/[0.05] bg-white/[0.025] px-3 py-3">
             <div className="flex items-start justify-between gap-3">
               <span className="text-sm font-medium text-[var(--ink-primary)]">{item.title}</span>
               <span className="rounded-full bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-[var(--ink-muted)]">{item.priority}</span>
@@ -124,7 +124,13 @@ function WorkList({ title, items, empty, tone = "default", defaultOpen = false }
   );
 }
 
-export default async function AiManagerPage() {
+export default async function AiManagerPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ taskId?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const requestedTaskId = params.taskId?.trim() || null;
   const container = await getRequestContainer();
   const [{ data: taskRows }, { data: activityRows }, { data: syncRows }, { data: syncSources }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
@@ -150,6 +156,7 @@ export default async function AiManagerPage() {
   ];
 
   const items: ManagerWorkItem[] = buildManagerItems(tasks, syncRecords);
+  const requestedTask = requestedTaskId ? items.find((item) => item.id === requestedTaskId) ?? null : null;
   const brief = buildManagerBrief(items, authorities);
   const ceoSupportItems = items
     .filter((item) => item.status !== "DONE" && item.needsCeoSupport)
@@ -245,6 +252,17 @@ export default async function AiManagerPage() {
             </CollapsibleSection>
           </div>
 
+          {requestedTask ? (
+            <section className="mt-5 rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Việc được mở từ Action Center</p>
+              <h2 className="mt-1 text-sm font-semibold text-white">{requestedTask.title}</h2>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">{requestedTask.id} · {requestedTask.priority} · Phụ trách: {requestedTask.resolutionOwner ?? requestedTask.owner ?? requestedTask.agent}</p>
+              {requestedTask.nextAction ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">Bước tiếp theo: {requestedTask.nextAction}</p> : null}
+            </section>
+          ) : requestedTaskId ? (
+            <section className="mt-5 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm text-amber-200">Không tìm thấy task {requestedTaskId} trong runtime hiện tại.</section>
+          ) : null}
+
           <div className="mt-5">
             <WorkList title="CEO cần hỗ trợ — hành động cụ thể" items={ceoSupportItems} empty="Hiện không có công việc nào cần CEO thao tác hoặc quyết định." tone="ceo" defaultOpen={ceoSupportItems.length > 0} />
           </div>
@@ -259,7 +277,7 @@ export default async function AiManagerPage() {
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
             <CollapsibleSection title="Giao việc cho quản lý AI của TCE" defaultOpen>
               <p className="mb-3 text-sm text-[var(--ink-muted)]">Giao việc trực tiếp tại đây. Các thay đổi L2/L3 vẫn đi qua cổng phê duyệt.</p>
-              <TceManagerChat />
+              <TceManagerChat initialMessage={requestedTask ? "Giao việc / xử lý " + requestedTask.id + " — " + requestedTask.title : ""} />
             </CollapsibleSection>
 
             <CollapsibleSection title="Hoạt động gần đây" count={(activityRows ?? []).length}>

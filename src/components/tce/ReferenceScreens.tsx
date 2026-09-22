@@ -39,7 +39,7 @@ const tones: Record<Tone, { box: string; icon: string; delta: string }> = {
 const meta: Record<ScreenKey, ScreenMeta> = {
   business: {
     title: "Kinh doanh – Điều hành doanh thu & lợi nhuận",
-    subtitle: "Dữ liệu tổng hợp từ: Lavender Homestay | Cozy Garden | KiotViet | PMS",
+    subtitle: "Dữ liệu tổng hợp từ: Lavender Homestay | Ruby Homestay | Cozy Garden | KiotViet | PMS",
     metrics: [
       { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "So với hôm qua", tone: "blue", icon: "▮▮" },
       { label: "Doanh thu tháng", value: "—", delta: "↗", note: "So với tháng trước", tone: "green", icon: "▦" },
@@ -64,7 +64,7 @@ const meta: Record<ScreenKey, ScreenMeta> = {
   },
   operations: {
     title: "Vận hành – Công việc, tồn kho & chất lượng dịch vụ",
-    subtitle: "Theo dõi từ: Lavender Homestay | Cozy Garden | SOP | Kho | Nhân sự",
+    subtitle: "Theo dõi từ: Lavender Homestay | Ruby Homestay | Cozy Garden | SOP | Kho | Nhân sự",
     metrics: [
       { label: "Việc cần xử lý hôm nay", value: "—", delta: "↗", note: "TASK-001 / checklist", tone: "blue", icon: "▤" },
       { label: "Đã hoàn thành", value: "—", delta: "↗", note: "Evidence-to-close", tone: "green", icon: "✓" },
@@ -220,8 +220,8 @@ function Section({
   icon?: string;
 }) {
   return (
-    <section className={"overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
-      <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-[#edf3f8] px-3 py-2">
+    <section className={"flex min-h-0 flex-col overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
+      <div className="flex min-h-[44px] shrink-0 items-center justify-between gap-3 border-b border-[#edf3f8] px-3 py-2">
         <div className="flex min-w-0 items-start gap-2">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f4ff] text-[13px] font-bold text-[#1768df]"><UiIcon kind={title + " " + icon} className="h-[15px] w-[15px]" /></span>
           <div className="min-w-0">
@@ -231,7 +231,7 @@ function Section({
         </div>
         {action || null}
       </div>
-      {children}
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable]">{children}</div>
     </section>
   );
 }
@@ -241,12 +241,12 @@ function Status({ label = "NEED VERIFY", tone = "amber" }: { label?: string; ton
   return <span className={"inline-flex max-w-full items-center gap-0.5 whitespace-nowrap rounded-full px-1 py-0.5 text-[7px] font-bold " + cls}><span className="h-1 w-1 shrink-0 rounded-full bg-current" />{label}</span>;
 }
 
-function DataTable({ columns, rows = 6, data }: { columns: string[]; rows?: number; data?: string[][] }) {
+function DataTable({ columns, data }: { columns: string[]; rows?: number; data?: string[][] }) {
   const liveRows = data?.length ? data : null;
   return (
-    <div className="overflow-hidden">
-      <table className="w-full table-fixed text-left text-[9px]">
-        <thead className="bg-[#f2f7fc] text-[#2f4d7a]">
+    <div className="max-h-full overflow-auto overscroll-contain [scrollbar-gutter:stable]">
+      <table className="w-full table-fixed text-left text-[9px]" style={{ minWidth: Math.max(560, columns.length * 112) }}>
+        <thead className="sticky top-0 z-10 bg-[#f2f7fc] text-[#2f4d7a]">
           <tr>{columns.map((c, i) => <th key={c} className={"px-2 py-[7px] font-bold " + (i === 0 ? "w-[34px]" : "")}>{c}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-[#e8f0f7] text-[#3e5b84]">
@@ -254,52 +254,69 @@ function DataTable({ columns, rows = 6, data }: { columns: string[]; rows?: numb
             <tr key={r} className="h-[31px]">
               {columns.map((col, i) => <td key={col + i} className="truncate px-1.5 py-1.5" title={row[i] ?? "—"}>{row[i] ?? "—"}</td>)}
             </tr>
-          )) : Array.from({ length: rows }).map((_, r) => (
-            <tr key={r} className="h-[31px]">
-              {columns.map((col, i) => (
-                <td key={col + i} className="truncate px-1.5 py-1.5">
-                  {i === 0 ? r + 1 : i === columns.length - 1 ? <Status label={r % 3 === 0 ? "Chờ dữ liệu" : "Theo dõi"} tone={r % 3 === 0 ? "amber" : "blue"} /> : "—"}
-                </td>
-              ))}
+          )) : (
+            <tr>
+              <td colSpan={columns.length} className="px-4 py-6 text-center text-[9px] text-[#7084a5]">Chưa có dữ liệu đã xác minh cho khu vực này.</td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
     </div>
   );
 }
 
-function BarLineChart({ labels = ["15/09", "16/09", "17/09", "18/09", "19/09", "20/09", "21/09"], line = true }: { labels?: string[]; line?: boolean }) {
+function BarLineChart({ labels = ["-6", "-5", "-4", "-3", "-2", "-1", "Hôm nay"] }: { labels?: string[]; line?: boolean }) {
   return (
     <div className="relative h-full min-h-[220px] px-4 pb-6 pt-4">
       <div className="absolute inset-x-5 bottom-9 top-4 grid grid-rows-4 border-b border-l border-[#dce7f1]">
         {[0,1,2,3].map(i => <div key={i} className="border-t border-[#e8eff6]" />)}
       </div>
-      <div className="absolute inset-x-9 bottom-9 top-4 flex items-end justify-around gap-4">
-        {[52,60,58,66,70,72,78].slice(0, labels.length).map((h, i) => (
-          <div key={i} className="flex h-full flex-1 items-end justify-center gap-1">
-            <span className="w-[35%] rounded-t-[2px] bg-[#3d86ee]" style={{ height: h + "%" }} />
-            <span className="w-[35%] rounded-t-[2px] bg-[#ff7a83]" style={{ height: Math.max(20, h - 20) + "%" }} />
-          </div>
-        ))}
+      <div className="absolute inset-0 grid place-items-center">
+        <div className="rounded-[7px] border border-[#dce8f4] bg-white/95 px-4 py-3 text-center">
+          <b className="block text-[9px] text-[#29486f]">Chưa có chuỗi dữ liệu đã xác minh</b>
+          <span className="mt-1 block text-[8px] text-[#7386a3]">Không vẽ xu hướng giả khi nguồn daily-series chưa sẵn sàng.</span>
+        </div>
       </div>
-      {line ? <svg className="pointer-events-none absolute inset-x-8 bottom-10 top-6 h-[150px] w-[calc(100%-4rem)]" viewBox="0 0 700 150" preserveAspectRatio="none"><polyline points="0,105 115,104 230,92 345,105 460,82 575,90 700,74" fill="none" stroke="#0caf61" strokeWidth="3"/>{[0,115,230,345,460,575,700].map((x,i)=><circle key={i} cx={x} cy={[105,104,92,105,82,90,74][i]} r="5" fill="#0caf61"/>)}</svg> : null}
-      <div className="absolute bottom-2 left-9 right-9 flex justify-around text-[8px] text-[#687fa5]">{labels.map(x => <span key={x}>{x}</span>)}</div>
+      <div className="absolute bottom-2 left-9 right-9 flex justify-around text-[8px] text-[#8b9ab0]">{labels.map(x => <span key={x}>{x}</span>)}</div>
     </div>
   );
 }
 
-function Donut({ center = "—", sub = "Chờ dữ liệu", items = ["Nhóm A", "Nhóm B"] }: { center?: string; sub?: string; items?: string[] }) {
-  const colors = ["#8051e6", "#11b974", "#ffad23", "#2c7ff1"];
+function Donut({
+  center = "—",
+  sub = "Chờ dữ liệu",
+  items = ["Nhóm A", "Nhóm B"],
+  values,
+  shares,
+}: {
+  center?: string;
+  sub?: string;
+  items?: string[];
+  values?: string[];
+  shares?: number[];
+}) {
+  const colors = ["#8051e6", "#2f7cf4", "#11b974", "#ffad23"];
+  const hasVerifiedShares = Boolean(shares && shares.length === items.length && shares.some((value) => value > 0));
+  let cursor = 0;
+  const stops: string[] = [];
+  if (hasVerifiedShares && shares) {
+    shares.forEach((share, i) => {
+      const next = Math.min(100, cursor + Math.max(0, share));
+      stops.push(colors[i % colors.length] + " " + cursor + "% " + next + "%");
+      cursor = next;
+    });
+  }
+  if (cursor < 100) stops.push("#e4edf7 " + cursor + "% 100%");
+  const gradient = "conic-gradient(" + stops.join(", ") + ")";
   return (
     <div className="flex h-full min-h-[180px] items-center justify-center gap-5 px-4 py-3">
-      <div className="grid h-[150px] w-[150px] shrink-0 place-items-center rounded-full bg-[conic-gradient(#8051e6_0_35%,#11b974_35%_65%,#2c7ff1_65%_100%)]">
+      <div className="grid h-[150px] w-[150px] shrink-0 place-items-center rounded-full" style={{ background: gradient }}>
         <div className="grid h-[105px] w-[105px] place-items-center rounded-full bg-white text-center">
           <span><b className="block text-[22px] text-[#0c2457]">{center}</b><small className="text-[9px] text-[#6f82a0]">{sub}</small></span>
         </div>
       </div>
-      <div className="min-w-[120px] space-y-3">
-        {items.map((item, i) => <div key={item} className="flex items-center gap-2 text-[9px] text-[#405b82]"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} /><span className="flex-1">{item}</span><b>—</b></div>)}
+      <div className="min-w-[145px] space-y-3">
+        {items.map((item, i) => <div key={item} className="flex items-center gap-2 text-[9px] text-[#405b82]"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} /><span className="min-w-0 flex-1">{item}</span><b className="whitespace-nowrap">{values?.[i] ?? "—"}</b></div>)}
       </div>
     </div>
   );
@@ -327,7 +344,7 @@ function ListRows({ items }: { items: string[] }) {
 }
 
 function ProgressRows({ items }: { items: string[] }) {
-  return <div className="grid gap-3 p-3 sm:grid-cols-2">{items.map((item, i) => <div key={item}><div className="mb-1 flex justify-between text-[9px]"><b className="text-[#3b5678]">{item}</b><span className="text-[#7185a6]">—</span></div><div className="h-2 rounded-full bg-[#e9f0f7]"><div className={"h-2 rounded-full " + (i % 3 === 0 ? "bg-[#17b56c]" : i % 3 === 1 ? "bg-[#2d80ed]" : "bg-[#8b4ee9]")} style={{ width: (64 + (i*7)%28) + "%" }} /></div></div>)}</div>;
+  return <div className="grid gap-3 p-3 sm:grid-cols-2">{items.map((item) => <div key={item}><div className="mb-1 flex justify-between text-[9px]"><b className="text-[#3b5678]">{item}</b><span className="text-[#7185a6]">NEED VERIFY</span></div><div className="h-2 rounded-full bg-[#e9f0f7]"><div className="h-2 w-0 rounded-full bg-[#d7e2ee]" /></div></div>)}</div>;
 }
 
 function TileGrid({ items, columns = 3 }: { items: string[]; columns?: number }) {
@@ -347,7 +364,12 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <BarLineChart />
           </Section>
           <Section title="Cơ cấu doanh thu theo cơ sở" subtitle="Tỷ trọng doanh thu trong tháng này" className="col-span-12 lg:col-span-3 h-[345px]" icon="◔">
-            <Donut center="—" sub="Tổng doanh thu" items={["Lavender Homestay","Cozy Garden"]}/>
+            {(() => {
+              const rows = data?.tables.businessMonthBranches ?? [];
+              const values = rows.map((row) => row[3] ?? "—");
+              const shares = rows.map((row) => Number((row[4] ?? "0").replace("%", "").replace(",", ".")) || 0);
+              return <Donut center={data?.metricValues["Doanh thu tháng"] ?? "—"} sub="Tổng doanh thu tháng" items={rows.length ? rows.map((row) => row[1] ?? "Cơ sở") : ["Lavender Homestay","Ruby Homestay","Cozy Garden"]} values={values} shares={shares}/>;
+            })()}
           </Section>
           <Section title="Tình hình theo cơ sở" subtitle="" className="col-span-12 lg:col-span-3 h-[345px]" icon="◫">
             <DataTable columns={["#","Cơ sở","Hóa đơn","Doanh thu","Nguồn"]} rows={5} data={data?.tables.businessBranches}/>
@@ -381,13 +403,13 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Tiến độ","Mục tiêu","Trạng thái"]} rows={5}/>
           </Section>
           <Section title="Lịch nội dung tuần này" subtitle="Kế hoạch đăng bài và nội dung nổi bật" className="col-span-12 lg:col-span-5 h-[230px]" icon="♟">
-            <div className="grid h-full grid-cols-5 gap-2 p-3">{["Reel","TikTok","Review post","Ưu đãi","UGC"].map((x,i)=><div key={x} className="overflow-hidden rounded-[7px] border border-[#e1eaf4]"><div className={"h-[64px] " + (i%2?"bg-[#e8f5ee]":"bg-[#eaf3ff]")}/><div className="p-2"><b className="text-[9px] text-[#29456d]">{x}</b><p className="mt-1 text-[8px] text-[#8191a8]">Chưa lên lịch</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Lên lịch</button></div></div>)}</div>
+            <div className="grid h-full grid-cols-5 gap-2 p-3">{["Reel","TikTok","Review post","Ưu đãi","UGC"].map((x,i)=><div key={x} className="overflow-hidden rounded-[7px] border border-[#e1eaf4]"><div className={"h-[64px] " + (i%2?"bg-[#e8f5ee]":"bg-[#eaf3ff]")}/><div className="p-2"><b className="text-[9px] text-[#29456d]">{x}</b><p className="mt-1 text-[8px] text-[#8191a8]">Chưa lên lịch</p><Link href="/ai-manager" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Lên lịch</Link></div></div>)}</div>
           </Section>
           <Section title="Review & danh tiếng" subtitle="Theo dõi đánh giá từ các nền tảng" className="col-span-12 lg:col-span-6 h-[168px]" icon="⚙">
             <div className="grid h-full grid-cols-4 gap-2 p-3">{["Điểm đánh giá","Theo nền tảng","Tỷ lệ phản hồi","Cần xử lý"].map((x)=><div key={x} className="rounded-[7px] border border-[#e2ebf5] p-3"><b className="text-[9px] text-[#355174]">{x}</b><p className="mt-2 text-[20px] font-extrabold text-[#0c2758]">—</p></div>)}</div>
           </Section>
           <Section title="Gợi ý AI Marketing" subtitle="Đề xuất hành động dựa trên dữ liệu và xu hướng" className="col-span-12 lg:col-span-6 h-[168px]" icon="◈">
-            <div className="grid h-full grid-cols-3 gap-2 p-3">{["Tăng ngân sách Google Ads","Tập trung nội dung TikTok","Chạy remarketing"].map(x=><div key={x} className="rounded-[7px] border border-[#e4ecf5] p-3"><b className="text-[9px] text-[#345174]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#7a8da9]">Chỉ sinh đề xuất khi dữ liệu VERIFIED.</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Xem chi tiết</button></div>)}</div>
+            <div className="grid h-full grid-cols-3 gap-2 p-3">{["Tăng ngân sách Google Ads","Tập trung nội dung TikTok","Chạy remarketing"].map(x=><div key={x} className="rounded-[7px] border border-[#e4ecf5] p-3"><b className="text-[9px] text-[#345174]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#7a8da9]">Chỉ sinh đề xuất khi dữ liệu VERIFIED.</p><Link href="/intelligence/cmi" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Xem chi tiết</Link></div>)}</div>
           </Section>
         </div>
       );
@@ -395,7 +417,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section title="Checklist & công việc vận hành" subtitle="Danh sách công việc cần thực hiện trong ngày theo SOP" className="col-span-12 lg:col-span-6 h-[260px]" icon="▤"><DataTable columns={["#","Ưu tiên","Hạng mục công việc","Bộ phận","Owner","Hạn xử lý","Trạng thái","Hành động"]} rows={7} data={data?.tables.operationsTasks}/></Section>
-          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Cơ sở","Trạng thái","Công suất","Check-in","Check-out","Tin nhắn"]} rows={5} data={data?.tables.operationsProperties}/></Section>
+          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Cơ sở","Nguồn","Trạng thái","Hoạt động hôm nay","Việc mở","Cập nhật"]} rows={5} data={data?.tables.operationsProperties}/></Section>
           <Section title="Kho & nguyên vật liệu" subtitle="Theo dõi tồn kho, định mức và cảnh báo thiếu hàng" className="col-span-12 lg:col-span-5 h-[250px]" icon="▤"><DataTable columns={["#","Nguyên vật liệu","Tồn hiện tại","Định mức","Cảnh báo","Nhà cung cấp","Hành động"]} rows={7}/></Section>
           <Section title="Ca trực & chấm công" subtitle="Tình hình nhân sự theo ca trong ngày" className="col-span-12 lg:col-span-4 h-[250px]" icon="●●"><DataTable columns={["Bộ phận","Tổng","Ca sáng","Ca chiều","Có mặt","Tỷ lệ"]} rows={5}/></Section>
           <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions : ["Chưa có ngoại lệ live"]}/></Section>
@@ -421,7 +443,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Phân khúc khách hàng" subtitle="" className="col-span-12 lg:col-span-3 h-[180px]" icon="▣"><Donut center="—" sub="hồ sơ" items={["Quốc tế","Nội địa","Gia đình","VIP / Loyal"]}/></Section>
           <Section title="Tình trạng CSKH" subtitle="" className="col-span-12 lg:col-span-2 h-[180px]" icon="◈"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Đang follow-up","Sinh nhật / kỷ niệm","Complaint mở","VIP cần chào đón"].map(x=><div key={x} className="rounded-[7px] bg-[#f7faff] p-2"><p className="text-[8px] text-[#526e96]">{x}</p><b className="mt-2 block text-[18px] text-[#10285a]">—</b></div>)}</div></Section>
           <Section title="Khách cần chăm sóc hôm nay" subtitle="" className="col-span-12 lg:col-span-7 h-[240px]" icon="▣"><DataTable columns={["#","Khách","Kênh","Nhu cầu","Giá trị","Mức ưu tiên","Người phụ trách","Hành động"]} rows={6} data={data?.tables.customerCare}/></Section>
-          <Section title="Khách hàng nổi bật / loyalty" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="●●"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Lavender Homestay","Cozy Garden"].map(x=><div key={x} className="rounded-[8px] border border-[#e4ecf5] p-3"><div className="flex items-center justify-between"><b className="text-[10px] text-[#263f69]">{x}</b><Status label="Khách trung thành" tone="violet"/></div><div className="mt-4 grid grid-cols-3 gap-2">{["Số lần lưu trú","Tổng chi tiêu","Lần gần nhất"].map(y=><div key={y}><p className="text-[8px] text-[#7588a8]">{y}</p><b className="mt-1 block text-[12px]">—</b></div>)}</div><p className="mt-4 rounded bg-[#f7faff] p-2 text-[8px] text-[#6b80a1]">Ưu tiên dịch vụ theo hồ sơ và lịch sử đã xác minh.</p></div>)}</div></Section>
+          <Section title="Khách hàng nổi bật / loyalty" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="●●"><div className="grid h-full grid-cols-1 gap-2 p-3 xl:grid-cols-3">{["Lavender Homestay","Ruby Homestay","Cozy Garden"].map(x=><div key={x} className="rounded-[8px] border border-[#e4ecf5] p-3"><div className="flex items-center justify-between"><b className="text-[10px] text-[#263f69]">{x}</b><Status label="NEED VERIFY" tone="amber"/></div><div className="mt-4 grid grid-cols-3 gap-2">{["Số lần lưu trú","Tổng chi tiêu","Lần gần nhất"].map(y=><div key={y}><p className="text-[8px] text-[#7588a8]">{y}</p><b className="mt-1 block text-[12px]">—</b></div>)}</div><p className="mt-4 rounded bg-[#f7faff] p-2 text-[8px] text-[#6b80a1]">Ưu tiên dịch vụ theo hồ sơ và lịch sử đã xác minh.</p></div>)}</div></Section>
           <Section title="Lịch sử tương tác gần đây" subtitle="" className="col-span-12 lg:col-span-7 h-[180px]" icon="◷"><DataTable columns={["Thời gian","Khách hàng","Kênh","Nội dung tương tác","Người thực hiện","Kết quả"]} rows={5}/></Section>
           <Section title="Phản hồi & đánh giá" subtitle="" className="col-span-12 lg:col-span-5 h-[180px]" icon="★"><div className="grid grid-cols-4 gap-2 p-3">{["Google","Booking.com","TripAdvisor","Airbnb"].map(x=><div key={x} className="rounded border border-[#e2ebf4] p-2"><b className="text-[9px] text-[#334f74]">{x}</b><p className="mt-1 text-[17px] font-extrabold text-[#11275a]">—</p></div>)}</div><div className="px-3 pb-3"><BarLineChart labels={["Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9"]} line={true}/></div></Section>
         </div>
@@ -447,7 +469,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 lg:col-span-5 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
           <Section title="Dự báo trả nợ" subtitle="Kế hoạch thanh toán 6 tháng tới" className="col-span-12 lg:col-span-3 h-[290px]" icon="◫"><BarLineChart labels={["T09/26","T10/26","T11/26","T12/26","T01/27","T02/27"]} line={false}/></Section>
           <div className="col-span-12 lg:col-span-4 grid gap-2">
-            <Section title="Cảnh báo tài chính" subtitle="" className="h-[170px]" icon="!"><ListRows items={["Chi phí F&B tăng","Dòng tiền tuần tới dự kiến thấp","Có công nợ quá hạn","Chi phí marketing vượt ngân sách"]}/></Section>
+            <Section title="Cảnh báo tài chính" subtitle="" className="h-[170px]" icon="!"><ListRows items={["Chưa đủ dữ liệu đã xác minh để phát cảnh báo tài chính. Kết nối FIN-HOSPITALITY-001 / runtime trước khi kết luận."]}/></Section>
             <Section title="Quỹ an toàn / dự phòng" subtitle="" className="h-[105px]" icon="▣"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Dùng ngay","Thanh khoản nhanh","Kỳ hạn"].map(x=><div key={x} className="rounded bg-[#f5f9fe] p-2"><p className="text-[8px] text-[#667fa3]">{x}</p><b className="mt-1 block text-[13px] text-[#132d60]">—</b></div>)}</div></Section>
           </div>
         </div>
@@ -455,7 +477,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "reports":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="1. Thư viện báo cáo" subtitle="Danh sách báo cáo có sẵn trong hệ thống" className="col-span-12 lg:col-span-7 h-[290px]" icon="1"><div className="flex gap-2 p-2"><div className="flex-1 rounded border border-[#dbe7f4] px-3 py-1.5 text-[9px] text-[#8a9ab1]">Tìm kiếm báo cáo...</div><button className="rounded bg-[#2477ee] px-4 text-[9px] font-bold text-white">＋ Tạo báo cáo mới</button></div><DataTable columns={["#","Thời gian","Agent","Đơn vị","Nội dung","Loại"]} rows={5} data={data?.tables.reportLogs}/></Section>
+          <Section title="1. Thư viện báo cáo" subtitle="Danh sách báo cáo có sẵn trong hệ thống" className="col-span-12 lg:col-span-7 h-[290px]" icon="1"><div className="flex gap-2 p-2"><div className="flex-1 rounded border border-[#dbe7f4] px-3 py-1.5 text-[9px] text-[#8a9ab1]">Tìm kiếm báo cáo...</div><Link href="/ai-manager" className="rounded bg-[#2477ee] px-4 py-1.5 text-[9px] font-bold text-white">＋ Tạo báo cáo mới</Link></div><DataTable columns={["#","Thời gian","Agent","Đơn vị","Nội dung","Loại"]} rows={5} data={data?.tables.reportLogs}/></Section>
           <Section title="3. Lịch gửi báo cáo" subtitle="Các báo cáo được gửi tự động theo lịch" className="col-span-12 lg:col-span-5 h-[205px]" icon="3"><div className="grid h-full grid-cols-2 gap-2 p-3">{["08:00 hàng ngày","18:00 hàng ngày","Thứ Hai hàng tuần","Ngày 01 hàng tháng"].map(x=><div key={x} className="rounded border border-[#e4ecf5] bg-[#fbfdff] p-3"><div className="flex items-center justify-between"><b className="text-[10px] text-[#1a3867]">{x}</b><Status label="Đang hoạt động" tone="green"/></div><p className="mt-2 text-[8px] text-[#6d82a3]">Báo cáo tự động</p></div>)}</div></Section>
           <Section title="2. Bộ lọc báo cáo nhanh" subtitle="Chọn tiêu chí để xem hoặc tạo báo cáo tùy chỉnh" className="col-span-12 lg:col-span-7 h-[165px]" icon="2"><div className="grid grid-cols-4 gap-2 p-3">{["Cơ sở","Nguồn dữ liệu","Thời gian","Định dạng xuất"].map(x=><div key={x}><p className="mb-1 text-[8px] font-bold text-[#405c83]">{x}</p><div className="rounded border border-[#d5e3f2] bg-white px-3 py-2 text-[9px] text-[#4e688d]">Tất cả</div></div>)}</div><div className="flex gap-2 px-3">{["Tất cả","Kinh doanh","Marketing","Vận hành","Tài chính","AI-Lễ Tân","Khách hàng","Nhân sự"].map((x,i)=><span key={x} className={"rounded px-3 py-1 text-[8px] " + (i===0?"bg-[#2879ee] text-white":"bg-[#edf4fb] text-[#426089]")}>{x}</span>)}</div></Section>
           <Section title="4. Xuất dữ liệu gần đây" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="4"><DataTable columns={["#","Nguồn dữ liệu","Key","Trạng thái","Lần sync","Lỗi"]} rows={5} data={data?.tables.reportSources}/></Section>
@@ -473,7 +495,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Task queue cần chú ý" subtitle="Các task cần theo dõi, sắp quá hạn hoặc gặp vấn đề" className="col-span-12 lg:col-span-7 h-[245px]" icon="▤"><DataTable columns={["#","Workflow","Nguồn vào","Agent phụ trách","Ưu tiên","SLA","Trạng thái","Hành động"]} rows={8} data={data?.tables.agentQueue}/></Section>
           <Section title="Automation runs gần đây" subtitle="Các lần chạy workflow tự động mới nhất" className="col-span-12 lg:col-span-5 h-[245px]" icon="▣"><DataTable columns={["Thời gian","Workflow","Agent","Trạng thái","Kết quả"]} rows={8} data={data?.tables.agentRuns}/></Section>
           <Section title="Hiệu suất theo agent" subtitle="Số task xử lý và tỷ lệ thành công" className="col-span-12 lg:col-span-7 h-[180px]" icon="▦"><BarLineChart labels={["Receptionist","Concierge","Booking","Marketing","Finance","AI Ops","Sales","Content","Escalation"]}/></Section>
-          <Section title="Gợi ý tối ưu AI" subtitle="Đề xuất từ hệ thống dựa trên dữ liệu thực tế" className="col-span-12 lg:col-span-5 h-[180px]" icon="◎"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Nâng cấp knowledge base","Giảm human handoff","Tăng retry logic"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#345173]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#778aa8]">Chỉ đề xuất sau khi có evidence.</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Xem chi tiết</button></div>)}</div></Section>
+          <Section title="Gợi ý tối ưu AI" subtitle="Đề xuất từ hệ thống dựa trên dữ liệu thực tế" className="col-span-12 lg:col-span-5 h-[180px]" icon="◎"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Nâng cấp knowledge base","Giảm human handoff","Tăng retry logic"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#345173]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#778aa8]">Chỉ đề xuất sau khi có evidence.</p><Link href="/agents/registry" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Xem chi tiết</Link></div>)}</div></Section>
         </div>
       );
     case "settings":
@@ -484,7 +506,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Phân quyền người dùng" subtitle="Quản lý vai trò, quyền hạn theo chức năng" className="col-span-12 lg:col-span-6 h-[220px]" icon="●●"><DataTable columns={["#","Vai trò","View","Edit","Approve","Export","Số người","Hành động"]} rows={7}/></Section>
           <Section title="Thông báo & automation" subtitle="Cấu hình thông báo, nhắc nhở và quy trình tự động" className="col-span-12 lg:col-span-6 h-[220px]" icon="●"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Gửi email thông báo hệ thống","Nhắc nhở thanh toán","Thông báo qua Slack / Telegram","Tự động escalation với AI","Cảnh báo tồn kho thấp","Báo cáo tổng hợp hàng ngày"].map(x=><div key={x} className="flex items-center justify-between rounded border border-[#e5edf6] p-3"><div><b className="text-[9px] text-[#345172]">{x}</b><p className="mt-1 text-[7px] text-[#8392a8]">Theo policy và quyền hiện hành</p></div><span className="h-5 w-9 rounded-full bg-[#2d7df0] p-0.5"><span className="ml-auto block h-4 w-4 rounded-full bg-white"/></span></div>)}</div></Section>
           <Section title="Cần xử lý" subtitle="Các vấn đề cần được xử lý trong thời gian sớm nhất" className="col-span-12 lg:col-span-6 h-[145px]" icon="!"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Tích hợp đang hoạt động một phần","API key sắp hết hạn","Cập nhật vai trò chờ duyệt"].map(x=><div key={x} className="rounded border border-[#f0dfbd] bg-[#fffaf1] p-3"><b className="text-[9px] text-[#705625]">{x}</b><p className="mt-2 text-[8px] text-[#876f45]">NEED VERIFY / APPROVAL</p></div>)}</div></Section>
-          <Section title="Nhật ký thay đổi" subtitle="Lịch sử các thay đổi cấu hình và quản trị hệ thống" className="col-span-12 lg:col-span-6 h-[145px]" icon="◷"><DataTable columns={["#","Thời gian","Người thực hiện","Hành động","Đối tượng","Trạng thái"]} rows={5}/></Section>
+          <Section title="Nhật ký thay đổi" subtitle="Lịch sử các thay đổi cấu hình và quản trị hệ thống" className="col-span-12 lg:col-span-6 h-[145px]" icon="◷"><DataTable columns={["#","Thời gian","Người thực hiện","Hành động","Đối tượng","Trạng thái"]} rows={5} data={data?.tables.settingsChangeLog}/></Section>
         </div>
       );
   }

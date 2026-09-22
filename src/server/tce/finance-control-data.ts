@@ -151,6 +151,7 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
       monthKey,
       periodLabel: "MTD " + monthKey,
       lines: [],
+      guardrails: [],
       notes: ["Không đọc được FIN-HOSPITALITY-001 ở lần tải này."],
     };
   }

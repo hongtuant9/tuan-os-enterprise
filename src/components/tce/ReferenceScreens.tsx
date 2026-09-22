@@ -224,11 +224,11 @@ function Section({
         <div className="flex min-w-0 items-start gap-2">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f4ff] text-[13px] font-bold text-[#1768df]"><UiIcon kind={title + " " + icon} className="h-[15px] w-[15px]" /></span>
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-extrabold leading-5 text-[#102456]">{title}</h2>
-            {subtitle ? <p className="truncate text-[9px] text-[#7287aa]">{subtitle}</p> : null}
+            <h2 className="whitespace-normal break-words text-[14px] font-extrabold leading-[16px] text-[#102456]">{title}</h2>
+            {subtitle ? <p className="mt-0.5 whitespace-normal break-words text-[8px] leading-[10px] text-[#7287aa]">{subtitle}</p> : null}
           </div>
         </div>
-        {action || <button type="button" className="shrink-0 rounded-[5px] border border-[#afd0fb] px-3 py-1 text-[9px] font-bold text-[#1768df]">Xem chi tiết →</button>}
+        {action || null}
       </div>
       {children}
     </section>
@@ -237,7 +237,7 @@ function Section({
 
 function Status({ label = "NEED VERIFY", tone = "amber" }: { label?: string; tone?: "green" | "red" | "amber" | "blue" | "violet" }) {
   const cls = tone === "green" ? "bg-[#e6f8ee] text-[#079652]" : tone === "red" ? "bg-[#fff0f2] text-[#e62f43]" : tone === "blue" ? "bg-[#eaf3ff] text-[#1671e9]" : tone === "violet" ? "bg-[#f3edff] text-[#7040d7]" : "bg-[#fff5e5] text-[#c87900]";
-  return <span className={"inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-bold " + cls}><span className="h-1.5 w-1.5 rounded-full bg-current" />{label}</span>;
+  return <span className={"inline-flex max-w-full items-center gap-0.5 whitespace-nowrap rounded-full px-1 py-0.5 text-[7px] font-bold " + cls}><span className="h-1 w-1 shrink-0 rounded-full bg-current" />{label}</span>;
 }
 
 function DataTable({ columns, rows = 6 }: { columns: string[]; rows?: number }) {
@@ -251,7 +251,7 @@ function DataTable({ columns, rows = 6 }: { columns: string[]; rows?: number }) 
           {Array.from({ length: rows }).map((_, r) => (
             <tr key={r} className="h-[31px]">
               {columns.map((c, i) => (
-                <td key={c + i} className="truncate px-2 py-1.5">
+                <td key={c + i} className="truncate px-1.5 py-1.5">
                   {i === 0 ? r + 1 : i === columns.length - 1 ? <Status label={r % 3 === 0 ? "Chờ dữ liệu" : "Theo dõi"} tone={r % 3 === 0 ? "amber" : "blue"} /> : "—"}
                 </td>
               ))}

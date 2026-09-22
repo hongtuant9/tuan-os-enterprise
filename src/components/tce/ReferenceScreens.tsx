@@ -385,34 +385,51 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
         </div>
       );
-    case "marketing":
+    case "marketing": {
+      const funnelRows = data?.tables.marketingFunnel ?? [
+        ["Tiếp cận","NEED VERIFY"],["Click","NEED VERIFY"],["Lead / Inquiry","0"],["Booking","0"],["Doanh thu","0 đ"],
+      ];
+      const conversionRows = data?.tables.marketingConversion ?? [];
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Hiệu quả theo kênh" subtitle="So sánh hiệu suất marketing theo từng kênh" className="col-span-12 lg:col-span-7 h-[240px]" icon="▥">
-            <DataTable columns={["#","Kênh","Spend","Lead","Booking","Doanh thu","CPA","ROAS","Quyết định"]} rows={6} data={data?.tables.marketingChannels}/>
+          <Section title="Hiệu quả theo kênh" subtitle="Actual theo từng nguồn; KPI chưa có authority giữ NEED VERIFY" className="col-span-12 lg:col-span-7 h-[270px]" icon="▥">
+            <DataTable columns={["#","Kênh","Spend","Lead","Booking","Doanh thu","CPA","ROAS","Xác minh"]} data={data?.tables.marketingChannels}/>
           </Section>
-          <Section title="Phễu chuyển đổi" subtitle="Từ tiếp cận đến doanh thu (Tất cả kênh)" className="col-span-12 lg:col-span-5 h-[240px]" icon="▾">
-            <div className="flex h-full gap-4 p-3">
+          <Section title="Phễu chuyển đổi" subtitle="Tiếp cận → Click → Lead → Booking → Doanh thu" className="col-span-12 lg:col-span-5 h-[270px]" icon="▾">
+            <div className="flex h-full gap-3 p-3">
               <div className="flex flex-1 flex-col items-center justify-center gap-1">
-                {["Tiếp cận","Click","Lead / Inquiry","Booking","Doanh thu"].map((x,i)=><div key={x} className="grid h-[43px] place-items-center rounded-[3px] text-center text-[9px] font-bold text-[#0d2456]" style={{width:(100-i*13)+"%",background:["#dbeaff","#bfe3ff","#c8f4df","#ffe1a9","#ff9c9c"][i]}}>{x}<br/><b className="text-[12px]">—</b></div>)}
+                {funnelRows.slice(0,5).map((row,i)=><div key={row[0]} className="grid h-[43px] place-items-center rounded-[3px] text-center text-[9px] font-bold text-[#0d2456]" style={{width:(100-i*13)+"%",background:["#dbeaff","#bfe3ff","#c8f4df","#ffe1a9","#ff9c9c"][i]}}>{row[0]}<br/><b className="text-[12px]">{row[1] ?? "—"}</b></div>)}
               </div>
-              <div className="w-[38%] space-y-3 rounded-[7px] border border-[#e5edf6] p-3 text-[9px]"><b className="text-[10px] text-[#193865]">Tỷ lệ chuyển đổi</b>{["Click / Tiếp cận","Lead / Click","Booking / Lead"].map(x=><div key={x} className="flex justify-between"><span>{x}</span><b>—</b></div>)}<hr className="border-[#e5edf6]"/><b className="text-[10px] text-[#193865]">Giá trị trung bình</b><div className="flex justify-between"><span>Giá trị booking</span><b>—</b></div><div className="flex justify-between"><span>ROAS</span><b>—</b></div></div>
+              <div className="w-[42%] overflow-auto rounded-[7px] border border-[#e5edf6] p-3 text-[9px]">
+                <b className="text-[10px] text-[#193865]">Chất lượng đo lường</b>
+                <div className="mt-2 space-y-2">{conversionRows.map((row)=><div key={row[0]} className="flex justify-between gap-2"><span>{row[0]}</span><b className="text-right">{row[1] ?? "—"}</b></div>)}</div>
+              </div>
             </div>
           </Section>
-          <Section title="Chiến dịch đang chạy" subtitle="Top chiến dịch theo hiệu quả" className="col-span-12 lg:col-span-7 h-[230px]" icon="▣">
-            <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Tiến độ","Mục tiêu","Trạng thái"]} rows={5}/>
+
+          <Section title="Chiến dịch & thực thi" subtitle="Kế hoạch từ CMO Workbook; Actual từ provider khi connector LIVE" className="col-span-12 lg:col-span-7 h-[250px]" icon="▣">
+            <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Trạng thái","Mục tiêu","Xác minh"]} data={data?.tables.marketingCampaigns}/>
           </Section>
-          <Section title="Lịch nội dung tuần này" subtitle="Kế hoạch đăng bài và nội dung nổi bật" className="col-span-12 lg:col-span-5 h-[230px]" icon="♟">
-            <div className="grid h-full grid-cols-5 gap-2 p-3">{["Reel","TikTok","Review post","Ưu đãi","UGC"].map((x,i)=><div key={x} className="overflow-hidden rounded-[7px] border border-[#e1eaf4]"><div className={"h-[64px] " + (i%2?"bg-[#e8f5ee]":"bg-[#eaf3ff]")}/><div className="p-2"><b className="text-[9px] text-[#29456d]">{x}</b><p className="mt-1 text-[8px] text-[#8191a8]">Chưa lên lịch</p><Link href="/ai-manager" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Lên lịch</Link></div></div>)}</div>
+          <Section title="Lịch nội dung & xuất bản" subtitle="Plan → QA → Scheduled → Published; không tự publish ngoài approval" className="col-span-12 lg:col-span-5 h-[250px]" icon="♟">
+            <DataTable columns={["#","Content ID","Brand","Format","Kênh","Lịch","Publish","Xác minh"]} data={data?.tables.marketingContent}/>
           </Section>
-          <Section title="Review & danh tiếng" subtitle="Theo dõi đánh giá từ các nền tảng" className="col-span-12 lg:col-span-6 h-[168px]" icon="⚙">
-            <div className="grid h-full grid-cols-4 gap-2 p-3">{["Điểm đánh giá","Theo nền tảng","Tỷ lệ phản hồi","Cần xử lý"].map((x)=><div key={x} className="rounded-[7px] border border-[#e2ebf5] p-3"><b className="text-[9px] text-[#355174]">{x}</b><p className="mt-2 text-[20px] font-extrabold text-[#0c2758]">—</p></div>)}</div>
+
+          <Section title="Attribution – Nguồn → Lead → Booking → Revenue" subtitle="UTM/customer/conversation/booking linkage; tránh đếm trùng provider conversion" className="col-span-12 lg:col-span-7 h-[240px]" icon="↗">
+            <DataTable columns={["#","Thời gian","Nguồn","UTM Campaign","Sự kiện","Kênh","Giá trị","Xác minh"]} data={data?.tables.marketingAttribution}/>
           </Section>
-          <Section title="Gợi ý AI Marketing" subtitle="Đề xuất hành động dựa trên dữ liệu và xu hướng" className="col-span-12 lg:col-span-6 h-[168px]" icon="◈">
-            <div className="grid h-full grid-cols-3 gap-2 p-3">{["Tăng ngân sách Google Ads","Tập trung nội dung TikTok","Chạy remarketing"].map(x=><div key={x} className="rounded-[7px] border border-[#e4ecf5] p-3"><b className="text-[9px] text-[#345174]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#7a8da9]">Chỉ sinh đề xuất khi dữ liệu VERIFIED.</p><Link href="/intelligence/cmi" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Xem chi tiết</Link></div>)}</div>
+          <Section title="Data Health & Connector" subtitle="Nguồn nào chưa LIVE không được dùng để kết luận KPI" className="col-span-12 lg:col-span-5 h-[240px]" icon="⚙">
+            <DataTable columns={["#","Nguồn","Provider","Trạng thái","Auth","Last success","Lỗi"]} data={data?.tables.marketingDataHealth}/>
+          </Section>
+
+          <Section title="Market & Competitor Intelligence" subtitle="Evidence/insight từ CMI và Workbook; không thay live business truth" className="col-span-12 lg:col-span-6 h-[210px]" icon="◉">
+            <DataTable columns={["#","ID","Loại","Chủ đề / đối thủ","Xác minh","Hành động"]} data={data?.tables.marketingMarketIntel}/>
+          </Section>
+          <Section title="AI Marketing – Phân tích & khuyến nghị" subtitle="Chỉ đề xuất từ evidence; Ads spend/public mutation vẫn approval-gated" className="col-span-12 lg:col-span-6 h-[210px]" icon="◈">
+            <DataTable columns={["#","Mức","Nhóm","Khuyến nghị","Hành động","Quyền","Trạng thái"]} data={data?.tables.marketingRecommendations}/>
           </Section>
         </div>
       );
+    }
     case "operations":
       return (
         <div className="grid grid-cols-12 gap-2">

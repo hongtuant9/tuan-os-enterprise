@@ -10,6 +10,7 @@ import { runCmoExecutiveCycle, type CmoExecutiveResult } from "@/server/marketin
 import { runSeptemberExecutionPlan, type SeptemberExecutionPlanResult } from "./september-execution-plan";
 import { runExecutiveCouncilCycle, type ExecutiveCouncilResult } from "./executive-council-cycle";
 import { runRealityPulse, type RealityPulseResult } from "./reality-pulse";
+import { runMarketingCommandCenterCycle, type MarketingCommandCenterCycleResult } from "@/server/marketing-command-center/cycle";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -33,6 +34,7 @@ export type ExecutiveCycleResult = {
   growth: MarketingGrowthCycleResult;
   sales: CcoClosedLoopResult;
   cmo: CmoExecutiveResult;
+  marketingCommandCenter: MarketingCommandCenterCycleResult;
   septemberPlan: SeptemberExecutionPlanResult;
   council: ExecutiveCouncilResult;
   reality: RealityPulseResult;
@@ -47,6 +49,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     runSeptemberExecutionPlan(now),
     runRealityPulse(now),
   ]);
+  const marketingCommandCenter = await runMarketingCommandCenterCycle(now);
   const cmo = await runCmoExecutiveCycle(growth, sales, now);
   const council = await runExecutiveCouncilCycle(cmo, sales, septemberPlan, now);
   const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }] = await Promise.all([
@@ -119,6 +122,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     growth,
     sales,
     cmo,
+    marketingCommandCenter,
     septemberPlan,
     council,
     reality,

@@ -266,22 +266,16 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
     const hotelToday = hotelPeriod;
     const fnbToday = fnbPeriod;
-    const todayHotel = periodHotel;
     const todayFnb = periodFnb;
     const todayRevenue = periodRevenue;
     const estimateToday = estimatePeriod;
     const bothTodayVerified = bothPeriodVerified;
 
     const hotelTodayByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
-    const hotelMonthByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
     const canonicalHotelBranches = ["Lavender Homestay", "Ruby Homestay"];
     const hotelTodayRows = canonicalHotelBranches.map((name) => {
       const row = hotelTodayByName.get(name.toLowerCase());
       return { name: "Hotel · " + name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0, source: "KiotViet Hotel" };
-    });
-    const hotelMonthRows = canonicalHotelBranches.map((name) => {
-      const row = hotelMonthByName.get(name.toLowerCase());
-      return { name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0 };
     });
     const cozyTodayRows = fnbToday.branchBreakdown.length
       ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
@@ -300,7 +294,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         },
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
-          "Doanh thu tháng": "KiotViet Hotel + F&B Actual · " + period.label,
+          "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
           "Chi phí": "Ước tính vận hành; chưa phải Actual P&L",
           "Lợi nhuận gộp": "Ước tính từ doanh thu Actual và cost model",
           "Biên lợi nhuận": "Ước tính; chờ Actual OPEX đầy đủ",

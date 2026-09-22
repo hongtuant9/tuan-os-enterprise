@@ -42,8 +42,27 @@ git reset --hard "origin/$MAIN_BRANCH"
 SHA="$(git rev-parse --short=12 HEAD)"
 IMAGE="tce-control-center:$SHA"
 
+log "Preparing build-time public configuration"
+umask 077
+BUILD_PUBLIC_ENV="$(mktemp "$STATE_DIR/next-public-env.XXXXXX")"
+cleanup_build_public_env() {
+  rm -f "$BUILD_PUBLIC_ENV"
+}
+trap cleanup_build_public_env EXIT
+
+for key in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY; do
+  line="$(grep -m1 -E "^${key}=.+" "$ENV_FILE" || true)"
+  [ -n "$line" ] || fail "missing build-time public configuration: $key"
+  printf '%s\n' "$line" >> "$BUILD_PUBLIC_ENV"
+done
+
 log "Building image $IMAGE"
-docker build --pull -t "$IMAGE" .
+docker build --pull \
+  --secret id=next_public_env,src="$BUILD_PUBLIC_ENV" \
+  -t "$IMAGE" .
+
+cleanup_build_public_env
+trap - EXIT
 
 docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
 log "Starting candidate on 127.0.0.1:$CANDIDATE_PORT"

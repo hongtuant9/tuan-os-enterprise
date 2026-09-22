@@ -324,7 +324,7 @@ function Donut({
 
 function Pipeline({ items }: { items: string[] }) {
   return (
-    <div className="flex h-full min-h-[145px] items-center gap-1.5 overflow-hidden px-3 py-3">
+    <div className="flex h-full min-h-[145px] items-center gap-1.5 overflow-x-auto overscroll-x-contain px-3 py-3 [scrollbar-gutter:stable]">
       {items.map((item, i) => (
         <div key={item} className="flex min-w-0 flex-1 items-center">
           <div className="w-full rounded-[6px] bg-gradient-to-b from-[#f7fbff] to-[#ebf4ff] px-2 py-5 text-center">

@@ -24,10 +24,13 @@ export type MarketingWorkbookFreshness = {
   errors: string[];
 };
 
+function isPresent<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
+
 function latestIso(values: Array<string | null | undefined>): string | null {
-  const valid = values.filter((value): value is string => Boolean(value));
-  if (!valid.length) return null;
-  return valid.sort().at(-1) ?? null;
+  const valid = values.filter((value): value is string => Boolean(value)).sort();
+  return valid.length ? valid[valid.length - 1] : null;
 }
 
 export async function ensureMarketingWorkbookFresh(
@@ -41,7 +44,7 @@ export async function ensureMarketingWorkbookFresh(
       await Promise.all(
         MARKETING_WORKBOOK_SOURCE_KEYS.map((key) => container.syncSources.findByKey(key)),
       )
-    ).filter((row): row is NonNullable<typeof row> => Boolean(row));
+    ).filter(isPresent);
 
     if (!sourceRows.length) {
       return {

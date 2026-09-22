@@ -166,12 +166,32 @@ const meta: Record<ScreenKey, ScreenMeta> = {
   },
 };
 
+function UiIcon({ kind, className = "h-6 w-6" }: { kind: string; className?: string }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const k = kind.toLowerCase();
+  let paths: ReactNode;
+  if (/doanh thu|dòng tiền|lợi nhuận|roas|hiệu suất|tăng trưởng/.test(k)) paths = <><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" {...common}/><path d="m4 7 5-3 5 3 6-5" {...common}/></>;
+  else if (/chi phí|ngân sách|công nợ|nợ vay|quỹ lương|lương/.test(k)) paths = <><rect x="3" y="5" width="18" height="15" rx="2" {...common}/><path d="M7 9h10M8 14h3M15 14h2" {...common}/></>;
+  else if (/công suất|phòng|homestay/.test(k)) paths = <><path d="M3 18V8M21 18v-5a3 3 0 0 0-3-3H8a3 3 0 0 0-3 3v5M3 15h18M7 10V7h5v3" {...common}/></>;
+  else if (/khách|nhân sự|người dùng|tương tác|lễ tân|human/.test(k)) paths = <><circle cx="9" cy="8" r="3" {...common}/><circle cx="17" cy="9" r="2.5" {...common}/><path d="M3 20c.4-4 2.4-6 6-6s5.6 2 6 6M14 15c3.6 0 5.7 1.7 6 5" {...common}/></>;
+  else if (/hội thoại|lead|inquiry|phản hồi|complaint/.test(k)) paths = <><path d="M4 5h16v11H9l-5 4V5Z" {...common}/><path d="M8 9h8M8 12h5" {...common}/></>;
+  else if (/booking|order|ca hôm nay|lịch|báo cáo tự động/.test(k)) paths = <><rect x="4" y="5" width="16" height="15" rx="2" {...common}/><path d="M8 3v4M16 3v4M4 9h16M8 13h3M13 13h3M8 16h3" {...common}/></>;
+  else if (/tồn kho|kho|export|nguồn dữ liệu|tích hợp/.test(k)) paths = <><path d="m4 8 8-4 8 4-8 4-8-4Z" {...common}/><path d="M4 8v8l8 4 8-4V8M12 12v8" {...common}/></>;
+  else if (/quá hạn|cảnh báo|sự cố|luồng lỗi|bảo mật/.test(k)) paths = <><path d="M12 3 2.8 20h18.4L12 3Z" {...common}/><path d="M12 9v5M12 17h.01" {...common}/></>;
+  else if (/agent|automation|workflow|ai /.test(k)) paths = <><circle cx="12" cy="12" r="8" {...common}/><path d="M12 8v8M8 12h8M4 4l2 2M20 4l-2 2" {...common}/></>;
+  else if (/cài đặt|thiết lập|vai trò|quyền/.test(k)) paths = <><circle cx="12" cy="12" r="3" {...common}/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-5l-.3 3.1a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L5.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 3.1h5l.3-3.1a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z" {...common}/></>;
+  else if (/biên|%|tỷ lệ/.test(k)) paths = <><path d="m6 18 12-12" {...common}/><circle cx="7" cy="7" r="2" {...common}/><circle cx="17" cy="17" r="2" {...common}/></>;
+  else if (/đã hoàn thành|verified|mức hài lòng|checklist/.test(k)) paths = <><circle cx="12" cy="12" r="9" {...common}/><path d="m8 12 2.5 2.5L16.5 8" {...common}/></>;
+  else paths = <><rect x="4" y="4" width="16" height="16" rx="3" {...common}/><path d="M8 15v-4M12 15V8M16 15v-6" {...common}/></>;
+  return <svg viewBox="0 0 24 24" className={className} aria-hidden="true">{paths}</svg>;
+}
+
 function MetricCard({ metric }: { metric: Metric }) {
   const t = tones[metric.tone];
   return (
     <div className={"h-[116px] min-w-0 rounded-[10px] border border-[#dce8f4] bg-gradient-to-br " + t.box + " px-3 py-3 shadow-[0_2px_12px_rgba(37,74,120,0.035)]"}>
       <div className="flex items-center gap-3">
-        <span className={"grid h-[48px] w-[48px] shrink-0 place-items-center rounded-[8px] text-[18px] font-black text-white shadow-sm " + t.icon}>{metric.icon}</span>
+        <span className={"grid h-[48px] w-[48px] shrink-0 place-items-center rounded-[8px] text-[18px] font-black text-white shadow-sm " + t.icon}><UiIcon kind={metric.label} className="h-[25px] w-[25px]" /></span>
         <div className="min-w-0">
           <p className="truncate text-[11px] font-medium text-[#476495]">{metric.label}</p>
           <p className="mt-1 truncate text-[20px] font-extrabold leading-none tracking-[-0.03em] text-[#061850]">{metric.value || "—"}</p>
@@ -202,7 +222,7 @@ function Section({
     <section className={"overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
       <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-[#edf3f8] px-3 py-2">
         <div className="flex min-w-0 items-start gap-2">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f4ff] text-[13px] font-bold text-[#1768df]">{icon}</span>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f4ff] text-[13px] font-bold text-[#1768df]"><UiIcon kind={title + " " + icon} className="h-[15px] w-[15px]" /></span>
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-extrabold leading-5 text-[#102456]">{title}</h2>
             {subtitle ? <p className="truncate text-[9px] text-[#7287aa]">{subtitle}</p> : null}

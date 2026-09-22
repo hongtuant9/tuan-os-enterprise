@@ -7,6 +7,7 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
+import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
 
 export type TceTabScreen =
   | "business"
@@ -110,6 +111,24 @@ function money(value: number) {
 
 function pct(value: number) {
   return Number.isFinite(value) ? value.toFixed(1).replace(".", ",") + "%" : "0%";
+}
+
+function textField(row: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return "";
+}
+
+function numberField(row: Record<string, unknown>, key: string): number {
+  const value = Number(row[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function boolField(row: Record<string, unknown>, key: string): boolean {
+  return row[key] === true || String(row[key] ?? "").toLowerCase() === "true";
 }
 
 function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: string): RevenueSnapshot {
@@ -380,11 +399,12 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
   }
 
   if (screen === "marketing") {
-    const [customers, acquisition, upsell, receptionist] = await Promise.all([
+    const [customers, acquisition, upsell, receptionist, mcc] = await Promise.all([
       container.hospitalityCrm.customerSummaries(500),
       container.hospitalityCrm.acquisitionAttribution(500),
       container.hospitalityCrm.upsellSummary(500),
       container.aiReceptionist.dashboard(),
+      getMarketingCommandCenterSnapshot(container.db, period.from, period.to),
     ]);
     const periodCustomers = customers.filter((customer) => inPeriod(customer.lastSeenAt));
     const periodConversations = receptionist.conversations.filter((conversation) => inPeriod(conversation.lastMessageAt));
@@ -393,71 +413,148 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const verifiedBookings = periodBookings.filter((booking) => booking.verificationStatus === "verified");
     const bookedUpsells = periodUpsellEvents.filter((event) => event.event_type === "booked");
     const periodUpsellRevenue = bookedUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0);
-    const channelNames = [...new Set(periodConversations.map((conversation) => conversation.channel))];
-    const periodChannels = channelNames.map((channel) => {
-      const rows = periodConversations.filter((conversation) => conversation.channel === channel);
-      const conversationIds = new Set(rows.map((conversation) => conversation.id));
-      const channelBookings = verifiedBookings.filter((booking) => conversationIds.has(booking.conversationId));
-      const channelUpsells = bookedUpsells.filter((event) => event.conversation_id && conversationIds.has(event.conversation_id));
-      const customerKeys = new Set(rows.map((conversation) => conversation.customerContact || conversation.customerName || conversation.id));
-      return {
-        channel,
-        customers: customerKeys.size,
-        conversations: rows.length,
-        verifiedBookings: channelBookings.length,
-        upsellRevenue: channelUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0),
-      };
-    }).sort((a, b) => b.verifiedBookings - a.verifiedBookings || b.conversations - a.conversations);
+
+    const leadValue = mcc.totals.leads || periodCustomers.length;
+    const bookingValue = mcc.totals.bookings || verifiedBookings.length;
+    const revenueValue = mcc.totals.revenue || periodUpsellRevenue;
+    const interactionValue = mcc.totals.engagements || periodConversations.length;
+    const attributionCoverage = mcc.totals.attributionCoverage === null ? "NEED VERIFY" : pct(mcc.totals.attributionCoverage * 100);
+
+    const marketingChannels = mcc.channels.length
+      ? mcc.channels.map((row, i) => [
+          String(i + 1),
+          row.channelName,
+          mcc.totals.spendVerified ? money(row.spend) : "NEED VERIFY",
+          String(row.leads),
+          String(row.bookings),
+          money(row.revenue),
+          row.cpa === null || !mcc.totals.spendVerified ? "—" : money(row.cpa),
+          row.roas === null || !mcc.totals.spendVerified ? "—" : row.roas.toFixed(2) + "x",
+          row.verification,
+        ])
+      : acquisition.slice(0, 8).map((row, i) => [
+          String(i + 1), row.source, "NEED VERIFY", String(row.customers),
+          String(row.verifiedBookings), money(row.upsellRevenue), "—", "—", "PARTIAL",
+        ]);
+
+    const campaignRows = mcc.campaigns.slice(0, 12).map((row, i) => [
+      String(i + 1),
+      textField(row, "name", "CAMPAIGN", "Campaign"),
+      textField(row, "channel_id", "CHANNELS", "Channel"),
+      numberField(row, "budget_amount") > 0 ? money(numberField(row, "budget_amount")) : textField(row, "budget_mode", "BUDGET_MODE"),
+      "NEED VERIFY",
+      textField(row, "status", "STATUS"),
+      textField(row, "objective", "OBJECTIVE"),
+      textField(row, "verification_status") || "NEED VERIFY",
+    ]);
+
+    const contentRows = mcc.content.slice(0, 12).map((row, i) => [
+      String(i + 1),
+      textField(row, "content_id"),
+      textField(row, "brand"),
+      textField(row, "format"),
+      textField(row, "channel_id") || "Đa kênh / kế hoạch",
+      textField(row, "scheduled_at") ? textField(row, "scheduled_at").slice(0, 16).replace("T", " ") : "Chưa lên lịch",
+      textField(row, "publish_status"),
+      textField(row, "verification_status"),
+    ]);
+
+    const attributionRows = mcc.attribution.slice(0, 14).map((row, i) => [
+      String(i + 1),
+      textField(row, "occurred_at").slice(0, 16).replace("T", " "),
+      textField(row, "source") || textField(row, "utm_source") || "Direct/unknown",
+      textField(row, "utm_campaign") || "—",
+      textField(row, "event_type"),
+      textField(row, "channel_id") || "—",
+      numberField(row, "revenue_amount") > 0 ? money(numberField(row, "revenue_amount")) : "—",
+      textField(row, "verification_status"),
+    ]);
+
+    const healthRows = mcc.connectors.map((row, i) => [
+      String(i + 1),
+      textField(row, "display_name"),
+      textField(row, "provider"),
+      textField(row, "status"),
+      textField(row, "auth_state"),
+      textField(row, "last_success_at") ? textField(row, "last_success_at").slice(0, 16).replace("T", " ") : "Chưa có",
+      textField(row, "last_error") || "—",
+    ]);
+
+    const recommendationRows = mcc.recommendations.slice(0, 8).map((row, i) => [
+      String(i + 1),
+      textField(row, "severity"),
+      textField(row, "category"),
+      textField(row, "title"),
+      textField(row, "recommended_action"),
+      boolField(row, "approval_required") ? "CẦN DUYỆT" : "SAFE/READ-ONLY",
+      textField(row, "status"),
+    ]);
+
+    const marketRows = mcc.marketIntelligence.slice(0, 10).map((row, i) => [
+      String(i + 1),
+      textField(row, "MI_ID", "ID", "Record ID") || "MI-" + String(i + 1),
+      textField(row, "TYPE", "CATEGORY", "Business", "BUSINESS_LINE") || "Market / Competitor",
+      textField(row, "SUBJECT", "COMPETITOR", "INSIGHT", "TOPIC", "TITLE") || "Evidence record",
+      textField(row, "STATUS", "VERIFICATION", "Verification Status") || "NEED VERIFY",
+      textField(row, "ACTION", "NEXT_ACTION", "NOTES", "Notes") || "—",
+    ]);
 
     return makeResult(
       {
-        "Tiếp cận": "NEED VERIFY",
-        "Tương tác": String(periodConversations.length),
-        "Lead / Inquiry": String(periodCustomers.length),
-        "Booking / Order": String(verifiedBookings.length),
-        "Doanh thu quy đổi": periodUpsellRevenue ? money(periodUpsellRevenue) : "0 đ",
-        "Chi phí quảng cáo": "NEED VERIFY",
-        "ROAS": "NEED VERIFY",
+        "Tiếp cận": mcc.totals.reachVerified ? String(mcc.totals.reach) : "NEED VERIFY",
+        "Tương tác": String(interactionValue),
+        "Lead / Inquiry": String(leadValue),
+        "Booking / Order": String(bookingValue),
+        "Doanh thu quy đổi": revenueValue ? money(revenueValue) : "0 đ",
+        "Chi phí quảng cáo": mcc.totals.spendVerified ? money(mcc.totals.spend) : "NEED VERIFY",
+        "ROAS": mcc.totals.spendVerified && mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY",
       },
       {
-        "Tiếp cận": "Ads reach/impression chưa có connector Actual",
-        "Tương tác": "AI/CRM conversations · " + period.label,
-        "Lead / Inquiry": "CRM profiles có hoạt động · " + period.label,
-        "Booking / Order": "Verified AI booking · " + period.label,
-        "Doanh thu quy đổi": "Upsell booked revenue · " + period.label,
-        "Chi phí quảng cáo": "Google/Meta/TikTok spend chưa sync Actual",
-        "ROAS": "Fail closed khi spend/attribution chưa đủ",
+        "Tiếp cận": mcc.totals.reachVerified ? "Provider Actual · " + period.label : "Reach/impressions provider chưa có Actual authority",
+        "Tương tác": "Chuẩn hóa từ GA4/CRM/provider đã kết nối · " + period.label,
+        "Lead / Inquiry": "Hospitality CRM / attribution runtime · " + period.label,
+        "Booking / Order": "Verified AI/CRM booking · " + period.label,
+        "Doanh thu quy đổi": "Booked upsell attribution; không đồng nghĩa collected cash",
+        "Chi phí quảng cáo": mcc.totals.spendVerified ? "Google/Meta Ads Actual" : "Google/Meta Ads spend chưa VERIFIED",
+        "ROAS": mcc.totals.spendVerified ? "Attributed revenue / verified spend" : "Fail closed khi spend/attribution chưa đủ",
       },
       {
-        marketingChannels: periodChannels.map((row, i) => [
-          String(i + 1),
-          row.channel,
-          "NEED VERIFY",
-          String(row.customers),
-          String(row.verifiedBookings),
-          money(row.upsellRevenue),
-          "—",
-          "—",
-          row.verifiedBookings > 0 ? "MONITOR" : "HOLD",
-        ]),
+        marketingChannels,
+        marketingCampaigns: campaignRows,
+        marketingContent: contentRows,
+        marketingAttribution: attributionRows,
+        marketingDataHealth: healthRows,
+        marketingRecommendations: recommendationRows,
+        marketingMarketIntel: marketRows,
         marketingAcquisition: acquisition.slice(0, 8).map((row, i) => [
-          String(i + 1),
-          row.source,
-          String(row.customers),
-          String(row.conversations),
-          String(row.verifiedBookings),
-          money(row.upsellRevenue),
+          String(i + 1), row.source, String(row.customers), String(row.conversations),
+          String(row.verifiedBookings), money(row.upsellRevenue),
         ]),
+        marketingFunnel: [
+          ["Tiếp cận", mcc.totals.reachVerified ? String(mcc.totals.reach) : "NEED VERIFY"],
+          ["Click", mcc.totals.clicks ? String(mcc.totals.clicks) : "NEED VERIFY"],
+          ["Lead / Inquiry", String(leadValue)],
+          ["Booking", String(bookingValue)],
+          ["Doanh thu", revenueValue ? money(revenueValue) : "0 đ"],
+        ],
+        marketingConversion: [
+          ["Attribution coverage", attributionCoverage],
+          ["Lead / Click", mcc.totals.clicks > 0 ? pct((leadValue / mcc.totals.clicks) * 100) : "NEED VERIFY"],
+          ["Booking / Lead", leadValue > 0 ? pct((bookingValue / leadValue) * 100) : "NEED VERIFY"],
+          ["CPA", mcc.totals.cpa !== null ? money(mcc.totals.cpa) : "NEED VERIFY"],
+          ["ROAS", mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY"],
+        ],
       },
       {
         marketingSignals: [
+          "Data Health: " + mcc.connectors.filter((row) => ["LIVE","READY"].includes(textField(row, "status"))).length + "/" + mcc.connectors.length + " nguồn LIVE/READY",
+          "Attribution coverage: " + attributionCoverage,
           "AI Lễ Tân mở trong kỳ: " + periodConversations.filter((conversation) => conversation.status !== "closed").length,
           "Review quản lý trong kỳ: " + receptionist.managerReviews.filter((review) => inPeriod(review.createdAt)).length,
-          "Upsell đã hiển thị trong kỳ: " + periodUpsellEvents.filter((event) => event.event_type === "shown").length,
           "Upsell booked trong kỳ: " + bookedUpsells.length,
         ],
       },
-      "PARTIAL",
+      mcc.sourceState === "LIVE" && mcc.totals.spendVerified && mcc.totals.reachVerified ? "LIVE" : "PARTIAL",
     );
   }
 

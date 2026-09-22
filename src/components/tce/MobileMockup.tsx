@@ -395,26 +395,32 @@ function MobileBusiness({ data }: { data?: TceTabLiveData }) {
 }
 
 function MobileMarketing({ data }: { data?: TceTabLiveData }) {
-  const rows = ["Google Ads","Meta Ads","Instagram","TikTok","Website"].map(x=>[x,"—","—","—","—","—"]);
+  const channelRows = data?.tables.marketingChannels?.length
+    ? data.tables.marketingChannels.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—", r[4] ?? "—", r[5] ?? "—", r[8] ?? "—"])
+    : [["Chưa có Actual","NEED VERIFY","—","—","—","—"]];
+  const funnelRows = data?.tables.marketingFunnel?.length
+    ? data.tables.marketingFunnel
+    : [["Tiếp cận","NEED VERIFY"],["Click","NEED VERIFY"],["Lead / Inquiry","0"],["Booking","0"],["Doanh thu","0 đ"]];
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Hiệu quả theo kênh" subtitle="Spend · Lead · Booking · Doanh thu"><RowTable rows={data?.tables.marketingChannels?.length ? data.tables.marketingChannels.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—", r[4] ?? "—", r[5] ?? "—", r[8] ?? "—"]) : rows} cols={6}/></MobileSection>
-      <MobileSection title="Phễu chuyển đổi" subtitle="Từ tiếp cận đến doanh thu">
+      <MobileSection title="Hiệu quả theo kênh" subtitle="Spend · Lead · Booking · Doanh thu · Xác minh">
+        <RowTable rows={channelRows} cols={6}/>
+      </MobileSection>
+      <MobileSection title="Phễu chuyển đổi" subtitle="Actual-only; thiếu authority giữ NEED VERIFY">
         <div className="space-y-[3px] px-[28px] py-[3px]">
-          {[
-            ["Tiếp cận  —","#2f7cf4","100%"],
-            ["Click  —","#45a2ef","86%"],
-            ["Lead / Inquiry  —","#63d69a","70%"],
-            ["Booking  —","#ffbd58","54%"],
-            ["Doanh thu  —","#ff686e","38%"],
-          ].map(([label,color,width])=><div key={label} className="mx-auto grid h-[24px] place-items-center rounded-[6px] text-[8px] font-bold text-white" style={{backgroundColor:color,width}}>{label}</div>)}
+          {funnelRows.slice(0,5).map((row,i)=><div key={row[0]} className="mx-auto grid h-[24px] place-items-center rounded-[6px] text-[8px] font-bold text-white" style={{backgroundColor:["#2f7cf4","#45a2ef","#63d69a","#ffbd58","#ff686e"][i],width:(100-i*13)+"%"}}>{row[0]} · {row[1] ?? "—"}</div>)}
         </div>
       </MobileSection>
-      <MobileSection title="Review & Gợi ý AI" subtitle="Danh tiếng & hành động">
-        <div className="grid grid-cols-3 gap-[6px]">
-          {[["R","Review","amber"],["P","Phản hồi","green"],["C","Cần xử lý","red"]].map(([l,n,t])=><div key={n} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><div className="flex items-center gap-2"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="amber"?"bg-[#ffa20e]":t==="green"?"bg-[#16ba6d]":"bg-[#ff4d5d]")}>{l}</span><span><small className="block text-[6px] text-[#7084a7]">{n}</small><b className="text-[9px]">—</b></span></div></div>)}
-        </div>
-        <p className="mt-[10px] text-[7px] font-bold text-[#17315b]">AI: gợi ý tối ưu sẽ xuất hiện khi tracking end-to-end PASS</p>
+      <MobileSection title="Chiến dịch & nội dung" subtitle="CMO plan + provider Actual khi connector LIVE">
+        <RowTable rows={data?.tables.marketingCampaigns?.length ? data.tables.marketingCampaigns.map((r)=>[r[1] ?? "—",r[2] ?? "—",r[5] ?? "—",r[7] ?? "—"]) : [["Chưa có campaign sync","—","PLANNED","NEED VERIFY"]]} cols={4}/>
+        <div className="mt-[6px]"><RowTable rows={data?.tables.marketingContent?.length ? data.tables.marketingContent.slice(0,5).map((r)=>[r[1] ?? "—",r[2] ?? "—",r[5] ?? "—",r[6] ?? "—"]) : [["Chưa có content sync","—","—","NEED VERIFY"]]} cols={4}/></div>
+      </MobileSection>
+      <MobileSection title="Attribution & Data Health" subtitle="Nguồn → Lead → Booking → Revenue">
+        <RowTable rows={data?.tables.marketingAttribution?.length ? data.tables.marketingAttribution.slice(0,6).map((r)=>[r[2] ?? "—",r[3] ?? "—",r[4] ?? "—",r[7] ?? "—"]) : [["Chưa có attribution event","—","—","NEED VERIFY"]]} cols={4}/>
+        <div className="mt-[6px]"><RowTable rows={data?.tables.marketingDataHealth?.length ? data.tables.marketingDataHealth.slice(0,8).map((r)=>[r[1] ?? "—",r[3] ?? "—",r[4] ?? "—"]) : [["Connector registry","NEED VERIFY","—"]]} cols={3}/></div>
+      </MobileSection>
+      <MobileSection title="AI Marketing" subtitle="Khuyến nghị evidence-based; không tự chi Ads">
+        <RowTable rows={data?.tables.marketingRecommendations?.length ? data.tables.marketingRecommendations.slice(0,5).map((r)=>[r[1] ?? "—",r[3] ?? "—",r[5] ?? "—"]) : [["INFO","Chờ đủ dữ liệu Actual","SAFE/READ-ONLY"]]} cols={3}/>
       </MobileSection>
     </div>
   );

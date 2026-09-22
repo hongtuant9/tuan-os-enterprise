@@ -2,11 +2,12 @@ import "server-only";
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GoogleOAuthTokenStore, GoogleAnalyticsReadScopeError } from "@/server/integrations/google/token-store";
+import { normalizeGa4DailyMetrics } from "@/server/marketing-command-center/ga4-normalizer";
 
 const MEASUREMENT_ID = "G-QC8L09B1LV";
 const SOURCE_KEY = "ga4-traffic";
 
-type Ga4Snapshot = {
+export type Ga4Snapshot = {
   propertyId: string;
   measurementId: string;
   observedAt: string;
@@ -18,6 +19,7 @@ type Ga4Snapshot = {
     keyEvents: number;
   };
   sources: Array<{ source: string; medium: string; sessions: number; engagedSessions: number; totalUsers: number; keyEvents: number }>;
+  daily: Array<{ date: string; source: string; medium: string; sessions: number; engagedSessions: number; totalUsers: number; keyEvents: number }>;
 };
 
 function numberValue(value?: string | null): number {
@@ -68,21 +70,41 @@ export async function collectGa4TrafficSnapshot(): Promise<{ ok: boolean; status
       property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-        dimensions: [{ name: "sessionSource" }, { name: "sessionMedium" }],
+        dimensions: [{ name: "date" }, { name: "sessionSource" }, { name: "sessionMedium" }],
         metrics: [{ name: "sessions" }, { name: "engagedSessions" }, { name: "totalUsers" }, { name: "keyEvents" }],
         limit: "100",
       },
     });
 
-    const rows = (report.data.rows ?? []).map((row) => ({
-      source: row.dimensionValues?.[0]?.value ?? "(unknown)",
-      medium: row.dimensionValues?.[1]?.value ?? "(unknown)",
-      sessions: numberValue(row.metricValues?.[0]?.value),
-      engagedSessions: numberValue(row.metricValues?.[1]?.value),
-      totalUsers: numberValue(row.metricValues?.[2]?.value),
-      keyEvents: numberValue(row.metricValues?.[3]?.value),
-    }));
-    const totals = rows.reduce((acc, row) => ({
+    const daily = (report.data.rows ?? []).map((row) => {
+      const rawDate = row.dimensionValues?.[0]?.value ?? "";
+      const date = /^\d{8}$/.test(rawDate)
+        ? rawDate.slice(0, 4) + "-" + rawDate.slice(4, 6) + "-" + rawDate.slice(6, 8)
+        : new Date().toISOString().slice(0, 10);
+      return {
+        date,
+        source: row.dimensionValues?.[1]?.value ?? "(unknown)",
+        medium: row.dimensionValues?.[2]?.value ?? "(unknown)",
+        sessions: numberValue(row.metricValues?.[0]?.value),
+        engagedSessions: numberValue(row.metricValues?.[1]?.value),
+        totalUsers: numberValue(row.metricValues?.[2]?.value),
+        keyEvents: numberValue(row.metricValues?.[3]?.value),
+      };
+    });
+    const sourceMap = new Map<string, Ga4Snapshot["sources"][number]>();
+    for (const row of daily) {
+      const key = row.source + "\u0000" + row.medium;
+      const current = sourceMap.get(key) ?? {
+        source: row.source, medium: row.medium, sessions: 0, engagedSessions: 0, totalUsers: 0, keyEvents: 0,
+      };
+      current.sessions += row.sessions;
+      current.engagedSessions += row.engagedSessions;
+      current.totalUsers += row.totalUsers;
+      current.keyEvents += row.keyEvents;
+      sourceMap.set(key, current);
+    }
+    const rows = [...sourceMap.values()];
+    const totals = daily.reduce((acc, row) => ({
       sessions: acc.sessions + row.sessions,
       engagedSessions: acc.engagedSessions + row.engagedSessions,
       totalUsers: acc.totalUsers + row.totalUsers,
@@ -95,6 +117,7 @@ export async function collectGa4TrafficSnapshot(): Promise<{ ok: boolean; status
       period: { startDate: "7daysAgo", endDate: "today" },
       totals,
       sources: rows,
+      daily,
     };
 
     const now = new Date().toISOString();
@@ -108,6 +131,7 @@ export async function collectGa4TrafficSnapshot(): Promise<{ ok: boolean; status
       updated_at: now,
     }, { onConflict: "source_key,external_id" });
     await db.from("sync_sources").update({ status: "idle", last_synced_at: now, last_error: null }).eq("key", SOURCE_KEY);
+    await normalizeGa4DailyMetrics(db, daily, now);
     return { ok: true, status: "SYNCED", snapshot };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 220) : "GA4 collection failed";

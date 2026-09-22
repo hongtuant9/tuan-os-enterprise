@@ -339,7 +339,7 @@ function MobileBusiness({ data }: { data?: TceTabLiveData }) {
       <MobileSection title="Doanh thu - Chi phí - Lợi nhuận" subtitle="7 ngày gần nhất"><TinyChart withDonut/><p className="-mt-[4px] text-[6px] text-[#6c82a5]">Lavender — · Cozy Garden —</p></MobileSection>
       <MobileSection title="Tình hình theo cơ sở" subtitle="Hôm nay">
         <div className="space-y-[5px]">
-          {[["Lavender Homestay","L","violet"],["Cozy Garden","C","green"]].map(([name,letter,tone])=><div key={name} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[11px] font-extrabold text-white " + (tone==="violet"?"bg-[#8238ee]":"bg-[#16ba6d]")}>{letter}</span><div><b className="text-[8px] text-[#102a56]">{name}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Công suất — · ADR —</p><p className="mt-[2px] text-[6.5px] font-bold text-[#17315b]">RevPAR — · Booking —</p></div></div>)}
+          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Cozy Garden","—","—","KiotViet F&B"]]).slice(0,4).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn live"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
         </div>
       </MobileSection>
       <MobileSection title="Dự báo & cảnh báo" subtitle="Các tín hiệu quan trọng">
@@ -424,7 +424,7 @@ function MobileCustomers({ data }: { data?: TceTabLiveData }) {
 function MobileHR({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Chấm công theo bộ phận" subtitle="Nhân sự hôm nay"><RowTable rows={[["Lễ tân","—","—","—"],["Buồng phòng","—","—","—"],["Bếp","—","—","—"],["Bar","—","—","—"],["Phục vụ","—","—","—"],["Marketing","—","—","—"]]} cols={4}/></MobileSection>
+      <MobileSection title="Chấm công theo bộ phận" subtitle="Nhân sự hôm nay"><RowTable rows={[["Tổng nhân sự",data?.metricValues["Tổng nhân sự"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Đang làm việc",data?.metricValues["Đang làm việc"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Vắng mặt",data?.metricValues["Vắng mặt"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Đi muộn",data?.metricValues["Đi muộn"] ?? "NEED VERIFY","Attendance","Chưa nối"]]} cols={4}/></MobileSection>
       <MobileSection title="Lịch ca hôm nay" subtitle="06:00–14:00 · 14:00–22:00">
         <div className="space-y-[8px]">
           {["Ca sáng · — nhân sự","Ca chiều · — nhân sự"].map((x,i)=><div key={x}><b className={"text-[8px] " + (i===0?"text-[#10a85a]":"text-[#2f7cf4]")}>{x}</b><div className="mt-[4px] space-y-[3px]">{["Nhân viên 01","Nhân viên 02","Nhân viên 03"].map((n,j)=><div key={n} className="flex justify-between px-[6px] text-[7px]"><span>{n}</span><b className={j===1?"text-[#ffa20e]":"text-[#10a85a]"}>{j===1?"Đi muộn":"Đúng giờ"}</b></div>)}</div></div>)}
@@ -448,7 +448,7 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
           <div className="space-y-[10px] text-[7px]"><div><span className="text-[#7185a7]">Ngân sách</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Thực tế</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Chênh lệch</span><b className="block text-[10px] text-[#10a85a]">—</b></div></div>
         </div>
       </MobileSection>
-      <MobileSection title="Công nợ & cảnh báo" subtitle="Các khoản cần theo dõi"><RowTable rows={[["Agoda","—","Đã thanh toán"],["Nhà cung cấp","—","Quá hạn"],["Khoản vay","—","Sắp đến hạn"],["F&B Supplier","—","Quá hạn"]]} /></MobileSection>
+      <MobileSection title="Công nợ & cảnh báo" subtitle="Các khoản cần theo dõi"><RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[1] ?? "—",r[2] ?? "—",r[4] ?? "—"]).slice(0,5) : [["Công nợ phải trả",data?.metricValues["Công nợ phải trả"] ?? "NEED VERIFY","Chưa có AP runtime"],["Nợ vay",data?.metricValues["Nợ vay"] ?? "NEED VERIFY","Chưa sync FIN-HOSPITALITY-001"]]} /></MobileSection>
     </div>
   );
 }

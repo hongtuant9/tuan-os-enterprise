@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { recordLogin } from "@/app/actions/auth";
@@ -70,9 +71,17 @@ export default function LoginPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-xs font-medium text-[var(--ink-secondary)]">
-              Password
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="password" className="text-xs font-medium text-[var(--ink-secondary)]">
+                Password
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                Quên mật khẩu?
+              </Link>
+            </div>
             <input
               id="password"
               type="password"

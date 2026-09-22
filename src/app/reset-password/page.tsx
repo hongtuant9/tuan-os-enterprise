@@ -25,29 +25,27 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
 
     try {
+      const supabase = createClient();
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !sessionData.session) {
-        setLoading(false);
         setError("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.");
         return;
       }
 
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
-        setLoading(false);
         setError("Không thể cập nhật mật khẩu. Liên kết có thể đã hết hạn; vui lòng yêu cầu liên kết mới.");
         return;
       }
 
       await supabase.auth.signOut();
-      setLoading(false);
       setDone(true);
     } catch {
-      setLoading(false);
       setError("Không thể hoàn tất đặt lại mật khẩu. Vui lòng thử lại hoặc yêu cầu liên kết mới.");
+    } finally {
+      setLoading(false);
     }
   }
 

@@ -16,21 +16,30 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setLoading(false);
+      if (signInError) {
+        setError("Email hoặc mật khẩu không đúng.");
+        return;
+      }
 
-    if (signInError) {
-      setError(signInError.message);
-      return;
+      try {
+        await recordLogin();
+      } catch {
+        // Authentication succeeded; a non-critical audit write must not block access.
+      }
+
+      window.location.href = "/";
+    } catch {
+      setError("Không thể kết nối dịch vụ đăng nhập. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
     }
-
-    await recordLogin();
-    window.location.href = "/";
   }
 
   return (

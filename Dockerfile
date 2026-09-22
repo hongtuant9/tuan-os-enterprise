@@ -14,7 +14,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN --mount=type=secret,id=next_public_env \
+    set -eu; \
+    set -a; \
+    . /run/secrets/next_public_env; \
+    set +a; \
+    test -n "$NEXT_PUBLIC_SUPABASE_URL"; \
+    test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"; \
+    test -n "$NEXT_PUBLIC_APP_URL"; \
+    npm run build
 
 # 3. Run the app in a minimal image
 FROM base AS runner

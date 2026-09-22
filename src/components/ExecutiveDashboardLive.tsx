@@ -1,5 +1,6 @@
 import Link from "next/link";
 import RefreshOnView from "./RefreshOnView";
+import MobileExecutiveDashboard from "@/components/tce/MobileExecutiveDashboard";
 
 export type ExecutiveAction = {
   id: string;
@@ -251,7 +252,11 @@ function SystemCard({ source }: { source: ExecutiveSource }) {
 export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
   const t = timeParts(props.generatedAt);
   return (
-    <div className="min-h-screen bg-[#f5f9fd] text-[#17315c]">
+    <>
+      <div className="md:hidden">
+        <MobileExecutiveDashboard {...props} />
+      </div>
+      <div className="hidden min-h-screen bg-[#f5f9fd] text-[#17315c] md:block">
       <RefreshOnView intervalMs={60000}/>
       <header className="border-b border-[#dce7f3] bg-white px-4 py-[8px]">
         <div className="flex items-start justify-between gap-4">
@@ -369,6 +374,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
           </Panel>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

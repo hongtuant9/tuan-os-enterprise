@@ -245,7 +245,7 @@ export default async function Home({
 
   return (
     <div className="flex min-h-screen bg-[#f4f8fd]">
-      <Sidebar />
+      <div className="hidden md:block"><Sidebar /></div>
       <main className="min-w-0 flex-1">
         <ExecutiveDashboardLive
           generatedAt={now.toISOString()}

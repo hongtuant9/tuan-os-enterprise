@@ -114,7 +114,7 @@ export async function ensureMarketingWorkbookFresh(
 
     if (staleSources.length) {
       const cycle = await runMarketingCommandCenterCycle(now);
-      if (cycle.runtimeError) errors.push("marketing-command-center: " + cycle.runtimeError);
+      if (!cycle.ok) errors.push("marketing-command-center: runtime cycle chưa hoàn tất");
     }
 
     const refreshed = (

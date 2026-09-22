@@ -322,21 +322,6 @@ function Pipeline({ items }: { items: string[] }) {
   );
 }
 
-function MiniStatusGrid({ items }: { items: string[] }) {
-  return (
-    <div className="grid h-full gap-2 p-3 sm:grid-cols-2">
-      {items.map((item) => (
-        <div key={item} className="rounded-[7px] border border-[#e4edf6] bg-[#fbfdff] p-3">
-          <div className="flex items-center justify-between"><b className="text-[10px] text-[#173566]">{item}</b><Status label="Đang hoạt động" tone="green" /></div>
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
-            {["Chỉ số", "Ngoại lệ", "Cập nhật"].map((x) => <div key={x} className="rounded bg-white p-2 text-center shadow-sm"><p className="text-[8px] text-[#8291a7]">{x}</p><b className="mt-1 block text-[12px] text-[#27486f]">—</b></div>)}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ListRows({ items }: { items: string[] }) {
   return <div className="divide-y divide-[#e9f0f7] px-3">{items.map((item, i) => <div key={item} className="flex h-[36px] items-center gap-2 text-[9px]"><span className={"grid h-5 w-5 place-items-center rounded-full text-[8px] font-bold text-white " + (i < 2 ? "bg-[#f59b0b]" : "bg-[#2c7dec]")}>{i + 1}</span><span className="min-w-0 flex-1 truncate font-medium text-[#385375]">{item}</span><span className="text-[#8594aa]">—</span></div>)}</div>;
 }

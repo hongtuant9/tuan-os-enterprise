@@ -8,6 +8,7 @@ import {
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
 import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
+import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
 
 export type TceTabScreen =
   | "business"
@@ -399,6 +400,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
   }
 
   if (screen === "marketing") {
+    const workbookFreshness = await ensureMarketingWorkbookFresh();
     const [acquisition, upsell, receptionist, mcc] = await Promise.all([
       container.hospitalityCrm.acquisitionAttribution(500),
       container.hospitalityCrm.upsellSummary(500),
@@ -467,15 +469,26 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       textField(row, "verification_status"),
     ]);
 
-    const healthRows = mcc.connectors.map((row, i) => [
-      String(i + 1),
-      textField(row, "display_name"),
-      textField(row, "provider"),
-      textField(row, "status"),
-      textField(row, "auth_state"),
-      textField(row, "last_success_at") ? textField(row, "last_success_at").slice(0, 16).replace("T", " ") : "Chưa có",
-      textField(row, "last_error") || "—",
-    ]);
+    const healthRows = [
+      [
+        "1",
+        "TCE Marketing Workbook",
+        "google_drive",
+        workbookFreshness.state,
+        workbookFreshness.workbookId ? "VERIFIED" : "NEED_VERIFY",
+        workbookFreshness.lastSyncedAt ? workbookFreshness.lastSyncedAt.slice(0, 16).replace("T", " ") : "Chưa có",
+        workbookFreshness.errors.length ? workbookFreshness.errors.join(" | ") : "—",
+      ],
+      ...mcc.connectors.map((row, i) => [
+        String(i + 2),
+        textField(row, "display_name"),
+        textField(row, "provider"),
+        textField(row, "status"),
+        textField(row, "auth_state"),
+        textField(row, "last_success_at") ? textField(row, "last_success_at").slice(0, 16).replace("T", " ") : "Chưa có",
+        textField(row, "last_error") || "—",
+      ]),
+    ];
 
     const recommendationRows = mcc.recommendations.slice(0, 8).map((row, i) => [
       String(i + 1),
@@ -544,6 +557,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {
         marketingSignals: [
+          "Workbook sync: " + workbookFreshness.state + (workbookFreshness.changed ? " · đã reconcile bản sửa mới" : " · current"),
           "Data Health: " + mcc.connectors.filter((row) => ["LIVE","READY"].includes(textField(row, "status"))).length + "/" + mcc.connectors.length + " nguồn LIVE/READY",
           "Attribution coverage: " + attributionCoverage,
           "AI Lễ Tân mở trong kỳ: " + periodConversations.filter((conversation) => conversation.status !== "closed").length,

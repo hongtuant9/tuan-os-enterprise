@@ -16,6 +16,7 @@ type Query = PromiseLike<DbResult> & {
   upsert(values: unknown, options?: Record<string, unknown>): Query;
   insert(values: unknown): Query;
   update(values: unknown): Query;
+  delete(): Query;
 };
 type UntypedDb = { from(name: string): Query };
 type Row = Record<string, unknown>;
@@ -108,10 +109,26 @@ function campaignStatus(raw: string): string {
 
 function budgetMode(raw: string): string {
   const value = raw.toUpperCase();
-  if (value.includes("ORGANIC") || value.includes("NO SPEND")) return "NO_SPEND";
-  if (value.includes("APPROV")) return "APPROVED_LIMIT";
+  if (
+    value.includes("ORGANIC") ||
+    value.includes("NO_SPEND") ||
+    value.includes("NO SPEND") ||
+    value.includes("KHÔNG SPEND") ||
+    value.includes("KHONG SPEND") ||
+    value.includes("KHÔNG PAID") ||
+    value.includes("KHONG PAID")
+  ) return "NO_SPEND";
+  if (value.includes("APPROV") || value.includes("DUYỆT") || value.includes("DUYET")) return "APPROVED_LIMIT";
   if (value.includes("ACTUAL")) return "PROVIDER_ACTUAL";
   return "PROPOSAL_ONLY";
+}
+
+function canonicalVerification(raw: string): string {
+  const value = raw.trim().toUpperCase();
+  if (value === "VERIFIED") return "VERIFIED";
+  if (value === "PARTIAL") return "PARTIAL";
+  if (value === "HOLD") return "HOLD";
+  return "NEED_VERIFY";
 }
 
 async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
@@ -127,7 +144,9 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     const name = pick(data, ["CAMPAIGN", "Campaign"]);
     if (!planId || !name) return [];
     const channels = pick(data, ["CHANNELS", "Channel", "Kênh"]);
-    const statusRaw = pick(data, ["STATUS", "Status", "Trạng thái"]);
+    const statusRaw = pick(data, ["STATUS", "Status", "Trạng thái", "TRẠNG THÁI CHIẾN DỊCH"]);
+    if (campaignStatus(statusRaw) === "DEMO_ONLY") return [];
+    const verificationRaw = pick(data, ["XÁC MINH (Verification Status)", "VERIFICATION", "Verification Status"]);
     return [{
       channel_id: channelFor(channels),
       connector_id: null,
@@ -145,7 +164,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       end_date: null,
       utm_campaign: pick(data, ["UTM / ATTRIBUTION", "UTM", "utm_campaign"]) || null,
       source_authority: "TCE CMO Operating Workbook — plan only",
-      verification_status: statusRaw.toUpperCase().includes("ACTIVE") ? "PARTIAL" : "NEED_VERIFY",
+      verification_status: canonicalVerification(verificationRaw),
       last_synced_at: str(record.synced_at) || nowIso,
       metadata: {
         channels,
@@ -160,6 +179,15 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
   });
   if (campaignPayload.length) {
     await db.from("marketing_campaigns").upsert(campaignPayload, { onConflict: "plan_campaign_id" });
+  }
+  if (campaignRecords.length) {
+    const currentIds = new Set(campaignPayload.map((row) => str(row.plan_campaign_id)).filter(Boolean));
+    const existing = rowList(await db.from("marketing_campaigns").select("id,plan_campaign_id,metadata"));
+    for (const row of existing) {
+      if (obj(row.metadata).plan_only === true && str(row.plan_campaign_id) && !currentIds.has(str(row.plan_campaign_id))) {
+        await db.from("marketing_campaigns").delete().eq("id", str(row.id));
+      }
+    }
   }
 
   const contentPayload = contentRecords.flatMap((record) => {
@@ -176,14 +204,14 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     }
     return [{
       content_id: contentId,
-      brand: pick(data, ["BRAND", "Brand"]) || null,
+      brand: pick(data, ["MASTER_BRAND", "BRAND", "Brand"]) || null,
       pillar: pick(data, ["PILLAR", "Pillar"]) || null,
       objective: pick(data, ["OBJECTIVE", "Objective"]) || null,
       format: pick(data, ["FORMAT", "Format"]) || null,
       channel_id: /facebook|metricool/i.test(note + " " + publishStatus) ? "facebook" : null,
       campaign_id: null,
       publish_status: publishStatus,
-      verification_status: pick(data, ["VERIFICATION", "Verification"]) || "NEED_VERIFY",
+      verification_status: canonicalVerification(pick(data, ["VERIFICATION", "Verification", "XÁC MINH (Verification Status)"])),
       scheduled_at: scheduledAt,
       provider_post_id: (note.match(/post id\s+(\d+)/i)?.[1] ?? null),
       destination_url: null,
@@ -196,6 +224,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
         dependency: pick(data, ["DEPENDENCY", "Dependency"]),
         success_metric: pick(data, ["SUCCESS_METRIC", "Success Metric"]),
         note,
+        service_line: pick(data, ["SERVICE_LINE", "Service Line"]) || null,
         plan_only: true,
       },
       last_synced_at: str(record.synced_at) || nowIso,
@@ -203,6 +232,15 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
   });
   if (contentPayload.length) {
     await db.from("marketing_content_items").upsert(contentPayload, { onConflict: "content_id" });
+  }
+  if (contentRecords.length) {
+    const currentIds = new Set(contentPayload.map((row) => str(row.content_id)).filter(Boolean));
+    const existing = rowList(await db.from("marketing_content_items").select("id,content_id,metadata"));
+    for (const row of existing) {
+      if (obj(row.metadata).plan_only === true && str(row.content_id) && !currentIds.has(str(row.content_id))) {
+        await db.from("marketing_content_items").delete().eq("id", str(row.id));
+      }
+    }
   }
   return { campaigns: campaignPayload.length, content: contentPayload.length };
 }

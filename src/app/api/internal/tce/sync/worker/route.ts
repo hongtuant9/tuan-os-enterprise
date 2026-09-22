@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import type { SyncSourceStatus } from "@/server/sync/sync-status.service";
+import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "worker_disabled" });
   }
 
+  const marketingWorkbook = await ensureMarketingWorkbookFresh();
   const container = getAdminContainer();
   const sources = (await container.syncStatus.list()).filter((source) => MANAGED_SOURCES.has(source.key));
   const due = sources.filter(isDue);
@@ -76,5 +78,6 @@ export async function POST(req: NextRequest) {
     checked: sources.length,
     ran: due.length,
     results,
+    marketingWorkbook,
   });
 }

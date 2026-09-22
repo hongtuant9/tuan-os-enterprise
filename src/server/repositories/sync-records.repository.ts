@@ -17,6 +17,21 @@ export class SyncRecordsRepository {
     return data;
   }
 
+  async listBySource(sourceKey: string): Promise<Row[]> {
+    const { data, error } = await this.db
+      .from("sync_records")
+      .select("*")
+      .eq("source_key", sourceKey);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async deleteByIds(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.db.from("sync_records").delete().in("id", ids);
+    if (error) throw error;
+  }
+
   async upsert(input: {
     sourceKey: string;
     externalId: string;

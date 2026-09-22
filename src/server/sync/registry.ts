@@ -22,6 +22,10 @@ export const SYNC_SOURCE_KEYS = [
   "l3-services",
   "l3-products",
   "marketing-shadow-content",
+  "marketing-campaign-plan",
+  "marketing-channel-plan",
+  "marketing-action-plan",
+  "marketing-market-intelligence",
   "fin-001",
   "business-portfolio",
   "family",
@@ -61,6 +65,10 @@ export function getMapperForSource(key: SyncSourceKey, db: SupabaseClient<Databa
     case "l3-services":
     case "l3-products":
     case "marketing-shadow-content":
+    case "marketing-campaign-plan":
+    case "marketing-channel-plan":
+    case "marketing-action-plan":
+    case "marketing-market-intelligence":
       return new GenericRecordMapper();
     case "l3-ota-change-review":
       return new MasterChangeImportMapper(new ApprovalsRepository(db));

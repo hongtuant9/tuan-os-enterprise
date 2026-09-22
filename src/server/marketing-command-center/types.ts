@@ -36,6 +36,7 @@ export type MarketingCommandCenterSnapshot = {
     roas: number | null;
     reachVerified: boolean;
     spendVerified: boolean;
+    revenueVerified: boolean;
     attributionCoverage: number | null;
   };
   channels: MarketingPerformanceRow[];

@@ -50,7 +50,10 @@ function channelAggregate(metricRows: Row[], channelRows: Row[]): MarketingPerfo
     const total = (key: string) => items.reduce((sum, row) => sum + n(row[key]), 0);
     const spend = total("spend");
     const leads = total("leads_verified");
-    const revenue = total("attributed_revenue");
+    const revenue = items.reduce(
+      (sum, row) => sum + (s(row.verification_status) === "VERIFIED" ? n(row.attributed_revenue) : 0),
+      0,
+    );
     return {
       channelId,
       channelName: names.get(channelId) ?? channelId,
@@ -92,8 +95,11 @@ export async function getMarketingCommandCenterSnapshot(
     ]);
     const metricRows = rows(metricResult);
     const channelRows = rows(channelResult);
-    const campaignRows = rows(campaignResult);
-    const contentRows = rows(contentResult);
+    const campaignRows = rows(campaignResult)
+      .filter((row) => !["DEMO_ONLY", "ARCHIVED"].includes(s(row.status)))
+      .sort((a, b) => s(a.plan_campaign_id).localeCompare(s(b.plan_campaign_id)));
+    const contentRows = rows(contentResult)
+      .sort((a, b) => s(a.content_id).localeCompare(s(b.content_id)));
     const attributionRows = rows(attributionResult);
     const connectorRows = rows(connectorResult);
     const recommendationRows = rows(recommendationResult);
@@ -108,13 +114,17 @@ export async function getMarketingCommandCenterSnapshot(
     const spend = total("spend");
     const revenue = total("revenue");
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
-    const taggedEvents = attributableEvents.filter((row) => Boolean(s(row.utm_source) || s(row.utm_campaign) || s(row.source)));
+    const taggedEvents = attributableEvents.filter((row) => Boolean(
+      s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
+    ));
     const attributionCoverage = attributableEvents.length ? taggedEvents.length / attributableEvents.length : null;
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
+    const revenueConnectors = new Set(["kiotviet_hotel","kiotviet_fnb"]);
     const reachVerified = metricRows.some((row) => reachConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
     const spendVerified = metricRows.some((row) => spendConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
+    const revenueVerified = metricRows.some((row) => revenueConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
 
     const liveConnectors = connectorRows.filter((row) => ["LIVE","READY"].includes(s(row.status))).length;
     const errorConnectors = connectorRows.filter((row) => s(row.status) === "ERROR").length;
@@ -134,9 +144,10 @@ export async function getMarketingCommandCenterSnapshot(
         spend,
         revenue,
         cpa: leads > 0 && spendVerified ? spend / leads : null,
-        roas: spend > 0 && spendVerified ? revenue / spend : null,
+        roas: spend > 0 && spendVerified && revenueVerified ? revenue / spend : null,
         reachVerified,
         spendVerified,
+        revenueVerified,
         attributionCoverage,
       },
       channels,
@@ -157,7 +168,7 @@ export async function getMarketingCommandCenterSnapshot(
       totals: {
         impressions: 0, reach: 0, clicks: 0, engagements: 0, sessions: 0,
         leads: 0, bookings: 0, spend: 0, revenue: 0, cpa: null, roas: null,
-        reachVerified: false, spendVerified: false, attributionCoverage: null,
+        reachVerified: false, spendVerified: false, revenueVerified: false, attributionCoverage: null,
       },
       channels: [], campaigns: [], content: [], attribution: [], connectors: [],
       recommendations: [], marketIntelligence: [], sourceState: "NEED_VERIFY",

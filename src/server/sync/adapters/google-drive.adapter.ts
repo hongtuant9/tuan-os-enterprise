@@ -28,8 +28,24 @@ function canonicalSheetRange(sourceKey: string, configuredRange: string | null):
   return range;
 }
 
-/** First row is treated as column headers; externalId is the 1-indexed sheet row number. */
-function rowsFromSheetValues(values: string[][], headerRowIndex = 0): RawSheetRow[] {
+const stableIdFieldsBySource: Record<string, string[]> = {
+  "marketing-shadow-content": ["CONTENT_ID"],
+  "marketing-campaign-plan": ["CAMPAIGN_ID"],
+  "marketing-channel-plan": ["KÊNH", "CHANNEL", "Channel"],
+  "marketing-action-plan": ["ACTION_ID"],
+  "marketing-market-intelligence": ["INTEL_ID", "MI_ID", "ID"],
+};
+
+function stableExternalId(sourceKey: string, fields: Record<string, string>, fallback: string): string {
+  for (const field of stableIdFieldsBySource[sourceKey] ?? []) {
+    const value = fields[field]?.trim();
+    if (value) return value;
+  }
+  return fallback;
+}
+
+/** First row is treated as column headers; marketing control sources use canonical IDs instead of row numbers. */
+function rowsFromSheetValues(sourceKey: string, values: string[][], headerRowIndex = 0): RawSheetRow[] {
   if (values.length <= headerRowIndex) return [];
 
   const header = values[headerRowIndex];
@@ -41,7 +57,8 @@ function rowsFromSheetValues(values: string[][], headerRowIndex = 0): RawSheetRo
     header.forEach((column, columnIndex) => {
       if (column) fields[column.trim()] = row[columnIndex] ?? "";
     });
-    return { externalId: String(index + headerRowIndex + 2), fields };
+    const fallback = String(index + headerRowIndex + 2);
+    return { externalId: stableExternalId(sourceKey, fields, fallback), fields };
   });
 }
 
@@ -94,7 +111,7 @@ export class GoogleDriveAdapter implements SyncAdapter {
         "l3-services": 2,
         "l3-products": 1,
       };
-      rows = rowsFromSheetValues(values, headerRowIndexBySource[this.sourceKey] ?? 0);
+      rows = rowsFromSheetValues(this.sourceKey, values, headerRowIndexBySource[this.sourceKey] ?? 0);
       if (this.sourceKey === "tce-checklist-daily") {
         rows = rows.filter((row) => row.fields["CHECKLIST_ID"]?.trim());
       }

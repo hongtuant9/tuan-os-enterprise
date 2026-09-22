@@ -96,7 +96,7 @@ function toAction(item: ReturnType<typeof buildManagerItems>[number]): Executive
     id: item.id,
     priority: item.priority,
     title: item.title,
-    unit: item.unit || "TCE",
+    unit: "TCE",
     owner: item.owner || item.agent || "AI Chief of Staff",
     due: item.dueDate,
     status: item.pendingCeoApproval ? "Chờ quyết định" : item.status === "BLOCKED" ? "Bị chặn" : item.status === "IN_PROGRESS" ? "Đang theo dõi" : "Chờ xử lý",
@@ -204,7 +204,7 @@ export default async function Home({
 
   const buckets = openItems.reduce(
     (acc, item) => {
-      const key = taskBucket(item.title + " " + item.unit);
+      const key = taskBucket(item.title + " " + (item.owner || item.agent || ""));
       if (key !== "other") acc[key] += 1;
       return acc;
     },

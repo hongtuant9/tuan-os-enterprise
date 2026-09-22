@@ -121,8 +121,10 @@ export async function getMarketingCommandCenterSnapshot(
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
+    const revenueConnectors = new Set(["kiotviet_hotel","kiotviet_fnb"]);
     const reachVerified = metricRows.some((row) => reachConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
     const spendVerified = metricRows.some((row) => spendConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
+    const revenueVerified = metricRows.some((row) => revenueConnectors.has(s(row.connector_id)) && s(row.verification_status) === "VERIFIED");
 
     const liveConnectors = connectorRows.filter((row) => ["LIVE","READY"].includes(s(row.status))).length;
     const errorConnectors = connectorRows.filter((row) => s(row.status) === "ERROR").length;
@@ -142,9 +144,10 @@ export async function getMarketingCommandCenterSnapshot(
         spend,
         revenue,
         cpa: leads > 0 && spendVerified ? spend / leads : null,
-        roas: spend > 0 && spendVerified ? revenue / spend : null,
+        roas: spend > 0 && spendVerified && revenueVerified ? revenue / spend : null,
         reachVerified,
         spendVerified,
+        revenueVerified,
         attributionCoverage,
       },
       channels,
@@ -165,7 +168,7 @@ export async function getMarketingCommandCenterSnapshot(
       totals: {
         impressions: 0, reach: 0, clicks: 0, engagements: 0, sessions: 0,
         leads: 0, bookings: 0, spend: 0, revenue: 0, cpa: null, roas: null,
-        reachVerified: false, spendVerified: false, attributionCoverage: null,
+        reachVerified: false, spendVerified: false, revenueVerified: false, attributionCoverage: null,
       },
       channels: [], campaigns: [], content: [], attribution: [], connectors: [],
       recommendations: [], marketIntelligence: [], sourceState: "NEED_VERIFY",

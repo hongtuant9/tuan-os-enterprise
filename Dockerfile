@@ -21,7 +21,6 @@ RUN --mount=type=secret,id=next_public_env \
     set +a; \
     test -n "$NEXT_PUBLIC_SUPABASE_URL"; \
     test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"; \
-    test -n "$NEXT_PUBLIC_APP_URL"; \
     npm run build
 
 # 3. Run the app in a minimal image

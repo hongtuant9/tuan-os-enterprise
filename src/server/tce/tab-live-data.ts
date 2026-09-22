@@ -399,20 +399,15 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
   }
 
   if (screen === "marketing") {
-    const [customers, acquisition, upsell, receptionist, mcc] = await Promise.all([
-      container.hospitalityCrm.customerSummaries(500),
+    const [acquisition, upsell, receptionist, mcc] = await Promise.all([
       container.hospitalityCrm.acquisitionAttribution(500),
       container.hospitalityCrm.upsellSummary(500),
       container.aiReceptionist.dashboard(),
       getMarketingCommandCenterSnapshot(container.db, period.from, period.to),
     ]);
-    const periodCustomers = customers.filter((customer) => inPeriod(customer.lastSeenAt));
     const periodConversations = receptionist.conversations.filter((conversation) => inPeriod(conversation.lastMessageAt));
-    const periodBookings = receptionist.bookings.filter((booking) => inPeriod(booking.createdAt));
     const periodUpsellEvents = upsell.events.filter((event) => inPeriod(event.created_at));
-    const verifiedBookings = periodBookings.filter((booking) => booking.verificationStatus === "verified");
     const bookedUpsells = periodUpsellEvents.filter((event) => event.event_type === "booked");
-    const periodUpsellRevenue = bookedUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0);
 
     const leadValue = mcc.totals.leads;
     const bookingValue = mcc.totals.bookings;
@@ -420,33 +415,31 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const interactionValue = mcc.totals.engagements;
     const attributionCoverage = mcc.totals.attributionCoverage === null ? "NEED VERIFY" : pct(mcc.totals.attributionCoverage * 100);
 
-    const marketingChannels = mcc.channels.length
-      ? mcc.channels.map((row, i) => [
-          String(i + 1),
-          row.channelName,
-          mcc.totals.spendVerified ? money(row.spend) : "NEED VERIFY",
-          String(row.leads),
-          String(row.bookings),
-          mcc.totals.revenueVerified ? money(row.revenue) : "NEED VERIFY",
-          row.cpa === null || !mcc.totals.spendVerified ? "—" : money(row.cpa),
-          row.roas === null || !mcc.totals.spendVerified ? "—" : row.roas.toFixed(2) + "x",
-          row.verification,
-        ])
-      : acquisition.slice(0, 8).map((row, i) => [
-          String(i + 1), row.source, "NEED VERIFY", String(row.customers),
-          String(row.verifiedBookings), money(row.upsellRevenue), "—", "—", "PARTIAL",
-        ]);
-
-    const campaignRows = mcc.campaigns.slice(0, 12).map((row, i) => [
+    const marketingChannels = mcc.channels.map((row, i) => [
       String(i + 1),
-      textField(row, "name", "CAMPAIGN", "Campaign"),
-      textField(row, "channel_id", "CHANNELS", "Channel"),
-      numberField(row, "budget_amount") > 0 ? money(numberField(row, "budget_amount")) : textField(row, "budget_mode", "BUDGET_MODE"),
-      "NEED VERIFY",
-      textField(row, "status", "STATUS"),
-      textField(row, "objective", "OBJECTIVE"),
-      textField(row, "verification_status") || "NEED VERIFY",
+      row.channelName,
+      mcc.totals.spendVerified ? money(row.spend) : "NEED VERIFY",
+      String(row.leads),
+      String(row.bookings),
+      mcc.totals.revenueVerified ? money(row.revenue) : "NEED VERIFY",
+      row.cpa === null || !mcc.totals.spendVerified ? "—" : money(row.cpa),
+      row.roas === null || !mcc.totals.spendVerified || !mcc.totals.revenueVerified ? "—" : row.roas.toFixed(2) + "x",
+      row.verification,
     ]);
+
+    const campaignRows = mcc.campaigns.slice(0, 12).map((row, i) => {
+      const budgetMode = textField(row, "budget_mode", "BUDGET_MODE");
+      return [
+        String(i + 1),
+        textField(row, "name", "CAMPAIGN", "Campaign"),
+        textField(row, "channel_id", "CHANNELS", "Channel"),
+        numberField(row, "budget_amount") > 0 ? money(numberField(row, "budget_amount")) : budgetMode,
+        budgetMode === "NO_SPEND" ? "0 đ" : "NEED VERIFY",
+        textField(row, "status", "STATUS"),
+        textField(row, "objective", "OBJECTIVE"),
+        textField(row, "verification_status") || "NEED VERIFY",
+      ];
+    });
 
     const contentRows = mcc.content.slice(0, 12).map((row, i) => [
       String(i + 1),

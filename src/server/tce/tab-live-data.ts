@@ -43,14 +43,6 @@ function money(value: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.round(value)) + " đ";
 }
 
-function compact(value: number) {
-  if (!Number.isFinite(value)) return "0";
-  if (Math.abs(value) >= 1_000_000_000) return (value / 1_000_000_000).toFixed(1).replace(".", ",") + " tỷ";
-  if (Math.abs(value) >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(".", ",") + "M";
-  if (Math.abs(value) >= 1_000) return (value / 1_000).toFixed(1).replace(".", ",") + "K";
-  return new Intl.NumberFormat("vi-VN").format(Math.round(value));
-}
-
 function pct(value: number) {
   return Number.isFinite(value) ? value.toFixed(1).replace(".", ",") + "%" : "0%";
 }
@@ -161,8 +153,8 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
 
     const branchRows = [
-      ...hotelToday.branchBreakdown.map((b) => ["Hotel · " + b.branchName, String(b.invoiceCount), money(b.revenue), "KiotViet Hotel"]),
-      ...fnbToday.branchBreakdown.map((b) => ["F&B · " + b.branchName, String(b.invoiceCount), money(b.revenue), "KiotViet F&B"]),
+      ...hotelToday.branchBreakdown.map((b) => ({ name: "Hotel · " + b.branchName, invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet Hotel" })),
+      ...fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + b.branchName, invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" })),
     ];
 
     if (screen === "business") {
@@ -186,12 +178,19 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         {
           businessChannels: branchRows.map((r, i) => [
             String(i + 1),
-            r[0],
-            r[1],
-            r[2],
-            todayRevenue ? pct((Number(r[2]?.replace(/[^0-9-]/g, "")) || 0) / todayRevenue * 100) : "0%",
+            r.name,
+            String(r.invoices),
+            money(r.revenue),
+            todayRevenue ? pct((r.revenue / todayRevenue) * 100) : "0%",
             "—",
-            r[3],
+            r.source,
+          ]),
+          businessBranches: branchRows.map((r, i) => [
+            String(i + 1),
+            r.name,
+            String(r.invoices),
+            money(r.revenue),
+            r.source,
           ]),
         },
         {},
@@ -300,7 +299,6 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const done = tasks.filter((t) => t.status === "done");
     const overdue = open.filter((t) => isOverdue(t.dueDate, today));
     const blocked = open.filter((t) => t.status === "blocked");
-    const inProgress = open.filter((t) => t.status === "in-progress");
     const rows = [...open]
       .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
       .slice(0, 12)

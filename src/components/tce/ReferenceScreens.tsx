@@ -482,12 +482,12 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
         <div className="grid grid-cols-12 gap-2">
           <Section
             title="Phân tích nhóm chi phí & mức kiểm soát"
-            subtitle={"Nhóm nào chi nhiều · % doanh thu · chuẩn kiểm soát · kỳ " + (data?.period.label ?? "Hôm nay")}
-            className="col-span-12 lg:col-span-7 h-[340px]"
+            subtitle="MTD tháng hiện tại · xếp từ chi phí lớn xuống nhỏ · giữ nguyên chất lượng evidence từ FIN-HOSPITALITY-001"
+            className="col-span-12 h-[340px]"
             icon="◫"
           >
             <DataTable
-              columns={["#","Nhóm chi phí","Giá trị","% DT","Cơ sở số liệu","Chuẩn / đối soát","Trạng thái"]}
+              columns={["#","Đơn vị","Nhóm / hạng mục","Giá trị MTD","% DT đơn vị","Loại số","Kiểm soát","Trần / cơ sở","Evidence"]}
               rows={6}
               data={data?.tables.financeCostGroups}
             />
@@ -495,7 +495,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section
             title="Nguồn lợi nhuận"
             subtitle="Doanh thu Actual; chi phí và lợi nhuận hiện đang là Ước tính/Mô hình cho tới khi Actual cost PASS"
-            className="col-span-12 lg:col-span-5 h-[340px]"
+            className="col-span-12 lg:col-span-7 h-[300px]"
             icon="▮"
           >
             <DataTable
@@ -520,7 +520,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section
             title="Quy tắc đánh giá chi phí"
             subtitle="Đạt chuẩn · Theo dõi · Cần tối ưu chỉ được gắn khi có dữ liệu đúng authority"
-            className="col-span-12 lg:col-span-5 h-[235px]"
+            className="col-span-12 lg:col-span-5 h-[300px]"
             icon="!"
           >
             <DataTable

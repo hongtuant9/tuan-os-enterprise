@@ -414,10 +414,10 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const bookedUpsells = periodUpsellEvents.filter((event) => event.event_type === "booked");
     const periodUpsellRevenue = bookedUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0);
 
-    const leadValue = mcc.totals.leads || periodCustomers.length;
-    const bookingValue = mcc.totals.bookings || verifiedBookings.length;
-    const revenueValue = mcc.totals.revenue || periodUpsellRevenue;
-    const interactionValue = mcc.totals.engagements || periodConversations.length;
+    const leadValue = mcc.totals.leads;
+    const bookingValue = mcc.totals.bookings;
+    const revenueValue = mcc.totals.revenue;
+    const interactionValue = mcc.totals.engagements;
     const attributionCoverage = mcc.totals.attributionCoverage === null ? "NEED VERIFY" : pct(mcc.totals.attributionCoverage * 100);
 
     const marketingChannels = mcc.channels.length
@@ -427,7 +427,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           mcc.totals.spendVerified ? money(row.spend) : "NEED VERIFY",
           String(row.leads),
           String(row.bookings),
-          money(row.revenue),
+          mcc.totals.revenueVerified ? money(row.revenue) : "NEED VERIFY",
           row.cpa === null || !mcc.totals.spendVerified ? "—" : money(row.cpa),
           row.roas === null || !mcc.totals.spendVerified ? "—" : row.roas.toFixed(2) + "x",
           row.verification,
@@ -505,18 +505,18 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Tương tác": String(interactionValue),
         "Lead / Inquiry": String(leadValue),
         "Booking / Order": String(bookingValue),
-        "Doanh thu quy đổi": revenueValue ? money(revenueValue) : "0 đ",
+        "Doanh thu quy đổi": mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY",
         "Chi phí quảng cáo": mcc.totals.spendVerified ? money(mcc.totals.spend) : "NEED VERIFY",
-        "ROAS": mcc.totals.spendVerified && mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY",
+        "ROAS": mcc.totals.spendVerified && mcc.totals.revenueVerified && mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY",
       },
       {
         "Tiếp cận": mcc.totals.reachVerified ? "Provider Actual · " + period.label : "Reach/impressions provider chưa có Actual authority",
         "Tương tác": "Chuẩn hóa từ GA4/CRM/provider đã kết nối · " + period.label,
         "Lead / Inquiry": "Hospitality CRM / attribution runtime · " + period.label,
         "Booking / Order": "Verified AI/CRM booking · " + period.label,
-        "Doanh thu quy đổi": "Booked upsell attribution; không đồng nghĩa collected cash",
+        "Doanh thu quy đổi": mcc.totals.revenueVerified ? "KiotViet/finance authority + attribution linkage VERIFIED" : "KiotViet revenue linkage chưa VERIFIED; booked upsell không được dùng thay revenue",
         "Chi phí quảng cáo": mcc.totals.spendVerified ? "Google/Meta Ads Actual" : "Google/Meta Ads spend chưa VERIFIED",
-        "ROAS": mcc.totals.spendVerified ? "Attributed revenue / verified spend" : "Fail closed khi spend/attribution chưa đủ",
+        "ROAS": mcc.totals.spendVerified && mcc.totals.revenueVerified ? "Verified attributed revenue / verified spend" : "Fail closed khi spend hoặc revenue authority chưa đủ",
       },
       {
         marketingChannels,
@@ -535,7 +535,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ["Click", mcc.totals.clicks ? String(mcc.totals.clicks) : "NEED VERIFY"],
           ["Lead / Inquiry", String(leadValue)],
           ["Booking", String(bookingValue)],
-          ["Doanh thu", revenueValue ? money(revenueValue) : "0 đ"],
+          ["Doanh thu", mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY"],
         ],
         marketingConversion: [
           ["Attribution coverage", attributionCoverage],

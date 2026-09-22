@@ -365,7 +365,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <Donut center="—" sub="Tổng doanh thu" items={["Lavender Homestay","Cozy Garden"]}/>
           </Section>
           <Section title="Tình hình theo cơ sở" subtitle="" className="col-span-12 lg:col-span-3 h-[345px]" icon="◫">
-            <DataTable columns={["#","Cơ sở","Trạng thái","Công suất","Check-in","Check-out","Tin nhắn"]} rows={5} data={data?.tables.operationsProperties}/>
+            <DataTable columns={["#","Cơ sở","Hóa đơn","Doanh thu","Nguồn"]} rows={5} data={data?.tables.businessBranches}/>
           </Section>
           <Section title="Hiệu suất theo nguồn bán" subtitle="So sánh doanh thu, sản lượng và tăng trưởng theo từng kênh" className="col-span-12 lg:col-span-7 h-[260px]" icon="▤">
             <DataTable columns={["#","Nguồn bán","Booking / Order","Doanh thu","Tỷ trọng","Tăng trưởng","Quyết định"]} rows={6} data={data?.tables.businessChannels}/>
@@ -410,7 +410,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section title="Checklist & công việc vận hành" subtitle="Danh sách công việc cần thực hiện trong ngày theo SOP" className="col-span-12 lg:col-span-6 h-[260px]" icon="▤"><DataTable columns={["#","Ưu tiên","Hạng mục công việc","Bộ phận","Owner","Hạn xử lý","Trạng thái","Hành động"]} rows={7} data={data?.tables.operationsTasks}/></Section>
-          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={5} data={data?.tables.financeBranches}/></Section>
+          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Cơ sở","Trạng thái","Công suất","Check-in","Check-out","Tin nhắn"]} rows={5} data={data?.tables.operationsProperties}/></Section>
           <Section title="Kho & nguyên vật liệu" subtitle="Theo dõi tồn kho, định mức và cảnh báo thiếu hàng" className="col-span-12 lg:col-span-5 h-[250px]" icon="▤"><DataTable columns={["#","Nguyên vật liệu","Tồn hiện tại","Định mức","Cảnh báo","Nhà cung cấp","Hành động"]} rows={7}/></Section>
           <Section title="Ca trực & chấm công" subtitle="Tình hình nhân sự theo ca trong ngày" className="col-span-12 lg:col-span-4 h-[250px]" icon="●●"><DataTable columns={["Bộ phận","Tổng","Ca sáng","Ca chiều","Có mặt","Tỷ lệ"]} rows={5}/></Section>
           <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions : ["Chưa có ngoại lệ live"]}/></Section>
@@ -458,7 +458,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
         <div className="grid grid-cols-12 gap-2">
           <Section title="Dòng tiền vào – ra" subtitle="Doanh thu, chi phí và dòng tiền ròng theo ngày" className="col-span-12 lg:col-span-5 h-[325px]" icon="▮"><BarLineChart/></Section>
           <Section title="Ngân sách vs thực tế" subtitle="Tổng chi phí vận hành theo danh mục" className="col-span-12 lg:col-span-3 h-[325px]" icon="◫"><Donut center="—" sub="Tổng chi phí" items={["F&B","Nhân sự","Marketing","Vận hành","Khác"]}/></Section>
-          <Section title="Tình hình theo đơn vị" subtitle="Hiệu quả tài chính của từng cơ sở" className="col-span-12 lg:col-span-4 h-[325px]" icon="▣"><MiniStatusGrid items={["Lavender Homestay","Cozy Garden"]}/></Section>
+          <Section title="Tình hình theo đơn vị" subtitle="Hiệu quả tài chính của từng cơ sở" className="col-span-12 lg:col-span-4 h-[325px]" icon="▣"><DataTable columns={["#","Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={5} data={data?.tables.financeBranches}/></Section>
           <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 lg:col-span-5 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
           <Section title="Dự báo trả nợ" subtitle="Kế hoạch thanh toán 6 tháng tới" className="col-span-12 lg:col-span-3 h-[290px]" icon="◫"><BarLineChart labels={["T09/26","T10/26","T11/26","T12/26","T01/27","T02/27"]} line={false}/></Section>
           <div className="col-span-12 lg:col-span-4 grid gap-2">

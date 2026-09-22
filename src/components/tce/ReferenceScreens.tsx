@@ -281,7 +281,7 @@ function Donut({ center = "—", sub = "Chờ dữ liệu", items = ["Nhóm A", 
 function Pipeline({ items }: { items: string[] }) {
   return (
     <div className="flex h-full min-h-[145px] items-center gap-1.5 overflow-hidden px-3 py-3">
-      {items.map((item, i) => (
+      {items.map((item) => (
         <div key={item} className="flex min-w-0 flex-1 items-center">
           <div className="w-full rounded-[6px] bg-gradient-to-b from-[#f7fbff] to-[#ebf4ff] px-2 py-5 text-center">
             <p className="truncate text-[9px] font-semibold text-[#34547d]">{item}</p>
@@ -345,7 +345,7 @@ function Board({ screen }: { screen: ScreenKey }) {
           </Section>
           <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 lg:col-span-5 h-[300px]" icon="●">
             <div className="grid h-full grid-cols-2 gap-2 p-3">
-              {["Dự báo doanh thu tháng","Ngưỡng hòa vốn","Top dịch vụ / mặt hàng","Công nợ cần theo dõi"].map((x,i)=><div key={x} className="rounded-[7px] border border-[#e6eef6] bg-[#fbfdff] p-3"><b className="text-[9px] text-[#3c5578]">{x}</b><p className="mt-2 text-[18px] font-extrabold text-[#0e2858]">—</p><p className="mt-1 text-[8px] text-[#7c8ea8]">Chưa đủ dữ liệu để kết luận.</p></div>)}
+              {["Dự báo doanh thu tháng","Ngưỡng hòa vốn","Top dịch vụ / mặt hàng","Công nợ cần theo dõi"].map((x)=><div key={x} className="rounded-[7px] border border-[#e6eef6] bg-[#fbfdff] p-3"><b className="text-[9px] text-[#3c5578]">{x}</b><p className="mt-2 text-[18px] font-extrabold text-[#0e2858]">—</p><p className="mt-1 text-[8px] text-[#7c8ea8]">Chưa đủ dữ liệu để kết luận.</p></div>)}
               <div className="col-span-2 rounded-[7px] border border-[#fde4b5] bg-[#fffaf0] p-2 text-[9px] text-[#9a6b14]">Cảnh báo kinh doanh sẽ hiển thị ở đây khi có evidence.</div>
             </div>
           </Section>
@@ -372,7 +372,7 @@ function Board({ screen }: { screen: ScreenKey }) {
             <div className="grid h-full grid-cols-5 gap-2 p-3">{["Reel","TikTok","Review post","Ưu đãi","UGC"].map((x,i)=><div key={x} className="overflow-hidden rounded-[7px] border border-[#e1eaf4]"><div className={"h-[64px] " + (i%2?"bg-[#e8f5ee]":"bg-[#eaf3ff]")}/><div className="p-2"><b className="text-[9px] text-[#29456d]">{x}</b><p className="mt-1 text-[8px] text-[#8191a8]">Chưa lên lịch</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Lên lịch</button></div></div>)}</div>
           </Section>
           <Section title="Review & danh tiếng" subtitle="Theo dõi đánh giá từ các nền tảng" className="col-span-12 lg:col-span-6 h-[180px]" icon="⚙">
-            <div className="grid h-full grid-cols-4 gap-2 p-3">{["Điểm đánh giá","Theo nền tảng","Tỷ lệ phản hồi","Cần xử lý"].map((x,i)=><div key={x} className="rounded-[7px] border border-[#e2ebf5] p-3"><b className="text-[9px] text-[#355174]">{x}</b><p className="mt-2 text-[20px] font-extrabold text-[#0c2758]">—</p></div>)}</div>
+            <div className="grid h-full grid-cols-4 gap-2 p-3">{["Điểm đánh giá","Theo nền tảng","Tỷ lệ phản hồi","Cần xử lý"].map((x)=><div key={x} className="rounded-[7px] border border-[#e2ebf5] p-3"><b className="text-[9px] text-[#355174]">{x}</b><p className="mt-2 text-[20px] font-extrabold text-[#0c2758]">—</p></div>)}</div>
           </Section>
           <Section title="Gợi ý AI Marketing" subtitle="Đề xuất hành động dựa trên dữ liệu và xu hướng" className="col-span-12 lg:col-span-6 h-[180px]" icon="◈">
             <div className="grid h-full grid-cols-3 gap-2 p-3">{["Tăng ngân sách Google Ads","Tập trung nội dung TikTok","Chạy remarketing"].map(x=><div key={x} className="rounded-[7px] border border-[#e4ecf5] p-3"><b className="text-[9px] text-[#345174]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#7a8da9]">Chỉ sinh đề xuất khi dữ liệu VERIFIED.</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Xem chi tiết</button></div>)}</div>

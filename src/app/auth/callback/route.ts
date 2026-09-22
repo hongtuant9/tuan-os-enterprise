@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPublicBaseUrl } from "@/server/public-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      return NextResponse.redirect(new URL(next, getPublicBaseUrl()));
     }
   }
 
@@ -33,11 +34,11 @@ export async function GET(request: NextRequest) {
       type: "recovery",
     });
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      return NextResponse.redirect(new URL(next, getPublicBaseUrl()));
     }
   }
 
-  const target = new URL("/forgot-password", request.url);
+  const target = new URL("/forgot-password", getPublicBaseUrl());
   target.searchParams.set("error", "invalid_or_expired_link");
   return NextResponse.redirect(target);
 }

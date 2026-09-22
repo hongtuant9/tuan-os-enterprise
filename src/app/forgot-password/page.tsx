@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -15,23 +14,31 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const redirectTo =
-      window.location.origin + "/auth/callback?next=" + encodeURIComponent("/reset-password");
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+        cache: "no-store",
+      });
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo,
-    });
+      setLoading(false);
 
-    setLoading(false);
+      if (!response.ok) {
+        setError(
+          response.status === 504
+            ? "Hệ thống gửi email đang phản hồi chậm. Vui lòng thử lại sau ít phút."
+            : "Chưa thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau."
+        );
+        return;
+      }
 
-    if (resetError) {
-      setError("Chưa thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.");
-      return;
+      // Luôn dùng thông báo chung để không tiết lộ email có tồn tại trong hệ thống hay không.
+      setSent(true);
+    } catch {
+      setLoading(false);
+      setError("Không thể kết nối dịch vụ đặt lại mật khẩu. Vui lòng thử lại.");
     }
-
-    // Luôn dùng thông báo chung để không tiết lộ email có tồn tại trong hệ thống hay không.
-    setSent(true);
   }
 
   return (

@@ -91,12 +91,17 @@ export async function ensureMarketingWorkbookFresh(
     const staleSources = sourceRows.filter((source) => source.last_cursor !== modifiedAt);
     const synced: string[] = [];
 
-    for (const source of staleSources) {
-      const summary = await container.sync.run(
-        source.key,
-        "manual",
-        "marketing-workbook-freshness-gate",
-      );
+    const outcomes = await Promise.all(
+      staleSources.map(async (source) => ({
+        source,
+        summary: await container.sync.run(
+          source.key,
+          "manual",
+          "marketing-workbook-freshness-gate",
+        ),
+      })),
+    );
+    for (const { source, summary } of outcomes) {
       if (summary.status === "failed") {
         errors.push(source.key + ": " + (summary.errorMessage || "sync failed"));
       } else {

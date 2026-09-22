@@ -854,5 +854,5 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     );
   }
 
-  return result({}, {}, {}, {}, "NEED_VERIFY");
+  return makeResult({}, {}, {}, {}, "NEED_VERIFY");
 }

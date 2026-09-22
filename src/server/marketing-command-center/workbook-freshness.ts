@@ -121,7 +121,7 @@ export async function ensureMarketingWorkbookFresh(
       await Promise.all(
         MARKETING_WORKBOOK_SOURCE_KEYS.map((key) => container.syncSources.findByKey(key)),
       )
-    ).filter((row): row is NonNullable<typeof row> => Boolean(row));
+    ).filter(isPresent);
 
     const allCurrent = refreshed.length === sourceRows.length &&
       refreshed.every((source) => source.last_cursor === modifiedAt);

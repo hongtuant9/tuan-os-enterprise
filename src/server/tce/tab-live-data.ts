@@ -9,6 +9,7 @@ import {
 } from "@/server/integrations/kiotviet/revenue-actual";
 import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
+import { getFinanceControlSnapshot, type FinanceControlLine, type FinanceGuardrail } from "@/server/tce/finance-control-data";
 
 export type TceTabScreen =
   | "business"
@@ -369,22 +370,145 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const collectedToday =
       (hotelToday.state === "VERIFIED" ? hotelToday.collected : 0) +
       (fnbToday.state === "VERIFIED" ? fnbToday.collected : 0);
+    const financeControl = await getFinanceControlSnapshot(now);
+
+    // Finance analysis V1 deliberately separates Actual revenue from modelled cost.
+    // Until FIN-HOSPITALITY-001 actual expense sync is available, cost/profit must not be presented as Actual.
+    const periodFactor = Math.max(0.01, period.elapsedDays / 30);
+    const homestayFixedCost = 55_000_000 * periodFactor;
+    const homestayVariableCost = periodHotel * 0.30;
+    const cozyFixedCost = 45_470_000 * periodFactor;
+    const cozyVariableCost = periodFnb * 0.37;
+    const modelCostTotal = homestayFixedCost + homestayVariableCost + cozyFixedCost + cozyVariableCost;
+    const modelProfitTotal = periodRevenue - modelCostTotal;
+
+    const fallbackCostGroups = [
+      {
+        businessUnit: "HOMESTAY",
+        item: "Chi phí nền Homestay",
+        mtdVnd: homestayFixedCost + homestayVariableCost,
+        evidenceState: "[Ước tính/Mô hình]",
+        basis: "Mô hình fallback khi FIN-HOSPITALITY-001 không đọc được",
+        evidence: "NEED VERIFY",
+      },
+      {
+        businessUnit: "COZY GARDEN",
+        item: "Chi phí nền Cozy Garden",
+        mtdVnd: cozyFixedCost + cozyVariableCost,
+        evidenceState: "[Ước tính/Mô hình]",
+        basis: "Mô hình fallback khi FIN-HOSPITALITY-001 không đọc được",
+        evidence: "NEED VERIFY",
+      },
+    ] satisfies Array<Pick<FinanceControlLine, "businessUnit" | "item" | "mtdVnd" | "evidenceState" | "basis" | "evidence">>;
+
+    const liveCostLines = financeControl.lines.length
+      ? financeControl.lines.filter((line) => line.mtdVnd !== null)
+      : fallbackCostGroups;
+
+    const normalizeEvidenceControl = (state: string) => {
+      const upper = state.toUpperCase();
+      if (upper.includes("PARTIAL") || upper.includes("TEMP ACTUAL") || upper.includes("ACTUAL-DERIVED") || upper.includes("ACCRUAL")) {
+        return "THEO DÕI";
+      }
+      if (upper === "VERIFIED" || upper === "ACTUAL — SOURCE VERIFIED") return "ĐỦ CĂN CỨ ĐỐI CHIẾU";
+      return "NEED VERIFY";
+    };
+
+    const matchGuardrail = (line: Pick<FinanceControlLine, "businessUnit" | "item">): FinanceGuardrail | undefined => {
+      const item = line.item.toLowerCase();
+      const candidates = financeControl.guardrails.filter((rule) => rule.businessUnit === line.businessUnit);
+      const keyword =
+        line.businessUnit === "HOMESTAY"
+          ? item.includes("commission") ? "hoa hồng"
+            : item.includes("breakfast") ? "ăn sáng"
+            : item.includes("điện") || item.includes("tiện ích") ? "điện, nước"
+            : item.includes("laundry") ? "giặt là"
+            : item.includes("repair") || item.includes("bảo trì") ? "bảo trì"
+            : item.includes("marketing") ? "marketing"
+            : ""
+          : item.includes("cogs") || item.includes("purchase") ? "giá vốn"
+            : item.includes("payroll") || item.includes("lương") ? "nhân sự"
+            : item.includes("điện") || item.includes("tiện ích") ? "điện, nước"
+            : item.includes("marketing") ? "marketing"
+            : item.includes("software") ? "phần mềm"
+            : item.includes("repair") || item.includes("hao hụt") ? "hao hụt"
+            : "";
+      return keyword ? candidates.find((rule) => rule.label.toLowerCase().includes(keyword)) : undefined;
+    };
+
+    const rankedCostGroups = liveCostLines
+      .map((line) => {
+        const value = line.mtdVnd ?? 0;
+        const unitRevenue = line.businessUnit === "HOMESTAY" ? monthHotel : line.businessUnit === "COZY GARDEN" ? monthFnb : monthRevenue;
+        const ratio = unitRevenue > 0 ? (value / unitRevenue) * 100 : null;
+        const guardrail = matchGuardrail(line);
+        const evidenceControl = normalizeEvidenceControl(line.evidenceState);
+        const isFinalVerified = line.evidenceState === "VERIFIED" || line.evidenceState === "ACTUAL — SOURCE VERIFIED";
+        const control =
+          isFinalVerified && guardrail && ratio !== null
+            ? ratio <= guardrail.maxPct ? "ĐẠT CHUẨN" : "CẦN TỐI ƯU"
+            : evidenceControl;
+        return { ...line, value, ratio, guardrail, control };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    const homestayRevenueTotal = hotelTodayRows.reduce((sum, row) => sum + row.revenue, 0);
+    const profitRows = hotelTodayRows.map((row) => {
+      const revenueShare = homestayRevenueTotal > 0 ? row.revenue / homestayRevenueTotal : 0;
+      const allocatedCost = (homestayFixedCost + homestayVariableCost) * revenueShare;
+      const estimatedProfit = row.revenue - allocatedCost;
+      const margin = row.revenue > 0 ? (estimatedProfit / row.revenue) * 100 : 0;
+      return {
+        name: row.name.replace("Hotel · ", ""),
+        type: "Lưu trú",
+        revenue: row.revenue,
+        cost: allocatedCost,
+        profit: estimatedProfit,
+        margin,
+      };
+    });
+    const cozyEstimatedProfit = periodFnb - cozyFixedCost - cozyVariableCost;
+    profitRows.push({
+      name: "Cozy Garden",
+      type: "F&B",
+      revenue: periodFnb,
+      cost: cozyFixedCost + cozyVariableCost,
+      profit: cozyEstimatedProfit,
+      margin: periodFnb > 0 ? (cozyEstimatedProfit / periodFnb) * 100 : 0,
+    });
+    if (homestayRevenueTotal <= 0 && homestayFixedCost > 0) {
+      profitRows.push({
+        name: "Chi phí chung Homestay chưa phân bổ",
+        type: "Chi phí chung",
+        revenue: 0,
+        cost: homestayFixedCost,
+        profit: -homestayFixedCost,
+        margin: 0,
+      });
+    }
+    const positiveProfitTotal = profitRows.reduce((sum, row) => sum + Math.max(0, row.profit), 0);
+    const sortedProfitRows = [...profitRows].sort((a, b) => b.profit - a.profit);
+
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-        "Chi phí vận hành": bothTodayVerified ? "~" + money(estimateToday.cost) : "NEED VERIFY",
-        "Dòng tiền ròng": bothTodayVerified ? "~" + money(collectedToday - estimateToday.cost) : "NEED VERIFY",
+        "Chi phí vận hành": bothTodayVerified ? "~" + money(modelCostTotal) : "NEED VERIFY",
+        "Dòng tiền ròng": bothTodayVerified ? "~" + money(collectedToday - modelCostTotal) : "NEED VERIFY",
         "Số dư tiền mặt": "NEED VERIFY",
         "Công nợ phải trả": "NEED VERIFY",
         "Nợ vay": "NEED VERIFY",
+        "Lợi nhuận vận hành ước tính": bothTodayVerified ? "~" + money(modelProfitTotal) : "NEED VERIFY",
+        "Tỷ lệ chi phí / doanh thu": bothTodayVerified && periodRevenue > 0 ? "~" + pct((modelCostTotal / periodRevenue) * 100) : "NEED VERIFY",
       },
       {
         "Doanh thu thuần": "KiotViet Actual · " + period.label,
-        "Chi phí vận hành": "Ước tính; FIN-HOSPITALITY-001 chưa sync runtime",
-        "Dòng tiền ròng": "Tiền thu KiotViet trừ cost estimate",
+        "Chi phí vận hành": "Ước tính/Mô hình; chưa phải Actual P&L vì FIN-HOSPITALITY-001 chưa sync runtime",
+        "Dòng tiền ròng": "Tiền thu KiotViet trừ chi phí mô hình; chưa phải dòng tiền kế toán",
         "Số dư tiền mặt": "Chưa có bank feed/runtime SSOT",
         "Công nợ phải trả": "Chưa có AP runtime",
         "Nợ vay": "Chưa sync FIN-HOSPITALITY-001",
+        "Lợi nhuận vận hành ước tính": "Doanh thu Actual trừ chi phí mô hình; không dùng như lợi nhuận Actual",
+        "Tỷ lệ chi phí / doanh thu": "Tỷ lệ theo mô hình chi phí hiện hành; cần đối soát Actual",
       },
       {
         financeBranches: [
@@ -393,8 +517,51 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ["Tổng tháng hiện tại", money(monthRevenue), "—", "Actual revenue"],
           ["Ước tính chi phí tháng", "~" + money(estimateMonth.cost), "—", "Estimate"],
         ],
+        financeCostGroups: rankedCostGroups.map((row, i) => [
+          String(i + 1),
+          row.businessUnit === "HOMESTAY" ? "Homestay" : row.businessUnit === "COZY GARDEN" ? "Cozy Garden" : row.businessUnit,
+          row.item,
+          (financeControl.lines.length ? "" : "~") + money(row.value),
+          row.ratio === null ? "—" : pct(row.ratio),
+          row.evidenceState,
+          row.control,
+          row.guardrail ? "Trần " + pct(row.guardrail.maxPct) + " · " + row.guardrail.label : row.basis,
+          row.evidence || "—",
+        ]),
+        financeProfitSources: sortedProfitRows.map((row, i) => [
+          String(i + 1),
+          row.name,
+          row.type,
+          money(row.revenue),
+          "~" + money(row.cost),
+          "~" + money(row.profit),
+          row.revenue > 0 ? "~" + pct(row.margin) : "—",
+          positiveProfitTotal > 0 && row.profit > 0 ? "~" + pct((row.profit / positiveProfitTotal) * 100) : "—",
+          "[Ước tính/Mô hình]",
+        ]),
+        financeProductProfitReadiness: [
+          ["Cozy Garden — theo món/đồ uống", "Doanh thu món − COGS BOM", "KiotViet F&B invoice detail + COST-001", "NEED VERIFY", "Chưa xếp hạng"],
+          ["Lavender/Ruby — theo hạng phòng", "Doanh thu hạng phòng − direct cost − phân bổ chi phí chung", "KiotViet Hotel + MKT-001 + FIN-HOSPITALITY-001", "NEED VERIFY", "Chưa xếp hạng"],
+          ["Dịch vụ bổ sung / upsell", "Doanh thu booked − direct cost", "Booking/Upsell runtime + cost evidence", "NEED VERIFY", "Chưa xếp hạng"],
+        ],
+        financeCostControlRules: [
+          ["Cozy Garden — COGS theo món", "≤35%: Đạt chuẩn", "35–40%: Theo dõi", ">40%: Cần tối ưu", "COST-001"],
+          ...financeControl.guardrails.map((rule) => [
+            rule.businessUnit === "HOMESTAY" ? "Homestay" : "Cozy Garden",
+            rule.label,
+            "≤ " + pct(rule.maxPct),
+            "> " + pct(rule.maxPct) + " khi Actual VERIFIED → Cần tối ưu",
+            "FIN-HOSPITALITY-001 / GIẢ ĐỊNH",
+          ]),
+        ],
       },
-      {},
+      {
+        financeActions: [
+          "Ưu tiên 1: hoàn thiện các dòng OPEX còn Forecast/Partial trong FIN-HOSPITALITY-001 để hệ thống được phép chấm Đạt chuẩn / Cần tối ưu.",
+          "Ưu tiên 2: nối KiotViet F&B invoice detail với COST-001 để xếp hạng món theo Gross Profit và COGS.",
+          "Ưu tiên 3: nối doanh thu theo hạng phòng/dịch vụ với quy tắc phân bổ chi phí đã duyệt để xác định đúng nguồn lợi nhuận.",
+        ],
+      },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",
     );
   }

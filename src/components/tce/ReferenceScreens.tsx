@@ -193,12 +193,12 @@ function MetricCard({ metric }: { metric: Metric }) {
       <div className="flex items-center gap-3">
         <span className={"grid h-[48px] w-[48px] shrink-0 place-items-center rounded-[8px] text-[18px] font-black text-white shadow-sm " + t.icon}><UiIcon kind={metric.label} className="h-[25px] w-[25px]" /></span>
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-[#476495]">{metric.label}</p>
-          <p className="mt-1 truncate text-[20px] font-extrabold leading-none tracking-[-0.03em] text-[#061850]">{metric.value || "—"}</p>
+          <p className="min-h-[26px] whitespace-normal text-[10px] font-medium leading-[12px] text-[#476495]">{metric.label}</p>
+          <p className="mt-1 whitespace-nowrap text-[18px] font-extrabold leading-none tracking-[-0.03em] text-[#061850]">{metric.value || "—"}</p>
           <p className={"mt-1 text-[12px] font-bold " + t.delta}>{metric.delta || "↗"}</p>
         </div>
       </div>
-      <p className="mt-2 truncate text-[9px] text-[#6f86ad]">{metric.note}</p>
+      <p className="mt-2 whitespace-normal text-[8.5px] leading-[10px] text-[#6f86ad]">{metric.note}</p>
     </div>
   );
 }

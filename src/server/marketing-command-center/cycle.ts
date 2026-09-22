@@ -141,7 +141,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
   const campaignPayload = campaignRecords.flatMap((record) => {
     const data = obj(record.data);
     const planId = pick(data, ["CAMPAIGN_ID", "Campaign ID"]);
-    const name = pick(data, ["CAMPAIGN", "Campaign"]);
+    const name = pick(data, ["CAMPAIGN", "Campaign", "CHIẾN DỊCH"]);
     if (!planId || !name) return [];
     const channels = pick(data, ["CHANNELS", "Channel", "Kênh"]);
     const statusRaw = pick(data, ["STATUS", "Status", "Trạng thái", "TRẠNG THÁI CHIẾN DỊCH"]);
@@ -154,10 +154,10 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       plan_campaign_id: planId,
       name,
       objective: pick(data, ["OBJECTIVE", "Objective", "Mục tiêu"]) || null,
-      audience: pick(data, ["AUDIENCE", "Audience"]) || null,
-      funnel_stage: pick(data, ["FUNNEL_STAGE", "Funnel Stage"]) || null,
+      audience: pick(data, ["AUDIENCE", "Audience", "ĐỐI TƯỢNG"]) || null,
+      funnel_stage: pick(data, ["FUNNEL_STAGE", "Funnel Stage", "GIAI ĐOẠN FUNNEL"]) || null,
       status: campaignStatus(statusRaw),
-      budget_mode: budgetMode(pick(data, ["BUDGET_MODE", "Budget Mode", "Ngân sách"])),
+      budget_mode: budgetMode(pick(data, ["BUDGET_MODE", "Budget Mode", "Ngân sách", "CHẾ ĐỘ NGÂN SÁCH"])),
       budget_amount: null,
       currency: "VND",
       start_date: null,
@@ -168,11 +168,11 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       last_synced_at: str(record.synced_at) || nowIso,
       metadata: {
         channels,
-        offer_message: pick(data, ["OFFER / MESSAGE", "Offer / Message"]),
+        offer_message: pick(data, ["OFFER / MESSAGE", "Offer / Message", "OFFER / THÔNG ĐIỆP"]),
         owner: pick(data, ["OWNER", "Owner"]),
-        success_criteria: pick(data, ["SUCCESS CRITERIA", "Success Criteria"]),
+        success_criteria: pick(data, ["SUCCESS CRITERIA", "Success Criteria", "TIÊU CHÍ THÀNH CÔNG"]),
         stop_rollback: pick(data, ["STOP / ROLLBACK", "Stop / Rollback"]),
-        notes: pick(data, ["NOTES", "Notes"]),
+        notes: pick(data, ["NOTES", "Notes", "GHI CHÚ"]),
         plan_only: true,
       },
     }];

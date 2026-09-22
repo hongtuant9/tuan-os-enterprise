@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import RefreshOnView from "./RefreshOnView";
 
 export type ExecutiveAction = {
@@ -74,69 +73,22 @@ export type ExecutiveDashboardProps = {
   };
 };
 
-function shortMoney(value: number) {
-  if (value >= 1000000000) return (value / 1000000000).toFixed(2).replace(".", ",") + " tỷ";
-  if (value >= 1000000) return (value / 1000000).toFixed(1).replace(".", ",") + " triệu";
+function money(value: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.round(value)) + " đ";
 }
 
-function timeLabel(value: string) {
-  return new Date(value).toLocaleString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function compactMoney(value: number) {
+  if (value >= 1_000_000_000) return (value / 1_000_000_000).toFixed(1).replace(".", ",") + " tỷ";
+  if (value >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(".", ",") + "M";
+  return money(value);
 }
 
-function Panel(props: { title: string; index?: number; subtitle?: string; children: ReactNode; action?: ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-[#dbe7f4] bg-white shadow-[0_8px_30px_rgba(34,86,150,0.06)]">
-      <div className="flex items-start justify-between gap-4 border-b border-[#edf3f8] px-4 py-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-[17px] font-bold text-[#112447]">
-            {props.index ? <span className="grid h-7 w-7 place-items-center rounded-full bg-[#e8f4ff] text-[#0d62d8]">{props.index}</span> : null}
-            {props.title}
-          </h2>
-          {props.subtitle ? <p className="mt-0.5 text-xs text-[#6d7f9e]">{props.subtitle}</p> : null}
-        </div>
-        {props.action}
-      </div>
-      <div className="p-4">{props.children}</div>
-    </section>
-  );
-}
-
-function SmallStat(props: {
-  label: string;
-  value: string | number;
-  tone?: "blue" | "green" | "red" | "amber" | "violet" | "slate";
-  sub?: string;
-}) {
-  const toneMap = {
-    blue: "bg-[#edf5ff] text-[#0d62d8]",
-    green: "bg-[#eafaf3] text-[#0b9b60]",
-    red: "bg-[#fff0f1] text-[#df3043]",
-    amber: "bg-[#fff7e9] text-[#d88400]",
-    violet: "bg-[#f4efff] text-[#7b4bdd]",
-    slate: "bg-[#f2f5f9] text-[#536681]",
+function timeParts(value: string) {
+  const d = new Date(value);
+  return {
+    date: new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(d),
+    time: new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Ho_Chi_Minh" }).format(d),
   };
-  const tone = props.tone || "blue";
-  return (
-    <div className={"rounded-xl px-3 py-3 " + toneMap[tone]}>
-      <p className="text-[11px] font-semibold opacity-80">{props.label}</p>
-      <p className="mt-1 text-xl font-bold tracking-tight">{props.value}</p>
-      {props.sub ? <p className="mt-1 text-[10px] opacity-70">{props.sub}</p> : null}
-    </div>
-  );
-}
-
-function StatusDot({ status }: { status: ExecutiveSource["status"] }) {
-  const cls = status === "online" ? "bg-emerald-500" : status === "partial" ? "bg-amber-500" : status === "estimate" ? "bg-violet-500" : "bg-rose-500";
-  return <span className={"inline-block h-2.5 w-2.5 rounded-full " + cls} />;
 }
 
 const PERIODS = [
@@ -146,225 +98,277 @@ const PERIODS = [
   ["year", "Năm"],
 ] as const;
 
-export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
-  const revenueShare = props.revenue.total ? Math.round((props.revenue.homestay / props.revenue.total) * 100) : 0;
-
+function Panel({
+  title,
+  subtitle,
+  number,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  number?: number;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="min-h-screen bg-[#f4f8fd] text-[#15284a]">
-      <RefreshOnView intervalMs={60000} />
+    <section className={"overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
+      <div className="flex min-h-[42px] items-start justify-between gap-3 px-3 py-2">
+        <div>
+          <h2 className="flex items-center gap-2 text-[15px] font-extrabold leading-5 text-[#102456]">
+            {number ? <span className="grid h-6 w-6 place-items-center rounded-full bg-[#dff6f4] text-[13px] text-[#116b78]">{number}.</span> : null}
+            {title}
+          </h2>
+          {subtitle ? <p className="ml-8 mt-0.5 text-[9px] text-[#7186a9]">{subtitle}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
-      <div className="border-b border-[#dce8f4] bg-white px-4 py-3 lg:px-5">
-        <div className="mx-auto max-w-[1700px]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-[#071b55]">Executive Dashboard – Tổng quan điều hành</h1>
-              <p className="mt-1 text-xs text-[#677da7]">Dữ liệu tổng hợp từ: Lavender Homestay | Cozy Garden | Hệ thống vận hành</p>
-            </div>
-            <div className="flex items-center gap-4 text-[#122b61]">
-              <span className="hidden text-[11px] font-semibold lg:inline">{timeLabel(props.generatedAt)}</span>
-              <span className="relative grid h-8 w-8 place-items-center text-[#274a7d]" title="Thông báo">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                  <path d="M10 21h4" />
-                </svg>
-              </span>
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e8f0fb] text-[11px] font-bold">T</span>
-              <span className="hidden leading-4 lg:block">
-                <span className="block text-[12px] font-bold">Tuấn</span>
-                <span className="block text-[9px] text-[#7689a8]">Owner</span>
-              </span>
-            </div>
+function Stat({
+  label,
+  value,
+  tone,
+  icon,
+  note,
+}: {
+  label: string;
+  value: string | number;
+  tone: "blue" | "green" | "red" | "amber" | "violet" | "slate";
+  icon: string;
+  note?: string;
+}) {
+  const map = {
+    blue: ["from-[#fbfdff] to-[#eaf4ff]", "bg-[#2477ef]", "text-[#1768df]"],
+    green: ["from-[#fbfffd] to-[#eafaf2]", "bg-[#12b768]", "text-[#079854]"],
+    red: ["from-[#fffdfd] to-[#fff0f2]", "bg-[#fa3d4f]", "text-[#e93243]"],
+    amber: ["from-[#fffefa] to-[#fff4df]", "bg-[#ffa000]", "text-[#bf7600]"],
+    violet: ["from-[#fefcff] to-[#f2edff]", "bg-[#7e45e6]", "text-[#7040d6]"],
+    slate: ["from-[#fbfcfe] to-[#edf2f7]", "bg-[#71859d]", "text-[#536b88]"],
+  } as const;
+  const t = map[tone];
+  return (
+    <div className={"min-w-0 rounded-[7px] bg-gradient-to-br " + t[0] + " px-3 py-2"}>
+      <div className="flex items-center gap-2">
+        <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-[7px] text-[14px] font-black text-white " + t[1]}>{icon}</span>
+        <div className="min-w-0">
+          <p className="truncate text-[9px] text-[#48648e]">{label}</p>
+          <p className="mt-0.5 truncate text-[18px] font-extrabold leading-none text-[#071b51]">{value}</p>
+        </div>
+      </div>
+      {note ? <p className={"mt-1 truncate text-[8px] " + t[2]}>{note}</p> : null}
+    </div>
+  );
+}
+
+function ActionTable({ items }: { items: ExecutiveAction[] }) {
+  return (
+    <table className="w-full table-fixed text-left text-[8px]">
+      <thead className="bg-[#f1f6fb] text-[#38557d]">
+        <tr>
+          <th className="w-[35px] px-2 py-1.5">#</th>
+          <th className="w-[80px] px-2 py-1.5">Ưu tiên</th>
+          <th className="px-2 py-1.5">Việc cần làm</th>
+          <th className="w-[100px] px-2 py-1.5">Liên quan</th>
+          <th className="w-[100px] px-2 py-1.5">Owner</th>
+          <th className="w-[100px] px-2 py-1.5">Hạn xử lý</th>
+          <th className="w-[105px] px-2 py-1.5">Trạng thái</th>
+          <th className="w-[95px] px-2 py-1.5">Hành động</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-[#e7eef6] text-[#3a567d]">
+        {items.slice(0,5).map((item, i) => (
+          <tr key={item.id} className="h-[28px]">
+            <td className="px-2">{i + 1}</td>
+            <td className="px-2"><span className={"rounded-full px-2 py-1 font-bold " + (item.priority === "P0" ? "bg-[#fff0f2] text-[#e83143]" : item.priority === "P1" ? "bg-[#fff4e2] text-[#ce7b00]" : "bg-[#eaf3ff] text-[#1769df]")}>{item.priority === "P0" ? "Critical" : item.priority === "P1" ? "High" : "Medium"}</span></td>
+            <td className="truncate px-2 font-medium">{item.title}</td>
+            <td className="truncate px-2">{item.unit}</td>
+            <td className="truncate px-2">{item.owner}</td>
+            <td className="truncate px-2">{item.due || "—"}</td>
+            <td className="px-2"><span className="rounded-full bg-[#fff0f2] px-2 py-1 font-bold text-[#e53244]">{item.status}</span></td>
+            <td className="px-2"><span className="block rounded border border-[#a9cdf8] py-1 text-center font-bold text-[#1768df]">Xem / Giao việc</span></td>
+          </tr>
+        ))}
+        {items.length === 0 ? <tr><td colSpan={8} className="py-6 text-center text-[#7b8ca5]">Không có việc cần xử lý.</td></tr> : null}
+      </tbody>
+    </table>
+  );
+}
+
+function RevenueChart() {
+  const heights = [46,55,60,52,61,62,68];
+  return (
+    <div className="relative h-[190px] px-3 pb-6 pt-3">
+      <div className="absolute inset-x-5 bottom-8 top-3 grid grid-rows-3 border-b border-l border-[#dbe6f1]">
+        {[0,1,2].map(i => <div key={i} className="border-t border-[#e7eef5]"/>)}
+      </div>
+      <div className="absolute inset-x-8 bottom-8 top-3 flex items-end justify-around gap-2">
+        {heights.map((h,i)=><div key={i} className="flex h-full flex-1 items-end justify-center gap-1"><span className="w-[34%] bg-[#4186ec]" style={{height:h+"%"}}/><span className="w-[34%] bg-[#ff7b82]" style={{height:Math.max(20,h-18)+"%"}}/></div>)}
+      </div>
+      <svg className="absolute left-8 right-8 top-5 h-[135px] w-[calc(100%_-_4rem)]" viewBox="0 0 700 135" preserveAspectRatio="none">
+        <polyline points="0,95 115,96 230,82 345,99 460,78 575,88 700,72" fill="none" stroke="#11a95f" strokeWidth="3"/>
+        {[0,115,230,345,460,575,700].map((x,i)=><circle key={i} cx={x} cy={[95,96,82,99,78,88,72][i]} r="4" fill="#11a95f"/>)}
+      </svg>
+      <div className="absolute bottom-1 left-7 right-7 flex justify-around text-[7px] text-[#677fa3]">{["15/09","16/09","17/09","18/09","19/09","20/09","21/09"].map(x=><span key={x}>{x}</span>)}</div>
+    </div>
+  );
+}
+
+function RevenueDonut({ total, homestay, cozy }: { total: number; homestay: number; cozy: number }) {
+  const share = total ? Math.round(homestay / total * 100) : 0;
+  return (
+    <div className="flex h-[190px] items-center justify-center gap-4 p-3">
+      <div className="grid h-[120px] w-[120px] shrink-0 place-items-center rounded-full bg-[conic-gradient(#8051e6_0_67%,#13b879_67%_100%)]">
+        <div className="grid h-[82px] w-[82px] place-items-center rounded-full bg-white text-center">
+          <span><b className="block text-[18px] text-[#11265b]">{compactMoney(total)}</b><small className="text-[7px] text-[#7284a0]">Tổng doanh thu</small></span>
+        </div>
+      </div>
+      <div className="space-y-3 text-[8px] text-[#405b82]">
+        <div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-[#8051e6]"/><b>Lavender Homestay</b><p className="ml-4 mt-1 text-[12px] font-bold text-[#11265b]">{compactMoney(homestay)} ({share}%)</p></div>
+        <div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-[#13b879]"/><b>Cozy Garden</b><p className="ml-4 mt-1 text-[12px] font-bold text-[#11265b]">{compactMoney(cozy)} ({100-share}%)</p></div>
+      </div>
+    </div>
+  );
+}
+
+function SystemCard({ source }: { source: ExecutiveSource }) {
+  const good = source.status === "online";
+  return (
+    <div className="rounded-[6px] border border-[#e0e9f3] bg-white px-2 py-2">
+      <div className="flex items-center gap-2">
+        <span className="grid h-6 w-6 place-items-center rounded bg-[#edf5ff] text-[10px] text-[#1768df]">◉</span>
+        <div className="min-w-0"><b className="block truncate text-[8px] text-[#28476f]">{source.name}</b><span className={"text-[8px] font-bold " + (good ? "text-[#08a054]" : "text-[#d18500]")}>● {good ? "Online" : source.status === "partial" ? "Partial" : source.status === "estimate" ? "Estimate" : "Hold"}</span></div>
+      </div>
+    </div>
+  );
+}
+
+export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
+  const t = timeParts(props.generatedAt);
+  return (
+    <div className="min-h-screen bg-[#f5f9fd] text-[#17315c]">
+      <RefreshOnView intervalMs={60000}/>
+      <header className="border-b border-[#dce7f3] bg-white px-4 py-[8px]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[21px] font-extrabold tracking-[-0.025em] text-[#071b55]">Executive Dashboard – Tổng quan điều hành</h1>
+            <p className="mt-[2px] text-[10px] text-[#6c83a8]">Dữ liệu tổng hợp từ: Lavender Homestay | Cozy Garden | Hệ thống vận hành</p>
           </div>
-          <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-            {PERIODS.map(([key, label]) => (
-              <Link
-                key={key}
-                href={key === "today" ? "/" : "/?period=" + key}
-                className={"rounded-md border px-4 py-1.5 text-[11px] font-semibold " + (props.period === key ? "border-[#1668e3] bg-[#1668e3] text-white" : "border-[#d7e3f0] bg-white text-[#425471] hover:bg-[#f6f9fd]")}
-              >
-                {label}
-              </Link>
-            ))}
-            <span className="rounded-md border border-[#d7e3f0] bg-white px-4 py-1.5 text-[11px] font-semibold text-[#425471]">Tùy chọn</span>
-            <span className="ml-2 min-w-[180px] rounded-md border border-[#d7e3f0] bg-white px-4 py-1.5 text-[11px] font-semibold text-[#425471]">Tất cả cơ sở</span>
+          <div className="flex items-center gap-4 text-[#18345f]">
+            <span className="text-[9px] font-semibold">{t.date}</span><b className="text-[9px]">{t.time}</b>
+            <span className="relative">♟<span className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-[#ee3945] text-[7px] text-white">3</span></span>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e5edf7] text-[10px] font-bold">T</span>
+            <span className="text-[9px]"><b className="block">Tuấn</b><small className="text-[#7285a3]">Owner</small></span>
           </div>
         </div>
-      </div>
+        <div className="mt-[4px] flex justify-end gap-0">
+          {PERIODS.map(([key,label]) => <Link key={key} href={key === "today" ? "/" : "/?period="+key} className={"min-w-[72px] border px-3 py-[6px] text-center text-[9px] font-bold " + (props.period===key ? "border-[#2377ef] bg-[#2377ef] text-white" : "border-[#d5e1ef] bg-white text-[#314b72]")}>{label}</Link>)}
+          <span className="min-w-[82px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-center text-[9px] font-bold text-[#314b72]">Tùy chọn</span>
+          <span className="ml-3 min-w-[185px] rounded-[4px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-[9px] font-bold text-[#314b72]">Tất cả cơ sở⌄</span>
+        </div>
+      </header>
 
-      <div className="mx-auto grid max-w-[1700px] gap-4 p-4 xl:grid-cols-[1.18fr_0.92fr]">
-        <div className="space-y-4">
-          <Panel
-            index={1}
-            title="ACTION CENTER – Việc cần Tuấn xử lý"
-            subtitle="Ưu tiên quyết định, giao việc và theo dõi escalation"
-            action={<Link href="/ai-manager" className="rounded-lg border border-[#bad5ff] px-3 py-1.5 text-xs font-semibold text-[#1265d8]">Xem tất cả →</Link>}
-          >
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <SmallStat label="Cần Tuấn quyết định" value={props.actionCenter.decisions} tone="red" />
-              <SmallStat label="Cần giao việc" value={props.actionCenter.unassigned} tone="blue" />
-              <SmallStat label="Đã giao / theo dõi" value={props.actionCenter.inProgress} tone="green" />
-              <SmallStat label="Quá hạn / Escalation" value={props.actionCenter.overdue} tone="amber" />
+      <main className="grid grid-cols-12 gap-2 p-[10px]">
+        <div className="col-span-12 space-y-2 xl:col-span-7">
+          <Panel number={1} title="ACTION CENTER – Việc cần Tuấn xử lý" subtitle="Ưu tiên quyết định, giao việc và theo dõi escalation" action={<Link href="/ai-manager" className="rounded-[5px] border border-[#acd0fa] px-3 py-1 text-[8px] font-bold text-[#1768df]">Xem tất cả ({props.actionCenter.items.length})</Link>}>
+            <div className="grid grid-cols-4 gap-2 px-3 pb-2">
+              <Stat label="Cần Tuấn quyết định" value={props.actionCenter.decisions} tone="red" icon="!" />
+              <Stat label="Cần giao việc" value={props.actionCenter.unassigned} tone="blue" icon="●" />
+              <Stat label="Đã giao / đang theo dõi" value={props.actionCenter.inProgress} tone="green" icon="☷" />
+              <Stat label="Quá hạn / Escalation" value={props.actionCenter.overdue} tone="amber" icon="◷" />
             </div>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-[11px]">
-                <thead className="bg-[#f4f7fb] text-[#52647f]">
-                  <tr>
-                    <th className="px-3 py-2">Ưu tiên</th>
-                    <th className="px-3 py-2">Việc cần làm</th>
-                    <th className="px-3 py-2">Liên quan</th>
-                    <th className="px-3 py-2">Owner</th>
-                    <th className="px-3 py-2">Hạn xử lý</th>
-                    <th className="px-3 py-2">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#edf2f7]">
-                  {props.actionCenter.items.slice(0, 5).map((item) => (
-                    <tr key={item.id} className="hover:bg-[#f9fbfe]">
-                      <td className="px-3 py-2"><span className={"rounded-full px-2 py-1 font-semibold " + (item.priority === "P0" ? "bg-red-50 text-red-600" : item.priority === "P1" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-600")}>{item.priority}</span></td>
-                      <td className="max-w-[300px] truncate px-3 py-2 font-semibold text-[#243a5e]" title={item.title}>{item.title}</td>
-                      <td className="px-3 py-2 text-[#657796]">{item.unit}</td>
-                      <td className="px-3 py-2 text-[#657796]">{item.owner || "AI Chief of Staff"}</td>
-                      <td className="px-3 py-2 text-[#657796]">{item.due || "—"}</td>
-                      <td className="px-3 py-2"><span className="rounded-full bg-[#fff3e6] px-2 py-1 font-semibold text-[#c56a00]">{item.status}</span></td>
-                    </tr>
-                  ))}
-                  {props.actionCenter.items.length === 0 ? <tr><td colSpan={6} className="px-3 py-6 text-center text-[#7b8ca6]">Không có việc cần xử lý.</td></tr> : null}
-                </tbody>
-              </table>
-            </div>
+            <ActionTable items={props.actionCenter.items}/>
           </Panel>
 
-          <Panel index={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Actual KiotViet theo " + props.periodLabel + " · chi phí thiếu Actual dùng dự toán có nhãn"}>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <SmallStat label="Doanh thu Actual" value={shortMoney(props.revenue.total)} tone="green" sub="KiotViet Hotel + F&B · live" />
-              <SmallStat label="Chi phí" value={shortMoney(props.finance.costEstimate)} tone="red" sub={props.finance.costLabel} />
-              <SmallStat label="Lợi nhuận tham chiếu" value={shortMoney(props.finance.profitEstimate)} tone="blue" sub="Revenue Actual − Cost Estimate" />
-              <SmallStat label="Biên lợi nhuận" value={props.finance.marginEstimate.toFixed(1).replace(".", ",") + "%"} tone="amber" sub="THAM CHIẾU, chưa phải P&L Actual" />
+          <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Actual từ KiotViet / nguồn đã xác minh · " + props.periodLabel}>
+            <div className="grid grid-cols-4 gap-2 px-3 pb-2">
+              <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="KiotViet Actual · Live" />
+              <Stat label="Chi phí" value={money(props.finance.costEstimate)} tone="red" icon="▥" note={props.finance.costLabel} />
+              <Stat label="Lợi nhuận" value={money(props.finance.profitEstimate)} tone="blue" icon="▣" note="Tự động tính toán" />
+              <Stat label="Biên lợi nhuận" value={props.finance.marginEstimate.toFixed(1).replace(".",",")+"%"} tone="amber" icon="⌕" note="Tham chiếu" />
             </div>
-
-            <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-xl border border-[#e2ebf4] p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-bold text-[#263a5c]">Doanh thu theo cơ sở</p>
-                  <span className="rounded-full bg-[#eafaf3] px-2 py-1 text-[10px] font-semibold text-[#0b9b60]">LIVE · no-store</span>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-1 flex justify-between text-xs"><span>Homestay</span><strong>{shortMoney(props.revenue.homestay)}</strong></div>
-                    <div className="h-3 overflow-hidden rounded-full bg-[#edf2f7]"><div className="h-full rounded-full bg-[#7357df]" style={{ width: String(revenueShare) + "%" }} /></div>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex justify-between text-xs"><span>Cozy Garden</span><strong>{shortMoney(props.revenue.cozy)}</strong></div>
-                    <div className="h-3 overflow-hidden rounded-full bg-[#edf2f7]"><div className="h-full rounded-full bg-[#10a86f]" style={{ width: String(100 - revenueShare) + "%" }} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    {props.revenue.branches.slice(0, 4).map((branch) => (
-                      <div key={branch.name} className="rounded-lg bg-[#f6f9fd] p-3">
-                        <p className="truncate text-[10px] text-[#6d7f9e]">{branch.name}</p>
-                        <p className="mt-1 text-sm font-bold text-[#25395a]">{shortMoney(branch.revenue)}</p>
-                        <p className="text-[9px] text-[#8795aa]">{branch.invoices} hóa đơn</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div className="grid grid-cols-[1.75fr_1fr] gap-2 px-3 pb-3">
+              <div className="rounded-[7px] border border-[#e0e9f3]">
+                <div className="flex items-center justify-between px-3 py-2 text-[9px] font-bold text-[#16345f]"><span>Doanh thu – Chi phí – Lợi nhuận (7 ngày gần nhất)</span><span className="rounded border border-[#d9e5f2] px-2 py-1">7 ngày⌄</span></div>
+                <RevenueChart/>
               </div>
-
-              <div className="rounded-xl border border-[#e2ebf4] p-4">
-                <p className="text-xs font-bold text-[#263a5c]">Kiểm soát P&L</p>
-                <div className="mt-3 space-y-2 text-xs">
-                  <div className="flex justify-between rounded-lg bg-[#f6f9fd] p-2.5"><span>Chi phí Actual đã biết</span><strong>{shortMoney(props.finance.actualCostKnown)}</strong></div>
-                  <div className="flex justify-between rounded-lg bg-[#fff8ec] p-2.5"><span>Phần chưa đủ chứng từ</span><strong className="text-[#bd7200]">DỰ TOÁN</strong></div>
-                  <div className="rounded-lg bg-[#fff1f2] p-2.5 text-[11px] text-[#bd4251]">Không tự chuyển lợi nhuận tham chiếu thành P&L Actual cho tới khi CFO đủ evidence.</div>
-                </div>
+              <div className="rounded-[7px] border border-[#e0e9f3]">
+                <p className="px-3 py-2 text-[9px] font-bold text-[#16345f]">Doanh thu theo cơ sở (Hôm nay)</p>
+                <RevenueDonut total={props.revenue.total} homestay={props.revenue.homestay} cozy={props.revenue.cozy}/>
               </div>
             </div>
           </Panel>
 
-          <Panel title="VẬN HÀNH & NGOẠI LỆ" subtitle="Chỉ hiển thị mục cần can thiệp hoặc theo dõi" action={<Link href="/ai-manager" className="text-xs font-semibold text-[#1265d8]">Xem tất cả →</Link>}>
-            <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="grid grid-cols-3 gap-2">
-                <SmallStat label="Homestay" value={props.operations.homestayOpen} tone="green" sub="việc đang mở" />
-                <SmallStat label="Cozy Garden" value={props.operations.cozyOpen} tone="amber" sub="việc đang mở" />
-                <SmallStat label="Nhân sự / Dịch vụ" value={props.operations.hrOpen} tone="blue" sub="cần theo dõi" />
-              </div>
-              <div className="space-y-2">
-                {props.operations.exceptions.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 rounded-lg border border-[#e5edf6] px-3 py-2">
-                    <span className={"h-2 w-2 rounded-full " + (item.priority === "P0" ? "bg-red-500" : "bg-amber-500")} />
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#344a6c]">{item.title}</span>
-                    <span className="text-[10px] text-[#7a8ba5]">{item.unit}</span>
-                  </div>
-                ))}
+          <Panel title="VẬN HÀNH & NGOẠI LỆ" subtitle="Chỉ hiển thị tóm tắt cần CEO và vấn đề cần chú ý" action={<Link href="/operations" className="rounded-[5px] border border-[#acd0fa] px-3 py-1 text-[8px] font-bold text-[#1768df]">Xem tất cả →</Link>}>
+            <div className="grid grid-cols-[1fr_1fr_1fr_1.7fr] gap-2 px-3 pb-3">
+              {[["Lavender Homestay",props.operations.homestayOpen,"Ổn định"],["Cozy Garden",props.operations.cozyOpen,"ngoại lệ"],["Nhân sự / Dịch vụ",props.operations.hrOpen,"ca đi muộn"]].map(([name,value,label],i)=><div key={String(name)} className="rounded-[7px] border border-[#e1eaf4] p-3"><b className="text-[9px] text-[#234268]">{name}</b><p className={"mt-2 text-[10px] font-bold " + (i===0?"text-[#0a9f57]":"text-[#d47b00]")}>● {value} {label}</p><p className="mt-2 text-[7px] text-[#7c8da7]">Theo dõi từ runtime</p></div>)}
+              <div className="rounded-[7px] border border-[#e1eaf4] p-2">
+                <b className="text-[9px] text-[#244368]">Ngoại lệ cần chú ý ({props.operations.exceptions.length})</b>
+                <div className="mt-1 divide-y divide-[#edf2f7]">{props.operations.exceptions.slice(0,4).map(x=><div key={x.id} className="flex h-[24px] items-center gap-2 text-[7px]"><span className="h-2 w-2 rounded-full bg-[#f13a48]"/><span className="min-w-0 flex-1 truncate">{x.title}</span><span className="text-[#7e8da3]">{x.unit}</span></div>)}</div>
               </div>
             </div>
           </Panel>
         </div>
 
-        <div className="space-y-4">
-          <Panel index={3} title="AI-LỄ TÂN" subtitle="Kênh tự động tư vấn – bán hàng – CSKH" action={<Link href="/ai-le-tan" className="rounded-lg bg-[#1768df] px-3 py-2 text-xs font-semibold text-white">Xem AI-Lễ Tân →</Link>}>
-            <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
-              <SmallStat label="Hội thoại" value={props.receptionist.conversations} tone="blue" />
-              <SmallStat label="AI xử lý" value={props.receptionist.active} tone="green" />
-              <SmallStat label="Cần lễ tân" value={props.receptionist.waitingHuman} tone="amber" />
-              <SmallStat label="SLA rủi ro" value={props.receptionist.slaRisk} tone="red" />
-              <SmallStat label="Complaint" value={props.receptionist.complaints} tone="violet" />
-              <SmallStat label="Human handoff" value={props.receptionist.waitingHuman} tone="slate" />
+        <div className="col-span-12 space-y-2 xl:col-span-5">
+          <Panel number={3} title="AI-LỄ TÂN" subtitle="Kênh tự động trọng yếu cho tư vấn – bán hàng – CSKH" action={<Link href="/ai-le-tan" className="rounded-[5px] bg-[#2477ef] px-4 py-1.5 text-[8px] font-bold text-white">Xem AI-Lễ Tân →</Link>}>
+            <div className="grid grid-cols-6 gap-2 px-3 pb-2">
+              <Stat label="Hội thoại đang mở" value={props.receptionist.conversations} tone="blue" icon="•••"/>
+              <Stat label="AI đang xử lý" value={props.receptionist.active} tone="green" icon="◉"/>
+              <Stat label="Cần Lễ tân hỗ trợ" value={props.receptionist.waitingHuman} tone="amber" icon="●●"/>
+              <Stat label="SLA quá hạn" value={props.receptionist.slaRisk} tone="red" icon="◷"/>
+              <Stat label="Complaint mở" value={props.receptionist.complaints} tone="violet" icon="!"/>
+              <Stat label="Human correction hôm nay" value={props.receptionist.waitingHuman} tone="slate" icon="⚙"/>
             </div>
-            <div className="mt-3 rounded-xl bg-[#f5f9ff] p-4">
-              <p className="text-xs font-bold text-[#274061]">Pipeline hội thoại</p>
-              <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-                {[
-                  ["Lead mới", props.receptionist.conversations],
-                  ["Booking verified", props.receptionist.verifiedBookings],
-                  ["Upsell cơ hội", props.receptionist.upsellOpportunities],
-                  ["Human handoff", props.receptionist.waitingHuman],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-lg bg-white p-3 shadow-sm">
-                    <p className="text-[10px] text-[#73839b]">{label}</p>
-                    <p className="mt-1 text-xl font-bold text-[#243b61]">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Panel>
-
-          <Panel index={4} title="MARKETING & SALES" subtitle={props.marketing.actualAvailable ? "Actual từ nguồn marketing đã xác minh" : "Chưa đủ Ads Actual · dùng dự toán có nhãn"}>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <SmallStat label="Chi phí quảng cáo" value={shortMoney(props.marketing.spendEstimate)} tone="blue" sub={props.marketing.actualAvailable ? "ACTUAL" : "DỰ TOÁN 3%/2%"} />
-              <SmallStat label="Lead / Inquiry" value={props.marketing.leads} tone="green" />
-              <SmallStat label="Booking / Order" value={props.marketing.bookings} tone="amber" />
-              <SmallStat label="Doanh thu Actual" value={shortMoney(props.marketing.revenue)} tone="green" />
-            </div>
-            <div className="mt-3 rounded-xl border border-[#e5edf6] p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-[#2a4165]">Hiệu quả dữ liệu Marketing</p>
-                <span className={"rounded-full px-2 py-1 text-[10px] font-bold " + (props.marketing.actualAvailable ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700")}>{props.marketing.actualAvailable ? "ACTUAL" : "NEED VERIFY"}</span>
-              </div>
-              <p className="mt-2 text-[11px] leading-5 text-[#70809a]">Khi Google Ads/Meta Actual chưa đọc được, dashboard chỉ dùng ngân sách tham chiếu để hệ thống vẫn vận hành. Không dùng số dự toán để quyết định ROAS hoặc tăng ngân sách.</p>
-            </div>
-          </Panel>
-
-          <Panel title="SYSTEM / DATA HEALTH" action={<span className="rounded-full bg-[#eafaf3] px-2 py-1 text-[10px] font-bold text-[#0b9b60]">{props.system.verified}/{props.system.total} nguồn ổn định</span>}>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {props.system.sources.map((source) => (
-                <div key={source.name} className="rounded-xl border border-[#e2ebf4] p-3" title={source.note}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[11px] font-bold text-[#294164]">{source.name}</p>
-                    <StatusDot status={source.status} />
-                  </div>
-                  <p className={"mt-1 text-[10px] font-semibold " + (source.status === "online" ? "text-emerald-600" : source.status === "estimate" ? "text-violet-600" : source.status === "partial" ? "text-amber-600" : "text-red-600")}>
-                    {source.status === "online" ? "Online" : source.status === "estimate" ? "Dự toán" : source.status === "partial" ? "Partial" : "Hold"}
-                  </p>
+            <div className="grid grid-cols-[2fr_1fr] gap-2 px-3 pb-3">
+              <div className="rounded-[7px] border border-[#e0e9f3] p-2">
+                <b className="text-[9px] text-[#18365f]">Pipeline hội thoại (Hôm nay)</b>
+                <div className="mt-3 flex items-center gap-2">
+                  {[["Lead mới",props.receptionist.conversations],["Booking draft","—"],["Booking verified",props.receptionist.verifiedBookings],["Upsell cơ hội",props.receptionist.upsellOpportunities]].map(([l,v],i)=><div key={String(l)} className="flex flex-1 items-center"><div className="w-full rounded bg-[#eff6fd] p-3 text-center"><p className="text-[8px]">{l}</p><b className="mt-1 block text-[16px] text-[#11275a]">{v}</b></div>{i<3?<span className="text-[#9bcaff]">›</span>:null}</div>)}
                 </div>
-              ))}
+                <div className="mt-3 rounded bg-[#e9fbf2] px-3 py-2 text-[8px] text-[#168b55]">● Wrong price / Wrong availability / Wrong policy = 0</div>
+              </div>
+              <div className="rounded-[7px] border border-[#e0e9f3] p-2">
+                <b className="text-[9px] text-[#18365f]">Phối hợp AI Agent</b>
+                <div className="mt-2 space-y-2">{["Receptionist","Concierge","Upsell","Booking Assistant","Human Handoff"].map(x=><div key={x} className="flex items-center gap-2 text-[8px]"><span className="text-[#09a159]">●</span><span>{x}</span></div>)}</div>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel number={4} title="MARKETING & SALES" subtitle={props.marketing.actualAvailable ? "Hiệu quả theo kênh – Actual đã kết nối" : "Hiệu quả theo kênh – Actual sẽ kết nối dần"} action={!props.marketing.actualAvailable?<span className="rounded-full bg-[#fff0f2] px-2 py-1 text-[8px] font-bold text-[#e63243]">DEMO DATA</span>:null}>
+            <div className="grid grid-cols-5 gap-2 px-3 pb-2">
+              <Stat label="Tiếp cận" value="—" tone="blue" icon="◉"/>
+              <Stat label="Tương tác" value="—" tone="blue" icon="●●"/>
+              <Stat label="Lead / Inquiry" value={props.marketing.leads} tone="green" icon="●"/>
+              <Stat label="Booking / Order" value={props.marketing.bookings} tone="amber" icon="⌑"/>
+              <Stat label="Doanh thu Actual" value={money(props.marketing.revenue)} tone="green" icon="▮▮"/>
+            </div>
+            <div className="grid grid-cols-[2.4fr_1fr] gap-2 px-3 pb-3">
+              <div className="rounded-[7px] border border-[#e0e9f3]">
+                <p className="px-3 py-2 text-[9px] font-bold text-[#18365f]">Hiệu quả theo kênh (Hôm nay)</p>
+                <table className="w-full text-[7px]"><thead className="bg-[#f2f7fb] text-[#36527a]"><tr>{["Kênh","Spend","Lead","Booking","Doanh thu","ROAS","Quyết định"].map(x=><th key={x} className="px-2 py-1.5">{x}</th>)}</tr></thead><tbody className="divide-y divide-[#e8eef5]">{["Google Ads","Meta Ads","Instagram","Website","TikTok","Tripadvisor"].map((x,i)=><tr key={x}><td className="px-2 py-1.5 font-medium">{x}</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="px-1"><span className={"block rounded-full px-1 py-1 text-center font-bold " + (i%2?"bg-[#fff4df] text-[#c67900]":"bg-[#e8f9f0] text-[#079852]")}>{i%2?"HOLD":"MONITOR"}</span></td></tr>)}</tbody></table>
+              </div>
+              <div className="rounded-[7px] border border-[#e0e9f3] p-3 text-center">
+                <b className="text-[9px] text-[#203b63]">CHI PHÍ QUẢNG CÁO</b>
+                <div className="mt-3 grid h-[105px] place-items-center rounded bg-[#f3f7fb]"><span><b className="block text-[24px] text-[#5a6c85]">♙</b><b className="text-[10px] text-[#334b6f]">ĐANG KHÓA / LOCKED</b></span></div>
+                <p className="mt-2 text-left text-[7px] text-[#7788a2]">Chưa kích hoạt chi tiêu quảng cáo. Chỉ hiển thị dữ liệu organic.</p>
+                <button className="mt-2 w-full rounded border border-[#a9cef9] py-1.5 text-[8px] font-bold text-[#1768df]">Liên hệ Admin</button>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="SYSTEM / DATA HEALTH" action={<span className="rounded-full bg-[#e7f9ef] px-2 py-1 text-[8px] font-bold text-[#079852]">● {props.system.verified}/{props.system.total} nguồn ổn định</span>}>
+            <div className="grid grid-cols-4 gap-2 px-3 pb-3">
+              {props.system.sources.slice(0,8).map(source=><SystemCard key={source.name} source={source}/>)}
             </div>
           </Panel>
         </div>
-      </div>
-
-      <div className="mx-auto max-w-[1700px] px-4 pb-4 text-right text-[10px] text-[#8593a8]">
-        Mỗi lần mở lại trang/tab tải dữ liệu mới · tự refresh 60 giây/lần · cache: no-store
-      </div>
+      </main>
     </div>
   );
 }

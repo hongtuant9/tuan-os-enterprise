@@ -54,8 +54,8 @@ export function Sidebar() {
         <Link href="/" className="font-bold text-[#10224a]">TUAN OS · TCE</Link>
         <Link href="/settings" className="text-slate-500"><Icon name="settings" /></Link>
       </div>
-      <aside className="hidden min-h-screen w-[196px] shrink-0 flex-col bg-[linear-gradient(180deg,#172c44_0%,#102237_100%)] px-3 py-5 text-white md:flex">
-        <Link href="/" className="mb-5 flex items-start gap-3 px-2">
+      <aside className="hidden min-h-screen w-[194px] shrink-0 flex-col bg-[linear-gradient(180deg,#172c44_0%,#102237_100%)] px-3 py-4 text-white md:flex">
+        <Link href="/" className="mb-4 flex items-start gap-3 px-2">
           <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full border-[5px] border-[#d9f1ff]">
             <span className="h-3 w-3 rotate-45 rounded-[2px] bg-[#d9f1ff]" />
           </span>
@@ -65,12 +65,12 @@ export function Sidebar() {
           </span>
         </Link>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-[3px]">
           {NAVIGATION.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={"flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition " +
+              className={"flex items-center gap-3 rounded-[6px] px-3 py-[9px] text-[13px] font-medium transition " +
                 (active(item.href)
                   ? "bg-[linear-gradient(90deg,#1774f5,#2f86ff)] text-white shadow-[0_5px_14px_rgba(14,104,240,0.28)]"
                   : "text-slate-200 hover:bg-white/10 hover:text-white")}
@@ -112,18 +112,18 @@ export function TcePageHeader({
 }) {
   const time = formatHeaderTime(generatedAt);
   return (
-    <header className="border-b border-[#dce7f3] bg-white px-4 py-3 lg:px-5">
+    <header className="border-b border-[#dce7f3] bg-white px-4 py-[9px] lg:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[21px] font-extrabold tracking-[-0.02em] text-[#071b55] lg:text-[23px]">{title}</h1>
-          <p className="mt-1 text-[12px] text-[#677da7]">{subtitle}</p>
+          <h1 className="text-[20px] font-extrabold tracking-[-0.025em] text-[#071b55] lg:text-[22px]">{title}</h1>
+          <p className="mt-[3px] text-[11px] text-[#677da7]">{subtitle}</p>
         </div>
         <div className="flex items-center gap-4 text-[#122b61]">
           <div className="hidden text-right text-[11px] font-semibold lg:block">
             <span>{time.date}</span>
             <span className="ml-4">{time.time}</span>
           </div>
-          <span className="relative text-[#274a7d]"><Icon name="bell" className="h-5 w-5" /></span>
+          <span className="relative text-[#274a7d]"><Icon name="bell" className="h-5 w-5" /><span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-[#f13b47] text-[8px] font-bold text-white">3</span></span>
           <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e8f0fb] text-[11px] font-bold">T</span>
           <span className="hidden leading-4 lg:block">
             <span className="block text-[12px] font-bold">Tuấn</span>
@@ -132,18 +132,18 @@ export function TcePageHeader({
           <Icon name="chevron" className="h-4 w-4" />
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+      <div className="mt-[5px] flex flex-wrap justify-end gap-0">
         {["Hôm nay", "7 ngày", "Tháng", "Năm", "Tùy chọn"].map((label, index) => (
           <button
             type="button"
             key={label}
-            className={"rounded-md border px-4 py-1.5 text-[11px] font-semibold " +
+            className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-[10px] font-semibold " +
               (index === 0 ? "border-[#1f78ee] bg-[#2178ef] text-white" : "border-[#d5e1ef] bg-white text-[#243d69]")}
           >
             {label}
           </button>
         ))}
-        <button type="button" className="ml-2 flex min-w-[180px] items-center justify-between rounded-md border border-[#d5e1ef] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#243d69]">
+        <button type="button" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-[10px] font-semibold text-[#243d69]">
           Tất cả cơ sở <Icon name="chevron" className="h-4 w-4" />
         </button>
       </div>
@@ -163,7 +163,7 @@ export function TceWorkspaceShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-[#f4f8fd]">
+    <div className="flex min-h-screen bg-[#f5f9fd]">
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-x-hidden">
         <TcePageHeader title={title} subtitle={subtitle} generatedAt={generatedAt} />

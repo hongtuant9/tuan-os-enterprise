@@ -67,24 +67,76 @@ function sourceHealthy(rows: Array<{ key: string; status: string | null; last_sy
   return rows.some((row) => pattern.test(row.key) && row.status !== "error" && Boolean(row.last_synced_at));
 }
 
+function workbookStateLabel(state: CmoWorkstreamState): string {
+  if (state === "NEED_DATA") return "NEED VERIFY";
+  if (state === "GATED") return "HOLD / APPROVAL GATED";
+  return state;
+}
+
+function workbookDecisionLabel(decision: CmoExecutiveDecision): string {
+  if (decision === "BUILD_DATA") return "XÂY DỮ LIỆU (BUILD_DATA)";
+  if (decision === "IMPROVE") return "CẢI THIỆN (IMPROVE)";
+  if (decision === "OPTIMIZE") return "TỐI ƯU (OPTIMIZE)";
+  return "HOLD";
+}
+
+function localizeWorkbookNextAction(action: string): string {
+  if (action === "Restore the missing trusted runtime/source before changing campaign/channel strategy.") {
+    return "Khôi phục nguồn/runtime đáng tin cậy còn thiếu trước khi thay đổi campaign hoặc channel strategy.";
+  }
+  if (action === "Create CMI research jobs for Homestay, Cozy Garden and cross-business demand/competitor research.") {
+    return "Tạo CMI research jobs cho Homestay, Cozy Garden và nghiên cứu nhu cầu/đối thủ cross-business.";
+  }
+  if (action.startsWith("CMI has ") && action.includes("but 0 competitor records")) {
+    return action
+      .replace("CMI has ", "CMI hiện có ")
+      .replace(" relevant job(s), ", " job liên quan, ")
+      .replace(" source(s) and ", " nguồn và ")
+      .replace(" verified evidence item(s), but 0 competitor records. Run competitor discovery/selection before CMO competitor conclusions.", " evidence đã xác minh nhưng chưa có competitor record. Chạy competitor discovery/selection trước khi CMO kết luận về đối thủ.");
+  }
+  if (action.startsWith("CMI has ") && action.includes("but 0 verified insight")) {
+    return action
+      .replace("CMI has ", "CMI hiện có ")
+      .replace(" competitor record(s) but 0 verified insight. Capture/verify evidence and approve insight before changing strategy.", " competitor record nhưng chưa có insight VERIFIED. Thu thập/xác minh evidence và duyệt insight trước khi thay strategy.");
+  }
+  if (action === "Refresh dated competitor/search/destination evidence on the defined cadence; do not rely on stale observations.") {
+    return "Làm mới evidence có ngày về đối thủ/search/destination theo cadence; không dựa vào quan sát đã cũ.";
+  }
+  if (action === "Collect real customer questions/objections and feed recurring themes into content, offer and product decisions.") {
+    return "Thu thập câu hỏi/objection thật của khách và đưa theme lặp lại vào quyết định content, offer và product.";
+  }
+  if (action === "Prioritize the highest-leverage channel/funnel bottleneck; keep paid-spend and pricing mutations gated.") {
+    return "Ưu tiên bottleneck channel/funnel có leverage cao nhất; tiếp tục khóa paid-spend và pricing mutation theo approval gate.";
+  }
+  if (action.startsWith("Audit ") && action.includes("channel/provider state(s) still marked NEED_VERIFY")) {
+    return action
+      .replace("Audit ", "Audit ")
+      .replace(" channel/provider state(s) still marked NEED_VERIFY; planning is allowed, customer-facing activation is not.", " trạng thái channel/provider còn NEED_VERIFY; được phép planning nhưng không được customer-facing activation.");
+  }
+  if (action === "Design one measurable cross-channel or funnel test with explicit KPI, stop condition and approval scope before claiming optimization.") {
+    return "Thiết kế một test cross-channel hoặc funnel đo được, có KPI, stop condition và approval scope rõ trước khi kết luận đã tối ưu.";
+  }
+  return action;
+}
+
 async function writeWorkbookSnapshot(result: Omit<CmoExecutiveResult, "workbookWrite" | "changed">): Promise<boolean> {
   try {
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
     const sheets = google.sheets({ version: "v4", auth });
     const rows = [
-      ["CMO RUNTIME SNAPSHOT — VPS ALWAYS-ON", "", "", "", "", ""],
-      ["Generated At", result.generatedAt, "Decision", result.decision, "Workbook", "AUTO-UPDATED"],
-      ["Workstream", "State", "Evidence / Signal", "", "", ""],
-      ["Brand & Portfolio", result.workstreams.brand, "TCE master brand / STAY-EAT-EXPERIENCE-EXPLORE", "", "", ""],
-      ["Market Intelligence", result.workstreams.marketIntelligence, `CMI jobs=${result.intelligence.cmi.jobs}; sources=${result.intelligence.cmi.sources}; verified_evidence=${result.intelligence.cmi.verifiedEvidence}; competitors=${result.intelligence.cmi.competitors}; verified_insights=${result.intelligence.cmi.verifiedInsights}; customer_voice=${result.intelligence.customerVoiceAvailable}`, "", "", ""],
-      ["Channel Strategy", result.workstreams.channelStrategy, `open=${result.channels.customerFacingOpen.join(",") || "none"}; ready=${result.channels.providerReady}; need_verify=${result.channels.providerNeedVerify}`, "", "", ""],
-      ["Campaigns / Content", result.workstreams.campaigns, `tests active=${result.campaignTests.active}; completed=${result.campaignTests.completed}`, "", "", ""],
-      ["Paid Media", result.workstreams.paidMedia, "recommend/propose only; no autonomous spend", "", "", ""],
-      ["Funnel / Direct Growth", result.workstreams.funnel, "Traffic → Lead → Booking → Upsell → Revenue", "", "", ""],
-      ["Measurement", result.workstreams.measurement, `GA4=${result.intelligence.ga4Available}`, "", "", ""],
-      ["Budget / ROI", result.workstreams.budgetRoi, "proposal only; financial mutation gated", "", "", ""],
-      ["Weekly / Monthly Reporting", result.workstreams.reporting, "actual-only; no invented KPI", "", "", ""],
-      ["Top Next Actions", result.nextActions.slice(0, 4).join(" | "), "", "", "", ""],
+      ["ẢNH CHỤP RUNTIME CMO — VPS 24/7", "", "", "", "", ""],
+      ["Tạo lúc (Generated At)", result.generatedAt, "Quyết định (Decision)", workbookDecisionLabel(result.decision), "Workbook", "AUTO-UPDATED"],
+      ["LUỒNG CÔNG VIỆC", "TRẠNG THÁI KỸ THUẬT", "BẰNG CHỨNG / TÍN HIỆU", "", "", ""],
+      ["Thương hiệu & danh mục", workbookStateLabel(result.workstreams.brand), "TCE master brand / STAY-EAT-EXPERIENCE-EXPLORE", "", "", ""],
+      ["Thông tin thị trường", workbookStateLabel(result.workstreams.marketIntelligence), `CMI jobs=${result.intelligence.cmi.jobs}; nguồn=${result.intelligence.cmi.sources}; evidence_verified=${result.intelligence.cmi.verifiedEvidence}; đối_thủ=${result.intelligence.cmi.competitors}; insight_verified=${result.intelligence.cmi.verifiedInsights}; customer_voice=${result.intelligence.customerVoiceAvailable}`, "", "", ""],
+      ["Chiến lược kênh", workbookStateLabel(result.workstreams.channelStrategy), `kênh_mở=${result.channels.customerFacingOpen.join(",") || "none"}; provider_ready=${result.channels.providerReady}; need_verify=${result.channels.providerNeedVerify}`, "", "", ""],
+      ["Chiến dịch / Content", workbookStateLabel(result.workstreams.campaigns), `test đang chạy=${result.campaignTests.active}; hoàn tất=${result.campaignTests.completed}`, "", "", ""],
+      ["Paid Media", workbookStateLabel(result.workstreams.paidMedia), "Chỉ recommend/propose; không autonomous spend", "", "", ""],
+      ["Funnel / Direct Growth", workbookStateLabel(result.workstreams.funnel), "Traffic → Lead → Booking → Upsell → Revenue", "", "", ""],
+      ["Đo lường (Measurement)", workbookStateLabel(result.workstreams.measurement), `GA4=${result.intelligence.ga4Available}`, "", "", ""],
+      ["Ngân sách / ROI", workbookStateLabel(result.workstreams.budgetRoi), "Chỉ proposal; financial mutation bị khóa theo approval gate", "", "", ""],
+      ["Báo cáo tuần / tháng", workbookStateLabel(result.workstreams.reporting), "Chỉ Actual/evidence; không tạo KPI giả", "", "", ""],
+      ["Hành động ưu tiên", result.nextActions.slice(0, 4).map(localizeWorkbookNextAction).join(" | "), "", "", "", ""],
     ];
     await sheets.spreadsheets.values.update({
       spreadsheetId: CMO_WORKBOOK_ID,

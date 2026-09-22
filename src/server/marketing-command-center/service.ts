@@ -50,7 +50,10 @@ function channelAggregate(metricRows: Row[], channelRows: Row[]): MarketingPerfo
     const total = (key: string) => items.reduce((sum, row) => sum + n(row[key]), 0);
     const spend = total("spend");
     const leads = total("leads_verified");
-    const revenue = total("attributed_revenue");
+    const revenue = items.reduce(
+      (sum, row) => sum + (s(row.verification_status) === "VERIFIED" ? n(row.attributed_revenue) : 0),
+      0,
+    );
     return {
       channelId,
       channelName: names.get(channelId) ?? channelId,
@@ -92,8 +95,11 @@ export async function getMarketingCommandCenterSnapshot(
     ]);
     const metricRows = rows(metricResult);
     const channelRows = rows(channelResult);
-    const campaignRows = rows(campaignResult);
-    const contentRows = rows(contentResult);
+    const campaignRows = rows(campaignResult)
+      .filter((row) => !["DEMO_ONLY", "ARCHIVED"].includes(s(row.status)))
+      .sort((a, b) => s(a.plan_campaign_id).localeCompare(s(b.plan_campaign_id)));
+    const contentRows = rows(contentResult)
+      .sort((a, b) => s(a.content_id).localeCompare(s(b.content_id)));
     const attributionRows = rows(attributionResult);
     const connectorRows = rows(connectorResult);
     const recommendationRows = rows(recommendationResult);
@@ -108,7 +114,9 @@ export async function getMarketingCommandCenterSnapshot(
     const spend = total("spend");
     const revenue = total("revenue");
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
-    const taggedEvents = attributableEvents.filter((row) => Boolean(s(row.utm_source) || s(row.utm_campaign) || s(row.source)));
+    const taggedEvents = attributableEvents.filter((row) => Boolean(
+      s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
+    ));
     const attributionCoverage = attributableEvents.length ? taggedEvents.length / attributableEvents.length : null;
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);

@@ -487,16 +487,46 @@ function MobileHR({ data }: { data?: TceTabLiveData }) {
 }
 
 function MobileFinance({ data }: { data?: TceTabLiveData }) {
+  const costRows = data?.tables.financeCostGroups?.length
+    ? data.tables.financeCostGroups.map((r) => [r[1] ?? "—", r[2] ?? "—", r[6] ?? "—"])
+    : [["Chưa có chi phí Actual","—","NEED VERIFY"]];
+  const profitRows = data?.tables.financeProfitSources?.length
+    ? data.tables.financeProfitSources.map((r) => [r[1] ?? "—", r[5] ?? "—", r[7] ?? "—"])
+    : [["Chưa có nguồn lợi nhuận","—","NEED VERIFY"]];
+  const productRows = data?.tables.financeProductProfitReadiness?.length
+    ? data.tables.financeProductProfitReadiness.map((r) => [r[0] ?? "—", r[3] ?? "—", r[4] ?? "—"])
+    : [["Chưa có dữ liệu","NEED VERIFY","Chưa xếp hạng"]];
+
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Dòng tiền vào - ra" subtitle="7 ngày gần nhất"><TinyChart/><p className="mt-[2px] text-[6px] text-[#6f83a5]">Doanh thu · Chi phí · Dòng tiền ròng</p></MobileSection>
-      <MobileSection title="Ngân sách vs thực tế" subtitle="Tháng này">
-        <div className="flex items-center gap-[25px] py-[6px]">
-          <div className="ml-[18px] grid h-[88px] w-[88px] place-items-center rounded-full bg-[conic-gradient(#8238ee_0_30%,#2f7cf4_30%_58%,#16ba6d_58%_72%,#ffa20e_72%_87%,#ff4d5d_87%_100%)]"><div className="grid h-[59px] w-[59px] place-items-center rounded-full bg-white text-center"><span><b className="block text-[13px]">—</b><small className="text-[5px] text-[#7185a7]">Tổng chi phí</small></span></div></div>
-          <div className="space-y-[10px] text-[7px]"><div><span className="text-[#7185a7]">Ngân sách</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Thực tế</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Chênh lệch</span><b className="block text-[10px] text-[#10a85a]">—</b></div></div>
+      <MobileSection title="Phân tích nhóm chi phí" subtitle={"Chi nhiều · chuẩn · theo dõi · " + (data?.period.label ?? "Hôm nay")}>
+        <RowTable rows={costRows} cols={3}/>
+        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Giá trị có dấu ~ là [Ước tính/Mô hình]. Actual cost chưa đủ thì không tự gắn “Đạt chuẩn”.</p>
+      </MobileSection>
+
+      <MobileSection title="Nguồn lợi nhuận" subtitle="Cơ sở / service line đóng góp lợi nhuận">
+        <RowTable rows={profitRows} cols={3}/>
+        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Doanh thu lấy từ KiotViet Actual; chi phí và lợi nhuận hiện là mô hình cho tới khi FIN-HOSPITALITY-001 PASS.</p>
+      </MobileSection>
+
+      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Top/Bottom chỉ bật khi đủ cost evidence">
+        <RowTable rows={productRows} cols={3}/>
+      </MobileSection>
+
+      <MobileSection title="3 hành động tối ưu ưu tiên" subtitle="Không tự thay đổi giá / BOM / ngân sách">
+        <div className="space-y-[5px]">
+          {(data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]).slice(0,3).map((item, index) => (
+            <div key={item} className="flex gap-[7px] rounded-[7px] border border-[#dce7f2] bg-white p-[7px]">
+              <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[#eaf2ff] text-[8px] font-extrabold text-[#2477ee]">{index + 1}</span>
+              <p className="text-[7px] leading-[11px] text-[#38547b]">{item}</p>
+            </div>
+          ))}
         </div>
       </MobileSection>
-      <MobileSection title="Công nợ & cảnh báo" subtitle="Các khoản cần theo dõi"><RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[1] ?? "—",r[2] ?? "—",r[4] ?? "—"]) : [["Công nợ phải trả",data?.metricValues["Công nợ phải trả"] ?? "NEED VERIFY","Chưa có AP runtime"],["Nợ vay",data?.metricValues["Nợ vay"] ?? "NEED VERIFY","Chưa sync FIN-HOSPITALITY-001"]]} /></MobileSection>
+
+      <MobileSection title="Tình hình theo đơn vị" subtitle="Lavender · Ruby · Cozy Garden">
+        <RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[0] ?? "—",r[1] ?? "—",r[3] ?? "—"]) : [["Chưa có dữ liệu","—","NEED VERIFY"]]} />
+      </MobileSection>
     </div>
   );
 }

@@ -337,7 +337,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
 
         <div className="col-span-12 space-y-2 xl:col-span-5">
           <Panel number={3} title="AI-LỄ TÂN" subtitle="Kênh tự động trọng yếu cho tư vấn – bán hàng – CSKH" action={<Link href="/ai-le-tan" className="rounded-[5px] bg-[#2477ef] px-4 py-1.5 text-[8px] font-bold text-white">Xem AI-Lễ Tân →</Link>}>
-            <div className="grid grid-cols-3 gap-2 px-3 pb-2 2xl:grid-cols-6">
+            <div className="grid grid-cols-3 gap-2 px-3 pb-2 min-[1650px]:grid-cols-6">
               <Stat label="Hội thoại đang mở" value={props.receptionist.conversations} tone="blue" icon="•••"/>
               <Stat label="AI đang xử lý" value={props.receptionist.active} tone="green" icon="◉"/>
               <Stat label="Cần Lễ tân hỗ trợ" value={props.receptionist.waitingHuman} tone="amber" icon="●●"/>
@@ -345,11 +345,11 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
               <Stat label="Complaint mở" value={props.receptionist.complaints} tone="violet" icon="!"/>
               <Stat label="Human correction hôm nay" value={props.receptionist.waitingHuman} tone="slate" icon="⚙"/>
             </div>
-            <div className="grid grid-cols-1 gap-2 px-3 pb-3 2xl:grid-cols-[2fr_1fr]">
+            <div className="grid grid-cols-1 gap-2 px-3 pb-3 min-[1650px]:grid-cols-[2fr_1fr]">
               <div className="rounded-[7px] border border-[#e0e9f3] p-2">
                 <b className="text-[9px] text-[#18365f]">Pipeline hội thoại (Hôm nay)</b>
-                <div className="mt-3 grid grid-cols-2 gap-2 2xl:grid-cols-4">
-                  {[["Lead mới",props.receptionist.conversations],["Booking draft","—"],["Booking verified",props.receptionist.verifiedBookings],["Upsell cơ hội",props.receptionist.upsellOpportunities]].map(([l,v],i)=><div key={String(l)} className="flex min-w-0 items-center"><div className="w-full rounded bg-[#eff6fd] p-3 text-center"><p className="text-[8px]">{l}</p><b className="mt-1 block text-[16px] text-[#11275a]">{v}</b></div>{i<3?<span className="hidden text-[#9bcaff] 2xl:inline">›</span>:null}</div>)}
+                <div className="mt-3 grid grid-cols-2 gap-2 min-[1650px]:grid-cols-4">
+                  {[["Lead mới",props.receptionist.conversations],["Booking draft","—"],["Booking verified",props.receptionist.verifiedBookings],["Upsell cơ hội",props.receptionist.upsellOpportunities]].map(([l,v],i)=><div key={String(l)} className="flex min-w-0 items-center"><div className="w-full rounded bg-[#eff6fd] p-3 text-center"><p className="text-[8px]">{l}</p><b className="mt-1 block text-[16px] text-[#11275a]">{v}</b></div>{i<3?<span className="hidden text-[#9bcaff] min-[1650px]:inline">›</span>:null}</div>)}
                 </div>
                 <div className="mt-3 rounded bg-[#e9fbf2] px-3 py-2 text-[8px] text-[#168b55]">● Wrong price / Wrong availability / Wrong policy = 0</div>
               </div>
@@ -361,14 +361,14 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
           </Panel>
 
           <Panel number={4} title="MARKETING & SALES" subtitle={props.marketing.actualAvailable ? "Hiệu quả theo kênh – Actual đã kết nối" : "Hiệu quả theo kênh – Actual sẽ kết nối dần"} action={!props.marketing.actualAvailable?<span className="rounded-full bg-[#fff0f2] px-2 py-1 text-[8px] font-bold text-[#e63243]">DEMO DATA</span>:null}>
-            <div className="grid grid-cols-3 gap-2 px-3 pb-2 2xl:grid-cols-5">
+            <div className="grid grid-cols-3 gap-2 px-3 pb-2 min-[1650px]:grid-cols-5">
               <Stat label="Tiếp cận" value="—" tone="blue" icon="◉"/>
               <Stat label="Tương tác" value="—" tone="blue" icon="●●"/>
               <Stat label="Lead / Inquiry" value={props.marketing.leads} tone="green" icon="●"/>
               <Stat label="Booking / Order" value={props.marketing.bookings} tone="amber" icon="⌑"/>
               <Stat label="Doanh thu Actual" value={money(props.marketing.revenue)} tone="green" icon="▮▮"/>
             </div>
-            <div className="grid grid-cols-1 gap-2 px-3 pb-3 2xl:grid-cols-[2.4fr_1fr]">
+            <div className="grid grid-cols-1 gap-2 px-3 pb-3 min-[1650px]:grid-cols-[2.4fr_1fr]">
               <div className="rounded-[7px] border border-[#e0e9f3]">
                 <p className="px-3 py-2 text-[9px] font-bold text-[#18365f]">Hiệu quả theo kênh (Hôm nay)</p>
                 <table className="w-full text-[7px]"><thead className="bg-[#f2f7fb] text-[#36527a]"><tr>{["Kênh","Spend","Lead","Booking","Doanh thu","ROAS","Quyết định"].map(x=><th key={x} className="px-2 py-1.5">{x}</th>)}</tr></thead><tbody className="divide-y divide-[#e8eef5]">{["Google Ads","Meta Ads","Instagram","Website","TikTok","Tripadvisor"].map((x,i)=><tr key={x}><td className="px-2 py-1.5 font-medium">{x}</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="px-1"><span className={"block rounded-full px-1 py-1 text-center font-bold " + (i%2?"bg-[#fff4df] text-[#c67900]":"bg-[#e8f9f0] text-[#079852]")}>{i%2?"HOLD":"MONITOR"}</span></td></tr>)}</tbody></table>

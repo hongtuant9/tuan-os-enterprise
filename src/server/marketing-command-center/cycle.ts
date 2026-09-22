@@ -147,6 +147,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     const statusRaw = pick(data, ["STATUS", "Status", "Trạng thái", "TRẠNG THÁI CHIẾN DỊCH"]);
     if (campaignStatus(statusRaw) === "DEMO_ONLY") return [];
     const verificationRaw = pick(data, ["XÁC MINH (Verification Status)", "VERIFICATION", "Verification Status"]);
+    const budgetRaw = pick(data, ["BUDGET_MODE", "Budget Mode", "Ngân sách", "CHẾ ĐỘ NGÂN SÁCH"]);
     return [{
       channel_id: channelFor(channels),
       connector_id: null,
@@ -157,7 +158,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       audience: pick(data, ["AUDIENCE", "Audience", "ĐỐI TƯỢNG"]) || null,
       funnel_stage: pick(data, ["FUNNEL_STAGE", "Funnel Stage", "GIAI ĐOẠN FUNNEL"]) || null,
       status: campaignStatus(statusRaw),
-      budget_mode: budgetMode(pick(data, ["BUDGET_MODE", "Budget Mode", "Ngân sách", "CHẾ ĐỘ NGÂN SÁCH"])),
+      budget_mode: budgetMode(budgetRaw),
       budget_amount: null,
       currency: "VND",
       start_date: null,
@@ -168,6 +169,9 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       last_synced_at: str(record.synced_at) || nowIso,
       metadata: {
         channels,
+        plan_status_raw: statusRaw,
+        budget_mode_raw: budgetRaw,
+        verification_raw: verificationRaw,
         offer_message: pick(data, ["OFFER / MESSAGE", "Offer / Message", "OFFER / THÔNG ĐIỆP"]),
         owner: pick(data, ["OWNER", "Owner"]),
         success_criteria: pick(data, ["SUCCESS CRITERIA", "Success Criteria", "TIÊU CHÍ THÀNH CÔNG"]),

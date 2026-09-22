@@ -281,7 +281,7 @@ function Donut({ center = "—", sub = "Chờ dữ liệu", items = ["Nhóm A", 
 function Pipeline({ items }: { items: string[] }) {
   return (
     <div className="flex h-full min-h-[145px] items-center gap-1.5 overflow-hidden px-3 py-3">
-      {items.map((item) => (
+      {items.map((item, i) => (
         <div key={item} className="flex min-w-0 flex-1 items-center">
           <div className="w-full rounded-[6px] bg-gradient-to-b from-[#f7fbff] to-[#ebf4ff] px-2 py-5 text-center">
             <p className="truncate text-[9px] font-semibold text-[#34547d]">{item}</p>
@@ -298,7 +298,7 @@ function Pipeline({ items }: { items: string[] }) {
 function MiniStatusGrid({ items }: { items: string[] }) {
   return (
     <div className="grid h-full gap-2 p-3 sm:grid-cols-2">
-      {items.map((item, i) => (
+      {items.map((item) => (
         <div key={item} className="rounded-[7px] border border-[#e4edf6] bg-[#fbfdff] p-3">
           <div className="flex items-center justify-between"><b className="text-[10px] text-[#173566]">{item}</b><Status label="Đang hoạt động" tone="green" /></div>
           <div className="mt-3 grid grid-cols-3 gap-1.5">

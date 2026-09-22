@@ -20,8 +20,25 @@ export type TceTabScreen =
   | "agents"
   | "settings";
 
+export type TcePeriodKey = "today" | "7d" | "month" | "year" | "custom";
+
+export type TcePeriodQuery = {
+  period?: string;
+  from?: string;
+  to?: string;
+};
+
+export type TcePeriodResolved = {
+  key: TcePeriodKey;
+  label: string;
+  from: string;
+  to: string;
+  elapsedDays: number;
+};
+
 export type TceTabLiveData = {
   generatedAt: string;
+  period: TcePeriodResolved;
   metricValues: Record<string, string>;
   metricNotes: Record<string, string>;
   tables: Record<string, string[][]>;
@@ -38,6 +55,53 @@ function localDateKey(now = new Date()) {
   }).formatToParts(now);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return get("year") + "-" + get("month") + "-" + get("day");
+}
+
+function dateAdd(dateKey: string, days: number) {
+  const date = new Date(dateKey + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function validDateKey(value?: string) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value + "T00:00:00Z").getTime()));
+}
+
+export function resolveTcePeriod(query: TcePeriodQuery = {}, now = new Date()): TcePeriodResolved {
+  const today = localDateKey(now);
+  const requested = query.period;
+  let key: TcePeriodKey = requested === "7d" || requested === "month" || requested === "year" || requested === "custom" ? requested : "today";
+  let from = today;
+  let to = today;
+
+  if (key === "7d") from = dateAdd(today, -6);
+  if (key === "month") from = today.slice(0, 7) + "-01";
+  if (key === "year") from = today.slice(0, 4) + "-01-01";
+  if (key === "custom") {
+    if (validDateKey(query.from) && validDateKey(query.to) && query.from! <= query.to!) {
+      from = query.from!;
+      to = query.to!;
+    } else {
+      key = "today";
+      from = today;
+      to = today;
+    }
+  }
+
+  const elapsedDays = Math.max(
+    1,
+    Math.round((new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000) + 1,
+  );
+  const label = key === "today"
+    ? "Hôm nay"
+    : key === "7d"
+      ? "7 ngày"
+      : key === "month"
+        ? "Tháng"
+        : key === "year"
+          ? "Năm"
+          : from + " → " + to;
+  return { key, label, from, to, elapsedDays };
 }
 
 function money(value: number) {
@@ -148,6 +212,7 @@ function isOverdue(dueDate: string | null | undefined, today: string) {
 }
 
 function result(
+  period: TcePeriodResolved,
   metricValues: Record<string, string>,
   metricNotes: Record<string, string> = {},
   tables: Record<string, string[][]> = {},
@@ -156,6 +221,7 @@ function result(
 ): TceTabLiveData {
   return {
     generatedAt: new Date().toISOString(),
+    period,
     metricValues,
     metricNotes,
     tables,
@@ -164,40 +230,49 @@ function result(
   };
 }
 
-export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiveData> {
+export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQuery = {}): Promise<TceTabLiveData> {
   const container = await getRequestContainer();
   const now = new Date();
   const today = localDateKey(now);
+  const period = resolveTcePeriod(query, now);
+  const makeResult = (
+    metricValues: Record<string, string>,
+    metricNotes: Record<string, string> = {},
+    tables: Record<string, string[][]> = {},
+    lists: Record<string, string[]> = {},
+    sourceState: TceTabLiveData["sourceState"] = "LIVE",
+  ) => result(period, metricValues, metricNotes, tables, lists, sourceState);
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const elapsedDays = Math.max(
-      1,
-      Math.round(
-        (new Date(today + "T00:00:00Z").getTime() - new Date(monthStart + "T00:00:00Z").getTime()) /
-          86_400_000,
-      ) + 1,
-    );
-    const [hotelToday, fnbToday, hotelMonth, fnbMonth, stats] = await Promise.all([
-      safeHotel(today + "T00:00:00", today + "T23:59:59"),
-      safeFnb(today + "T00:00:00", today + "T23:59:59"),
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats] = await Promise.all([
+      safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
+      safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
       safeFnb(monthStart + "T00:00:00", today + "T23:59:59"),
       container.dashboard.stats(),
     ]);
 
-    const todayHotel = hotelToday.state === "VERIFIED" ? hotelToday.revenue : 0;
-    const todayFnb = fnbToday.state === "VERIFIED" ? fnbToday.revenue : 0;
+    const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
+    const periodFnb = fnbPeriod.state === "VERIFIED" ? fnbPeriod.revenue : 0;
     const monthHotel = hotelMonth.state === "VERIFIED" ? hotelMonth.revenue : 0;
     const monthFnb = fnbMonth.state === "VERIFIED" ? fnbMonth.revenue : 0;
-    const todayRevenue = todayHotel + todayFnb;
+    const periodRevenue = periodHotel + periodFnb;
     const monthRevenue = monthHotel + monthFnb;
-    const estimateToday = revenueCostEstimate(todayHotel, todayFnb, 1);
-    const estimateMonth = revenueCostEstimate(monthHotel, monthFnb, elapsedDays);
-    const bothTodayVerified = hotelToday.state === "VERIFIED" && fnbToday.state === "VERIFIED";
+    const estimatePeriod = revenueCostEstimate(periodHotel, periodFnb, period.elapsedDays);
+    const estimateMonth = revenueCostEstimate(monthHotel, monthFnb, Math.max(1, Number(today.slice(8, 10))));
+    const bothPeriodVerified = hotelPeriod.state === "VERIFIED" && fnbPeriod.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
 
-    const hotelTodayByName = new Map(hotelToday.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
+    const hotelToday = hotelPeriod;
+    const fnbToday = fnbPeriod;
+    const todayHotel = periodHotel;
+    const todayFnb = periodFnb;
+    const todayRevenue = periodRevenue;
+    const estimateToday = estimatePeriod;
+    const bothTodayVerified = bothPeriodVerified;
+
+    const hotelTodayByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
     const hotelMonthByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
     const canonicalHotelBranches = ["Lavender Homestay", "Ruby Homestay"];
     const hotelTodayRows = canonicalHotelBranches.map((name) => {
@@ -212,14 +287,9 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
       ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
       : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
     const branchRows = [...hotelTodayRows, ...cozyTodayRows];
-    const cozyMonthRevenue = monthFnb;
-    const monthFacilityRows = [
-      ...hotelMonthRows,
-      { name: "Cozy Garden", invoices: fnbMonth.invoiceCount, revenue: cozyMonthRevenue },
-    ];
 
     if (screen === "business") {
-      return result(
+      return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
@@ -229,8 +299,8 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
           "Công suất phòng": pct(stats.averageOccupancy),
         },
         {
-          "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual",
-          "Doanh thu tháng": "KiotViet Hotel + F&B Actual",
+          "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
+          "Doanh thu tháng": "KiotViet Hotel + F&B Actual · " + period.label,
           "Chi phí": "Ước tính vận hành; chưa phải Actual P&L",
           "Lợi nhuận gộp": "Ước tính từ doanh thu Actual và cost model",
           "Biên lợi nhuận": "Ước tính; chờ Actual OPEX đầy đủ",
@@ -253,13 +323,22 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
             money(r.revenue),
             r.source,
           ]),
-          businessMonthBranches: monthFacilityRows.map((r, i) => [
-            String(i + 1),
-            r.name,
-            String(r.invoices),
-            money(r.revenue),
-            monthRevenue ? pct((r.revenue / monthRevenue) * 100) : "0%",
-          ]),
+          businessMonthBranches: [
+            ...hotelTodayRows.map((r, i) => [
+              String(i + 1),
+              r.name.replace("Hotel · ", ""),
+              String(r.invoices),
+              money(r.revenue),
+              periodRevenue ? pct((r.revenue / periodRevenue) * 100) : "0%",
+            ]),
+            [
+              String(hotelTodayRows.length + 1),
+              "Cozy Garden",
+              String(fnbPeriod.invoiceCount),
+              money(periodFnb),
+              periodRevenue ? pct((periodFnb / periodRevenue) * 100) : "0%",
+            ],
+          ],
         },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
@@ -269,7 +348,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const collectedToday =
       (hotelToday.state === "VERIFIED" ? hotelToday.collected : 0) +
       (fnbToday.state === "VERIFIED" ? fnbToday.collected : 0);
-    return result(
+    return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
         "Chi phí vận hành": bothTodayVerified ? "~" + money(estimateToday.cost) : "NEED VERIFY",
@@ -279,7 +358,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         "Nợ vay": "NEED VERIFY",
       },
       {
-        "Doanh thu thuần": "KiotViet Actual hôm nay",
+        "Doanh thu thuần": "KiotViet Actual · " + period.label,
         "Chi phí vận hành": "Ước tính; FIN-HOSPITALITY-001 chưa sync runtime",
         "Dòng tiền ròng": "Tiền thu KiotViet trừ cost estimate",
         "Số dư tiền mặt": "Chưa có bank feed/runtime SSOT",
@@ -309,7 +388,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     ]);
     const conversations = channels.reduce((sum, row) => sum + row.conversations, 0);
     const bookings = channels.reduce((sum, row) => sum + row.verifiedBookings, 0);
-    return result(
+    return makeResult(
       {
         "Tiếp cận": "NEED VERIFY",
         "Tương tác": String(conversations),
@@ -385,7 +464,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         t.status,
         t.status === "blocked" ? "Cần xử lý" : "Theo dõi",
       ]);
-    return result(
+    return makeResult(
       {
         "Việc cần xử lý hôm nay": String(open.length),
         "Đã hoàn thành": String(done.length),
@@ -451,7 +530,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
       /complaint|phàn nàn|khiếu nại|review/i.test(r.title + " " + r.reason),
     );
     const draftBookings = dashboard.bookings.filter((b) => b.verificationStatus !== "verified").length;
-    return result(
+    return makeResult(
       {
         "Hội thoại hôm nay": String(dashboard.conversations.length),
         "AI đang xử lý": String(dashboard.metrics.openConversations),
@@ -514,7 +593,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     ).length;
     const confirmed = customers.reduce((sum, c) => sum + c.verifiedBookingCount, 0);
     const pendingRequests = receptionist.metrics.pendingManagerReviews;
-    return result(
+    return makeResult(
       {
         "Khách mới": String(customers.length),
         "Khách quay lại": String(returning),
@@ -560,7 +639,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const [tasks, agents] = await Promise.all([container.tasks.list(), container.agents.list()]);
     const hrTasks = tasks.filter((t) => /nhân sự|hr|staff|ca |chấm công|lương|đào tạo/i.test(t.unit + " " + t.title));
     const openHr = hrTasks.filter((t) => t.status !== "done");
-    return result(
+    return makeResult(
       {
         "Tổng nhân sự": "NEED VERIFY",
         "Đang làm việc": "NEED VERIFY",
@@ -609,7 +688,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     ]);
     const scheduled = syncSources.filter((s) => Number(s.schedule_interval_minutes ?? 0) > 0).length;
     const errorSources = syncSources.filter((s) => s.status === "error").length;
-    return result(
+    return makeResult(
       {
         "Báo cáo đã tạo": String(logs.length),
         "Báo cáo tự động hôm nay": String(logs.filter((l) => l.timestamp.slice(0, 10) === today).length),
@@ -665,7 +744,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const openTasks = tasks.filter((t) => t.status !== "done");
     const blocked = tasks.filter((t) => t.status === "blocked").length;
     const errorSources = syncSources.filter((s) => s.status === "error").length;
-    return result(
+    return makeResult(
       {
         "Agent hoạt động": String(online),
         "Task xử lý hôm nay": String(openTasks.length),
@@ -727,7 +806,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const onlineSources = syncSources.filter((s) => s.status !== "error" && Boolean(s.last_synced_at)).length;
     const errors = syncSources.filter((s) => s.status === "error").length;
     const pending = approvals.filter((a) => a.status === "pending").length;
-    return result(
+    return makeResult(
       {
         "Người dùng hoạt động": "NEED VERIFY",
         "Vai trò / quyền": "NEED VERIFY",

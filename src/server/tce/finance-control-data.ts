@@ -15,11 +15,18 @@ export type FinanceControlLine = {
   evidence: string;
 };
 
+export type FinanceGuardrail = {
+  businessUnit: "HOMESTAY" | "COZY GARDEN";
+  label: string;
+  maxPct: number;
+};
+
 export type FinanceControlSnapshot = {
   state: "PARTIAL" | "NEED_VERIFY";
   monthKey: string;
   periodLabel: string;
   lines: FinanceControlLine[];
+  guardrails: FinanceGuardrail[];
   notes: string[];
 };
 
@@ -29,6 +36,36 @@ function parseMillionVnd(raw: string | undefined): number | null {
   const normalized = source.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
   const value = Number(normalized);
   return Number.isFinite(value) ? value * 1_000_000 : null;
+}
+
+function parsePercent(raw: string | undefined): number | null {
+  const source = String(raw ?? "").trim().replace("%", "").replace(",", ".");
+  const value = Number(source);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseGuardrails(values: string[][]): FinanceGuardrail[] {
+  const out: FinanceGuardrail[] = [];
+  let unit: FinanceGuardrail["businessUnit"] | null = null;
+
+  for (const row of values) {
+    const label = String(row[0] ?? "").trim();
+    if (label.startsWith("D. HOMESTAY")) {
+      unit = "HOMESTAY";
+      continue;
+    }
+    if (label.startsWith("E. COZY GARDEN")) {
+      unit = "COZY GARDEN";
+      continue;
+    }
+    if (label.startsWith("F.")) break;
+    if (!unit || !label || label.toLowerCase().includes("doanh thu")) continue;
+
+    const maxPct = parsePercent(row[1]);
+    if (maxPct === null || maxPct <= 0 || maxPct > 100) continue;
+    out.push({ businessUnit: unit, label, maxPct });
+  }
+  return out;
 }
 
 function currentMonthKey(now = new Date()) {
@@ -48,11 +85,19 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
 
   try {
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
-    const values = await getSheetValues(
-      FIN_HOSPITALITY_SPREADSHEET_ID,
-      "'" + sheetName.replace(/'/g, "''") + "'!A1:L220",
-      auth,
-    );
+    const [values, assumptions] = await Promise.all([
+      getSheetValues(
+        FIN_HOSPITALITY_SPREADSHEET_ID,
+        "'" + sheetName.replace(/'/g, "''") + "'!A1:L220",
+        auth,
+      ),
+      getSheetValues(
+        FIN_HOSPITALITY_SPREADSHEET_ID,
+        "'GIẢ ĐỊNH'!A1:D80",
+        auth,
+      ),
+    ]);
+    const guardrails = parseGuardrails(assumptions);
 
     const marker = values.findIndex((row) =>
       String(row[0] ?? "").trim().startsWith("DỰ TOÁN OPEX"),
@@ -63,6 +108,7 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
         monthKey,
         periodLabel: "MTD " + monthKey,
         lines: [],
+        guardrails,
         notes: ["Không tìm thấy vùng DỰ TOÁN OPEX trong FIN-HOSPITALITY-001."],
       };
     }
@@ -92,6 +138,7 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
       monthKey,
       periodLabel: "MTD " + monthKey,
       lines,
+      guardrails,
       notes: [
         "Nguồn: FIN-HOSPITALITY-001 / " + sheetName + ".",
         "Vùng này trộn Actual-derived, Temp Actual, Accrual và Forecast; trạng thái từng dòng phải được giữ nguyên.",

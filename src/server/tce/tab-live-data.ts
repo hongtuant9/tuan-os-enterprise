@@ -428,14 +428,18 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     ]);
 
     const campaignRows = mcc.campaigns.slice(0, 12).map((row, i) => {
+      const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? row.metadata as Record<string, unknown>
+        : {};
       const budgetMode = textField(row, "budget_mode", "BUDGET_MODE");
+      const rawBudget = textField(metadata, "budget_mode_raw") || budgetMode;
       return [
         String(i + 1),
         textField(row, "name", "CAMPAIGN", "Campaign"),
-        textField(row, "channel_id", "CHANNELS", "Channel"),
-        numberField(row, "budget_amount") > 0 ? money(numberField(row, "budget_amount")) : budgetMode,
+        textField(metadata, "channels") || textField(row, "channel_id", "CHANNELS", "Channel"),
+        numberField(row, "budget_amount") > 0 ? money(numberField(row, "budget_amount")) : rawBudget,
         budgetMode === "NO_SPEND" ? "0 đ" : "NEED VERIFY",
-        textField(row, "status", "STATUS"),
+        textField(metadata, "plan_status_raw") || textField(row, "status", "STATUS"),
         textField(row, "objective", "OBJECTIVE"),
         textField(row, "verification_status") || "NEED VERIFY",
       ];

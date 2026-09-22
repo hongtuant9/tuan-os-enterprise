@@ -488,7 +488,7 @@ function MobileHR({ data }: { data?: TceTabLiveData }) {
 
 function MobileFinance({ data }: { data?: TceTabLiveData }) {
   const costRows = data?.tables.financeCostGroups?.length
-    ? data.tables.financeCostGroups.map((r) => [r[1] ?? "—", r[2] ?? "—", r[6] ?? "—"])
+    ? data.tables.financeCostGroups.map((r) => [((r[1] ?? "—") + " · " + (r[2] ?? "—")), r[3] ?? "—", r[6] ?? "—"])
     : [["Chưa có chi phí Actual","—","NEED VERIFY"]];
   const profitRows = data?.tables.financeProfitSources?.length
     ? data.tables.financeProfitSources.map((r) => [r[1] ?? "—", r[5] ?? "—", r[7] ?? "—"])
@@ -499,7 +499,7 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
 
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Phân tích nhóm chi phí" subtitle={"Chi nhiều · chuẩn · theo dõi · " + (data?.period.label ?? "Hôm nay")}>
+      <MobileSection title="Phân tích nhóm chi phí" subtitle="MTD tháng hiện tại · chi lớn → nhỏ">
         <RowTable rows={costRows} cols={3}/>
         <p className="mt-[5px] text-[6px] text-[#6f83a5]">Giá trị có dấu ~ là [Ước tính/Mô hình]. Actual cost chưa đủ thì không tự gắn “Đạt chuẩn”.</p>
       </MobileSection>

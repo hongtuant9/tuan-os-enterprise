@@ -131,6 +131,21 @@ function Panel({
   );
 }
 
+function ExecIcon({ label, fallback }: { label: string; fallback: string }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const k = label.toLowerCase();
+  let paths: React.ReactNode;
+  if (/doanh thu|lợi nhuận/.test(k)) paths = <><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" {...common}/><path d="m4 7 5-3 5 3 6-5" {...common}/></>;
+  else if (/chi phí/.test(k)) paths = <><rect x="4" y="4" width="16" height="16" rx="2" {...common}/><path d="M8 8h8M8 12h8M8 16h5" {...common}/></>;
+  else if (/biên/.test(k)) paths = <><path d="m6 18 12-12" {...common}/><circle cx="7" cy="7" r="2" {...common}/><circle cx="17" cy="17" r="2" {...common}/></>;
+  else if (/hội thoại|lead/.test(k)) paths = <><path d="M4 5h16v11H9l-5 4V5Z" {...common}/><path d="M8 9h8M8 12h5" {...common}/></>;
+  else if (/ai |booking/.test(k)) paths = <><circle cx="12" cy="12" r="8" {...common}/><path d="M12 8v8M8 12h8" {...common}/></>;
+  else if (/lễ tân|human/.test(k)) paths = <><circle cx="9" cy="8" r="3" {...common}/><circle cx="17" cy="9" r="2.5" {...common}/><path d="M3 20c.4-4 2.4-6 6-6s5.6 2 6 6M14 15c3.6 0 5.7 1.7 6 5" {...common}/></>;
+  else if (/sla|complaint|quá hạn/.test(k)) paths = <><path d="M12 3 2.8 20h18.4L12 3Z" {...common}/><path d="M12 9v5M12 17h.01" {...common}/></>;
+  else paths = <><rect x="4" y="4" width="16" height="16" rx="3" {...common}/><path d="M8 15v-4M12 15V8M16 15v-6" {...common}/></>;
+  return <svg viewBox="0 0 24 24" className="h-[20px] w-[20px]" aria-label={fallback}>{paths}</svg>;
+}
+
 function Stat({
   label,
   value,
@@ -156,7 +171,7 @@ function Stat({
   return (
     <div className={"min-w-0 rounded-[7px] bg-gradient-to-br " + t[0] + " px-3 py-2"}>
       <div className="flex items-center gap-2">
-        <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-[7px] text-[14px] font-black text-white " + t[1]}>{icon}</span>
+        <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-[7px] text-[14px] font-black text-white " + t[1]}><ExecIcon label={label} fallback={icon} /></span>
         <div className="min-w-0">
           <p className="truncate text-[9px] text-[#48648e]">{label}</p>
           <p className="mt-0.5 truncate text-[18px] font-extrabold leading-none text-[#071b51]">{value}</p>

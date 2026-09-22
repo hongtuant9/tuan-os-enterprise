@@ -45,12 +45,22 @@ function periodBounds(period: PeriodKey, now: Date) {
         : period === "month"
           ? month + "-01"
           : year + "-01-01";
-  const days = Math.max(
-    1,
-    Math.round((new Date(today + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86400000) + 1,
+  const fullDaysBeforeToday = Math.max(
+    0,
+    Math.round((new Date(today + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86400000),
   );
+  const timeParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const part = (type: string) => Number(timeParts.find((p) => p.type === type)?.value ?? 0);
+  const elapsedToday = Math.max(0.01, Math.min(1, (part("hour") * 3600 + part("minute") * 60 + part("second")) / 86400));
+  const elapsedDays = fullDaysBeforeToday + elapsedToday;
   const label = period === "today" ? "hôm nay" : period === "7d" ? "7 ngày gần nhất" : period === "month" ? "tháng này" : "năm nay";
-  return { from: from + "T00:00:00", to: today + "T23:59:59", days, label };
+  return { from: from + "T00:00:00", to: today + "T23:59:59", elapsedDays, label };
 }
 
 function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: string): RevenueSnapshot {
@@ -160,7 +170,8 @@ export default async function Home({
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
-  const openItems = managerItems.filter((item) => item.status !== "DONE");
+  const closedStatuses = new Set(["DONE", "SUPERSEDED", "INACTIVE", "CANCELLED", "CANCELED"]);
+  const openItems = managerItems.filter((item) => !closedStatuses.has(item.status));
   const pendingApprovals = approvals.filter((item) => item.status === "pending");
   const decisionIds = new Set(
     openItems.filter((item) => item.pendingCeoApproval).map((item) => item.id),
@@ -187,7 +198,7 @@ export default async function Home({
   // Variable reserve: breakfast/room goods + OTA/fees + repairs + marketing/other ~= 30% revenue.
   // Cozy fixed monthly: payroll 37.98m + utilities 5m + gas 2m + software 0.49m.
   // Variable reserve: COGS 32% + repairs/marketing/other 5% revenue.
-  const monthFactor = bounds.days / 30;
+  const monthFactor = bounds.elapsedDays / 30;
   const homestayCostEstimate = 55000000 * monthFactor + homestayRevenue * 0.30;
   const cozyCostEstimate = 45470000 * monthFactor + cozyRevenue * 0.37;
   const costEstimate = homestayCostEstimate + cozyCostEstimate;
@@ -216,6 +227,7 @@ export default async function Home({
   const approvalSync = syncMap.get("approval-001");
   const l3Sync = syncMap.get("l3-channel-tracking");
 
+  const onlineAgents = agents.filter((item) => item.status === "online").length;
   const sources: ExecutiveSource[] = [
     { name: "KiotViet Hotel", status: hotel.state === "VERIFIED" ? "online" : "hold", note: hotel.notes.join(" ") },
     { name: "KiotViet F&B", status: fnb.state === "VERIFIED" ? "online" : "hold", note: fnb.notes.join(" ") },
@@ -223,13 +235,13 @@ export default async function Home({
     { name: "APPROVAL-001", status: sourceStatus(approvalSync?.last_synced_at, approvalSync?.status), note: approvalSync?.last_error || "Google Drive canonical approval source" },
     { name: "L3 Master Data", status: sourceStatus(l3Sync?.last_synced_at, l3Sync?.status), note: l3Sync?.last_error || "Customer-facing master data" },
     { name: "AI-Lễ tân", status: "online", note: "Supabase operational runtime" },
+    { name: "AI Agents", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " agent online" },
     { name: "Server (VPS)", status: "online", note: "Trang được render trực tiếp từ production runtime" },
     { name: "Google Ads", status: "partial", note: "Actual spend chưa đủ quyền/connector; dashboard dùng dự toán có nhãn" },
   ];
   const verifiedSources = sources.filter((item) => item.status === "online").length;
 
   const marketingSpendEstimate = homestayRevenue * 0.03 + cozyRevenue * 0.02;
-  const onlineAgents = agents.filter((item) => item.status === "online").length;
 
   return (
     <div className="flex min-h-screen bg-[#f4f8fd]">
@@ -298,11 +310,7 @@ export default async function Home({
           system={{
             verified: verifiedSources,
             total: sources.length,
-            sources: [
-              ...sources.slice(0, 6),
-              { name: "AI Agents", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " agent online" },
-              sources[6],
-            ],
+            sources,
           }}
         />
       </main>

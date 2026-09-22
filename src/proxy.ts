@@ -5,6 +5,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 const PUBLIC_PATHS = [
   "/health",
   "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/auth/callback",
   "/review",
   "/feedback",
   "/cozy/review",

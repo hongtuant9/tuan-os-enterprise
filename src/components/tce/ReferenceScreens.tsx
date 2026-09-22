@@ -506,18 +506,6 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
 
           <Section
-            title="Sản phẩm / dịch vụ tạo lợi nhuận"
-            subtitle="Tự động xếp hạng Top/Bottom khi đủ invoice detail + cost evidence; không suy diễn khi thiếu dữ liệu"
-            className="col-span-12 lg:col-span-7 h-[235px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["Nhóm phân tích","Cách tính","Nguồn dữ liệu","Trạng thái","Kết quả"]}
-              rows={5}
-              data={data?.tables.financeProductProfitReadiness}
-            />
-          </Section>
-          <Section
             title="Quy tắc đánh giá chi phí"
             subtitle="Đạt chuẩn · Theo dõi · Cần tối ưu chỉ được gắn khi có dữ liệu đúng authority"
             className="col-span-12 lg:col-span-5 h-[300px]"
@@ -529,6 +517,19 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
               data={data?.tables.financeCostControlRules}
             />
           </Section>
+          <Section
+            title="Sản phẩm / dịch vụ tạo lợi nhuận"
+            subtitle="Tự động xếp hạng Top/Bottom khi đủ invoice detail + cost evidence; không suy diễn khi thiếu dữ liệu"
+            className="col-span-12 lg:col-span-7 h-[235px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["Nhóm phân tích","Cách tính","Nguồn dữ liệu","Trạng thái","Kết quả"]}
+              rows={5}
+              data={data?.tables.financeProductProfitReadiness}
+            />
+          </Section>
+
 
           <Section
             title="Tình hình theo đơn vị"

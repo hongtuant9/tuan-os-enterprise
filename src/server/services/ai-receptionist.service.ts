@@ -29,6 +29,31 @@ import {
   isPilotOutboundEnabled,
 } from "@/server/ai-receptionist/config";
 
+const HOTEL_BRANCH_BY_PROPERTY = {
+  "Lavender Homestay": 8992,
+  "Ruby Homestay": 9011,
+} as const;
+
+type HotelPropertyName = keyof typeof HOTEL_BRANCH_BY_PROPERTY;
+
+function kiotVietRoomRows(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  if (Array.isArray(root.data)) {
+    return root.data.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
+  }
+  const result = root.result;
+  if (result && typeof result === "object" && Array.isArray((result as Record<string, unknown>).data)) {
+    return ((result as Record<string, unknown>).data as unknown[])
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
+  }
+  return [];
+}
+
+function isHotelPropertyName(value: unknown): value is HotelPropertyName {
+  return typeof value === "string" && value in HOTEL_BRANCH_BY_PROPERTY;
+}
+
 function toMessage(row: {
   id: string;
   direction: string;
@@ -269,9 +294,12 @@ export class AiReceptionistService {
       input.customerName,
       input.customerContact
     );
+    const requestedProperty = isHotelPropertyName(decision.metadataPatch.property_hint)
+      ? decision.metadataPatch.property_hint
+      : null;
     if (
       decision.review?.reviewType === "booking_exception" &&
-      decision.metadataPatch.property_hint === "Lavender Homestay" &&
+      requestedProperty &&
       typeof decision.metadataPatch.check_in === "string" &&
       typeof decision.metadataPatch.check_out === "string" &&
       this.kiotViet.isConfigured()
@@ -284,8 +312,8 @@ export class AiReceptionistService {
           pageIndex: "1",
         }).toString();
         const availability = await this.kiotViet.listRoomClasses(query);
-        const payload = availability.data as { result?: { data?: Array<Record<string, unknown>> } } | null;
-        const rooms = (payload?.result?.data ?? []).filter((room) => Number(room.branchId) === 8992);
+        const branchId = HOTEL_BRANCH_BY_PROPERTY[requestedProperty];
+        const rooms = kiotVietRoomRows(availability.data).filter((room) => Number(room.branchId) === branchId);
         const availableRooms = rooms.filter((room) => Number(room.totalAvailableRoom ?? 0) > 0);
         const availabilityEvidence = availableRooms.map((room) => ({
           roomClassId: String(room.id ?? ""),
@@ -299,7 +327,7 @@ export class AiReceptionistService {
           reply: availableRooms.length > 0
             ? "Mình đã kiểm tra tình trạng phòng cho khoảng ngày anh/chị hỏi. Cho mình xác nhận thêm mức giá hiện hành trước khi gửi thông tin chính thức nhé."
             : "Mình chưa thấy phương án phòng phù hợp cho khoảng ngày này. Cho mình kiểm tra lại một lần nữa trước khi xác nhận với anh/chị nhé.",
-          evidence: { ...decision.evidence, kiotviet_read_status: availability.status, kiotviet_availability: availabilityEvidence },
+          evidence: { ...decision.evidence, kiotviet_read_status: availability.status, property: requestedProperty, branch_id: branchId, kiotviet_availability: availabilityEvidence },
           review: decision.review ? {
             ...decision.review,
             reason: availableRooms.length > 0
@@ -525,15 +553,19 @@ export class AiReceptionistService {
     });
   }
 
-  async getLavenderRoomOptions(checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }>> {
+  async getHomestayRoomOptions(propertyName: HotelPropertyName, checkIn: string, checkOut: string): Promise<Array<{ id: string; code: string; name: string; available: number; version: number; branchId: number; checkedAt: string; requestId: string | null }>> {
     if (!this.kiotViet.isConfigured()) throw new Error("KiotViet Hotel API chưa được cấu hình.");
+    const branchId = HOTEL_BRANCH_BY_PROPERTY[propertyName];
     const query = new URLSearchParams({ startDate: checkIn, endDate: checkOut, pageSize: "100", pageIndex: "1" }).toString();
     const result = await this.kiotViet.listRoomClasses(query);
-    if (!result.ok) throw new Error(`KiotViet availability thất bại HTTP ${result.status}.`);
-    const payload = result.data as { result?: { data?: Array<Record<string, unknown>> } } | null;
-    return (payload?.result?.data ?? [])
-      .filter((room) => Number(room.branchId) === 8992 && Number(room.totalAvailableRoom ?? 0) > 0)
+    if (!result.ok) throw new Error("KiotViet availability thất bại HTTP " + result.status + ".");
+    return kiotVietRoomRows(result.data)
+      .filter((room) => Number(room.branchId) === branchId && Number(room.totalAvailableRoom ?? 0) > 0)
       .map((room) => ({ id: String(room.id ?? ""), code: String(room.code ?? ""), name: String(room.name ?? ""), available: Number(room.totalAvailableRoom ?? 0), version: Number(room.version ?? 0), branchId: Number(room.branchId), checkedAt: new Date().toISOString(), requestId: result.requestId }));
+  }
+
+  async getLavenderRoomOptions(checkIn: string, checkOut: string) {
+    return this.getHomestayRoomOptions("Lavender Homestay", checkIn, checkOut);
   }
 
   async prepareBookingDraft(input: BookingDraftInput): Promise<{ bookingId: string; idempotencyKey: string; duplicate: boolean }> {

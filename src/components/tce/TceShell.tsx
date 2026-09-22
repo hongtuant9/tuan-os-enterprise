@@ -134,18 +134,19 @@ export function TcePageHeader({
       </div>
       <div className="mt-[5px] flex flex-wrap justify-end gap-0">
         {["Hôm nay", "7 ngày", "Tháng", "Năm", "Tùy chọn"].map((label, index) => (
-          <button
-            type="button"
+          <span
             key={label}
-            className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-[10px] font-semibold " +
-              (index === 0 ? "border-[#1f78ee] bg-[#2178ef] text-white" : "border-[#d5e1ef] bg-white text-[#243d69]")}
+            title={index === 0 ? "Dữ liệu mặc định hiện tại" : "Bộ lọc kỳ sẽ được bật khi từng tab hỗ trợ cùng một pipeline thời gian"}
+            aria-disabled={index !== 0}
+            className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-center text-[10px] font-semibold " +
+              (index === 0 ? "border-[#1f78ee] bg-[#2178ef] text-white" : "border-[#d5e1ef] bg-[#f8fafc] text-[#8796ac]")}
           >
             {label}
-          </button>
+          </span>
         ))}
-        <button type="button" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-[10px] font-semibold text-[#243d69]">
+        <span title="Bộ lọc cơ sở đang chờ kết nối filter end-to-end" aria-disabled="true" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-[#f8fafc] px-3 py-[6px] text-[10px] font-semibold text-[#8796ac]">
           Tất cả cơ sở <Icon name="chevron" className="h-4 w-4" />
-        </button>
+        </span>
       </div>
     </header>
   );

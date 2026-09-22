@@ -116,7 +116,9 @@ function toAction(item: ReturnType<typeof buildManagerItems>[number]): Executive
 function taskBucket(text: string) {
   const value = text.toLowerCase();
   if (/cozy|f&b|restaurant|bar|bếp|kho/.test(value)) return "cozy";
-  if (/homestay|lavender|ruby|hotel|phòng|booking|ota/.test(value)) return "homestay";
+  if (/ruby/.test(value)) return "ruby";
+  if (/lavender/.test(value)) return "lavender";
+  if (/homestay|hotel|phòng|booking|ota/.test(value)) return "homestayShared";
   if (/nhân sự|staff|hr|ca làm|chấm công|dịch vụ/.test(value)) return "hr";
   return "other";
 }
@@ -187,6 +189,13 @@ export default async function Home({
     .map(toAction);
 
   const homestayRevenue = hotel.state === "VERIFIED" ? hotel.revenue : 0;
+  const hotelBranches = hotel.state === "VERIFIED" ? hotel.branchBreakdown : [];
+  const branchRevenue = (needle: string) =>
+    hotelBranches
+      .filter((item) => item.branchName.toLowerCase().includes(needle))
+      .reduce((sum, item) => sum + item.revenue, 0);
+  const lavenderRevenue = branchRevenue("lavender");
+  const rubyRevenue = branchRevenue("ruby");
   const cozyRevenue = fnb.state === "VERIFIED" ? fnb.revenue : 0;
   const totalRevenue = homestayRevenue + cozyRevenue;
   const totalCollected =
@@ -219,7 +228,7 @@ export default async function Home({
       if (key !== "other") acc[key] += 1;
       return acc;
     },
-    { homestay: 0, cozy: 0, hr: 0 },
+    { lavender: 0, ruby: 0, homestayShared: 0, cozy: 0, hr: 0 },
   );
 
   const syncMap = new Map((syncQuery.data ?? []).map((item) => [item.key, item]));
@@ -253,6 +262,8 @@ export default async function Home({
           periodLabel={bounds.label}
           revenue={{
             homestay: homestayRevenue,
+            lavender: lavenderRevenue,
+            ruby: rubyRevenue,
             cozy: cozyRevenue,
             total: totalRevenue,
             collected: totalCollected,
@@ -302,7 +313,9 @@ export default async function Home({
             actualAvailable: false,
           }}
           operations={{
-            homestayOpen: buckets.homestay,
+            lavenderOpen: buckets.lavender,
+            rubyOpen: buckets.ruby,
+            homestaySharedOpen: buckets.homestayShared,
             cozyOpen: buckets.cozy,
             hrOpen: buckets.hr,
             exceptions: actionItems.filter((item) => item.priority === "P0" || item.priority === "P1"),

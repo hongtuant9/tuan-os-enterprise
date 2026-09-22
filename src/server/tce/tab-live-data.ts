@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getRequestContainer } from "@/server/container";
+import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import {
   fetchFnbRevenueActual,
   fetchHotelRevenueActual,
@@ -79,6 +80,50 @@ async function safeFnb(from: string, to: string) {
   }
 }
 
+
+
+type HotelAvailabilityState = {
+  state: "VERIFIED" | "UNAVAILABLE" | "ERROR";
+  byBranchId: Record<string, number>;
+};
+
+function addDateDays(dateKey: string, days: number) {
+  const date = new Date(dateKey + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+async function safeHotelAvailability(dateKey: string): Promise<HotelAvailabilityState> {
+  try {
+    const client = new KiotVietHotelClient();
+    if (!client.isConfigured()) return { state: "UNAVAILABLE", byBranchId: {} };
+    const query = new URLSearchParams({
+      startDate: dateKey,
+      endDate: addDateDays(dateKey, 1),
+      pageSize: "100",
+      pageIndex: "1",
+    }).toString();
+    const response = await client.listRoomClasses(query);
+    if (!response.ok || !response.data || typeof response.data !== "object") {
+      return { state: "ERROR", byBranchId: {} };
+    }
+    const root = response.data as { data?: unknown[]; result?: { data?: unknown[] } };
+    const rows = Array.isArray(root.data) ? root.data : Array.isArray(root.result?.data) ? root.result!.data! : [];
+    const byBranchId: Record<string, number> = {};
+    for (const raw of rows) {
+      if (!raw || typeof raw !== "object") continue;
+      const row = raw as Record<string, unknown>;
+      const branchId = String(row.branchId ?? "");
+      if (!branchId) continue;
+      const available = Number(row.totalAvailableRoom ?? 0);
+      byBranchId[branchId] = (byBranchId[branchId] ?? 0) + (Number.isFinite(available) ? available : 0);
+    }
+    return { state: "VERIFIED", byBranchId };
+  } catch {
+    return { state: "ERROR", byBranchId: {} };
+  }
+}
+
 function revenueCostEstimate(hotelRevenue: number, fnbRevenue: number, elapsedDays: number) {
   const monthFactor = Math.max(0.01, elapsedDays / 30);
   const homestayCost = 55_000_000 * monthFactor + hotelRevenue * 0.3;
@@ -152,9 +197,25 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const bothTodayVerified = hotelToday.state === "VERIFIED" && fnbToday.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
 
-    const branchRows = [
-      ...hotelToday.branchBreakdown.map((b) => ({ name: "Hotel · " + b.branchName, invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet Hotel" })),
-      ...fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + b.branchName, invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" })),
+    const hotelTodayByName = new Map(hotelToday.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
+    const hotelMonthByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
+    const canonicalHotelBranches = ["Lavender Homestay", "Ruby Homestay"];
+    const hotelTodayRows = canonicalHotelBranches.map((name) => {
+      const row = hotelTodayByName.get(name.toLowerCase());
+      return { name: "Hotel · " + name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0, source: "KiotViet Hotel" };
+    });
+    const hotelMonthRows = canonicalHotelBranches.map((name) => {
+      const row = hotelMonthByName.get(name.toLowerCase());
+      return { name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0 };
+    });
+    const cozyTodayRows = fnbToday.branchBreakdown.length
+      ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
+      : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
+    const branchRows = [...hotelTodayRows, ...cozyTodayRows];
+    const cozyMonthRevenue = monthFnb;
+    const monthFacilityRows = [
+      ...hotelMonthRows,
+      { name: "Cozy Garden", invoices: fnbMonth.invoiceCount, revenue: cozyMonthRevenue },
     ];
 
     if (screen === "business") {
@@ -192,6 +253,13 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
             money(r.revenue),
             r.source,
           ]),
+          businessMonthBranches: monthFacilityRows.map((r, i) => [
+            String(i + 1),
+            r.name,
+            String(r.invoices),
+            money(r.revenue),
+            monthRevenue ? pct((r.revenue / monthRevenue) * 100) : "0%",
+          ]),
         },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
@@ -220,9 +288,9 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
       },
       {
         financeBranches: [
-          ["Lavender / Hotel", money(todayHotel), String(hotelToday.invoiceCount), hotelToday.state],
-          ["Cozy Garden / F&B", money(todayFnb), String(fnbToday.invoiceCount), fnbToday.state],
-          ["Tháng hiện tại", money(monthRevenue), "—", "Actual revenue"],
+          ...hotelTodayRows.map((r) => [r.name.replace("Hotel · ", ""), money(r.revenue), String(r.invoices), hotelToday.state]),
+          ["Cozy Garden", money(todayFnb), String(fnbToday.invoiceCount), fnbToday.state],
+          ["Tổng tháng hiện tại", money(monthRevenue), "—", "Actual revenue"],
           ["Ước tính chi phí tháng", "~" + money(estimateMonth.cost), "—", "Estimate"],
         ],
       },
@@ -294,7 +362,12 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
   }
 
   if (screen === "operations") {
-    const [tasks, properties] = await Promise.all([container.tasks.list(), container.properties.list()]);
+    const [tasks, properties, hotelToday, hotelAvailability] = await Promise.all([
+      container.tasks.list(),
+      container.properties.list(),
+      safeHotel(today + "T00:00:00", today + "T23:59:59"),
+      safeHotelAvailability(today),
+    ]);
     const open = tasks.filter((t) => t.status !== "done");
     const done = tasks.filter((t) => t.status === "done");
     const overdue = open.filter((t) => isOverdue(t.dueDate, today));
@@ -331,15 +404,36 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
       },
       {
         operationsTasks: rows,
-        operationsProperties: properties.map((p, i) => [
-          String(i + 1),
-          p.name,
-          p.status,
-          pct(p.occupancy),
-          String(p.checkInsToday),
-          String(p.checkOutsToday),
-          String(p.pendingGuestMessages),
-        ]),
+        operationsProperties: [
+          ...[
+            { name: "Lavender Homestay", branchId: "8992" },
+            { name: "Ruby Homestay", branchId: "9011" },
+          ].map((branch, i) => {
+            const row = hotelToday.branchBreakdown.find((b) => b.branchName.toLowerCase() === branch.name.toLowerCase());
+            const taskCount = open.filter((t) => (t.title + " " + t.unit + " " + t.owner).toLowerCase().includes(branch.name.split(" ")[0].toLowerCase())).length;
+            const available = hotelAvailability.state === "VERIFIED" ? String(hotelAvailability.byBranchId[branch.branchId] ?? 0) + " phòng trống live" : "Availability NEED VERIFY";
+            return [
+              String(i + 1),
+              branch.name,
+              "KiotViet Hotel",
+              hotelToday.state === "VERIFIED" && hotelAvailability.state === "VERIFIED" ? "VERIFIED" : "PARTIAL",
+              available + " · " + String(row?.invoiceCount ?? 0) + " hóa đơn hôm nay",
+              String(taskCount) + " việc mở",
+              "Live",
+            ];
+          }),
+          ...properties
+            .filter((p) => !/lavender|ruby/i.test(p.name))
+            .map((p, i) => [
+              String(i + 3),
+              p.name,
+              "Supabase runtime",
+              p.status,
+              pct(p.occupancy) + " công suất",
+              String(open.filter((t) => (t.title + " " + t.unit).toLowerCase().includes(p.name.toLowerCase().split(" ")[0])).length) + " việc mở",
+              String(p.pendingGuestMessages) + " tin nhắn",
+            ]),
+        ],
       },
       {
         operationsExceptions: [...blocked, ...overdue].slice(0, 8).map((t) => t.title),
@@ -623,11 +717,12 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
   }
 
   if (screen === "settings") {
-    const [syncSources, units, properties, approvals] = await Promise.all([
+    const [syncSources, units, properties, approvals, activityLogs] = await Promise.all([
       container.syncSources.findAll(),
       container.businessUnits.list(),
       container.properties.list(),
       container.approvals.list(),
+      container.activityLog.list(20),
     ]);
     const onlineSources = syncSources.filter((s) => s.status !== "error" && Boolean(s.last_synced_at)).length;
     const errors = syncSources.filter((s) => s.status === "error").length;
@@ -671,6 +766,14 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
           p.status,
           pct(p.occupancy),
           String(p.pendingGuestMessages),
+        ]),
+        settingsChangeLog: activityLogs.slice(0, 10).map((log, i) => [
+          String(i + 1),
+          log.timestamp.slice(0, 16).replace("T", " "),
+          log.agent,
+          log.message,
+          log.unit,
+          log.type,
         ]),
       },
       {},

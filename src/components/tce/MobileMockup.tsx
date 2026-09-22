@@ -39,7 +39,7 @@ type MobileMeta = {
 const META: Record<MobileScreenKey, MobileMeta> = {
   business: {
     title: "Kinh doanh – Điều hành doanh thu & lợi nhuận",
-    subtitle: "Lavender Homestay · Cozy Garden · KiotViet · PMS",
+    subtitle: "Lavender Homestay · Ruby Homestay · Cozy Garden · KiotViet · PMS",
     active: "business",
     kpis: [
       { label: "Doanh thu hôm nay", value: "—", icon: "D", tone: "blue", delta: "↑" },
@@ -65,7 +65,7 @@ const META: Record<MobileScreenKey, MobileMeta> = {
   },
   operations: {
     title: "Vận hành – Công việc, tồn kho & chất lượng dịch vụ",
-    subtitle: "Lavender Homestay · Cozy Garden · SOP · Kho · Nhân sự",
+    subtitle: "Lavender Homestay · Ruby Homestay · Cozy Garden · SOP · Kho · Nhân sự",
     active: "more",
     kpis: [
       { label: "Việc cần xử lý", value: "—", icon: "V", tone: "blue", delta: "↑" },
@@ -245,9 +245,9 @@ function MobileHeader({ title, subtitle, active }: { title: string; subtitle: st
       <div className="border-y border-[#d9e6f4] bg-[#f4f8fd] px-[10px] py-[6px]">
         <div className="flex h-[26px] items-center gap-1 rounded-[8px] border border-[#d9e5f2] bg-white px-[6px]">
           {["Hôm nay", "7 ngày", "Tháng"].map((x, i) => (
-            <button key={x} type="button" className={"h-[18px] min-w-[52px] rounded-[5px] px-2 text-[7px] font-semibold " + (i === 0 ? "bg-[#2d7ef4] text-white" : "border border-[#dbe6f2] bg-white text-[#2a436c]")}>{x}</button>
+            <span key={x} title={i === 0 ? "Dữ liệu mặc định hiện tại" : "Bộ lọc kỳ chưa bật end-to-end"} className={"grid h-[18px] min-w-[52px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (i === 0 ? "bg-[#2d7ef4] text-white" : "border border-[#dbe6f2] bg-[#f8fafc] text-[#8796ac]")}>{x}</span>
           ))}
-          <button type="button" className="h-[18px] min-w-[82px] rounded-[5px] border border-[#dbe6f2] bg-white px-2 text-[7px] font-semibold text-[#2a436c]">Tất cả cơ sở</button>
+          <span title="Bộ lọc cơ sở chưa bật end-to-end" className="grid h-[18px] min-w-[82px] place-items-center rounded-[5px] border border-[#dbe6f2] bg-[#f8fafc] px-2 text-[7px] font-semibold text-[#8796ac]">Tất cả cơ sở</span>
         </div>
       </div>
       <BottomNav active={active} />
@@ -288,33 +288,33 @@ function MobileSection({ title, subtitle, children, className = "" }: { title: s
 }
 
 function RowTable({ rows, cols = 3 }: { rows: string[][]; cols?: number }) {
+  const minWidth = Math.max(320, cols * 92);
   return (
-    <div className="space-y-[2px]">
+    <div className="overflow-x-auto overscroll-x-contain">
+      <div className="space-y-[2px]" style={{ minWidth }}>
       {rows.map((row, i) => (
-        <div key={i} className={"grid min-h-[24px] items-center rounded-[5px] px-[5px] text-[7px] text-[#19325c] " + (i % 2 === 0 ? "bg-[#f6f9fd]" : "bg-white")} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-          {row.map((cell, j) => <span key={j} className={"truncate " + (j === 0 ? "font-semibold" : "")}>{cell}</span>)}
+        <div key={i} className={"grid min-h-[24px] items-center rounded-[5px] px-[5px] text-[7px] text-[#19325c] " + (i % 2 === 0 ? "bg-[#f6f9fd]" : "bg-white")} style={{ gridTemplateColumns: "repeat(" + cols + ", minmax(78px, 1fr))" }}>
+          {row.map((cell, j) => <span key={j} className={"whitespace-normal break-words pr-1 " + (j === 0 ? "font-semibold" : "")}>{cell}</span>)}
         </div>
       ))}
+      </div>
     </div>
   );
 }
 
 function TinyChart({ withDonut = false }: { withDonut?: boolean }) {
-  const heights = [46,55,51,61,65,67,76];
   return (
     <div className="relative h-[145px]">
-      <div className="absolute inset-x-[18px] bottom-[27px] top-[14px] grid grid-rows-3 border-b border-[#dae6f2]">
+      <div className="absolute inset-x-[18px] bottom-[27px] top-[14px] grid grid-rows-3 border-b border-l border-[#dae6f2]">
         {[0,1,2].map(i => <span key={i} className="border-t border-[#e5edf6]" />)}
       </div>
-      <div className="absolute inset-x-[20px] bottom-[27px] top-[14px] flex items-end gap-[4px]">
-        {heights.map((h, i) => <div key={i} className="flex h-full flex-1 items-end gap-[2px]"><span className="w-1/2 rounded-t-[2px] bg-[#4a86ef]" style={{height:h+"%"}}/><span className="w-1/2 rounded-t-[2px] bg-[#ff6874]" style={{height:Math.max(24,h-18)+"%"}}/></div>)}
+      <div className="absolute inset-0 grid place-items-center">
+        <div className="rounded-[6px] border border-[#dce8f4] bg-white/95 px-[10px] py-[7px] text-center">
+          <b className="block text-[7px] text-[#29486f]">Daily series: NEED VERIFY</b>
+          <span className="mt-[2px] block text-[6px] text-[#7386a3]">Không vẽ dữ liệu giả.</span>
+        </div>
       </div>
-      <svg className="absolute left-[26px] top-[24px] h-[80px] w-[calc(100%-52px)]" viewBox="0 0 700 80" preserveAspectRatio="none">
-        <polyline points="0,52 115,52 230,44 345,51 460,35 575,39 700,26" fill="none" stroke="#14b768" strokeWidth="3"/>
-        {[0,115,230,345,460,575,700].map((x,i)=><circle key={i} cx={x} cy={[52,52,44,51,35,39,26][i]} r="4" fill="#14b768"/>)}
-      </svg>
-      <div className="absolute bottom-[10px] left-[24px] right-[24px] flex justify-around text-[5.5px] text-[#7186a7]">{["15","16","17","18","19","20","21"].map(x=><span key={x}>{x}</span>)}</div>
-      {withDonut ? <div className="absolute bottom-0 right-[14px] grid h-[66px] w-[66px] place-items-center rounded-full bg-[conic-gradient(#7c39ed_0_62%,#16ba6d_62%_100%)]"><div className="grid h-[43px] w-[43px] place-items-center rounded-full bg-white text-center"><span><b className="block text-[12px] text-[#071b45]">—</b><small className="text-[5px] text-[#7185a7]">Doanh thu</small></span></div></div> : null}
+      {withDonut ? <div className="absolute bottom-[6px] right-[14px] grid h-[54px] w-[54px] place-items-center rounded-full bg-[#e4edf7]"><div className="grid h-[36px] w-[36px] place-items-center rounded-full bg-white text-center"><small className="text-[5px] text-[#7185a7]">NEED VERIFY</small></div></div> : null}
     </div>
   );
 }
@@ -336,10 +336,10 @@ function DonutBlock({ center = "—", items }: { center?: string; items: Array<[
 function MobileBusiness({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Doanh thu - Chi phí - Lợi nhuận" subtitle="7 ngày gần nhất"><TinyChart withDonut/><p className="-mt-[4px] text-[6px] text-[#6c82a5]">Lavender — · Cozy Garden —</p></MobileSection>
+      <MobileSection title="Doanh thu - Chi phí - Lợi nhuận" subtitle="7 ngày gần nhất"><TinyChart withDonut/><p className="-mt-[4px] text-[6px] text-[#6c82a5]">Lavender · Ruby · Cozy Garden</p></MobileSection>
       <MobileSection title="Tình hình theo cơ sở" subtitle="Hôm nay">
         <div className="space-y-[5px]">
-          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Cozy Garden","—","—","KiotViet F&B"]]).slice(0,4).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn live"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
+          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Ruby Homestay","—","—","KiotViet Hotel"],["3","Cozy Garden","—","—","KiotViet F&B"]]).slice(0,4).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn live"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
         </div>
       </MobileSection>
       <MobileSection title="Dự báo & cảnh báo" subtitle="Các tín hiệu quan trọng">
@@ -383,9 +383,9 @@ function MobileOperations({ data }: { data?: TceTabLiveData }) {
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Checklist & công việc vận hành" subtitle="Theo SOP hôm nay"><RowTable rows={data?.tables.operationsTasks?.length ? data.tables.operationsTasks.map((r) => [r[2] ?? "—", r[1] ?? "—", r[6] ?? "—"]).slice(0,5) : [["Chưa có task live","—","—"]]} /></MobileSection>
       <MobileSection title="Tình trạng theo cơ sở" subtitle="Vận hành hôm nay">
-        <div className="space-y-[5px]">{["Lavender Homestay","Cozy Garden"].map(x=><div key={x} className="rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><b className="text-[8px]">{x}</b><p className="mt-[2px] text-[6px] text-[#6f83a5]">Phòng sẵn sàng — · Bảo trì — · Sự cố —</p><p className="mt-[2px] text-[7px] font-bold text-[#10a65a]">Phản hồi khách —</p></div>)}</div>
+        <div className="space-y-[5px]">{(data?.tables.operationsProperties?.length ? data.tables.operationsProperties : [["1","Lavender Homestay","KiotViet Hotel","NEED VERIFY","—","—","—"],["2","Ruby Homestay","KiotViet Hotel","NEED VERIFY","—","—","—"],["3","Cozy Garden","Supabase runtime","NEED VERIFY","—","—","—"]]).slice(0,5).map((row,i)=><div key={(row[1] ?? "facility")+i} className="rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><div className="flex items-center justify-between gap-2"><b className="text-[8px]">{row[1] ?? "Cơ sở"}</b><span className="rounded-full bg-[#e9f8f0] px-2 py-0.5 text-[6px] font-bold text-[#0b9956]">{row[3] ?? "—"}</span></div><p className="mt-[2px] text-[6px] text-[#6f83a5]">{row[2] ?? "Nguồn"} · {row[4] ?? "—"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">{row[5] ?? "—"} · {row[6] ?? "—"}</p></div>)}</div>
       </MobileSection>
-      <MobileSection title="Kho & ngoại lệ" subtitle="Các cảnh báo ưu tiên"><RowTable rows={[["Coca Zero","—","Thấp"],["Cà phê hạt","—","Thấp"],["Bia Heineken","—","Thấp"],["Máy pha cà phê cần kiểm tra","—","Cần xử lý"]]} /></MobileSection>
+      <MobileSection title="Kho & ngoại lệ" subtitle="Các cảnh báo ưu tiên"><RowTable rows={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions.slice(0,5).map((x)=>[x,"Runtime","Cần xử lý"]) : [["Tồn kho","NEED VERIFY","Chưa nối KiotViet inventory"],["Ngoại lệ","—","Không có evidence mới"]]} /></MobileSection>
     </div>
   );
 }

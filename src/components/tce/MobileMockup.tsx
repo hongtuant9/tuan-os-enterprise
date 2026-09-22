@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 
 export type MobileScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -332,13 +333,13 @@ function DonutBlock({ center = "—", items }: { center?: string; items: Array<[
   );
 }
 
-function MobileBusiness() {
+function MobileBusiness({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Doanh thu - Chi phí - Lợi nhuận" subtitle="7 ngày gần nhất"><TinyChart withDonut/><p className="-mt-[4px] text-[6px] text-[#6c82a5]">Lavender — · Cozy Garden —</p></MobileSection>
       <MobileSection title="Tình hình theo cơ sở" subtitle="Hôm nay">
         <div className="space-y-[5px]">
-          {[["Lavender Homestay","L","violet"],["Cozy Garden","C","green"]].map(([name,letter,tone])=><div key={name} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[11px] font-extrabold text-white " + (tone==="violet"?"bg-[#8238ee]":"bg-[#16ba6d]")}>{letter}</span><div><b className="text-[8px] text-[#102a56]">{name}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Công suất — · ADR —</p><p className="mt-[2px] text-[6.5px] font-bold text-[#17315b]">RevPAR — · Booking —</p></div></div>)}
+          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Cozy Garden","—","—","KiotViet F&B"]]).slice(0,4).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn live"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
         </div>
       </MobileSection>
       <MobileSection title="Dự báo & cảnh báo" subtitle="Các tín hiệu quan trọng">
@@ -351,11 +352,11 @@ function MobileBusiness() {
   );
 }
 
-function MobileMarketing() {
+function MobileMarketing({ data }: { data?: TceTabLiveData }) {
   const rows = ["Google Ads","Meta Ads","Instagram","TikTok","Website"].map(x=>[x,"—","—","—","—","—"]);
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Hiệu quả theo kênh" subtitle="Spend · Lead · Booking · Doanh thu"><RowTable rows={rows} cols={6}/></MobileSection>
+      <MobileSection title="Hiệu quả theo kênh" subtitle="Spend · Lead · Booking · Doanh thu"><RowTable rows={data?.tables.marketingChannels?.length ? data.tables.marketingChannels.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—", r[4] ?? "—", r[5] ?? "—", r[8] ?? "—"]).slice(0,6) : rows} cols={6}/></MobileSection>
       <MobileSection title="Phễu chuyển đổi" subtitle="Từ tiếp cận đến doanh thu">
         <div className="space-y-[3px] px-[28px] py-[3px]">
           {[
@@ -377,10 +378,10 @@ function MobileMarketing() {
   );
 }
 
-function MobileOperations() {
+function MobileOperations({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Checklist & công việc vận hành" subtitle="Theo SOP hôm nay"><RowTable rows={[["Xử lý khách phàn nàn","Critical","Quá hạn"],["Vệ sinh phòng check-out","High","Đang làm"],["Kiểm tra thiết bị điều hòa","High","Chưa xử lý"],["Chuẩn bị nguyên liệu bữa sáng","Medium","Đang làm"],["Bổ sung amenities phòng","Medium","Chưa xử lý"]]} /></MobileSection>
+      <MobileSection title="Checklist & công việc vận hành" subtitle="Theo SOP hôm nay"><RowTable rows={data?.tables.operationsTasks?.length ? data.tables.operationsTasks.map((r) => [r[2] ?? "—", r[1] ?? "—", r[6] ?? "—"]).slice(0,5) : [["Chưa có task live","—","—"]]} /></MobileSection>
       <MobileSection title="Tình trạng theo cơ sở" subtitle="Vận hành hôm nay">
         <div className="space-y-[5px]">{["Lavender Homestay","Cozy Garden"].map(x=><div key={x} className="rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><b className="text-[8px]">{x}</b><p className="mt-[2px] text-[6px] text-[#6f83a5]">Phòng sẵn sàng — · Bảo trì — · Sự cố —</p><p className="mt-[2px] text-[7px] font-bold text-[#10a65a]">Phản hồi khách —</p></div>)}</div>
       </MobileSection>
@@ -389,7 +390,7 @@ function MobileOperations() {
   );
 }
 
-function MobileReception() {
+function MobileReception({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Pipeline hội thoại" subtitle="Tỷ trọng theo từng giai đoạn">
@@ -397,7 +398,7 @@ function MobileReception() {
           {[["1","Lead mới","blue"],["2","Booking draft","blue"],["3","Verified","green"],["4","Upsell","amber"],["5","Follow-up","violet"],["6","Handoff","red"]].map(([n,l,t])=><div key={n} className="flex items-center gap-[6px] rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[5px]"><span className={"grid h-[23px] w-[23px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="green"?"bg-[#16ba6d]":t==="amber"?"bg-[#ffa20e]":t==="violet"?"bg-[#8238ee]":t==="red"?"bg-[#ff4d5d]":"bg-[#2f7cf4]")}>{n}</span><span><small className="block text-[6px] text-[#6d82a4]">{l}</small><b className="text-[9px]">—</b></span></div>)}
         </div>
       </MobileSection>
-      <MobileSection title="Hội thoại cần chú ý" subtitle="Cần hỗ trợ hoặc có rủi ro"><RowTable rows={[["Website · Khách mới","Hỏi giá phòng","Cần hỗ trợ"],["Facebook · Khách mới","Đặt phòng","Đang xử lý"],["Zalo · Khách mới","Hỏi tour","Đang xử lý"],["Instagram · Khách mới","Upsell dịch vụ","Chờ phản hồi"],["WhatsApp · Khách mới","Hỏi vận chuyển","Cần hỗ trợ"]]} /></MobileSection>
+      <MobileSection title="Hội thoại cần chú ý" subtitle="Cần hỗ trợ hoặc có rủi ro"><RowTable rows={data?.tables.receptionConversations?.length ? data.tables.receptionConversations.map((r) => [(r[1] ?? "—") + " · " + (r[2] ?? "—"), r[3] ?? "—", r[5] ?? "—"]).slice(0,5) : [["Chưa có hội thoại mở","—","—"]]} /></MobileSection>
       <MobileSection title="Tổng quan hiệu suất" subtitle="AI xử lý & fallback">
         <div className="flex items-center gap-[20px]">
           <div className="grid h-[78px] w-[78px] place-items-center rounded-full bg-[conic-gradient(#2f7cf4_0_78%,#ff4d5d_78%_84%,#e4edf7_84%_100%)]"><div className="grid h-[55px] w-[55px] place-items-center rounded-full bg-white text-center"><span><b className="block text-[15px]">—</b><small className="text-[5px] text-[#7486a4]">xử lý thành công</small></span></div></div>
@@ -408,22 +409,22 @@ function MobileReception() {
   );
 }
 
-function MobileCustomers() {
+function MobileCustomers({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Pipeline khách hàng" subtitle="CRM · Booking · Chăm sóc">
         <div className="grid grid-cols-2 gap-[5px]">{["Lead mới","Đang tư vấn","Booking draft","Đã xác nhận","Check-in sắp tới","Quay lại"].map(x=><div key={x} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] px-[7px] py-[6px]"><span className="text-[6px] text-[#6f83a5]">{x}</span><div className="flex items-center justify-between"><b className="text-[10px]">—</b><b className="text-[10px] text-[#10a85a]">↑</b></div></div>)}</div>
       </MobileSection>
       <MobileSection title="Phân khúc & CSKH" subtitle="Hồ sơ khách hàng"><DonutBlock center="—" items={[["Quốc tế","—"],["Nội địa","—"],["Gia đình","—"],["VIP/Loyal","—"]]}/></MobileSection>
-      <MobileSection title="Khách cần chăm sóc hôm nay" subtitle="Ưu tiên theo giá trị"><RowTable rows={[["Khách hàng 01","—","Cao"],["Khách hàng 02","—","Cao"],["Khách hàng 03","—","Cao"],["Khách hàng 04","—","TB"]]} /></MobileSection>
+      <MobileSection title="Khách cần chăm sóc hôm nay" subtitle="Ưu tiên theo giá trị"><RowTable rows={data?.tables.customerCare?.length ? data.tables.customerCare.map((r) => [r[1] ?? "—", r[3] ?? "—", r[6] ?? "—"]).slice(0,5) : [["Chưa có CRM profile","—","—"]]} /></MobileSection>
     </div>
   );
 }
 
-function MobileHR() {
+function MobileHR({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Chấm công theo bộ phận" subtitle="Nhân sự hôm nay"><RowTable rows={[["Lễ tân","—","—","—"],["Buồng phòng","—","—","—"],["Bếp","—","—","—"],["Bar","—","—","—"],["Phục vụ","—","—","—"],["Marketing","—","—","—"]]} cols={4}/></MobileSection>
+      <MobileSection title="Chấm công theo bộ phận" subtitle="Nhân sự hôm nay"><RowTable rows={[["Tổng nhân sự",data?.metricValues["Tổng nhân sự"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Đang làm việc",data?.metricValues["Đang làm việc"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Vắng mặt",data?.metricValues["Vắng mặt"] ?? "NEED VERIFY","Attendance","Chưa nối"],["Đi muộn",data?.metricValues["Đi muộn"] ?? "NEED VERIFY","Attendance","Chưa nối"]]} cols={4}/></MobileSection>
       <MobileSection title="Lịch ca hôm nay" subtitle="06:00–14:00 · 14:00–22:00">
         <div className="space-y-[8px]">
           {["Ca sáng · — nhân sự","Ca chiều · — nhân sự"].map((x,i)=><div key={x}><b className={"text-[8px] " + (i===0?"text-[#10a85a]":"text-[#2f7cf4]")}>{x}</b><div className="mt-[4px] space-y-[3px]">{["Nhân viên 01","Nhân viên 02","Nhân viên 03"].map((n,j)=><div key={n} className="flex justify-between px-[6px] text-[7px]"><span>{n}</span><b className={j===1?"text-[#ffa20e]":"text-[#10a85a]"}>{j===1?"Đi muộn":"Đúng giờ"}</b></div>)}</div></div>)}
@@ -437,7 +438,7 @@ function MobileHR() {
   );
 }
 
-function MobileFinance() {
+function MobileFinance({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Dòng tiền vào - ra" subtitle="7 ngày gần nhất"><TinyChart/><p className="mt-[2px] text-[6px] text-[#6f83a5]">Doanh thu · Chi phí · Dòng tiền ròng</p></MobileSection>
@@ -447,15 +448,15 @@ function MobileFinance() {
           <div className="space-y-[10px] text-[7px]"><div><span className="text-[#7185a7]">Ngân sách</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Thực tế</span><b className="block text-[10px]">—</b></div><div><span className="text-[#7185a7]">Chênh lệch</span><b className="block text-[10px] text-[#10a85a]">—</b></div></div>
         </div>
       </MobileSection>
-      <MobileSection title="Công nợ & cảnh báo" subtitle="Các khoản cần theo dõi"><RowTable rows={[["Agoda","—","Đã thanh toán"],["Nhà cung cấp","—","Quá hạn"],["Khoản vay","—","Sắp đến hạn"],["F&B Supplier","—","Quá hạn"]]} /></MobileSection>
+      <MobileSection title="Công nợ & cảnh báo" subtitle="Các khoản cần theo dõi"><RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[1] ?? "—",r[2] ?? "—",r[4] ?? "—"]).slice(0,5) : [["Công nợ phải trả",data?.metricValues["Công nợ phải trả"] ?? "NEED VERIFY","Chưa có AP runtime"],["Nợ vay",data?.metricValues["Nợ vay"] ?? "NEED VERIFY","Chưa sync FIN-HOSPITALITY-001"]]} /></MobileSection>
     </div>
   );
 }
 
-function MobileReports() {
+function MobileReports({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="1. Thư viện báo cáo" subtitle="Báo cáo có sẵn trong hệ thống"><RowTable rows={[["Tổng quan doanh thu ngày","Kinh doanh","Hàng ngày"],["Hiệu quả marketing tuần","Marketing","Hàng tuần"],["Checklist vận hành","Vận hành","Hàng ngày"],["Dòng tiền tháng","Tài chính","Hàng tháng"],["Báo cáo AI-Lễ Tân","AI-Lễ Tân","Hàng tuần"]]} /></MobileSection>
+      <MobileSection title="1. Thư viện báo cáo" subtitle="Báo cáo có sẵn trong hệ thống"><RowTable rows={data?.tables.reportLogs?.length ? data.tables.reportLogs.map((r) => [r[2] ?? "—", r[3] ?? "—", r[5] ?? "—"]).slice(0,5) : [["Chưa có log báo cáo","—","—"]]} /></MobileSection>
       <MobileSection title="2. Bộ lọc báo cáo nhanh" subtitle="Tạo hoặc xem báo cáo tùy chỉnh">
         <div className="grid grid-cols-2 gap-[6px]">{[["Cơ sở","Tất cả cơ sở"],["Nguồn dữ liệu","Tất cả nguồn"],["Thời gian","7 ngày qua"],["Định dạng","Tất cả định dạng"]].map(([a,b])=><div key={a} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[7px]"><small className="block text-[6px] text-[#7084a7]">{a}</small><b className="mt-[2px] block text-[8px]">{b}</b></div>)}</div>
       </MobileSection>
@@ -466,48 +467,52 @@ function MobileReports() {
   );
 }
 
-function MobileAgents() {
+function MobileAgents({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Workflow pipeline" subtitle="Tổng quan xử lý yêu cầu hôm nay">
         <div className="space-y-[5px] px-[2px]">{[["Nhận yêu cầu","#2f7cf4"],["Phân loại","#45a2ef"],["Agent xử lý","#16ba6d"],["Kiểm tra","#ffa20e"],["Hoàn tất / Handoff","#8238ee"]].map(([x,c])=><div key={x} className="flex h-[22px] items-center justify-between rounded-[6px] px-[8px] text-[7px] font-bold text-white" style={{backgroundColor:c}}><span>{x}</span><span>—</span></div>)}</div>
       </MobileSection>
-      <MobileSection title="Danh sách AI Agent" subtitle="Trạng thái & hiệu suất"><RowTable rows={[["AI Receptionist","—","—","Hoạt động"],["AI Concierge","—","—","Hoạt động"],["AI Booking","—","—","Hoạt động"],["AI Marketing","—","—","Hoạt động"],["AI Finance","—","—","Đang xử lý"],["Escalation Bot","—","—","Tạm dừng"]]} cols={4}/></MobileSection>
-      <MobileSection title="Task queue & tối ưu AI" subtitle="Việc cần chú ý"><RowTable rows={[["Lead qualification","Critical","< 15 phút"],["Review response","High","< 30 phút"],["Inventory sync","High","< 15 phút"],["Invoice draft","Medium","< 1 giờ"]]} /><p className="mt-[5px] text-[6px] text-[#6f83a5]">Gợi ý: nâng cấp knowledge base · giảm human handoff · retry logic</p></MobileSection>
+      <MobileSection title="Danh sách AI Agent" subtitle="Trạng thái & hiệu suất"><RowTable rows={data?.tables.agentList?.length ? data.tables.agentList.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—", r[4] ?? "—"]).slice(0,6) : [["Chưa có agent","—","—","—"]]} cols={4}/></MobileSection>
+      <MobileSection title="Task queue & tối ưu AI" subtitle="Việc cần chú ý"><RowTable rows={data?.tables.agentQueue?.length ? data.tables.agentQueue.map((r) => [r[1] ?? "—", r[4] ?? "—", r[6] ?? "—"]).slice(0,5) : [["Chưa có task","—","—"]]} /><p className="mt-[5px] text-[6px] text-[#6f83a5]">Gợi ý tối ưu chỉ hiển thị khi có evidence.</p></MobileSection>
     </div>
   );
 }
 
-function MobileSettings() {
+function MobileSettings({ data }: { data?: TceTabLiveData }) {
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Thiết lập chung" subtitle="Cấu hình nền tảng">
         <div className="grid grid-cols-2 gap-[5px]">{[["1","Thông tin doanh nghiệp","blue"],["2","Cơ sở / chi nhánh","green"],["3","Branding","violet"],["4","Domain & email","red"],["5","Mẫu thông báo","amber"],["6","Sao lưu dữ liệu","blue"]].map(([n,l,t])=><div key={n} className="flex items-center gap-[6px] rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[5px]"><span className={"grid h-[23px] w-[23px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="green"?"bg-[#16ba6d]":t==="violet"?"bg-[#8238ee]":t==="red"?"bg-[#ff4d5d]":t==="amber"?"bg-[#ffa20e]":"bg-[#2f7cf4]")}>{n}</span><b className="text-[7px]">{l}</b></div>)}</div>
       </MobileSection>
-      <MobileSection title="Tích hợp hệ thống" subtitle="Kết nối & trạng thái"><RowTable rows={[["KiotViet Hotel","PMS","Online"],["KiotViet F&B","F&B","Online"],["Google Ads","Marketing","Online"],["Meta","Marketing","Partial"],["TikTok","Marketing","Online"],["TripAdvisor","OTA","Online"],["WhatsApp API","Messaging","Offline"]]} /></MobileSection>
+      <MobileSection title="Tích hợp hệ thống" subtitle="Kết nối & trạng thái"><RowTable rows={data?.tables.settingsIntegrations?.length ? data.tables.settingsIntegrations.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—"]).slice(0,7) : [["Chưa có integration runtime","—","—"]]} /></MobileSection>
       <MobileSection title="Thông báo & bảo mật" subtitle="Automation & cảnh báo"><RowTable rows={[["Gửi email thông báo hệ thống","Bật"],["Thông báo qua Slack / Telegram","Bật"],["Cảnh báo tồn kho thấp","Bật"],["Nhắc nhở thanh toán","Bật"]]} cols={2}/><p className="mt-[5px] text-[7px] font-bold text-[#ff4354]">Cần xử lý: cấu hình bảo mật / tích hợp đang chờ xác minh</p></MobileSection>
     </div>
   );
 }
 
-export default function MobileMockupScreen({ screen }: { screen: MobileScreenKey }) {
+export default function MobileMockupScreen({ screen, data }: { screen: MobileScreenKey; data?: TceTabLiveData }) {
   const m = META[screen];
   const pathname = usePathname();
   void pathname;
+  const kpis = m.kpis.map((kpi) => {
+    const key = kpi.label === "Việc cần xử lý" ? "Việc cần xử lý hôm nay" : kpi.label;
+    return { ...kpi, value: data?.metricValues[key] ?? kpi.value };
+  });
   return (
     <div className="min-h-screen bg-[#f4f8fd] pb-[76px] text-[#102a56]">
       <MobileHeader title={m.title} subtitle={m.subtitle} active={m.active} />
-      <KpiGrid items={m.kpis} />
-      {screen === "business" ? <MobileBusiness/> : null}
-      {screen === "marketing" ? <MobileMarketing/> : null}
-      {screen === "operations" ? <MobileOperations/> : null}
-      {screen === "reception" ? <MobileReception/> : null}
-      {screen === "customers" ? <MobileCustomers/> : null}
-      {screen === "hr" ? <MobileHR/> : null}
-      {screen === "finance" ? <MobileFinance/> : null}
-      {screen === "reports" ? <MobileReports/> : null}
-      {screen === "agents" ? <MobileAgents/> : null}
-      {screen === "settings" ? <MobileSettings/> : null}
+      <KpiGrid items={kpis} />
+      {screen === "business" ? <MobileBusiness data={data}/> : null}
+      {screen === "marketing" ? <MobileMarketing data={data}/> : null}
+      {screen === "operations" ? <MobileOperations data={data}/> : null}
+      {screen === "reception" ? <MobileReception data={data}/> : null}
+      {screen === "customers" ? <MobileCustomers data={data}/> : null}
+      {screen === "hr" ? <MobileHR data={data}/> : null}
+      {screen === "finance" ? <MobileFinance data={data}/> : null}
+      {screen === "reports" ? <MobileReports data={data}/> : null}
+      {screen === "agents" ? <MobileAgents data={data}/> : null}
+      {screen === "settings" ? <MobileSettings data={data}/> : null}
     </div>
   );
 }

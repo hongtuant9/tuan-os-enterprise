@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { TceWorkspaceShell } from "@/components/tce/TceShell";
 import MobileMockupScreen from "@/components/tce/MobileMockup";
+import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 
 type ScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -240,7 +241,8 @@ function Status({ label = "NEED VERIFY", tone = "amber" }: { label?: string; ton
   return <span className={"inline-flex max-w-full items-center gap-0.5 whitespace-nowrap rounded-full px-1 py-0.5 text-[7px] font-bold " + cls}><span className="h-1 w-1 shrink-0 rounded-full bg-current" />{label}</span>;
 }
 
-function DataTable({ columns, rows = 6 }: { columns: string[]; rows?: number }) {
+function DataTable({ columns, rows = 6, data }: { columns: string[]; rows?: number; data?: string[][] }) {
+  const liveRows = data?.length ? data : null;
   return (
     <div className="overflow-hidden">
       <table className="w-full table-fixed text-left text-[9px]">
@@ -248,10 +250,14 @@ function DataTable({ columns, rows = 6 }: { columns: string[]; rows?: number }) 
           <tr>{columns.map((c, i) => <th key={c} className={"px-2 py-[7px] font-bold " + (i === 0 ? "w-[34px]" : "")}>{c}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-[#e8f0f7] text-[#3e5b84]">
-          {Array.from({ length: rows }).map((_, r) => (
+          {liveRows ? liveRows.map((row, r) => (
             <tr key={r} className="h-[31px]">
-              {columns.map((c, i) => (
-                <td key={c + i} className="truncate px-1.5 py-1.5">
+              {columns.map((col, i) => <td key={col + i} className="truncate px-1.5 py-1.5" title={row[i] ?? "—"}>{row[i] ?? "—"}</td>)}
+            </tr>
+          )) : Array.from({ length: rows }).map((_, r) => (
+            <tr key={r} className="h-[31px]">
+              {columns.map((col, i) => (
+                <td key={col + i} className="truncate px-1.5 py-1.5">
                   {i === 0 ? r + 1 : i === columns.length - 1 ? <Status label={r % 3 === 0 ? "Chờ dữ liệu" : "Theo dõi"} tone={r % 3 === 0 ? "amber" : "blue"} /> : "—"}
                 </td>
               ))}
@@ -316,21 +322,6 @@ function Pipeline({ items }: { items: string[] }) {
   );
 }
 
-function MiniStatusGrid({ items }: { items: string[] }) {
-  return (
-    <div className="grid h-full gap-2 p-3 sm:grid-cols-2">
-      {items.map((item) => (
-        <div key={item} className="rounded-[7px] border border-[#e4edf6] bg-[#fbfdff] p-3">
-          <div className="flex items-center justify-between"><b className="text-[10px] text-[#173566]">{item}</b><Status label="Đang hoạt động" tone="green" /></div>
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
-            {["Chỉ số", "Ngoại lệ", "Cập nhật"].map((x) => <div key={x} className="rounded bg-white p-2 text-center shadow-sm"><p className="text-[8px] text-[#8291a7]">{x}</p><b className="mt-1 block text-[12px] text-[#27486f]">—</b></div>)}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ListRows({ items }: { items: string[] }) {
   return <div className="divide-y divide-[#e9f0f7] px-3">{items.map((item, i) => <div key={item} className="flex h-[36px] items-center gap-2 text-[9px]"><span className={"grid h-5 w-5 place-items-center rounded-full text-[8px] font-bold text-white " + (i < 2 ? "bg-[#f59b0b]" : "bg-[#2c7dec]")}>{i + 1}</span><span className="min-w-0 flex-1 truncate font-medium text-[#385375]">{item}</span><span className="text-[#8594aa]">—</span></div>)}</div>;
 }
@@ -347,7 +338,7 @@ function TileGrid({ items, columns = 3 }: { items: string[]; columns?: number })
   );
 }
 
-function Board({ screen }: { screen: ScreenKey }) {
+function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
   switch (screen) {
     case "business":
       return (
@@ -359,10 +350,10 @@ function Board({ screen }: { screen: ScreenKey }) {
             <Donut center="—" sub="Tổng doanh thu" items={["Lavender Homestay","Cozy Garden"]}/>
           </Section>
           <Section title="Tình hình theo cơ sở" subtitle="" className="col-span-12 lg:col-span-3 h-[345px]" icon="◫">
-            <MiniStatusGrid items={["Lavender Homestay","Cozy Garden"]}/>
+            <DataTable columns={["#","Cơ sở","Hóa đơn","Doanh thu","Nguồn"]} rows={5} data={data?.tables.businessBranches}/>
           </Section>
           <Section title="Hiệu suất theo nguồn bán" subtitle="So sánh doanh thu, sản lượng và tăng trưởng theo từng kênh" className="col-span-12 lg:col-span-7 h-[260px]" icon="▤">
-            <DataTable columns={["#","Nguồn bán","Booking / Order","Doanh thu","Tỷ trọng","Tăng trưởng","Quyết định"]} rows={6}/>
+            <DataTable columns={["#","Nguồn bán","Booking / Order","Doanh thu","Tỷ trọng","Tăng trưởng","Quyết định"]} rows={6} data={data?.tables.businessChannels}/>
           </Section>
           <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 lg:col-span-5 h-[260px]" icon="●">
             <div className="grid h-full grid-cols-2 gap-2 p-3">
@@ -376,7 +367,7 @@ function Board({ screen }: { screen: ScreenKey }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section title="Hiệu quả theo kênh" subtitle="So sánh hiệu suất marketing theo từng kênh" className="col-span-12 lg:col-span-7 h-[240px]" icon="▥">
-            <DataTable columns={["#","Kênh","Spend","Lead","Booking","Doanh thu","CPA","ROAS","Quyết định"]} rows={6}/>
+            <DataTable columns={["#","Kênh","Spend","Lead","Booking","Doanh thu","CPA","ROAS","Quyết định"]} rows={6} data={data?.tables.marketingChannels}/>
           </Section>
           <Section title="Phễu chuyển đổi" subtitle="Từ tiếp cận đến doanh thu (Tất cả kênh)" className="col-span-12 lg:col-span-5 h-[240px]" icon="▾">
             <div className="flex h-full gap-4 p-3">
@@ -403,11 +394,11 @@ function Board({ screen }: { screen: ScreenKey }) {
     case "operations":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Checklist & công việc vận hành" subtitle="Danh sách công việc cần thực hiện trong ngày theo SOP" className="col-span-12 lg:col-span-6 h-[260px]" icon="▤"><DataTable columns={["#","Ưu tiên","Hạng mục công việc","Bộ phận","Owner","Hạn xử lý","Trạng thái","Hành động"]} rows={7}/></Section>
-          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><MiniStatusGrid items={["Lavender Homestay","Cozy Garden"]}/></Section>
+          <Section title="Checklist & công việc vận hành" subtitle="Danh sách công việc cần thực hiện trong ngày theo SOP" className="col-span-12 lg:col-span-6 h-[260px]" icon="▤"><DataTable columns={["#","Ưu tiên","Hạng mục công việc","Bộ phận","Owner","Hạn xử lý","Trạng thái","Hành động"]} rows={7} data={data?.tables.operationsTasks}/></Section>
+          <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Cơ sở","Trạng thái","Công suất","Check-in","Check-out","Tin nhắn"]} rows={5} data={data?.tables.operationsProperties}/></Section>
           <Section title="Kho & nguyên vật liệu" subtitle="Theo dõi tồn kho, định mức và cảnh báo thiếu hàng" className="col-span-12 lg:col-span-5 h-[250px]" icon="▤"><DataTable columns={["#","Nguyên vật liệu","Tồn hiện tại","Định mức","Cảnh báo","Nhà cung cấp","Hành động"]} rows={7}/></Section>
           <Section title="Ca trực & chấm công" subtitle="Tình hình nhân sự theo ca trong ngày" className="col-span-12 lg:col-span-4 h-[250px]" icon="●●"><DataTable columns={["Bộ phận","Tổng","Ca sáng","Ca chiều","Có mặt","Tỷ lệ"]} rows={5}/></Section>
-          <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={["Phòng / thiết bị cần xử lý","Thiếu nguyên liệu","Sự cố dịch vụ","Đi muộn / vắng mặt","Phản hồi khách","Sự cố điện / nước"]}/></Section>
+          <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions : ["Chưa có ngoại lệ live"]}/></Section>
           <Section title="SOP / chất lượng dịch vụ" subtitle="Tỷ lệ hoàn thành checklist theo bộ phận trong ngày" className="col-span-12 h-[110px]" icon="◈"><ProgressRows items={["Buồng phòng","Lễ tân","Bếp","Bar","Vệ sinh khu vực chung"]}/></Section>
         </div>
       );
@@ -417,10 +408,10 @@ function Board({ screen }: { screen: ScreenKey }) {
           <Section title="Pipeline hội thoại" subtitle="Tỷ trọng hội thoại theo từng giai đoạn" className="col-span-12 lg:col-span-7 h-[150px]" icon="◉"><Pipeline items={["Lead mới","Booking draft","Booking verified","Upsell cơ hội","Follow-up","Human handoff"]}/></Section>
           <Section title="Phối hợp AI Agent" subtitle="Trạng thái các AI Agent trong hệ thống" className="col-span-12 lg:col-span-3 h-[150px]" icon="●●"><ListRows items={["Receptionist","Concierge","Booking Assistant","Upsell","Human Handoff"]}/></Section>
           <Section title="Tổng quan hiệu suất" subtitle="" className="col-span-12 lg:col-span-2 h-[150px]" icon="↻"><Donut center="—" sub="Tỷ lệ xử lý" items={["Fallback","SLA TB"]}/></Section>
-          <Section title="Hội thoại cần chú ý" subtitle="Các hội thoại cần theo dõi, hỗ trợ hoặc có rủi ro" className="col-span-12 lg:col-span-6 h-[240px]" icon="▤"><DataTable columns={["#","Kênh","Khách","Ý định","Mức độ ưu tiên","Trạng thái","Người phụ trách","Hành động"]} rows={8}/></Section>
+          <Section title="Hội thoại cần chú ý" subtitle="Các hội thoại cần theo dõi, hỗ trợ hoặc có rủi ro" className="col-span-12 lg:col-span-6 h-[240px]" icon="▤"><DataTable columns={["#","Kênh","Khách","Ý định","Mức độ ưu tiên","Trạng thái","Người phụ trách","Hành động"]} rows={8} data={data?.tables.receptionConversations}/></Section>
           <Section title="Chất lượng AI & ý định khách" subtitle="" className="col-span-12 lg:col-span-3 h-[240px]" icon="▮"><ProgressRows items={["Hỏi phòng","Hỏi giá","Hỏi tour","Hỏi đồ ăn (F&B)","Hỏi vận chuyển","Complaint / Khiếu nại"]}/></Section>
-          <Section title="Top câu hỏi hôm nay" subtitle="" className="col-span-12 lg:col-span-3 h-[240px]" icon="▤"><ListRows items={["Giá phòng hôm nay là bao nhiêu?","Có phòng trống cuối tuần không?","Khách sạn có đưa đón sân bay không?","Có tour tham quan nào ở gần đây?","Giờ nhận phòng và trả phòng là mấy giờ?","Có bữa sáng không? Giá thế nào?","Chính sách hủy phòng như thế nào?","Có chỗ đậu xe không?"]}/></Section>
-          <Section title="Escalation & human correction" subtitle="Các hội thoại cần review, chỉnh sửa hoặc đào tạo lại AI" className="col-span-12 h-[150px]" icon="⚙"><DataTable columns={["#","Thời gian","Kênh","Khách","Vấn đề","Nội dung tóm tắt","Đề xuất xử lý","Trạng thái","Hành động"]} rows={4}/></Section>
+          <Section title="Top câu hỏi hôm nay" subtitle="" className="col-span-12 lg:col-span-3 h-[240px]" icon="▤"><ListRows items={data?.lists.receptionTopQuestions?.length ? data.lists.receptionTopQuestions : ["Chưa có câu hỏi inbound"]}/></Section>
+          <Section title="Escalation & human correction" subtitle="Các hội thoại cần review, chỉnh sửa hoặc đào tạo lại AI" className="col-span-12 h-[150px]" icon="⚙"><DataTable columns={["#","Thời gian","Kênh","Khách","Vấn đề","Nội dung tóm tắt","Đề xuất xử lý","Trạng thái","Hành động"]} rows={4} data={data?.tables.receptionEscalations}/></Section>
         </div>
       );
     case "customers":
@@ -429,7 +420,7 @@ function Board({ screen }: { screen: ScreenKey }) {
           <Section title="Pipeline khách hàng" subtitle="" className="col-span-12 lg:col-span-7 h-[180px]" icon="●●"><Pipeline items={["Lead mới","Đang tư vấn","Booking draft","Đã xác nhận","Check-in sắp tới","Khách quay lại"]}/></Section>
           <Section title="Phân khúc khách hàng" subtitle="" className="col-span-12 lg:col-span-3 h-[180px]" icon="▣"><Donut center="—" sub="hồ sơ" items={["Quốc tế","Nội địa","Gia đình","VIP / Loyal"]}/></Section>
           <Section title="Tình trạng CSKH" subtitle="" className="col-span-12 lg:col-span-2 h-[180px]" icon="◈"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Đang follow-up","Sinh nhật / kỷ niệm","Complaint mở","VIP cần chào đón"].map(x=><div key={x} className="rounded-[7px] bg-[#f7faff] p-2"><p className="text-[8px] text-[#526e96]">{x}</p><b className="mt-2 block text-[18px] text-[#10285a]">—</b></div>)}</div></Section>
-          <Section title="Khách cần chăm sóc hôm nay" subtitle="" className="col-span-12 lg:col-span-7 h-[240px]" icon="▣"><DataTable columns={["#","Khách","Kênh","Nhu cầu","Giá trị","Mức ưu tiên","Người phụ trách","Hành động"]} rows={6}/></Section>
+          <Section title="Khách cần chăm sóc hôm nay" subtitle="" className="col-span-12 lg:col-span-7 h-[240px]" icon="▣"><DataTable columns={["#","Khách","Kênh","Nhu cầu","Giá trị","Mức ưu tiên","Người phụ trách","Hành động"]} rows={6} data={data?.tables.customerCare}/></Section>
           <Section title="Khách hàng nổi bật / loyalty" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="●●"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Lavender Homestay","Cozy Garden"].map(x=><div key={x} className="rounded-[8px] border border-[#e4ecf5] p-3"><div className="flex items-center justify-between"><b className="text-[10px] text-[#263f69]">{x}</b><Status label="Khách trung thành" tone="violet"/></div><div className="mt-4 grid grid-cols-3 gap-2">{["Số lần lưu trú","Tổng chi tiêu","Lần gần nhất"].map(y=><div key={y}><p className="text-[8px] text-[#7588a8]">{y}</p><b className="mt-1 block text-[12px]">—</b></div>)}</div><p className="mt-4 rounded bg-[#f7faff] p-2 text-[8px] text-[#6b80a1]">Ưu tiên dịch vụ theo hồ sơ và lịch sử đã xác minh.</p></div>)}</div></Section>
           <Section title="Lịch sử tương tác gần đây" subtitle="" className="col-span-12 lg:col-span-7 h-[180px]" icon="◷"><DataTable columns={["Thời gian","Khách hàng","Kênh","Nội dung tương tác","Người thực hiện","Kết quả"]} rows={5}/></Section>
           <Section title="Phản hồi & đánh giá" subtitle="" className="col-span-12 lg:col-span-5 h-[180px]" icon="★"><div className="grid grid-cols-4 gap-2 p-3">{["Google","Booking.com","TripAdvisor","Airbnb"].map(x=><div key={x} className="rounded border border-[#e2ebf4] p-2"><b className="text-[9px] text-[#334f74]">{x}</b><p className="mt-1 text-[17px] font-extrabold text-[#11275a]">—</p></div>)}</div><div className="px-3 pb-3"><BarLineChart labels={["Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9"]} line={true}/></div></Section>
@@ -440,7 +431,7 @@ function Board({ screen }: { screen: ScreenKey }) {
         <div className="grid grid-cols-12 gap-2">
           <Section title="Chấm công theo bộ phận" subtitle="Tình hình nhân sự hôm nay theo từng bộ phận" className="col-span-12 lg:col-span-5 h-[240px]" icon="▮"><DataTable columns={["#","Bộ phận","Tổng","Có mặt","Vắng","Đi muộn","Tỷ lệ"]} rows={6}/></Section>
           <Section title="Lịch ca hôm nay" subtitle="Danh sách ca làm việc theo khung giờ" className="col-span-12 lg:col-span-7 h-[240px]" icon="▦"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Ca sáng 06:00 – 14:00","Ca chiều 14:00 – 22:00"].map(x=><div key={x} className="overflow-hidden rounded-[7px] border border-[#e4ecf5]"><div className="flex items-center justify-between bg-[#eefaf4] px-3 py-2"><b className="text-[10px] text-[#315171]">{x}</b><Status label="Theo lịch" tone="green"/></div><DataTable columns={["#","Nhân viên","Bộ phận","Giờ vào","Trạng thái"]} rows={5}/></div>)}</div></Section>
-          <Section title="Yêu cầu nghỉ phép / phê duyệt" subtitle="" className="col-span-12 lg:col-span-5 h-[220px]" icon="▤"><DataTable columns={["#","Nhân viên","Loại nghỉ","Thời gian","Lý do","Trạng thái"]} rows={5}/></Section>
+          <Section title="Yêu cầu nghỉ phép / phê duyệt" subtitle="" className="col-span-12 lg:col-span-5 h-[220px]" icon="▤"><DataTable columns={["#","Công việc HR","Owner","Ưu tiên","Hạn xử lý","Trạng thái"]} rows={5} data={data?.tables.hrTasks}/></Section>
           <Section title="Quỹ lương & phụ cấp tháng" subtitle="" className="col-span-12 lg:col-span-4 h-[220px]" icon="▣"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Lương cơ bản","Phụ cấp","Thưởng","Tạm ứng"].map(x=><div key={x} className="rounded bg-[#f7faff] p-3"><p className="text-[8px] text-[#6c82a3]">{x}</p><b className="mt-1 block text-[14px] text-[#142b5d]">—</b></div>)}<div className="col-span-2 flex items-center justify-between rounded bg-[#edf5ff] p-3"><b className="text-[9px] text-[#41618b]">Tổng quỹ lương tháng</b><b className="text-[16px] text-[#12285b]">—</b></div></div></Section>
           <Section title="Đào tạo & năng lực" subtitle="" className="col-span-12 lg:col-span-3 h-[220px]" icon="▮"><ProgressRows items={["Onboarding","SOP vận hành","CSKH & giao tiếp","Ngoại ngữ (Tiếng Anh)","AI & Công cụ số"]}/></Section>
           <Section title="Hiệu suất theo bộ phận" subtitle="Tỷ lệ hoàn thành công việc, đánh giá chất lượng và phản hồi khách hàng" className="col-span-12 lg:col-span-8 h-[170px]" icon="◎"><div className="grid h-full grid-cols-5 gap-2 p-3">{["Lễ tân","Buồng phòng","Bếp","Bar","Phục vụ"].map((x,i)=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#334f73]">{x}</b><div className="mt-3 h-2 rounded-full bg-[#e8eef5]"><div className="h-2 rounded-full bg-[#13b76b]" style={{width:(82+i*2)+"%"}}/></div><div className="mt-4 flex justify-between text-center"><span><b className="block text-[15px]">—</b><small className="text-[7px] text-[#7d8da6]">Khiếu nại</small></span><span><b className="block text-[15px]">—</b><small className="text-[7px] text-[#7d8da6]">Đánh giá TB</small></span></div></div>)}</div></Section>
@@ -452,7 +443,7 @@ function Board({ screen }: { screen: ScreenKey }) {
         <div className="grid grid-cols-12 gap-2">
           <Section title="Dòng tiền vào – ra" subtitle="Doanh thu, chi phí và dòng tiền ròng theo ngày" className="col-span-12 lg:col-span-5 h-[325px]" icon="▮"><BarLineChart/></Section>
           <Section title="Ngân sách vs thực tế" subtitle="Tổng chi phí vận hành theo danh mục" className="col-span-12 lg:col-span-3 h-[325px]" icon="◫"><Donut center="—" sub="Tổng chi phí" items={["F&B","Nhân sự","Marketing","Vận hành","Khác"]}/></Section>
-          <Section title="Tình hình theo đơn vị" subtitle="Hiệu quả tài chính của từng cơ sở" className="col-span-12 lg:col-span-4 h-[325px]" icon="▣"><MiniStatusGrid items={["Lavender Homestay","Cozy Garden"]}/></Section>
+          <Section title="Tình hình theo đơn vị" subtitle="Hiệu quả tài chính của từng cơ sở" className="col-span-12 lg:col-span-4 h-[325px]" icon="▣"><DataTable columns={["#","Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={5} data={data?.tables.financeBranches}/></Section>
           <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 lg:col-span-5 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
           <Section title="Dự báo trả nợ" subtitle="Kế hoạch thanh toán 6 tháng tới" className="col-span-12 lg:col-span-3 h-[290px]" icon="◫"><BarLineChart labels={["T09/26","T10/26","T11/26","T12/26","T01/27","T02/27"]} line={false}/></Section>
           <div className="col-span-12 lg:col-span-4 grid gap-2">
@@ -464,10 +455,10 @@ function Board({ screen }: { screen: ScreenKey }) {
     case "reports":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="1. Thư viện báo cáo" subtitle="Danh sách báo cáo có sẵn trong hệ thống" className="col-span-12 lg:col-span-7 h-[290px]" icon="1"><div className="flex gap-2 p-2"><div className="flex-1 rounded border border-[#dbe7f4] px-3 py-1.5 text-[9px] text-[#8a9ab1]">Tìm kiếm báo cáo...</div><button className="rounded bg-[#2477ee] px-4 text-[9px] font-bold text-white">＋ Tạo báo cáo mới</button></div><DataTable columns={["#","Tên báo cáo","Danh mục","Tần suất","Owner","Cập nhật gần nhất","Hành động"]} rows={5}/></Section>
+          <Section title="1. Thư viện báo cáo" subtitle="Danh sách báo cáo có sẵn trong hệ thống" className="col-span-12 lg:col-span-7 h-[290px]" icon="1"><div className="flex gap-2 p-2"><div className="flex-1 rounded border border-[#dbe7f4] px-3 py-1.5 text-[9px] text-[#8a9ab1]">Tìm kiếm báo cáo...</div><button className="rounded bg-[#2477ee] px-4 text-[9px] font-bold text-white">＋ Tạo báo cáo mới</button></div><DataTable columns={["#","Thời gian","Agent","Đơn vị","Nội dung","Loại"]} rows={5} data={data?.tables.reportLogs}/></Section>
           <Section title="3. Lịch gửi báo cáo" subtitle="Các báo cáo được gửi tự động theo lịch" className="col-span-12 lg:col-span-5 h-[205px]" icon="3"><div className="grid h-full grid-cols-2 gap-2 p-3">{["08:00 hàng ngày","18:00 hàng ngày","Thứ Hai hàng tuần","Ngày 01 hàng tháng"].map(x=><div key={x} className="rounded border border-[#e4ecf5] bg-[#fbfdff] p-3"><div className="flex items-center justify-between"><b className="text-[10px] text-[#1a3867]">{x}</b><Status label="Đang hoạt động" tone="green"/></div><p className="mt-2 text-[8px] text-[#6d82a3]">Báo cáo tự động</p></div>)}</div></Section>
           <Section title="2. Bộ lọc báo cáo nhanh" subtitle="Chọn tiêu chí để xem hoặc tạo báo cáo tùy chỉnh" className="col-span-12 lg:col-span-7 h-[165px]" icon="2"><div className="grid grid-cols-4 gap-2 p-3">{["Cơ sở","Nguồn dữ liệu","Thời gian","Định dạng xuất"].map(x=><div key={x}><p className="mb-1 text-[8px] font-bold text-[#405c83]">{x}</p><div className="rounded border border-[#d5e3f2] bg-white px-3 py-2 text-[9px] text-[#4e688d]">Tất cả</div></div>)}</div><div className="flex gap-2 px-3">{["Tất cả","Kinh doanh","Marketing","Vận hành","Tài chính","AI-Lễ Tân","Khách hàng","Nhân sự"].map((x,i)=><span key={x} className={"rounded px-3 py-1 text-[8px] " + (i===0?"bg-[#2879ee] text-white":"bg-[#edf4fb] text-[#426089]")}>{x}</span>)}</div></Section>
-          <Section title="4. Xuất dữ liệu gần đây" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="4"><DataTable columns={["#","Tên file","Định dạng","Kích thước","Người xuất","Thời gian","Trạng thái"]} rows={5}/></Section>
+          <Section title="4. Xuất dữ liệu gần đây" subtitle="" className="col-span-12 lg:col-span-5 h-[240px]" icon="4"><DataTable columns={["#","Nguồn dữ liệu","Key","Trạng thái","Lần sync","Lỗi"]} rows={5} data={data?.tables.reportSources}/></Section>
           <Section title="5. Top báo cáo được xem nhiều" subtitle="5 báo cáo có lượt xem cao nhất trong 30 ngày qua" className="col-span-12 lg:col-span-4 h-[150px]" icon="5"><ProgressRows items={["Tổng quan doanh thu ngày","Hiệu quả marketing tuần","Báo cáo AI-Lễ Tân","Dòng tiền tháng","Checklist vận hành"]}/></Section>
           <Section title="6. Tạo báo cáo mới" subtitle="Chọn mẫu có sẵn hoặc tạo báo cáo tùy chỉnh" className="col-span-12 lg:col-span-4 h-[150px]" icon="6"><TileGrid items={["Dashboard tổng hợp","Báo cáo chi tiết","Báo cáo gửi email"]} columns={3}/></Section>
           <Section title="7. Data freshness / Đồng bộ dữ liệu" subtitle="Trạng thái kết nối và cập nhật dữ liệu từ các nguồn" className="col-span-12 lg:col-span-4 h-[150px]" icon="7"><div className="grid h-full grid-cols-3 gap-1.5 p-3">{["KiotViet Hotel","KiotViet F&B","Google Ads","Meta","TikTok","Tripadvisor","PMS","CRM","Server (VPS)"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-2"><b className="block truncate text-[8px] text-[#365175]">{x}</b><span className="text-[8px] font-bold text-[#0b9f57]">● Online</span></div>)}</div></Section>
@@ -477,10 +468,10 @@ function Board({ screen }: { screen: ScreenKey }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section title="Workflow pipeline" subtitle="Tổng quan luồng xử lý yêu cầu của các agent" className="col-span-12 lg:col-span-6 h-[240px]" icon="↑"><Pipeline items={["Nhận yêu cầu","Phân loại","Agent xử lý","Kiểm tra","Hoàn tất / Handoff"]}/></Section>
-          <Section title="Danh sách AI Agent" subtitle="Trạng thái hoạt động và hiệu suất" className="col-span-12 lg:col-span-4 h-[240px]" icon="◉"><DataTable columns={["#","Agent","Trạng thái","Task hôm nay","Tỷ lệ thành công"]} rows={9}/></Section>
+          <Section title="Danh sách AI Agent" subtitle="Trạng thái hoạt động và hiệu suất" className="col-span-12 lg:col-span-4 h-[240px]" icon="◉"><DataTable columns={["#","Agent","Trạng thái","Task hiện tại","Hoạt động gần nhất"]} rows={9} data={data?.tables.agentList}/></Section>
           <Section title="Tổng quan hiệu suất" subtitle="" className="col-span-12 lg:col-span-2 h-[240px]" icon="⚙"><Donut center="—" sub="Tỷ lệ thành công" items={["Thành công","Fallback","Human handoff","Lỗi"]}/></Section>
-          <Section title="Task queue cần chú ý" subtitle="Các task cần theo dõi, sắp quá hạn hoặc gặp vấn đề" className="col-span-12 lg:col-span-7 h-[245px]" icon="▤"><DataTable columns={["#","Workflow","Nguồn vào","Agent phụ trách","Ưu tiên","SLA","Trạng thái","Hành động"]} rows={8}/></Section>
-          <Section title="Automation runs gần đây" subtitle="Các lần chạy workflow tự động mới nhất" className="col-span-12 lg:col-span-5 h-[245px]" icon="▣"><DataTable columns={["Thời gian","Workflow","Agent","Trạng thái","Kết quả"]} rows={8}/></Section>
+          <Section title="Task queue cần chú ý" subtitle="Các task cần theo dõi, sắp quá hạn hoặc gặp vấn đề" className="col-span-12 lg:col-span-7 h-[245px]" icon="▤"><DataTable columns={["#","Workflow","Nguồn vào","Agent phụ trách","Ưu tiên","SLA","Trạng thái","Hành động"]} rows={8} data={data?.tables.agentQueue}/></Section>
+          <Section title="Automation runs gần đây" subtitle="Các lần chạy workflow tự động mới nhất" className="col-span-12 lg:col-span-5 h-[245px]" icon="▣"><DataTable columns={["Thời gian","Workflow","Agent","Trạng thái","Kết quả"]} rows={8} data={data?.tables.agentRuns}/></Section>
           <Section title="Hiệu suất theo agent" subtitle="Số task xử lý và tỷ lệ thành công" className="col-span-12 lg:col-span-7 h-[180px]" icon="▦"><BarLineChart labels={["Receptionist","Concierge","Booking","Marketing","Finance","AI Ops","Sales","Content","Escalation"]}/></Section>
           <Section title="Gợi ý tối ưu AI" subtitle="Đề xuất từ hệ thống dựa trên dữ liệu thực tế" className="col-span-12 lg:col-span-5 h-[180px]" icon="◎"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Nâng cấp knowledge base","Giảm human handoff","Tăng retry logic"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#345173]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#778aa8]">Chỉ đề xuất sau khi có evidence.</p><button className="mt-2 w-full rounded border border-[#bdd6f8] py-1 text-[8px] font-bold text-[#1768df]">Xem chi tiết</button></div>)}</div></Section>
         </div>
@@ -489,7 +480,7 @@ function Board({ screen }: { screen: ScreenKey }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section title="Thiết lập chung" subtitle="Cấu hình các thông tin nền tảng của hệ thống" className="col-span-12 lg:col-span-6 h-[285px]" icon="⚙"><TileGrid items={["Thông tin doanh nghiệp","Cơ sở / chi nhánh","Branding","Domain & email","Mẫu thông báo","Sao lưu dữ liệu"]} columns={3}/></Section>
-          <Section title="Tích hợp hệ thống" subtitle="Kết nối và quản lý trạng thái các hệ thống bên ngoài" className="col-span-12 lg:col-span-6 h-[285px]" icon="↕"><DataTable columns={["#","Hệ thống","Danh mục","Trạng thái","Lần đồng bộ cuối","Thao tác"]} rows={10}/></Section>
+          <Section title="Tích hợp hệ thống" subtitle="Kết nối và quản lý trạng thái các hệ thống bên ngoài" className="col-span-12 lg:col-span-6 h-[285px]" icon="↕"><DataTable columns={["#","Hệ thống","Danh mục","Trạng thái","Lần đồng bộ cuối","Thao tác"]} rows={10} data={data?.tables.settingsIntegrations}/></Section>
           <Section title="Phân quyền người dùng" subtitle="Quản lý vai trò, quyền hạn theo chức năng" className="col-span-12 lg:col-span-6 h-[220px]" icon="●●"><DataTable columns={["#","Vai trò","View","Edit","Approve","Export","Số người","Hành động"]} rows={7}/></Section>
           <Section title="Thông báo & automation" subtitle="Cấu hình thông báo, nhắc nhở và quy trình tự động" className="col-span-12 lg:col-span-6 h-[220px]" icon="●"><div className="grid h-full grid-cols-2 gap-2 p-3">{["Gửi email thông báo hệ thống","Nhắc nhở thanh toán","Thông báo qua Slack / Telegram","Tự động escalation với AI","Cảnh báo tồn kho thấp","Báo cáo tổng hợp hàng ngày"].map(x=><div key={x} className="flex items-center justify-between rounded border border-[#e5edf6] p-3"><div><b className="text-[9px] text-[#345172]">{x}</b><p className="mt-1 text-[7px] text-[#8392a8]">Theo policy và quyền hiện hành</p></div><span className="h-5 w-9 rounded-full bg-[#2d7df0] p-0.5"><span className="ml-auto block h-4 w-4 rounded-full bg-white"/></span></div>)}</div></Section>
           <Section title="Cần xử lý" subtitle="Các vấn đề cần được xử lý trong thời gian sớm nhất" className="col-span-12 lg:col-span-6 h-[145px]" icon="!"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Tích hợp đang hoạt động một phần","API key sắp hết hạn","Cập nhật vai trò chờ duyệt"].map(x=><div key={x} className="rounded border border-[#f0dfbd] bg-[#fffaf1] p-3"><b className="text-[9px] text-[#705625]">{x}</b><p className="mt-2 text-[8px] text-[#876f45]">NEED VERIFY / APPROVAL</p></div>)}</div></Section>
@@ -499,22 +490,27 @@ function Board({ screen }: { screen: ScreenKey }) {
   }
 }
 
-export default function ReferenceScreen({ screen }: { screen: ScreenKey }) {
+export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
   const m = meta[screen];
+  const metrics = m.metrics.map((metric) => ({
+    ...metric,
+    value: data?.metricValues[metric.label] ?? metric.value,
+    note: data?.metricNotes[metric.label] ?? metric.note,
+  }));
   return (
     <>
       <div className="md:hidden">
-        <MobileMockupScreen screen={screen} />
+        <MobileMockupScreen screen={screen} data={data} />
       </div>
       <div className="hidden md:block">
-        <TceWorkspaceShell title={m.title} subtitle={m.subtitle} generatedAt={new Date().toISOString()}>
+        <TceWorkspaceShell title={m.title} subtitle={m.subtitle} generatedAt={data?.generatedAt ?? new Date().toISOString()}>
           <div className="mx-auto max-w-[1500px] px-[10px] pb-[10px] pt-[10px]">
             {m.detailHref ? <div className="absolute right-4 top-[91px] z-10"><Link href={m.detailHref} className="rounded-[5px] border border-[#b7d3f9] bg-white px-3 py-1 text-[8px] font-bold text-[#1768df]">{m.detailLabel} →</Link></div> : null}
-            <div className={"grid gap-2 " + (m.metrics.length === 7 ? "grid-cols-7" : "grid-cols-6")}>
-              {m.metrics.map(metric => <MetricCard key={metric.label} metric={metric}/>)}
+            <div className={"grid gap-2 " + (metrics.length === 7 ? "grid-cols-7" : "grid-cols-6")}>
+              {metrics.map(metric => <MetricCard key={metric.label} metric={metric}/>)}
             </div>
             <div className="mt-2">
-              <Board screen={screen}/>
+              <Board screen={screen} data={data}/>
             </div>
           </div>
         </TceWorkspaceShell>

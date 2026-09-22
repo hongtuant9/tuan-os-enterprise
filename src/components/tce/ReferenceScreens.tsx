@@ -480,15 +480,85 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "finance":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Dòng tiền vào – ra" subtitle="Doanh thu, chi phí và dòng tiền ròng theo ngày" className="col-span-12 lg:col-span-5 h-[325px]" icon="▮"><BarLineChart/></Section>
-          <Section title="Ngân sách vs thực tế" subtitle="Tổng chi phí vận hành theo danh mục" className="col-span-12 lg:col-span-3 h-[325px]" icon="◫"><Donut center="—" sub="Tổng chi phí" items={["F&B","Nhân sự","Marketing","Vận hành","Khác"]}/></Section>
-          <Section title="Tình hình theo đơn vị" subtitle="Hiệu quả tài chính của từng cơ sở" className="col-span-12 lg:col-span-4 h-[325px]" icon="▣"><DataTable columns={["#","Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={5} data={data?.tables.financeBranches}/></Section>
-          <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 lg:col-span-5 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
+          <Section
+            title="Phân tích nhóm chi phí & mức kiểm soát"
+            subtitle={"Nhóm nào chi nhiều · % doanh thu · chuẩn kiểm soát · kỳ " + (data?.period.label ?? "Hôm nay")}
+            className="col-span-12 lg:col-span-7 h-[340px]"
+            icon="◫"
+          >
+            <DataTable
+              columns={["#","Nhóm chi phí","Giá trị","% DT","Cơ sở số liệu","Chuẩn / đối soát","Trạng thái"]}
+              rows={6}
+              data={data?.tables.financeCostGroups}
+            />
+          </Section>
+          <Section
+            title="Nguồn lợi nhuận"
+            subtitle="Doanh thu Actual; chi phí và lợi nhuận hiện đang là Ước tính/Mô hình cho tới khi Actual cost PASS"
+            className="col-span-12 lg:col-span-5 h-[340px]"
+            icon="▮"
+          >
+            <DataTable
+              columns={["#","Nguồn","Loại","Doanh thu","Chi phí","LN ước tính","Biên","Đóng góp","Loại số"]}
+              rows={6}
+              data={data?.tables.financeProfitSources}
+            />
+          </Section>
+
+          <Section
+            title="Sản phẩm / dịch vụ tạo lợi nhuận"
+            subtitle="Tự động xếp hạng Top/Bottom khi đủ invoice detail + cost evidence; không suy diễn khi thiếu dữ liệu"
+            className="col-span-12 lg:col-span-7 h-[235px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["Nhóm phân tích","Cách tính","Nguồn dữ liệu","Trạng thái","Kết quả"]}
+              rows={5}
+              data={data?.tables.financeProductProfitReadiness}
+            />
+          </Section>
+          <Section
+            title="Quy tắc đánh giá chi phí"
+            subtitle="Đạt chuẩn · Theo dõi · Cần tối ưu chỉ được gắn khi có dữ liệu đúng authority"
+            className="col-span-12 lg:col-span-5 h-[235px]"
+            icon="!"
+          >
+            <DataTable
+              columns={["Nhóm","Đạt chuẩn","Theo dõi","Cần tối ưu / Fail closed","Nguồn chuẩn"]}
+              rows={4}
+              data={data?.tables.financeCostControlRules}
+            />
+          </Section>
+
+          <Section
+            title="Tình hình theo đơn vị"
+            subtitle="Doanh thu Actual theo Lavender · Ruby · Cozy Garden; không gộp mất cơ sở"
+            className="col-span-12 lg:col-span-5 h-[235px]"
+            icon="▣"
+          >
+            <DataTable columns={["Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={6} data={data?.tables.financeBranches}/>
+          </Section>
+          <Section
+            title="3 hành động tối ưu ưu tiên"
+            subtitle="AI chỉ đưa tối đa 3 hành động; chưa tự thay đổi giá, ngân sách, BOM hoặc chi phí"
+            className="col-span-12 lg:col-span-7 h-[235px]"
+            icon="!"
+          >
+            <ListRows items={data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]}/>
+          </Section>
+
+          <Section title="Dòng tiền vào – ra" subtitle="Doanh thu, chi phí và dòng tiền ròng; chỉ hiện xu hướng khi có daily-series được xác minh" className="col-span-12 lg:col-span-5 h-[290px]" icon="▮"><BarLineChart/></Section>
+          <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 lg:col-span-4 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
           <Section title="Dự báo trả nợ" subtitle="Kế hoạch thanh toán 6 tháng tới" className="col-span-12 lg:col-span-3 h-[290px]" icon="◫"><BarLineChart labels={["T09/26","T10/26","T11/26","T12/26","T01/27","T02/27"]} line={false}/></Section>
-          <div className="col-span-12 lg:col-span-4 grid gap-2">
-            <Section title="Cảnh báo tài chính" subtitle="" className="h-[170px]" icon="!"><ListRows items={["Chưa đủ dữ liệu đã xác minh để phát cảnh báo tài chính. Kết nối FIN-HOSPITALITY-001 / runtime trước khi kết luận."]}/></Section>
-            <Section title="Quỹ an toàn / dự phòng" subtitle="" className="h-[105px]" icon="▣"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Dùng ngay","Thanh khoản nhanh","Kỳ hạn"].map(x=><div key={x} className="rounded bg-[#f5f9fe] p-2"><p className="text-[8px] text-[#667fa3]">{x}</p><b className="mt-1 block text-[13px] text-[#132d60]">—</b></div>)}</div></Section>
-          </div>
+
+          <Section title="Cảnh báo tài chính" subtitle="Chỉ cảnh báo từ evidence; dữ liệu thiếu giữ NEED VERIFY" className="col-span-12 lg:col-span-7 h-[150px]" icon="!">
+            <ListRows items={[
+              "Chi phí Actual chưa sync đầy đủ: chưa được kết luận nhóm nào vượt chuẩn chỉ từ mô hình.",
+              "Lợi nhuận theo cơ sở hiện là [Ước tính/Mô hình] vì chi phí Actual chưa đủ.",
+              "Profit ranking theo món/hạng phòng chỉ bật khi invoice detail + cost mapping PASS.",
+            ]}/>
+          </Section>
+          <Section title="Quỹ an toàn / dự phòng" subtitle="" className="col-span-12 lg:col-span-5 h-[150px]" icon="▣"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Dùng ngay","Thanh khoản nhanh","Kỳ hạn"].map(x=><div key={x} className="rounded bg-[#f5f9fe] p-2"><p className="text-[8px] text-[#667fa3]">{x}</p><b className="mt-1 block text-[13px] text-[#132d60]">—</b><small className="mt-1 block text-[7px] text-[#7d8da6]">NEED VERIFY</small></div>)}</div></Section>
         </div>
       );
     case "reports":

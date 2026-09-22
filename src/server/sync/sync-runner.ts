@@ -8,6 +8,14 @@ import { ActivityLogService } from "@/server/services/activity-log.service";
 import { getAdapterForSource, getMapperForSource, isSyncSourceKey } from "@/server/sync/registry";
 import type { SyncTrigger, SyncRunSummary, SyncRunStatus } from "@/server/sync/types";
 
+const SNAPSHOT_RECONCILE_SOURCES = new Set([
+  "marketing-shadow-content",
+  "marketing-campaign-plan",
+  "marketing-channel-plan",
+  "marketing-action-plan",
+  "marketing-market-intelligence",
+]);
+
 export class SyncRunner {
   constructor(
     private readonly db: SupabaseClient<Database>,
@@ -79,6 +87,27 @@ export class SyncRunner {
             level: "error",
             message: `Row ${row.externalId} failed: ${message}`,
             context: row.fields,
+          });
+        }
+      }
+
+      if (
+        failed === 0 &&
+        nextCursor &&
+        nextCursor !== source.last_cursor &&
+        SNAPSHOT_RECONCILE_SOURCES.has(sourceKey)
+      ) {
+        const currentExternalIds = new Set(rows.map((row) => row.externalId));
+        const existingRows = await this.records.listBySource(sourceKey);
+        const staleIds = existingRows
+          .filter((row) => !currentExternalIds.has(row.external_id))
+          .map((row) => row.id);
+        if (staleIds.length) {
+          await this.records.deleteByIds(staleIds);
+          await this.logs.create({
+            sync_run_id: run.id,
+            level: "info",
+            message: `Reconciled ${staleIds.length} stale snapshot record(s) removed from ${sourceKey}.`,
           });
         }
       }

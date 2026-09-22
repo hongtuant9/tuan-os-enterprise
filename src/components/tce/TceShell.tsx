@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, type ReactNode } from "react";
 import { signOut } from "@/app/actions/auth";
 
 type IconName =
@@ -111,6 +111,50 @@ export function TcePageHeader({
   generatedAt: string;
 }) {
   const time = formatHeaderTime(generatedAt);
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedPeriod = searchParams.get("period");
+  const activePeriod = requestedPeriod === "7d" || requestedPeriod === "month" || requestedPeriod === "year" || requestedPeriod === "custom"
+    ? requestedPeriod
+    : "today";
+  const generatedDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(generatedAt));
+  const [customOpen, setCustomOpen] = useState(activePeriod === "custom");
+  const [customFrom, setCustomFrom] = useState(searchParams.get("from") || generatedDate);
+  const [customTo, setCustomTo] = useState(searchParams.get("to") || generatedDate);
+
+  function periodHref(key: "today" | "7d" | "month" | "year") {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("from");
+    params.delete("to");
+    if (key === "today") params.delete("period");
+    else params.set("period", key);
+    const query = params.toString();
+    return query ? pathname + "?" + query : pathname;
+  }
+
+  function applyCustomPeriod() {
+    if (!customFrom || !customTo || customFrom > customTo) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("period", "custom");
+    params.set("from", customFrom);
+    params.set("to", customTo);
+    router.push(pathname + "?" + params.toString());
+    setCustomOpen(false);
+  }
+
+  const periods = [
+    ["today", "Hôm nay"],
+    ["7d", "7 ngày"],
+    ["month", "Tháng"],
+    ["year", "Năm"],
+  ] as const;
+
   return (
     <header className="border-b border-[#dce7f3] bg-white px-4 py-[9px] lg:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -133,21 +177,37 @@ export function TcePageHeader({
         </div>
       </div>
       <div className="mt-[5px] flex flex-wrap justify-end gap-0">
-        {["Hôm nay", "7 ngày", "Tháng", "Năm", "Tùy chọn"].map((label, index) => (
-          <span
-            key={label}
-            title={index === 0 ? "Dữ liệu mặc định hiện tại" : "Bộ lọc kỳ sẽ được bật khi từng tab hỗ trợ cùng một pipeline thời gian"}
-            aria-disabled={index !== 0}
-            className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-center text-[10px] font-semibold " +
-              (index === 0 ? "border-[#1f78ee] bg-[#2178ef] text-white" : "border-[#d5e1ef] bg-[#f8fafc] text-[#8796ac]")}
+        {periods.map(([key, label]) => (
+          <Link
+            key={key}
+            href={periodHref(key)}
+            className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-center text-[10px] font-semibold transition hover:bg-[#eef5ff] " +
+              (activePeriod === key ? "border-[#1f78ee] bg-[#2178ef] text-white hover:bg-[#2178ef]" : "border-[#d5e1ef] bg-white text-[#5f7395]")}
           >
             {label}
-          </span>
+          </Link>
         ))}
-        <span title="Bộ lọc cơ sở đang chờ kết nối filter end-to-end" aria-disabled="true" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-[#f8fafc] px-3 py-[6px] text-[10px] font-semibold text-[#8796ac]">
+        <button
+          type="button"
+          onClick={() => setCustomOpen((value) => !value)}
+          className={"min-w-[74px] rounded-[4px] border px-3 py-[6px] text-center text-[10px] font-semibold transition " +
+            (activePeriod === "custom" ? "border-[#1f78ee] bg-[#2178ef] text-white" : "border-[#d5e1ef] bg-white text-[#5f7395] hover:bg-[#eef5ff]")}
+        >
+          Tùy chọn
+        </button>
+        <span title="Bộ lọc cơ sở đang được nối riêng" aria-disabled="true" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-[#f8fafc] px-3 py-[6px] text-[10px] font-semibold text-[#8796ac]">
           Tất cả cơ sở <Icon name="chevron" className="h-4 w-4" />
         </span>
       </div>
+      {customOpen ? (
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          <label className="text-[9px] font-semibold text-[#61779b]">Từ ngày</label>
+          <input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} className="rounded-[5px] border border-[#cddbec] bg-white px-2 py-1 text-[10px] text-[#29466f]" />
+          <label className="text-[9px] font-semibold text-[#61779b]">Đến ngày</label>
+          <input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} className="rounded-[5px] border border-[#cddbec] bg-white px-2 py-1 text-[10px] text-[#29466f]" />
+          <button type="button" disabled={!customFrom || !customTo || customFrom > customTo} onClick={applyCustomPeriod} className="rounded-[5px] bg-[#2178ef] px-3 py-1.5 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Áp dụng</button>
+        </div>
+      ) : null}
     </header>
   );
 }

@@ -360,15 +360,15 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "business":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle="Biểu đồ 7 ngày gần nhất trên tất cả cơ sở" className="col-span-12 lg:col-span-6 h-[345px]" icon="▮">
+          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Daily-series chi tiết sẽ hiển thị khi đủ dữ liệu"} className="col-span-12 lg:col-span-6 h-[345px]" icon="▮">
             <BarLineChart />
           </Section>
-          <Section title="Cơ cấu doanh thu theo cơ sở" subtitle="Tỷ trọng doanh thu trong tháng này" className="col-span-12 lg:col-span-3 h-[345px]" icon="◔">
+          <Section title="Cơ cấu doanh thu theo cơ sở" subtitle={"Tỷ trọng doanh thu · " + (data?.period.label ?? "Hôm nay")} className="col-span-12 lg:col-span-3 h-[345px]" icon="◔">
             {(() => {
               const rows = data?.tables.businessMonthBranches ?? [];
               const values = rows.map((row) => row[3] ?? "—");
               const shares = rows.map((row) => Number((row[4] ?? "0").replace("%", "").replace(",", ".")) || 0);
-              return <Donut center={data?.metricValues["Doanh thu tháng"] ?? "—"} sub="Tổng doanh thu tháng" items={rows.length ? rows.map((row) => row[1] ?? "Cơ sở") : ["Lavender Homestay","Ruby Homestay","Cozy Garden"]} values={values} shares={shares}/>;
+              return <Donut center={data?.metricValues["Doanh thu hôm nay"] ?? "—"} sub={"Tổng doanh thu · " + (data?.period.label ?? "Hôm nay")} items={rows.length ? rows.map((row) => row[1] ?? "Cơ sở") : ["Lavender Homestay","Ruby Homestay","Cozy Garden"]} values={values} shares={shares}/>;
             })()}
           </Section>
           <Section title="Tình hình theo cơ sở" subtitle="" className="col-span-12 lg:col-span-3 h-[345px]" icon="◫">
@@ -514,11 +514,14 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
 
 export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
   const m = meta[screen];
-  const metrics = m.metrics.map((metric) => ({
-    ...metric,
-    value: data?.metricValues[metric.label] ?? metric.value,
-    note: data?.metricNotes[metric.label] ?? metric.note,
-  }));
+  const metrics = m.metrics.map((metric) => {
+    const value = data?.metricValues[metric.label] ?? metric.value;
+    const note = data?.metricNotes[metric.label] ?? metric.note;
+    const label = screen === "business" && metric.label === "Doanh thu hôm nay" && data?.period.key !== "today"
+      ? "Doanh thu " + data?.period.label.toLowerCase()
+      : metric.label;
+    return { ...metric, label, value, note };
+  });
   return (
     <>
       <div className="md:hidden">

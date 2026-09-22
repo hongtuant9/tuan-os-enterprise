@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, type ReactNode } from "react";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 
 export type MobileScreenKey =
@@ -225,6 +225,38 @@ function BottomNav({ active }: { active: MobileMeta["active"] }) {
 }
 
 function MobileHeader({ title, subtitle, active }: { title: string; subtitle: string; active: MobileMeta["active"] }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requested = searchParams.get("period");
+  const activePeriod = requested === "7d" || requested === "month" || requested === "year" || requested === "custom" ? requested : "today";
+  const today = new Date().toISOString().slice(0, 10);
+  const [customOpen, setCustomOpen] = useState(activePeriod === "custom");
+  const [customFrom, setCustomFrom] = useState(searchParams.get("from") || today);
+  const [customTo, setCustomTo] = useState(searchParams.get("to") || today);
+
+  function hrefFor(key: "today" | "7d" | "month" | "year") {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("from");
+    params.delete("to");
+    if (key === "today") params.delete("period");
+    else params.set("period", key);
+    const query = params.toString();
+    return query ? pathname + "?" + query : pathname;
+  }
+
+  function applyCustom() {
+    if (!customFrom || !customTo || customFrom > customTo) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("period", "custom");
+    params.set("from", customFrom);
+    params.set("to", customTo);
+    router.push(pathname + "?" + params.toString());
+    setCustomOpen(false);
+  }
+
+  const periods = [["today","Hôm nay"],["7d","7 ngày"],["month","Tháng"],["year","Năm"]] as const;
+
   return (
     <>
       <MobileStatusBar />
@@ -239,16 +271,26 @@ function MobileHeader({ title, subtitle, active }: { title: string; subtitle: st
             <span className="grid h-[24px] w-[24px] place-items-center rounded-full bg-[#eef3fb] text-[10px] font-bold text-[#2f7cf4]">T</span>
           </div>
         </div>
-        <h1 className="mt-[3px] whitespace-nowrap text-[13px] font-extrabold leading-[16px] tracking-[-0.01em] text-[#071b45]">{title}</h1>
+        <h1 className="mt-[3px] truncate text-[13px] font-extrabold leading-[16px] tracking-[-0.01em] text-[#071b45]">{title}</h1>
         <p className="mt-[3px] truncate text-[7px] text-[#7185a8]">{subtitle}</p>
       </header>
       <div className="border-y border-[#d9e6f4] bg-[#f4f8fd] px-[10px] py-[6px]">
-        <div className="flex h-[26px] items-center gap-1 rounded-[8px] border border-[#d9e5f2] bg-white px-[6px]">
-          {["Hôm nay", "7 ngày", "Tháng"].map((x, i) => (
-            <span key={x} title={i === 0 ? "Dữ liệu mặc định hiện tại" : "Bộ lọc kỳ chưa bật end-to-end"} className={"grid h-[18px] min-w-[52px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (i === 0 ? "bg-[#2d7ef4] text-white" : "border border-[#dbe6f2] bg-[#f8fafc] text-[#8796ac]")}>{x}</span>
-          ))}
-          <span title="Bộ lọc cơ sở chưa bật end-to-end" className="grid h-[18px] min-w-[82px] place-items-center rounded-[5px] border border-[#dbe6f2] bg-[#f8fafc] px-2 text-[7px] font-semibold text-[#8796ac]">Tất cả cơ sở</span>
+        <div className="overflow-x-auto rounded-[8px] border border-[#d9e5f2] bg-white px-[6px] py-[4px] [scrollbar-width:none]">
+          <div className="flex min-w-max items-center gap-1">
+            {periods.map(([key,label]) => (
+              <Link key={key} href={hrefFor(key)} className={"grid h-[20px] min-w-[52px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (activePeriod === key ? "bg-[#2d7ef4] text-white" : "border border-[#dbe6f2] bg-white text-[#61779a]")}>{label}</Link>
+            ))}
+            <button type="button" onClick={() => setCustomOpen((value) => !value)} className={"grid h-[20px] min-w-[58px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (activePeriod === "custom" ? "bg-[#2d7ef4] text-white" : "border border-[#dbe6f2] bg-white text-[#61779a]")}>Tùy chọn</button>
+            <span title="Bộ lọc cơ sở đang được nối riêng" className="grid h-[20px] min-w-[82px] place-items-center rounded-[5px] border border-[#dbe6f2] bg-[#f8fafc] px-2 text-[7px] font-semibold text-[#8796ac]">Tất cả cơ sở</span>
+          </div>
         </div>
+        {customOpen ? (
+          <div className="mt-1.5 grid grid-cols-[1fr_1fr_auto] gap-1">
+            <input aria-label="Từ ngày" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} className="min-w-0 rounded-[5px] border border-[#d4e1ef] bg-white px-1 py-1 text-[7px] text-[#29466f]" />
+            <input aria-label="Đến ngày" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} className="min-w-0 rounded-[5px] border border-[#d4e1ef] bg-white px-1 py-1 text-[7px] text-[#29466f]" />
+            <button type="button" disabled={!customFrom || !customTo || customFrom > customTo} onClick={applyCustom} className="rounded-[5px] bg-[#2d7ef4] px-2 text-[7px] font-bold text-white disabled:opacity-40">Áp dụng</button>
+          </div>
+        ) : null}
       </div>
       <BottomNav active={active} />
     </>
@@ -497,7 +539,10 @@ export default function MobileMockupScreen({ screen, data }: { screen: MobileScr
   void pathname;
   const kpis = m.kpis.map((kpi) => {
     const key = kpi.label === "Việc cần xử lý" ? "Việc cần xử lý hôm nay" : kpi.label;
-    return { ...kpi, value: data?.metricValues[key] ?? kpi.value };
+    const label = screen === "business" && kpi.label === "Doanh thu hôm nay" && data?.period.key !== "today"
+      ? "Doanh thu " + data?.period.label.toLowerCase()
+      : kpi.label;
+    return { ...kpi, label, value: data?.metricValues[key] ?? kpi.value };
   });
   return (
     <div className="min-h-screen bg-[#f4f8fd] pb-[76px] text-[#102a56]">

@@ -4,7 +4,12 @@ import { getTceTabLiveData } from "@/server/tce/tab-live-data";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function Page() {
-  const data = await getTceTabLiveData("finance");
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{ period?: string; from?: string; to?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const data = await getTceTabLiveData("finance", params);
   return <ReferenceScreen screen="finance" data={data} />;
 }

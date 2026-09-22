@@ -20,8 +20,25 @@ export type TceTabScreen =
   | "agents"
   | "settings";
 
+export type TcePeriodKey = "today" | "7d" | "month" | "year" | "custom";
+
+export type TcePeriodQuery = {
+  period?: string;
+  from?: string;
+  to?: string;
+};
+
+export type TcePeriodResolved = {
+  key: TcePeriodKey;
+  label: string;
+  from: string;
+  to: string;
+  elapsedDays: number;
+};
+
 export type TceTabLiveData = {
   generatedAt: string;
+  period: TcePeriodResolved;
   metricValues: Record<string, string>;
   metricNotes: Record<string, string>;
   tables: Record<string, string[][]>;
@@ -38,6 +55,53 @@ function localDateKey(now = new Date()) {
   }).formatToParts(now);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return get("year") + "-" + get("month") + "-" + get("day");
+}
+
+function dateAdd(dateKey: string, days: number) {
+  const date = new Date(dateKey + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function validDateKey(value?: string) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value + "T00:00:00Z").getTime()));
+}
+
+export function resolveTcePeriod(query: TcePeriodQuery = {}, now = new Date()): TcePeriodResolved {
+  const today = localDateKey(now);
+  const requested = query.period;
+  let key: TcePeriodKey = requested === "7d" || requested === "month" || requested === "year" || requested === "custom" ? requested : "today";
+  let from = today;
+  let to = today;
+
+  if (key === "7d") from = dateAdd(today, -6);
+  if (key === "month") from = today.slice(0, 7) + "-01";
+  if (key === "year") from = today.slice(0, 4) + "-01-01";
+  if (key === "custom") {
+    if (validDateKey(query.from) && validDateKey(query.to) && query.from! <= query.to!) {
+      from = query.from!;
+      to = query.to!;
+    } else {
+      key = "today";
+      from = today;
+      to = today;
+    }
+  }
+
+  const elapsedDays = Math.max(
+    1,
+    Math.round((new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000) + 1,
+  );
+  const label = key === "today"
+    ? "Hôm nay"
+    : key === "7d"
+      ? "7 ngày"
+      : key === "month"
+        ? "Tháng"
+        : key === "year"
+          ? "Năm"
+          : from + " → " + to;
+  return { key, label, from, to, elapsedDays };
 }
 
 function money(value: number) {
@@ -148,6 +212,7 @@ function isOverdue(dueDate: string | null | undefined, today: string) {
 }
 
 function result(
+  period: TcePeriodResolved,
   metricValues: Record<string, string>,
   metricNotes: Record<string, string> = {},
   tables: Record<string, string[][]> = {},
@@ -156,6 +221,7 @@ function result(
 ): TceTabLiveData {
   return {
     generatedAt: new Date().toISOString(),
+    period,
     metricValues,
     metricNotes,
     tables,
@@ -164,62 +230,67 @@ function result(
   };
 }
 
-export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiveData> {
+export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQuery = {}): Promise<TceTabLiveData> {
   const container = await getRequestContainer();
   const now = new Date();
   const today = localDateKey(now);
+  const period = resolveTcePeriod(query, now);
+  const periodStartMs = Date.parse(period.from + "T00:00:00+07:00");
+  const periodEndMs = Date.parse(period.to + "T23:59:59.999+07:00");
+  const inPeriod = (value?: string | null) => {
+    if (!value) return false;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) && timestamp >= periodStartMs && timestamp <= periodEndMs;
+  };
+  const makeResult = (
+    metricValues: Record<string, string>,
+    metricNotes: Record<string, string> = {},
+    tables: Record<string, string[][]> = {},
+    lists: Record<string, string[]> = {},
+    sourceState: TceTabLiveData["sourceState"] = "LIVE",
+  ) => result(period, metricValues, metricNotes, tables, lists, sourceState);
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const elapsedDays = Math.max(
-      1,
-      Math.round(
-        (new Date(today + "T00:00:00Z").getTime() - new Date(monthStart + "T00:00:00Z").getTime()) /
-          86_400_000,
-      ) + 1,
-    );
-    const [hotelToday, fnbToday, hotelMonth, fnbMonth, stats] = await Promise.all([
-      safeHotel(today + "T00:00:00", today + "T23:59:59"),
-      safeFnb(today + "T00:00:00", today + "T23:59:59"),
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats] = await Promise.all([
+      safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
+      safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
       safeFnb(monthStart + "T00:00:00", today + "T23:59:59"),
       container.dashboard.stats(),
     ]);
 
-    const todayHotel = hotelToday.state === "VERIFIED" ? hotelToday.revenue : 0;
-    const todayFnb = fnbToday.state === "VERIFIED" ? fnbToday.revenue : 0;
+    const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
+    const periodFnb = fnbPeriod.state === "VERIFIED" ? fnbPeriod.revenue : 0;
     const monthHotel = hotelMonth.state === "VERIFIED" ? hotelMonth.revenue : 0;
     const monthFnb = fnbMonth.state === "VERIFIED" ? fnbMonth.revenue : 0;
-    const todayRevenue = todayHotel + todayFnb;
+    const periodRevenue = periodHotel + periodFnb;
     const monthRevenue = monthHotel + monthFnb;
-    const estimateToday = revenueCostEstimate(todayHotel, todayFnb, 1);
-    const estimateMonth = revenueCostEstimate(monthHotel, monthFnb, elapsedDays);
-    const bothTodayVerified = hotelToday.state === "VERIFIED" && fnbToday.state === "VERIFIED";
+    const estimatePeriod = revenueCostEstimate(periodHotel, periodFnb, period.elapsedDays);
+    const estimateMonth = revenueCostEstimate(monthHotel, monthFnb, Math.max(1, Number(today.slice(8, 10))));
+    const bothPeriodVerified = hotelPeriod.state === "VERIFIED" && fnbPeriod.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
 
-    const hotelTodayByName = new Map(hotelToday.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
-    const hotelMonthByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
+    const hotelToday = hotelPeriod;
+    const fnbToday = fnbPeriod;
+    const todayFnb = periodFnb;
+    const todayRevenue = periodRevenue;
+    const estimateToday = estimatePeriod;
+    const bothTodayVerified = bothPeriodVerified;
+
+    const hotelTodayByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
     const canonicalHotelBranches = ["Lavender Homestay", "Ruby Homestay"];
     const hotelTodayRows = canonicalHotelBranches.map((name) => {
       const row = hotelTodayByName.get(name.toLowerCase());
       return { name: "Hotel · " + name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0, source: "KiotViet Hotel" };
     });
-    const hotelMonthRows = canonicalHotelBranches.map((name) => {
-      const row = hotelMonthByName.get(name.toLowerCase());
-      return { name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0 };
-    });
     const cozyTodayRows = fnbToday.branchBreakdown.length
       ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
       : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
     const branchRows = [...hotelTodayRows, ...cozyTodayRows];
-    const cozyMonthRevenue = monthFnb;
-    const monthFacilityRows = [
-      ...hotelMonthRows,
-      { name: "Cozy Garden", invoices: fnbMonth.invoiceCount, revenue: cozyMonthRevenue },
-    ];
 
     if (screen === "business") {
-      return result(
+      return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
@@ -229,8 +300,8 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
           "Công suất phòng": pct(stats.averageOccupancy),
         },
         {
-          "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual",
-          "Doanh thu tháng": "KiotViet Hotel + F&B Actual",
+          "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
+          "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
           "Chi phí": "Ước tính vận hành; chưa phải Actual P&L",
           "Lợi nhuận gộp": "Ước tính từ doanh thu Actual và cost model",
           "Biên lợi nhuận": "Ước tính; chờ Actual OPEX đầy đủ",
@@ -253,13 +324,22 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
             money(r.revenue),
             r.source,
           ]),
-          businessMonthBranches: monthFacilityRows.map((r, i) => [
-            String(i + 1),
-            r.name,
-            String(r.invoices),
-            money(r.revenue),
-            monthRevenue ? pct((r.revenue / monthRevenue) * 100) : "0%",
-          ]),
+          businessMonthBranches: [
+            ...hotelTodayRows.map((r, i) => [
+              String(i + 1),
+              r.name.replace("Hotel · ", ""),
+              String(r.invoices),
+              money(r.revenue),
+              periodRevenue ? pct((r.revenue / periodRevenue) * 100) : "0%",
+            ]),
+            [
+              String(hotelTodayRows.length + 1),
+              "Cozy Garden",
+              String(fnbPeriod.invoiceCount),
+              money(periodFnb),
+              periodRevenue ? pct((periodFnb / periodRevenue) * 100) : "0%",
+            ],
+          ],
         },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
@@ -269,7 +349,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const collectedToday =
       (hotelToday.state === "VERIFIED" ? hotelToday.collected : 0) +
       (fnbToday.state === "VERIFIED" ? fnbToday.collected : 0);
-    return result(
+    return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
         "Chi phí vận hành": bothTodayVerified ? "~" + money(estimateToday.cost) : "NEED VERIFY",
@@ -279,7 +359,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         "Nợ vay": "NEED VERIFY",
       },
       {
-        "Doanh thu thuần": "KiotViet Actual hôm nay",
+        "Doanh thu thuần": "KiotViet Actual · " + period.label,
         "Chi phí vận hành": "Ước tính; FIN-HOSPITALITY-001 chưa sync runtime",
         "Dòng tiền ròng": "Tiền thu KiotViet trừ cost estimate",
         "Số dư tiền mặt": "Chưa có bank feed/runtime SSOT",
@@ -300,36 +380,56 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
   }
 
   if (screen === "marketing") {
-    const [customers, channels, acquisition, upsell, receptionist] = await Promise.all([
+    const [customers, acquisition, upsell, receptionist] = await Promise.all([
       container.hospitalityCrm.customerSummaries(500),
-      container.hospitalityCrm.channelAttribution(500),
       container.hospitalityCrm.acquisitionAttribution(500),
       container.hospitalityCrm.upsellSummary(500),
       container.aiReceptionist.dashboard(),
     ]);
-    const conversations = channels.reduce((sum, row) => sum + row.conversations, 0);
-    const bookings = channels.reduce((sum, row) => sum + row.verifiedBookings, 0);
-    return result(
+    const periodCustomers = customers.filter((customer) => inPeriod(customer.lastSeenAt));
+    const periodConversations = receptionist.conversations.filter((conversation) => inPeriod(conversation.lastMessageAt));
+    const periodBookings = receptionist.bookings.filter((booking) => inPeriod(booking.createdAt));
+    const periodUpsellEvents = upsell.events.filter((event) => inPeriod(event.created_at));
+    const verifiedBookings = periodBookings.filter((booking) => booking.verificationStatus === "verified");
+    const bookedUpsells = periodUpsellEvents.filter((event) => event.event_type === "booked");
+    const periodUpsellRevenue = bookedUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0);
+    const channelNames = [...new Set(periodConversations.map((conversation) => conversation.channel))];
+    const periodChannels = channelNames.map((channel) => {
+      const rows = periodConversations.filter((conversation) => conversation.channel === channel);
+      const conversationIds = new Set(rows.map((conversation) => conversation.id));
+      const channelBookings = verifiedBookings.filter((booking) => conversationIds.has(booking.conversationId));
+      const channelUpsells = bookedUpsells.filter((event) => event.conversation_id && conversationIds.has(event.conversation_id));
+      const customerKeys = new Set(rows.map((conversation) => conversation.customerContact || conversation.customerName || conversation.id));
+      return {
+        channel,
+        customers: customerKeys.size,
+        conversations: rows.length,
+        verifiedBookings: channelBookings.length,
+        upsellRevenue: channelUpsells.reduce((sum, event) => sum + Number(event.amount ?? 0), 0),
+      };
+    }).sort((a, b) => b.verifiedBookings - a.verifiedBookings || b.conversations - a.conversations);
+
+    return makeResult(
       {
         "Tiếp cận": "NEED VERIFY",
-        "Tương tác": String(conversations),
-        "Lead / Inquiry": String(customers.length),
-        "Booking / Order": String(bookings),
-        "Doanh thu quy đổi": upsell.metrics.revenue ? money(upsell.metrics.revenue) : "0 đ",
+        "Tương tác": String(periodConversations.length),
+        "Lead / Inquiry": String(periodCustomers.length),
+        "Booking / Order": String(verifiedBookings.length),
+        "Doanh thu quy đổi": periodUpsellRevenue ? money(periodUpsellRevenue) : "0 đ",
         "Chi phí quảng cáo": "NEED VERIFY",
         "ROAS": "NEED VERIFY",
       },
       {
         "Tiếp cận": "Ads reach/impression chưa có connector Actual",
-        "Tương tác": "CRM conversations",
-        "Lead / Inquiry": "CRM customer profiles có evidence",
-        "Booking / Order": "Verified AI booking",
-        "Doanh thu quy đổi": "Upsell revenue có linkage",
+        "Tương tác": "AI/CRM conversations · " + period.label,
+        "Lead / Inquiry": "CRM profiles có hoạt động · " + period.label,
+        "Booking / Order": "Verified AI booking · " + period.label,
+        "Doanh thu quy đổi": "Upsell booked revenue · " + period.label,
         "Chi phí quảng cáo": "Google/Meta/TikTok spend chưa sync Actual",
         "ROAS": "Fail closed khi spend/attribution chưa đủ",
       },
       {
-        marketingChannels: channels.slice(0, 8).map((row, i) => [
+        marketingChannels: periodChannels.map((row, i) => [
           String(i + 1),
           row.channel,
           "NEED VERIFY",
@@ -351,10 +451,10 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
       },
       {
         marketingSignals: [
-          "AI Lễ Tân mở: " + receptionist.metrics.openConversations,
-          "Review quản lý chờ xử lý: " + receptionist.metrics.pendingManagerReviews,
-          "Upsell đã hiển thị: " + upsell.metrics.shown,
-          "Upsell đã booked: " + upsell.metrics.booked,
+          "AI Lễ Tân mở trong kỳ: " + periodConversations.filter((conversation) => conversation.status !== "closed").length,
+          "Review quản lý trong kỳ: " + receptionist.managerReviews.filter((review) => inPeriod(review.createdAt)).length,
+          "Upsell đã hiển thị trong kỳ: " + periodUpsellEvents.filter((event) => event.event_type === "shown").length,
+          "Upsell booked trong kỳ: " + bookedUpsells.length,
         ],
       },
       "PARTIAL",
@@ -385,7 +485,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         t.status,
         t.status === "blocked" ? "Cần xử lý" : "Theo dõi",
       ]);
-    return result(
+    return makeResult(
       {
         "Việc cần xử lý hôm nay": String(open.length),
         "Đã hoàn thành": String(done.length),
@@ -444,79 +544,97 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
 
   if (screen === "reception") {
     const dashboard = await container.aiReceptionist.dashboard();
-    const open = dashboard.conversations.filter((c) => c.status !== "closed");
-    const pending = dashboard.managerReviews.filter((r) => r.status === "pending");
-    const highRisk = pending.filter((r) => r.riskLevel === "high");
-    const complaints = dashboard.managerReviews.filter((r) =>
-      /complaint|phàn nàn|khiếu nại|review/i.test(r.title + " " + r.reason),
+    const periodConversations = dashboard.conversations.filter((conversation) => inPeriod(conversation.lastMessageAt));
+    const periodBookings = dashboard.bookings.filter((booking) => inPeriod(booking.createdAt));
+    const periodReviews = dashboard.managerReviews.filter((review) => inPeriod(review.createdAt));
+    const open = periodConversations.filter((conversation) => conversation.status !== "closed");
+    const pending = periodReviews.filter((review) => review.status === "pending");
+    const highRisk = pending.filter((review) => review.riskLevel === "high");
+    const complaints = periodReviews.filter((review) =>
+      /complaint|phàn nàn|khiếu nại|review/i.test(review.title + " " + review.reason),
     );
-    const draftBookings = dashboard.bookings.filter((b) => b.verificationStatus !== "verified").length;
-    return result(
+    const draftBookings = periodBookings.filter((booking) => booking.verificationStatus !== "verified").length;
+    const verifiedBookings = periodBookings.filter((booking) => booking.verificationStatus === "verified").length;
+    return makeResult(
       {
-        "Hội thoại hôm nay": String(dashboard.conversations.length),
-        "AI đang xử lý": String(dashboard.metrics.openConversations),
-        "Cần lễ tân hỗ trợ": String(dashboard.metrics.pendingManagerReviews),
+        "Hội thoại hôm nay": String(periodConversations.length),
+        "AI đang xử lý": String(open.length),
+        "Cần lễ tân hỗ trợ": String(pending.length),
         "Booking draft": String(draftBookings),
-        "Booking verified": String(dashboard.metrics.verifiedAiBookings),
+        "Booking verified": String(verifiedBookings),
         "SLA quá hạn": String(highRisk.length),
         "Complaint mở": String(complaints.length),
       },
       {
-        "Hội thoại hôm nay": "AI Receptionist runtime",
-        "AI đang xử lý": "Open conversations",
-        "Cần lễ tân hỗ trợ": "Pending manager reviews",
-        "Booking draft": "AI booking chưa verified",
-        "Booking verified": "AI booking verified",
-        "SLA quá hạn": "High-risk pending review",
-        "Complaint mở": "Review có complaint/khiếu nại",
+        "Hội thoại hôm nay": "AI Receptionist · " + period.label,
+        "AI đang xử lý": "Open conversations · " + period.label,
+        "Cần lễ tân hỗ trợ": "Pending manager reviews · " + period.label,
+        "Booking draft": "AI booking chưa verified · " + period.label,
+        "Booking verified": "AI booking verified · " + period.label,
+        "SLA quá hạn": "High-risk pending review · " + period.label,
+        "Complaint mở": "Review complaint/khiếu nại · " + period.label,
       },
       {
-        receptionConversations: open.slice(0, 10).map((c, i) => [
+        receptionConversations: open.map((conversation, i) => [
           String(i + 1),
-          c.channel,
-          c.customerName,
-          c.intent || "general",
-          c.mode,
-          c.status,
-          c.routedAgent || "AI_RECEPTIONIST",
+          conversation.channel,
+          conversation.customerName,
+          conversation.intent || "general",
+          conversation.mode,
+          conversation.status,
+          conversation.routedAgent || "AI_RECEPTIONIST",
           "Xem",
         ]),
-        receptionEscalations: pending.slice(0, 10).map((r, i) => [
+        receptionEscalations: pending.map((review, i) => [
           String(i + 1),
-          r.createdAt.slice(0, 16).replace("T", " "),
+          review.createdAt.slice(0, 16).replace("T", " "),
           "AI Lễ Tân",
-          r.title,
-          r.riskLevel,
-          r.reason,
-          r.recommendation,
-          r.status,
+          review.title,
+          review.riskLevel,
+          review.reason,
+          review.recommendation,
+          review.status,
           "Review",
         ]),
       },
       {
-        receptionTopQuestions: dashboard.conversations
-          .flatMap((c) => c.messages.filter((m) => m.direction === "inbound").map((m) => m.translatedVi || m.content))
-          .slice(0, 8),
+        receptionTopQuestions: periodConversations
+          .flatMap((conversation) => conversation.messages
+            .filter((message) => message.direction === "inbound" && inPeriod(message.createdAt))
+            .map((message) => message.translatedVi || message.content))
+          .slice(0, 12),
       },
       "LIVE",
     );
   }
 
   if (screen === "customers") {
-    const [customers, channels, receptionist] = await Promise.all([
+    const [customers, receptionist] = await Promise.all([
       container.hospitalityCrm.customerSummaries(500),
-      container.hospitalityCrm.channelAttribution(500),
       container.aiReceptionist.dashboard(),
     ]);
-    const returning = customers.filter((c) => c.verifiedBookingCount > 1 || c.journeyStage === "LOYAL").length;
-    const nurturing = customers.filter((c) =>
-      ["ENGAGED", "CONSIDERING", "BOOKING_INTENT", "NEEDS_HUMAN"].includes(c.journeyStage),
+    const periodCustomers = customers.filter((customer) => inPeriod(customer.lastSeenAt));
+    const returning = periodCustomers.filter((customer) => customer.verifiedBookingCount > 1 || customer.journeyStage === "LOYAL").length;
+    const nurturing = periodCustomers.filter((customer) =>
+      ["ENGAGED", "CONSIDERING", "BOOKING_INTENT", "NEEDS_HUMAN"].includes(customer.journeyStage),
     ).length;
-    const confirmed = customers.reduce((sum, c) => sum + c.verifiedBookingCount, 0);
-    const pendingRequests = receptionist.metrics.pendingManagerReviews;
-    return result(
+    const confirmed = periodCustomers.reduce((sum, customer) => sum + customer.verifiedBookingCount, 0);
+    const pendingRequests = receptionist.managerReviews.filter((review) => review.status === "pending" && inPeriod(review.createdAt)).length;
+    const channelNames = [...new Set(periodCustomers.flatMap((customer) => customer.channels))];
+    const customerChannels = channelNames.map((channel) => {
+      const rows = periodCustomers.filter((customer) => customer.channels.includes(channel));
+      return [
+        channel,
+        String(rows.length),
+        String(rows.reduce((sum, customer) => sum + customer.conversationCount, 0)),
+        String(rows.filter((customer) => ["CONSIDERING", "BOOKING_INTENT"].includes(customer.journeyStage)).length),
+        String(rows.reduce((sum, customer) => sum + customer.verifiedBookingCount, 0)),
+        money(rows.reduce((sum, customer) => sum + customer.upsellRevenue, 0)),
+      ];
+    });
+    return makeResult(
       {
-        "Khách mới": String(customers.length),
+        "Khách mới": String(periodCustomers.length),
         "Khách quay lại": String(returning),
         "Lead đang chăm sóc": String(nurturing),
         "Booking confirmed": String(confirmed),
@@ -524,32 +642,25 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         "Yêu cầu chờ xử lý": String(pendingRequests),
       },
       {
-        "Khách mới": "CRM profiles hiện có; chưa phân biệt created-today",
-        "Khách quay lại": "Verified booking > 1 hoặc journey LOYAL",
-        "Lead đang chăm sóc": "CRM journey active",
-        "Booking confirmed": "Verified bookings",
+        "Khách mới": "CRM profiles có hoạt động · " + period.label,
+        "Khách quay lại": "Cohort hoạt động trong kỳ; verified booking > 1 hoặc LOYAL",
+        "Lead đang chăm sóc": "CRM journey active · " + period.label,
+        "Booking confirmed": "Verified bookings của cohort hoạt động trong kỳ",
         "Mức hài lòng": "Review aggregation chưa có runtime chuẩn",
-        "Yêu cầu chờ xử lý": "AI Receptionist manager review pending",
+        "Yêu cầu chờ xử lý": "AI Receptionist manager review pending · " + period.label,
       },
       {
-        customerCare: customers.slice(0, 12).map((c, i) => [
+        customerCare: periodCustomers.map((customer, i) => [
           String(i + 1),
-          c.displayName,
-          c.channels.join(", ") || "—",
-          c.journeyStage,
-          String(c.verifiedBookingCount),
-          c.lastSeenAt ? c.lastSeenAt.slice(0, 10) : "—",
-          c.lifecycleStatus,
+          customer.displayName,
+          customer.channels.join(", ") || "—",
+          customer.journeyStage,
+          String(customer.verifiedBookingCount),
+          customer.lastSeenAt ? customer.lastSeenAt.slice(0, 10) : "—",
+          customer.lifecycleStatus,
           "Xem",
         ]),
-        customerChannels: channels.slice(0, 8).map((c) => [
-          c.channel,
-          String(c.customers),
-          String(c.conversations),
-          String(c.bookingIntents),
-          String(c.verifiedBookings),
-          money(c.upsellRevenue),
-        ]),
+        customerChannels,
       },
       {},
       "PARTIAL",
@@ -560,7 +671,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const [tasks, agents] = await Promise.all([container.tasks.list(), container.agents.list()]);
     const hrTasks = tasks.filter((t) => /nhân sự|hr|staff|ca |chấm công|lương|đào tạo/i.test(t.unit + " " + t.title));
     const openHr = hrTasks.filter((t) => t.status !== "done");
-    return result(
+    return makeResult(
       {
         "Tổng nhân sự": "NEED VERIFY",
         "Đang làm việc": "NEED VERIFY",
@@ -609,25 +720,26 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     ]);
     const scheduled = syncSources.filter((s) => Number(s.schedule_interval_minutes ?? 0) > 0).length;
     const errorSources = syncSources.filter((s) => s.status === "error").length;
-    return result(
+    const periodLogs = logs.filter((log) => inPeriod(log.timestamp));
+    return makeResult(
       {
-        "Báo cáo đã tạo": String(logs.length),
-        "Báo cáo tự động hôm nay": String(logs.filter((l) => l.timestamp.slice(0, 10) === today).length),
+        "Báo cáo đã tạo": String(periodLogs.length),
+        "Báo cáo tự động hôm nay": String(periodLogs.length),
         "Lịch gửi hoạt động": String(scheduled),
         "Lượt xem dashboard": "NEED VERIFY",
         "Export chờ xử lý": "NEED VERIFY",
         "Nguồn dữ liệu kết nối": String(syncSources.length),
       },
       {
-        "Báo cáo đã tạo": "Activity log gần nhất; report catalog riêng chưa có",
-        "Báo cáo tự động hôm nay": "Activity log hôm nay",
+        "Báo cáo đã tạo": "Activity log · " + period.label + "; report catalog riêng chưa có",
+        "Báo cáo tự động hôm nay": "Activity log · " + period.label,
         "Lịch gửi hoạt động": "Sync sources có schedule",
         "Lượt xem dashboard": "Chưa có product analytics",
         "Export chờ xử lý": "Chưa có export queue",
         "Nguồn dữ liệu kết nối": errorSources ? errorSources + " nguồn lỗi" : "Sync source registry",
       },
       {
-        reportLogs: logs.slice(0, 10).map((l, i) => [
+        reportLogs: periodLogs.map((l, i) => [
           String(i + 1),
           l.timestamp.slice(0, 16).replace("T", " "),
           l.agent,
@@ -665,12 +777,14 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const openTasks = tasks.filter((t) => t.status !== "done");
     const blocked = tasks.filter((t) => t.status === "blocked").length;
     const errorSources = syncSources.filter((s) => s.status === "error").length;
-    return result(
+    const periodLogs = logs.filter((log) => inPeriod(log.timestamp));
+    const periodHandoffs = receptionist.managerReviews.filter((review) => review.status === "pending" && inPeriod(review.createdAt)).length;
+    return makeResult(
       {
         "Agent hoạt động": String(online),
         "Task xử lý hôm nay": String(openTasks.length),
         "Tỷ lệ tự động hóa": "NEED VERIFY",
-        "Human handoff": String(receptionist.metrics.pendingManagerReviews),
+        "Human handoff": String(periodHandoffs),
         "Luồng lỗi": String(blocked + errorSources),
         "Chi phí AI hôm nay": "NEED VERIFY",
       },
@@ -678,7 +792,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
         "Agent hoạt động": online + "/" + agents.length + " online",
         "Task xử lý hôm nay": "Open tasks hiện tại",
         "Tỷ lệ tự động hóa": "Chưa có run-level denominator chuẩn",
-        "Human handoff": "Pending manager review của AI Lễ Tân",
+        "Human handoff": "Pending manager review của AI Lễ Tân · " + period.label,
         "Luồng lỗi": "Blocked tasks + sync errors",
         "Chi phí AI hôm nay": "Billing feed chưa nối",
       },
@@ -703,7 +817,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
             t.status,
             "Theo dõi",
           ]),
-        agentRuns: logs.slice(0, 10).map((l) => [
+        agentRuns: periodLogs.map((l) => [
           l.timestamp.slice(0, 16).replace("T", " "),
           l.message,
           l.agent,
@@ -727,7 +841,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     const onlineSources = syncSources.filter((s) => s.status !== "error" && Boolean(s.last_synced_at)).length;
     const errors = syncSources.filter((s) => s.status === "error").length;
     const pending = approvals.filter((a) => a.status === "pending").length;
-    return result(
+    return makeResult(
       {
         "Người dùng hoạt động": "NEED VERIFY",
         "Vai trò / quyền": "NEED VERIFY",
@@ -767,7 +881,7 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
           pct(p.occupancy),
           String(p.pendingGuestMessages),
         ]),
-        settingsChangeLog: activityLogs.slice(0, 10).map((log, i) => [
+        settingsChangeLog: activityLogs.filter((log) => inPeriod(log.timestamp)).map((log, i) => [
           String(i + 1),
           log.timestamp.slice(0, 16).replace("T", " "),
           log.agent,
@@ -781,5 +895,5 @@ export async function getTceTabLiveData(screen: TceTabScreen): Promise<TceTabLiv
     );
   }
 
-  return result({}, {}, {}, {}, "NEED_VERIFY");
+  return makeResult({}, {}, {}, {}, "NEED_VERIFY");
 }

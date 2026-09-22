@@ -153,24 +153,40 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
     <div className="min-h-screen bg-[#f4f8fd] text-[#15284a]">
       <RefreshOnView intervalMs={60000} />
 
-      <div className="border-b border-[#dce8f4] bg-white px-5 py-3">
-        <div className="mx-auto flex max-w-[1700px] flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-[23px] font-bold tracking-tight text-[#10234a]">Executive Dashboard – Tổng quan điều hành</h1>
-            <p className="mt-0.5 text-xs text-[#6d7f9e]">Lavender Homestay · Ruby Homestay · Cozy Garden · TUAN OS</p>
+      <div className="border-b border-[#dce8f4] bg-white px-4 py-3 lg:px-5">
+        <div className="mx-auto max-w-[1700px]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-[#071b55]">Executive Dashboard – Tổng quan điều hành</h1>
+              <p className="mt-1 text-xs text-[#677da7]">Dữ liệu tổng hợp từ: Lavender Homestay | Cozy Garden | Hệ thống vận hành</p>
+            </div>
+            <div className="flex items-center gap-4 text-[#122b61]">
+              <span className="hidden text-[11px] font-semibold lg:inline">{timeLabel(props.generatedAt)}</span>
+              <span className="relative grid h-8 w-8 place-items-center text-[#274a7d]" title="Thông báo">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                  <path d="M10 21h4" />
+                </svg>
+              </span>
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e8f0fb] text-[11px] font-bold">T</span>
+              <span className="hidden leading-4 lg:block">
+                <span className="block text-[12px] font-bold">Tuấn</span>
+                <span className="block text-[9px] text-[#7689a8]">Owner</span>
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-2 text-[11px] font-semibold text-[#50627f]">{timeLabel(props.generatedAt)}</span>
+          <div className="mt-2 flex flex-wrap justify-end gap-1.5">
             {PERIODS.map(([key, label]) => (
               <Link
                 key={key}
                 href={key === "today" ? "/" : "/?period=" + key}
-                className={"rounded-lg border px-4 py-2 text-xs font-semibold " + (props.period === key ? "border-[#1668e3] bg-[#1668e3] text-white" : "border-[#d7e3f0] bg-white text-[#425471] hover:bg-[#f6f9fd]")}
+                className={"rounded-md border px-4 py-1.5 text-[11px] font-semibold " + (props.period === key ? "border-[#1668e3] bg-[#1668e3] text-white" : "border-[#d7e3f0] bg-white text-[#425471] hover:bg-[#f6f9fd]")}
               >
                 {label}
               </Link>
             ))}
-            <span className="ml-1 rounded-lg border border-[#d7e3f0] bg-white px-4 py-2 text-xs font-semibold text-[#425471]">Tất cả cơ sở</span>
+            <span className="rounded-md border border-[#d7e3f0] bg-white px-4 py-1.5 text-[11px] font-semibold text-[#425471]">Tùy chọn</span>
+            <span className="ml-2 min-w-[180px] rounded-md border border-[#d7e3f0] bg-white px-4 py-1.5 text-[11px] font-semibold text-[#425471]">Tất cả cơ sở</span>
           </div>
         </div>
       </div>

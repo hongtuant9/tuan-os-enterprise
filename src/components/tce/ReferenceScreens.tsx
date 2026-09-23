@@ -481,8 +481,45 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
       return (
         <div className="grid grid-cols-12 gap-2">
           <Section
-            title="Phân tích nhóm chi phí & mức kiểm soát"
-            subtitle="MTD tháng hiện tại · xếp từ chi phí lớn xuống nhỏ · giữ nguyên chất lượng evidence từ FIN-HOSPITALITY-001"
+            id="cost-analysis"
+            title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")}
+            subtitle="Chỉ tính khoản chi đã ghi nhận cho đúng kỳ; không chia chi phí tháng xuống ngày/tuần"
+            className="col-span-12 lg:col-span-8 h-[300px]"
+            icon="◫"
+          >
+            <DataTable
+              columns={["#","Đơn vị","Nhóm chi phí","Chi phí đã ghi nhận","Số khoản","Evidence state","Coverage"]}
+              rows={7}
+              data={data?.tables.financePeriodCostGroups}
+            />
+          </Section>
+          <Section
+            title="Phạm vi dữ liệu chi phí"
+            subtitle="Để tránh hiểu nhầm 0 đ = không có chi phí thực tế"
+            className="col-span-12 lg:col-span-4 h-[300px]"
+            icon="!"
+          >
+            <DataTable
+              columns={["Chỉ tiêu","Giá trị"]}
+              rows={4}
+              data={data?.tables.financeCostCoverage}
+            />
+          </Section>
+          <Section
+            title="Chi tiết khoản chi có ngày chứng từ"
+            subtitle="Dùng để kiểm tra ngày/tuần; các khoản dồn tích không có ngày không bị phân bổ giả"
+            className="col-span-12 h-[250px]"
+            icon="▤"
+          >
+            <DataTable
+              columns={["#","Ngày","Đơn vị","Nhóm","Hạng mục","Số tiền","Trạng thái","Nguồn"]}
+              rows={8}
+              data={data?.tables.financePeriodCostEvents}
+            />
+          </Section>
+          <Section
+            title="Phân tích MTD & mức kiểm soát"
+            subtitle="Chi phí MTD gồm Actual/Temp Actual/Accrual/Forecast; dùng để theo dõi, không thay thế báo cáo Actual theo kỳ"
             className="col-span-12 h-[340px]"
             icon="◫"
           >

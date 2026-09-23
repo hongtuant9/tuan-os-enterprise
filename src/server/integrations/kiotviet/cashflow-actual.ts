@@ -2,6 +2,7 @@ import "server-only";
 
 import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
+import { KiotVietRetailFinanceClient } from "./retail-finance-client";
 
 export type KiotVietCashflowSnapshot = {
   source: "KIOTVIET_FNB" | "KIOTVIET_HOTEL";
@@ -113,8 +114,7 @@ function hold(
 }
 
 export async function fetchFnbCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
-  const client = new KiotVietFnbClient();
-  if (!client.isConfigured()) return hold("KIOTVIET_FNB", from, to, 0, "KiotViet F&B chưa cấu hình API.");
+  const retail = new KiotVietRetailFinanceClient("fnb");
   const query = new URLSearchParams({
     startDate: from,
     endDate: to,
@@ -124,23 +124,69 @@ export async function fetchFnbCashflowActual(from: string, to: string): Promise<
     includeUser: "true",
     includeAccount: "true",
   });
-  const result = await client.probeCashflow(query.toString());
+
+  if (retail.isConfigured()) {
+    try {
+      const result = await retail.listCashflow(query.toString());
+      if (result.ok) {
+        const out = normalize("KIOTVIET_FNB", from, to, rows(result.data), result.status);
+        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng.");
+        return out;
+      }
+      if (![401, 403, 404].includes(result.status)) {
+        return hold("KIOTVIET_FNB", from, to, result.status, "KiotViet F&B finance cashflow lỗi HTTP " + result.status + ".");
+      }
+    } catch {
+      // Fall through to native F&B capability probe. Never use external data.
+    }
+  }
+
+  const native = new KiotVietFnbClient();
+  if (!native.isConfigured()) return hold("KIOTVIET_FNB", from, to, 0, "KiotViet F&B chưa cấu hình API.");
+  const result = await native.probeCashflow(query.toString());
   if (!result.ok) {
     return hold(
       "KIOTVIET_FNB",
       from,
       to,
       result.status,
-      "F&B cashflow GET chưa được Public API F&B hỗ trợ/xác minh; không dùng nguồn ngoài KiotViet làm fallback.",
+      "F&B cashflow chưa có finance Retail credential tương thích; native F&B Public API cũng chưa hỗ trợ /cashflow.",
     );
   }
   return normalize("KIOTVIET_FNB", from, to, rows(result.data), result.status);
 }
 
 export async function fetchHotelCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
-  const client = new KiotVietHotelClient();
-  if (!client.isConfigured()) return hold("KIOTVIET_HOTEL", from, to, 0, "KiotViet Hotel chưa cấu hình API.");
-  const query = new URLSearchParams({
+  const retail = new KiotVietRetailFinanceClient("hotel");
+  const retailQuery = new URLSearchParams({
+    startDate: from,
+    endDate: to,
+    pageSize: "100",
+    currentItem: "0",
+    includeBranch: "true",
+    includeUser: "true",
+    includeAccount: "true",
+  });
+
+  if (retail.isConfigured()) {
+    try {
+      const result = await retail.listCashflow(retailQuery.toString());
+      if (result.ok) {
+        const out = normalize("KIOTVIET_HOTEL", from, to, rows(result.data), result.status);
+        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng.");
+        return out;
+      }
+      if (![401, 403, 404].includes(result.status)) {
+        return hold("KIOTVIET_HOTEL", from, to, result.status, "KiotViet Hotel finance cashflow lỗi HTTP " + result.status + ".");
+      }
+    } catch {
+      // Fall through to native Hotel capability probe. Never use external data.
+    }
+  }
+
+  const native = new KiotVietHotelClient();
+  if (!native.isConfigured()) return hold("KIOTVIET_HOTEL", from, to, 0, "KiotViet Hotel chưa cấu hình API.");
+  const nativeQuery = new URLSearchParams({
     startDate: from,
     endDate: to,
     pageSize: "100",
@@ -149,14 +195,14 @@ export async function fetchHotelCashflowActual(from: string, to: string): Promis
     includeUser: "true",
     includeAccount: "true",
   });
-  const result = await client.probeCashflow(query.toString());
+  const result = await native.probeCashflow(nativeQuery.toString());
   if (!result.ok) {
     return hold(
       "KIOTVIET_HOTEL",
       from,
       to,
       result.status,
-      "Hotel cashflow GET chưa được Public API Hotel hỗ trợ/xác minh; không dùng nguồn ngoài KiotViet làm fallback.",
+      "Hotel cashflow chưa có finance Retail credential tương thích; native Hotel Public API cũng chưa hỗ trợ /cashflow.",
     );
   }
   return normalize("KIOTVIET_HOTEL", from, to, rows(result.data), result.status);

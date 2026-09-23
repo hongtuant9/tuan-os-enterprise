@@ -91,6 +91,15 @@ export class KiotVietFnbClient {
   }
 
   /**
+   * Read-only capability probe for F&B cashflow.
+   * Official F&B Public API does not currently document cashflow; production currently returns 404.
+   * Keep this GET-only and fail closed. Never use it as evidence of write support.
+   */
+  probeCashflow(query = "pageSize=1&currentItem=0") {
+    return this.request("/cashflow" + (query ? "?" + query : ""));
+  }
+
+  /**
    * Read-only compatibility probe only.
    * KiotViet documents purchaseorders for Retail Public API, not F&B Public API.
    * Never infer write compatibility from docs alone; worker must see HTTP 200 first.

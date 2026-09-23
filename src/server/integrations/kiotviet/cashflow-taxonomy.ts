@@ -110,3 +110,29 @@ export function appliesToSystem(group: KiotVietCashflowGroupBlueprint, system: K
 export function cashflowGroupsFor(system: KiotVietCashflowSystem) {
   return TCE_KIOTVIET_CASHFLOW_GROUPS.filter((group) => appliesToSystem(group, system));
 }
+
+export type KiotVietLegacyNameMigration =
+  | { legacyName: string; action: "MAP"; targetCode: string; note: string }
+  | { legacyName: string; action: "REVIEW"; targetCode: string; note: string }
+  | { legacyName: string; action: "NO_CASHBOOK"; note: string };
+
+/**
+ * Tên legacy quan sát trong KiotViet F&B/Hotel.
+ * Không xóa dữ liệu lịch sử. Giao dịch mới dùng taxonomy v2; báo cáo lịch sử map qua bảng này.
+ */
+export const TCE_KIOTVIET_LEGACY_NAME_MIGRATION: readonly KiotVietLegacyNameMigration[] = [
+  { legacyName: "Chi phí điện", action: "MAP", targetCode: "C02", note: "Giữ riêng Điện để đúng phân loại kế toán KiotViet." },
+  { legacyName: "Chi phí nước", action: "MAP", targetCode: "C03", note: "Giữ riêng Nước để đúng phân loại kế toán KiotViet." },
+  { legacyName: "Chi phí viễn thông", action: "MAP", targetCode: "C04", note: "Đổi về Internet & viễn thông." },
+  { legacyName: "Chi phí thuê kho bãi, mặt bằng kinh doanh", action: "MAP", targetCode: "C05", note: "Gom về Thuê mặt bằng / thuê tài sản." },
+  { legacyName: "Chi phí nhân công", action: "MAP", targetCode: "C01", note: "Gom về Nhân sự / Lương & phụ cấp." },
+  { legacyName: "Chi phí hội nghị, sự kiện, công tác phí", action: "MAP", targetCode: "C08", note: "Gom về Quản lý & vận hành; ghi nội dung cụ thể trong ghi chú." },
+  { legacyName: "Nộp thuế", action: "REVIEW", targetCode: "C09", note: "Chỉ khoản là chi phí mới hạch toán KQKD; khoản nộp hộ/không phải chi phí bỏ chọn KQKD." },
+  { legacyName: "Chi phí khác", action: "MAP", targetCode: "C11", note: "Không duy trì nhiều nhóm 'khác' song song." },
+  { legacyName: "Chi phí khác có giải trình", action: "MAP", targetCode: "C11", note: "Gom về một nhóm khác duy nhất; bắt buộc chứng từ + giải trình." },
+  { legacyName: "Chi phí lễ/Tết/trang trí lớn", action: "REVIEW", targetCode: "C06", note: "Ngắn hạn phục vụ bán hàng → Marketing; tài sản/trang trí dùng dài hạn → N02 CAPEX." },
+  { legacyName: "Khấu hao tài sản quản trị", action: "NO_CASHBOOK", note: "Khấu hao là bút toán kế toán không tiền; không tạo Phiếu chi Sổ quỹ." },
+  { legacyName: "Bảo hiểm / chi phí nhân sự bắt buộc nếu phát sinh", action: "MAP", targetCode: "C01", note: "Gom về Nhân sự / Lương & phụ cấp." },
+  { legacyName: "Đồng phục", action: "MAP", targetCode: "C01", note: "Gom về Nhân sự / Lương & phụ cấp." },
+  { legacyName: "Gửi tiền vào ngân hàng", action: "MAP", targetCode: "N04", note: "Là dòng tiền nội bộ, không phải chi phí KQKD." },
+] as const;

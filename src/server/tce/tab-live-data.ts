@@ -468,15 +468,73 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           unknownDirectionCount + " phiếu chưa xác định Thu/Chi và " +
           unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD; lợi nhuận giữ NEED VERIFY."
         : "Nguồn tài chính runtime chỉ KiotViet Hotel/F&B. Doanh thu Public API đang LIVE; cashflow F&B/Hotel hiện HOLD nên chi phí giữ NEED VERIFY.";
-    const costCategoryRows = KIOTVIET_EXPENSE_TAXONOMY.map((row, i) => [
-      String(i + 1),
-      row[2],
-      row[0] + " · " + row[1],
-      "NEED VERIFY",
-      "—",
-      "KIOTVIET ONLY",
-      row[3],
-    ]);
+    const cashflowBranchNames = new Map<string, string>();
+    for (const branch of hotelPeriod.branchBreakdown) {
+      if (branch.branchId) cashflowBranchNames.set("Hotel|" + branch.branchId, branch.branchName || "Hotel");
+    }
+    for (const branch of fnbPeriod.branchBreakdown) {
+      if (branch.branchId) cashflowBranchNames.set("F&B|" + branch.branchId, branch.branchName || "Cozy Garden");
+    }
+
+    const actualCostGroups = new Map<string, {
+      unit: string;
+      group: string;
+      amount: number;
+      count: number;
+      evidence: string;
+    }>();
+    const collectCostGroups = (
+      system: "Hotel" | "F&B",
+      snapshot: typeof hotelCashflow,
+    ) => {
+      for (const row of snapshot.rows) {
+        if (row.isReceipt !== false || /hủy|huỷ|cancel|void/i.test(row.status)) continue;
+        const unit =
+          cashflowBranchNames.get(system + "|" + row.branchId) ||
+          (system === "Hotel" ? "KiotViet Hotel" : "Cozy Garden");
+        const group = row.cashFlowGroupName || row.cashFlowGroupId || "Chưa gán Loại chi";
+        const key = unit + "|" + group + "|" + String(row.usedForFinancialReporting);
+        const current = actualCostGroups.get(key) ?? {
+          unit,
+          group,
+          amount: 0,
+          count: 0,
+          evidence:
+            row.usedForFinancialReporting === true
+              ? "ACTUAL · KQKD"
+              : row.usedForFinancialReporting === false
+                ? "ACTUAL · KHÔNG KQKD"
+                : "NEED VERIFY · KQKD",
+        };
+        current.amount += row.amount;
+        current.count += 1;
+        actualCostGroups.set(key, current);
+      }
+    };
+    if (hotelCashflow.state === "VERIFIED") collectCostGroups("Hotel", hotelCashflow);
+    if (fnbCashflow.state === "VERIFIED") collectCostGroups("F&B", fnbCashflow);
+
+    const costCategoryRows = actualCostGroups.size > 0
+      ? [...actualCostGroups.values()]
+          .sort((a, b) => b.amount - a.amount)
+          .map((row, i) => [
+            String(i + 1),
+            row.unit,
+            row.group,
+            money(row.amount),
+            String(row.count),
+            row.evidence,
+            costClassificationReady ? "FULL" : "PARTIAL",
+          ])
+      : KIOTVIET_EXPENSE_TAXONOMY.map((row, i) => [
+          String(i + 1),
+          row[2],
+          row[0] + " · " + row[1],
+          "NEED VERIFY",
+          "—",
+          "KIOTVIET ONLY",
+          row[3],
+        ]);
 
     const costStandardRows = KIOTVIET_EXPENSE_TAXONOMY.map((row) => [
       row[0],

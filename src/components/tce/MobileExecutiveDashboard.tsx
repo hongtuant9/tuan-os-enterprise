@@ -55,16 +55,17 @@ function Card({ children, className="" }: { children: React.ReactNode; className
   return <section className={"rounded-[9px] border border-[#d5e3f2] bg-white p-[9px] " + className}>{children}</section>;
 }
 
-function Kpi({ label, value, icon, tone, note }: { label: string; value: string; icon: string; tone: "blue"|"green"|"red"|"amber"; note: string }) {
+function Kpi({ label, value, icon, tone, note, href }: { label: string; value: string; icon: string; tone: "blue"|"green"|"red"|"amber"; note: string; href?: string }) {
   const bg = tone==="blue"?"bg-[#2f7cf4]":tone==="green"?"bg-[#17b96c]":tone==="red"?"bg-[#ff4d5d]":"bg-[#ffa20e]";
-  return (
+  const content = (
     <div className="h-[67px] rounded-[8px] border border-[#d7e4f2] bg-white px-[6px] py-[7px]">
       <div className="flex items-start gap-[7px]">
         <span className={"grid h-[27px] w-[27px] shrink-0 place-items-center rounded-[7px] text-[13px] font-extrabold text-white " + bg}>{icon}</span>
-        <div className="min-w-0 pt-[1px]"><p className="truncate text-[7px] text-[#6a80a6]">{label}</p><p className="mt-[3px] truncate text-[12px] font-extrabold leading-none text-[#071b45]">{value}</p><p className="mt-[5px] text-[8px] font-bold text-[#08b65a]">{note}</p></div>
+        <div className="min-w-0 pt-[1px]"><p className="truncate text-[7px] text-[#6a80a6]">{label}</p><p className="mt-[3px] truncate text-[12px] font-extrabold leading-none text-[#071b45]">{value}</p><p className="mt-[5px] truncate text-[7px] font-bold text-[#6b83a6]">{note}</p></div>
       </div>
     </div>
   );
+  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 function TinyChart() {
@@ -97,9 +98,9 @@ export default function MobileExecutiveDashboard(props: ExecutiveDashboardProps)
 
       <div className="grid grid-cols-2 gap-[6px] px-[10px] pt-[7px]">
         <Kpi label="Doanh thu" value={money(props.revenue.total)} icon="D" tone="green" note="↑ Actual"/>
-        <Kpi label="Chi phí" value={money(props.finance.costEstimate)} icon="C" tone="red" note="↓"/>
-        <Kpi label="Lợi nhuận" value={money(props.finance.profitEstimate)} icon="L" tone="blue" note="↑"/>
-        <Kpi label="Biên lợi nhuận" value={props.finance.marginEstimate.toFixed(1).replace(".",",")+"%"} icon="%" tone="amber" note="↑"/>
+        <Kpi label="Chi phí đã ghi nhận" value={money(props.finance.costEstimate)} icon="C" tone="red" note="Bấm xem chi tiết" href={"/finance?period="+props.period+"#cost-analysis"}/>
+        <Kpi label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "NEED VERIFY"} icon="L" tone="blue" note="Chờ Actual cost"/>
+        <Kpi label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "NEED VERIFY"} icon="%" tone="amber" note="Fail closed"/>
       </div>
 
       <div className="space-y-[7px] px-[10px] pt-[7px]">
@@ -118,7 +119,12 @@ export default function MobileExecutiveDashboard(props: ExecutiveDashboardProps)
 
         <Card>
           <h2 className="text-[11px] font-extrabold">2. Hoạt động kinh doanh</h2><p className="mt-[2px] text-[6.5px] text-[#7185a7]">KiotViet Actual · Verified</p>
-          <div className="mt-[7px] grid grid-cols-2 gap-[5px]">{[["Doanh thu",money(props.revenue.total)],["Chi phí",money(props.finance.costEstimate)],["Lợi nhuận",money(props.finance.profitEstimate)],["Biên LN",props.finance.marginEstimate.toFixed(1).replace(".",",")+"%"]].map(([l,v])=><div key={l} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><small className="text-[6px] text-[#7084a7]">{l}</small><b className="mt-[2px] block text-[9px]">{v}</b></div>)}</div>
+          <div className="mt-[7px] grid grid-cols-2 gap-[5px]">
+            <div className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><small className="text-[6px] text-[#7084a7]">Doanh thu</small><b className="mt-[2px] block text-[9px]">{money(props.revenue.total)}</b></div>
+            <Link href={"/finance?period="+props.period+"#cost-analysis"} className="rounded-[7px] border border-[#f4cbd2] bg-[#fff7f8] p-[6px]"><small className="text-[6px] text-[#a85d67]">Chi phí đã ghi nhận</small><b className="mt-[2px] block text-[9px]">{money(props.finance.costEstimate)}</b></Link>
+            <div className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><small className="text-[6px] text-[#7084a7]">Lợi nhuận</small><b className="mt-[2px] block text-[9px]">{props.finance.profitVerified ? money(props.finance.profitEstimate) : "NEED VERIFY"}</b></div>
+            <div className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><small className="text-[6px] text-[#7084a7]">Biên LN</small><b className="mt-[2px] block text-[9px]">{props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "NEED VERIFY"}</b></div>
+          </div>
           <div className="mt-[6px] grid grid-cols-3 gap-[4px]">{[["Lavender",props.revenue.lavender],["Ruby",props.revenue.ruby],["Cozy",props.revenue.cozy]].map(([name,value])=><div key={String(name)} className="rounded-[6px] bg-[#f6f9fd] p-[5px] text-center"><small className="block text-[5.5px] text-[#6f83a5]">{name}</small><b className="mt-[2px] block text-[7px]">{money(Number(value))}</b></div>)}</div>
           <div className="mt-[7px]"><TinyChart/></div>
         </Card>

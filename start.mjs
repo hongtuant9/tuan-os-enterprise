@@ -17,6 +17,8 @@ const syncWorkerEnabled = companyAutopilotEnabled && process.env.TCE_SYNC_WORKER
 const syncWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_SYNC_WORKER_INTERVAL_MS || 300_000));
 const cozyPurchaseWorkerEnabled = companyAutopilotEnabled && process.env.TCE_COZY_PURCHASE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const cozyPurchaseWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_COZY_PURCHASE_WORKER_INTERVAL_MS || 900_000));
+const kiotVietFinanceBotWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true" && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+const kiotVietFinanceBotWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_INTERVAL_MS || 900_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -38,6 +40,7 @@ const staffOpsToken = deriveToken("tce-staff-ops-worker-v1");
 const executiveToken = deriveToken("tce-executive-worker-v1");
 const syncWorkerToken = deriveToken("tce-sync-worker-v1");
 const cozyPurchaseWorkerToken = deriveToken("tce-cozy-purchase-worker-v1");
+const kiotVietFinanceBotWorkerToken = deriveToken("kiotviet-finance-bot-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -139,6 +142,48 @@ async function syncWorkerTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`[TCE Sync] ${message}`);
+  }
+}
+
+async function kiotVietFinanceBotWorkerTick() {
+  if (!kiotVietFinanceBotWorkerEnabled || !kiotVietFinanceBotWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/finance/kiotviet-finance-bot/worker",
+      "x-tce-kiotviet-finance-bot-worker-token",
+      kiotVietFinanceBotWorkerToken,
+      240000,
+    );
+    if (!response.ok) {
+      console.error(`[KiotViet Finance Bot] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped) {
+      const states = Array.isArray(payload?.results)
+        ? payload.results.map((item) => `${item.system}:${item.state}`).join(",")
+        : "n/a";
+      console.log(`[KiotViet Finance Bot] states=${states}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[KiotViet Finance Bot] ${message}`);
+  }
+}
+
+async function kiotVietFinanceBotWorkerLoop() {
+  if (!kiotVietFinanceBotWorkerEnabled) {
+    console.log("[KiotViet Finance Bot] disabled");
+    return;
+  }
+  if (!kiotVietFinanceBotWorkerToken) {
+    console.error("[KiotViet Finance Bot] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[KiotViet Finance Bot] enabled interval_ms=${kiotVietFinanceBotWorkerIntervalMs}`);
+  await sleep(45000);
+  while (!stopping) {
+    await kiotVietFinanceBotWorkerTick();
+    await sleep(kiotVietFinanceBotWorkerIntervalMs);
   }
 }
 
@@ -276,3 +321,4 @@ void staffOpsWorkerLoop();
 void executiveWorkerLoop();
 void syncWorkerLoop();
 void cozyPurchaseWorkerLoop();
+void kiotVietFinanceBotWorkerLoop();

@@ -550,6 +550,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",
     );
+  }
 
   if (screen === "marketing") {
     const workbookFreshness = await ensureMarketingWorkbookFresh();

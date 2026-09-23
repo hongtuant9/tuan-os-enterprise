@@ -10,7 +10,6 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
-import { getFinanceControlSnapshot, summarizeFinanceCostPeriod } from "@/server/tce/finance-control-data";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -156,7 +155,6 @@ export default async function Home({
     syncQuery,
     taskQuery,
     syncRecordsQuery,
-    financeControl,
   ] = await Promise.all([
     safeHotel(bounds.from, bounds.to),
     safeFnb(bounds.from, bounds.to),
@@ -171,7 +169,6 @@ export default async function Home({
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
-    getFinanceControlSnapshot(now),
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
@@ -205,18 +202,15 @@ export default async function Home({
     (hotel.state === "VERIFIED" ? hotel.collected : 0) +
     (fnb.state === "VERIFIED" ? fnb.collected : 0);
 
-  // Executive cost KPI must show costs actually recorded for the selected period.
-  // Forecast/accrual allocations are kept in the detailed Finance report and are never pushed
-  // into a day/week KPI as if they were real transactions.
-  const costPeriod = summarizeFinanceCostPeriod(
-    financeControl,
-    bounds.from.slice(0, 10),
-    bounds.to.slice(0, 10),
-  );
-  const costRecorded = costPeriod.totalVnd;
-  const profitEstimate = totalRevenue - costRecorded;
-  const marginEstimate = totalRevenue ? (profitEstimate / totalRevenue) * 100 : 0;
+  // Financial runtime authority: KiotViet Hotel + KiotViet F&B only.
+  // Public APIs currently expose revenue invoices but not Sổ quỹ / expense transactions.
+  // Therefore expense/profit stay fail-closed instead of importing figures from Drive/Sheets.
+  const costRecorded = 0;
+  const profitEstimate = 0;
+  const marginEstimate = 0;
   const profitVerified = false;
+  const costState: "NEED_VERIFY" = "NEED_VERIFY";
+  const costLabel = "KIOTVIET ONLY · Sổ quỹ/chi phí chưa có Public API đọc";
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;
@@ -288,8 +282,8 @@ export default async function Home({
             profitEstimate,
             marginEstimate,
             actualCostKnown: costRecorded,
-            costLabel: costPeriod.coverage,
-            costState: costPeriod.state,
+            costLabel,
+            costState,
             profitVerified,
           }}
           actionCenter={{

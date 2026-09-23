@@ -9,7 +9,6 @@ import {
 } from "@/server/integrations/kiotviet/revenue-actual";
 import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
-import { getFinanceControlSnapshot, summarizeFinanceCostPeriod, type FinanceControlLine, type FinanceGuardrail } from "@/server/tce/finance-control-data";
 
 export type TceTabScreen =
   | "business"
@@ -48,6 +47,59 @@ export type TceTabLiveData = {
   lists: Record<string, string[]>;
   sourceState: "LIVE" | "PARTIAL" | "NEED_VERIFY";
 };
+
+const KIOTVIET_EXPENSE_TAXONOMY = [
+  ["C01","Giá vốn / Nguyên vật liệu","Hotel + F&B","Nhập hàng","CÓ","Hàng tồn kho phải vào phiếu nhập; không tạo phiếu chi trùng chi phí."],
+  ["C02","Bao bì / Vật tư tiêu hao","Hotel + F&B","Nhập hàng hoặc Sổ quỹ","CÓ","Nếu quản lý tồn kho thì dùng Nhập hàng; nếu chi phí trực tiếp không tồn kho thì dùng Phiếu chi."],
+  ["C03","Nhân công / Lương","Hotel + F&B","Bảng lương","CÓ","Chi phí lấy từ bảng lương đã chốt; thanh toán lương không được hạch toán chi phí lần hai."],
+  ["C04","Điện","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Một phiếu theo hóa đơn/kỳ; ghi đúng cơ sở."],
+  ["C05","Nước","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Một phiếu theo hóa đơn/kỳ; ghi đúng cơ sở."],
+  ["C06","Internet / Viễn thông","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Tách khỏi điện nước để theo dõi định kỳ."],
+  ["C07","Hoa hồng OTA / Kênh bán","Hotel","Sổ quỹ > Phiếu chi","CÓ","Ghi theo settlement thực tế của Booking/Agoda/OTA; không lấy % dự toán."],
+  ["C08","Phí ngân hàng / Thẻ / QR","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Ghi phí thực thu bởi ngân hàng/cổng thanh toán."],
+  ["C09","Marketing / Quảng cáo","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Chỉ ghi khoản đã thanh toán/phải trả có chứng từ."],
+  ["C10","Bảo trì / Sửa chữa / Hao hụt","Hotel + F&B","Sổ quỹ + Kiểm kho/Xuất hủy","CÓ","Tiền sửa chữa vào Sổ quỹ; hao hụt hàng hóa xử lý bằng tồn kho để không double count."],
+  ["C11","Phần mềm / SaaS","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","KiotViet, channel manager và phần mềm vận hành khác."],
+  ["C12","Dịch vụ thuê ngoài","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Tour đối tác, vận chuyển thuê ngoài, vệ sinh, hành chính..."],
+  ["C13","Giặt là / Buồng phòng","Hotel","Sổ quỹ hoặc Nhập hàng","CÓ","Dịch vụ thuê ngoài vào Sổ quỹ; vật tư buồng phòng vào Nhập hàng."],
+  ["C14","Thuế / Phí hoạt động","Hotel + F&B","Sổ quỹ > Phiếu chi","THEO LOẠI","Phân biệt thuế/phí được tính chi phí và khoản nộp thay/không thuộc P&L."],
+  ["C15","Chi phí khác có chứng từ","Hotel + F&B","Sổ quỹ > Phiếu chi","CÓ","Chỉ dùng khi không thuộc C01–C14; bắt buộc ghi chú rõ."],
+  ["N01","CAPEX / Mua tài sản","Hotel + F&B","Sổ quỹ > Phiếu chi","KHÔNG","Theo dõi dòng tiền riêng; không đưa vào chi phí vận hành trong kỳ."],
+  ["N02","Trả gốc vay","Hotel + F&B","Sổ quỹ > Phiếu chi","KHÔNG","Dòng tiền tài chính, không phải OPEX."],
+  ["N03","Vốn chủ / Owner draw","Hotel + F&B","Sổ quỹ","KHÔNG","Không đưa vào kết quả kinh doanh."],
+  ["N04","Chuyển quỹ nội bộ","Hotel + F&B","Sổ quỹ","KHÔNG","Không tạo doanh thu hoặc chi phí."],
+] as const;
+
+const KIOTVIET_REVENUE_TAXONOMY = [
+  ["H-R01","KiotViet Hotel","Lưu trú","Hóa đơn / Đặt phòng","Tách Lavender/Ruby bằng branch; không lập Phiếu thu thủ công trùng doanh thu."],
+  ["H-R02","KiotViet Hotel","Phụ thu / Nâng hạng / Extra guest","Hàng dịch vụ trên hóa đơn","Phân tích doanh thu bổ sung ngoài tiền phòng."],
+  ["H-R03","KiotViet Hotel","Vận chuyển","Hàng dịch vụ trên hóa đơn","Taxi/Bus/Transfer phải xuất hiện trên hóa đơn Hotel."],
+  ["H-R04","KiotViet Hotel","Thuê xe","Hàng dịch vụ trên hóa đơn","Xe máy/xe đạp và dịch vụ thuê khác."],
+  ["H-R05","KiotViet Hotel","Tour / Trải nghiệm","Hàng dịch vụ trên hóa đơn","Ghi doanh thu khách trả; chi đối tác ghi riêng C12."],
+  ["H-R06","KiotViet Hotel","Giặt là","Hàng dịch vụ trên hóa đơn","Tách doanh thu và chi phí giặt thuê ngoài."],
+  ["H-R07","KiotViet Hotel","Minibar / Hàng bán","Hàng hóa trên hóa đơn","Quản lý tồn kho và giá vốn bằng Nhập hàng."],
+  ["H-R08","KiotViet Hotel","Ăn sáng / F&B bán thêm","Hàng hóa/dịch vụ trên hóa đơn","Chỉ phần bán thêm; ăn sáng đã bao gồm giá phòng không ghi doanh thu lần hai."],
+  ["H-R09","KiotViet Hotel","Dịch vụ khác","Hàng dịch vụ trên hóa đơn","Không dùng nếu có thể phân loại vào H-R02–H-R08."],
+  ["F-R01","KiotViet F&B","Món ăn","Hóa đơn F&B","Map các nhóm Bread/Fried/Rice/Breakfast/Snacks/Vegetarian/Salad hiện có."],
+  ["F-R02","KiotViet F&B","Cà phê & Trà","Hóa đơn F&B","Map Italian Cafe/Vietnam Cafe/Viet Nam Tea/Fruit Tea."],
+  ["F-R03","KiotViet F&B","Nước ép / Smoothie / Yogurt","Hóa đơn F&B","Map Fresh Juices/Smoothies/Yogurt."],
+  ["F-R04","KiotViet F&B","Bia / Soft Drink / Cocktail","Hóa đơn F&B","Map Beer & Soft Drink/COCKTAIL."],
+  ["F-R05","KiotViet F&B","Combo","Hóa đơn F&B","Map COMBO Menu và các nhóm con."],
+  ["F-R06","KiotViet F&B","Cooking Class","Hàng dịch vụ trên hóa đơn","Tạo nhóm riêng khi bắt đầu bán để đo doanh thu/lợi nhuận độc lập."],
+  ["F-R07","KiotViet F&B","Khác","Hóa đơn F&B","Không tính các nhóm nguyên vật liệu/bán thành phẩm vào doanh thu."],
+] as const;
+
+const KIOTVIET_API_CAPABILITIES = [
+  ["F&B","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
+  ["F&B","Categories","GET","LIVE","HTTP 200 · dùng mapping nhóm sản phẩm"],
+  ["F&B","Products + Inventory Cost","GET","LIVE","HTTP 200 · có invoice detail + product cost hiện tại"],
+  ["F&B","Sổ quỹ / Cashflow","GET","HOLD","Public F&B API trả 404"],
+  ["F&B","Purchase Orders","GET","HOLD","Public F&B API trả 404; Retail endpoint trả 401 với F&B token"],
+  ["Hotel","Branches / Categories / Products","GET","LIVE","HTTP 200"],
+  ["Hotel","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
+  ["Hotel","Sổ quỹ / Cashflow","GET","HOLD","Public Hotel API trả 404"],
+  ["Hotel","Purchase Orders / Suppliers","GET","HOLD","Public Hotel API trả 404"],
+] as const;
 
 function localDateKey(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {

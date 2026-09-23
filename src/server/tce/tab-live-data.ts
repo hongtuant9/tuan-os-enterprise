@@ -555,6 +555,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       group.appliesTo === "BOTH" ? "Hotel + F&B" : group.appliesTo === "HOTEL" ? "Hotel" : "F&B",
       group.direction,
       group.financialReporting === "CO" ? "CÓ" : group.financialReporting === "KHONG" ? "KHÔNG" : "THEO LOẠI",
+      group.accountingClass ?? "—",
       group.staffUse,
       group.rule,
     ]);

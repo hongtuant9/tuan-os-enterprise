@@ -324,12 +324,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
       safeFnb(monthStart + "T00:00:00", today + "T23:59:59"),
       container.dashboard.stats(),
-      screen === "finance"
-        ? fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59")
-        : Promise.resolve(null),
-      screen === "finance"
-        ? fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59")
-        : Promise.resolve(null),
+      fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
+      fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -357,23 +353,33 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
       : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
     const branchRows = [...hotelTodayRows, ...cozyTodayRows];
+    const cashflowReadReady = hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED";
+    const periodCostActual = cashflowReadReady
+      ? [...hotelCashflow.rows, ...fnbCashflow.rows]
+          .filter((row) => row.isReceipt === false && row.usedForFinancialReporting !== false && !/hủy|cancel/i.test(row.status))
+          .reduce((sum, row) => sum + row.amount, 0)
+      : 0;
+    const periodProfitActual = cashflowReadReady ? periodRevenue - periodCostActual : null;
+    const periodMarginActual = cashflowReadReady && periodRevenue > 0 && periodProfitActual !== null
+      ? (periodProfitActual / periodRevenue) * 100
+      : null;
 
     if (screen === "business") {
       return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
-          "Chi phí": "NEED VERIFY",
-          "Lợi nhuận gộp": "NEED VERIFY",
-          "Biên lợi nhuận": "NEED VERIFY",
+          "Chi phí": cashflowReadReady ? money(periodCostActual) : "NEED VERIFY",
+          "Lợi nhuận gộp": periodProfitActual === null ? "NEED VERIFY" : money(periodProfitActual),
+          "Biên lợi nhuận": periodMarginActual === null ? "NEED VERIFY" : pct(periodMarginActual),
           "Công suất phòng": pct(stats.averageOccupancy),
         },
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": "KIOTVIET ONLY · Public API hiện chưa đọc được Sổ quỹ/chi phí",
-          "Lợi nhuận gộp": "Fail closed: chưa đủ chi phí từ KiotViet để kết luận lợi nhuận",
-          "Biên lợi nhuận": "Fail closed: không dùng dữ liệu ngoài KiotViet",
+          "Chi phí": cashflowReadReady ? "KiotViet cashflow Actual · " + period.label : "KIOTVIET ONLY · Cashflow API chưa VERIFIED",
+          "Lợi nhuận gộp": periodProfitActual === null ? "Fail closed: chưa đủ chi phí từ KiotViet để kết luận lợi nhuận" : "Doanh thu KiotViet − chi phí cashflow KiotViet",
+          "Biên lợi nhuận": periodMarginActual === null ? "Fail closed: không dùng dữ liệu ngoài KiotViet" : "Tính từ doanh thu và chi phí KiotViet Actual",
           "Công suất phòng": "Property runtime",
         },
         {
@@ -415,18 +421,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       );
     }
 
-    const cashflowReadReady = hotelCashflow?.state === "VERIFIED" && fnbCashflow?.state === "VERIFIED";
-    const periodCostActual = cashflowReadReady
-      ? [...(hotelCashflow?.rows ?? []), ...(fnbCashflow?.rows ?? [])]
-          .filter((row) => row.isReceipt === false && row.usedForFinancialReporting !== false && !/hủy|cancel/i.test(row.status))
-          .reduce((sum, row) => sum + row.amount, 0)
-      : 0;
-    const periodProfitActual = cashflowReadReady ? periodRevenue - periodCostActual : null;
-    const periodMarginActual = cashflowReadReady && periodRevenue > 0 && periodProfitActual !== null
-      ? (periodProfitActual / periodRevenue) * 100
-      : null;
     const cashflowRows = cashflowReadReady
-      ? [...(hotelCashflow?.rows ?? []).map((row) => ({...row, system: "Hotel"})), ...(fnbCashflow?.rows ?? []).map((row) => ({...row, system: "F&B"}))]
+      ? [...hotelCashflow.rows.map((row) => ({...row, system: "Hotel"})), ...fnbCashflow.rows.map((row) => ({...row, system: "F&B"}))]
           .filter((row) => row.isReceipt === false)
           .sort((a, b) => b.transDate.localeCompare(a.transDate))
           .map((row, i) => [

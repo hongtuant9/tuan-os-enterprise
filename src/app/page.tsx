@@ -10,6 +10,7 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
+import { getFinanceControlSnapshot, summarizeFinanceCostPeriod } from "@/server/tce/finance-control-data";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -155,6 +156,7 @@ export default async function Home({
     syncQuery,
     taskQuery,
     syncRecordsQuery,
+    financeControl,
   ] = await Promise.all([
     safeHotel(bounds.from, bounds.to),
     safeFnb(bounds.from, bounds.to),
@@ -169,6 +171,7 @@ export default async function Home({
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
+    getFinanceControlSnapshot(now),
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
@@ -202,20 +205,18 @@ export default async function Home({
     (hotel.state === "VERIFIED" ? hotel.collected : 0) +
     (fnb.state === "VERIFIED" ? fnb.collected : 0);
 
-  // Owner-approved operating model when Actual OPEX is incomplete.
-  // Homestay fixed monthly: payroll 33m + utilities 20m + software 2m.
-  // Variable reserve: breakfast/room goods + OTA/fees + repairs + marketing/other ~= 30% revenue.
-  // Cozy fixed monthly: payroll 37.98m + utilities 5m + gas 2m + software 0.49m.
-  // Variable reserve: COGS 32% + repairs/marketing/other 5% revenue.
-  const monthFactor = bounds.elapsedDays / 30;
-  const homestayCostEstimate = 55000000 * monthFactor + homestayRevenue * 0.30;
-  const cozyCostEstimate = 45470000 * monthFactor + cozyRevenue * 0.37;
-  const costEstimate = homestayCostEstimate + cozyCostEstimate;
-  const actualCostKnown = period === "month" || period === "year"
-    ? 1940000 + 7175000 + 8214279
-    : 0;
-  const profitEstimate = totalRevenue - costEstimate;
+  // Executive cost KPI must show costs actually recorded for the selected period.
+  // Forecast/accrual allocations are kept in the detailed Finance report and are never pushed
+  // into a day/week KPI as if they were real transactions.
+  const costPeriod = summarizeFinanceCostPeriod(
+    financeControl,
+    bounds.from.slice(0, 10),
+    bounds.to.slice(0, 10),
+  );
+  const costRecorded = costPeriod.totalVnd;
+  const profitEstimate = totalRevenue - costRecorded;
   const marginEstimate = totalRevenue ? (profitEstimate / totalRevenue) * 100 : 0;
+  const profitVerified = false;
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;
@@ -283,11 +284,13 @@ export default async function Home({
             ],
           }}
           finance={{
-            costEstimate,
+            costEstimate: costRecorded,
             profitEstimate,
             marginEstimate,
-            actualCostKnown,
-            costLabel: "DỰ TOÁN / TẠM TÍNH",
+            actualCostKnown: costRecorded,
+            costLabel: costPeriod.coverage,
+            costState: costPeriod.state,
+            profitVerified,
           }}
           actionCenter={{
             decisions,

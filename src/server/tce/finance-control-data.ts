@@ -21,11 +21,49 @@ export type FinanceGuardrail = {
   maxPct: number;
 };
 
+export type FinanceActualCostLine = {
+  businessUnit: string;
+  group: string;
+  item: string;
+  source: string;
+  amountVnd: number | null;
+  evidenceState: string;
+  updatedAt: string;
+  evidence: string;
+};
+
+export type FinanceCostEvent = {
+  date: string;
+  businessUnit: string;
+  group: string;
+  item: string;
+  amountVnd: number;
+  source: string;
+  evidenceState: string;
+  evidence: string;
+};
+
+export type FinanceCostPeriodSummary = {
+  totalVnd: number;
+  state: "PARTIAL" | "NEED_VERIFY";
+  coverage: string;
+  groups: Array<{
+    businessUnit: string;
+    group: string;
+    amountVnd: number;
+    eventCount: number;
+    evidenceState: string;
+  }>;
+};
+
 export type FinanceControlSnapshot = {
   state: "PARTIAL" | "NEED_VERIFY";
   monthKey: string;
+  asOfDate: string;
   periodLabel: string;
   lines: FinanceControlLine[];
+  actualLines: FinanceActualCostLine[];
+  events: FinanceCostEvent[];
   guardrails: FinanceGuardrail[];
   notes: string[];
 };
@@ -68,6 +106,130 @@ function parseGuardrails(values: string[][]): FinanceGuardrail[] {
   return out;
 }
 
+function localDateKey(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return get("year") + "-" + get("month") + "-" + get("day");
+}
+
+function parseEvidenceAmount(evidence: string, fallback: number | null): number | null {
+  const patterns = [
+    /Tổng chi mua\s*=\s*([\d.,]+)m/i,
+    /Tổng\s+([\d.,]+)m/i,
+    /=\s*([\d.,]+)\s*triệu\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = evidence.match(pattern);
+    if (match?.[1]) return parseMillionVnd(match[1]);
+  }
+  return fallback;
+}
+
+function eventDate(day: string, month: string, year: string | undefined, monthKey: string) {
+  const y = year || monthKey.slice(0, 4);
+  const d = day.padStart(2, "0");
+  const m = month.padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
+
+function parseEvidenceEvents(line: FinanceActualCostLine, monthKey: string): FinanceCostEvent[] {
+  let evidence = line.evidence;
+  const events: FinanceCostEvent[] = [];
+  const push = (date: string, rawAmount: string) => {
+    const amountVnd = parseMillionVnd(rawAmount);
+    if (!amountVnd || amountVnd <= 0) return;
+    const key = date + "|" + amountVnd + "|" + line.item;
+    if (events.some((event) => event.date + "|" + event.amountVnd + "|" + event.item === key)) return;
+    events.push({
+      date,
+      businessUnit: line.businessUnit,
+      group: line.group,
+      item: line.item,
+      amountVnd,
+      source: line.source,
+      evidenceState: line.evidenceState,
+      evidence: line.evidence,
+    });
+  };
+
+  const corrected = /chi\s+đá\s+([\d.,]+)m[^;]{0,80}?trên giấy ghi\s*(\d{1,2})[/.](\d{1,2})/i.exec(evidence);
+  if (corrected) {
+    push(eventDate(corrected[2], corrected[3], undefined, monthKey), corrected[1]);
+    evidence = evidence.replace(corrected[0], "");
+  }
+
+  for (const match of evidence.matchAll(/(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?\s*=\s*([\d.,]+)\s*m/gi)) {
+    push(eventDate(match[1], match[2], match[3], monthKey), match[4]);
+  }
+  for (const match of evidence.matchAll(/([\d.,]+)\s*triệu\s*ngày\s*(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?/gi)) {
+    push(eventDate(match[2], match[3], match[4], monthKey), match[1]);
+  }
+  for (const match of evidence.matchAll(/(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?\s+[^;]{0,30}?([\d.,]+)\s*m/gi)) {
+    push(eventDate(match[1], match[2], match[3], monthKey), match[4]);
+  }
+
+  return events;
+}
+
+export function summarizeFinanceCostPeriod(
+  snapshot: FinanceControlSnapshot,
+  from: string,
+  to: string,
+): FinanceCostPeriodSummary {
+  const monthStart = snapshot.monthKey + "-01";
+  const coversCurrentMtd = from <= monthStart && to >= snapshot.asOfDate;
+  const groupMap = new Map<string, { businessUnit: string; group: string; amountVnd: number; eventCount: number; states: Set<string> }>();
+
+  const add = (businessUnit: string, group: string, amountVnd: number, eventCount: number, state: string) => {
+    const key = businessUnit + "|" + group;
+    const current = groupMap.get(key) ?? { businessUnit, group, amountVnd: 0, eventCount: 0, states: new Set<string>() };
+    current.amountVnd += amountVnd;
+    current.eventCount += eventCount;
+    if (state) current.states.add(state);
+    groupMap.set(key, current);
+  };
+
+  if (coversCurrentMtd) {
+    for (const line of snapshot.actualLines) {
+      if (line.amountVnd === null || line.amountVnd <= 0) continue;
+      if (/CẦN BỔ SUNG|DATA GAP|SUPERSEDED/i.test(line.evidenceState)) continue;
+      add(line.businessUnit, line.group, line.amountVnd, 1, line.evidenceState);
+    }
+  } else {
+    for (const event of snapshot.events) {
+      if (event.date < from || event.date > to) continue;
+      add(event.businessUnit, event.group, event.amountVnd, 1, event.evidenceState);
+    }
+  }
+
+  const groups = [...groupMap.values()]
+    .map((row) => ({
+      businessUnit: row.businessUnit,
+      group: row.group,
+      amountVnd: row.amountVnd,
+      eventCount: row.eventCount,
+      evidenceState: [...row.states].join(" / ") || "NEED VERIFY",
+    }))
+    .sort((a, b) => b.amountVnd - a.amountVnd);
+  const totalVnd = groups.reduce((sum, row) => sum + row.amountVnd, 0);
+
+  return {
+    totalVnd,
+    state: snapshot.state === "PARTIAL" ? "PARTIAL" : "NEED_VERIFY",
+    coverage: coversCurrentMtd
+      ? "Chi phí đã ghi nhận MTD từ FIN-HOSPITALITY-001; còn thiếu các dòng chưa có chứng từ/Actual."
+      : totalVnd > 0
+        ? "Chỉ tính các khoản có ngày phát sinh đọc được từ evidence; không phân bổ chi phí tháng xuống ngày/tuần."
+        : "0 đ đã ghi nhận theo evidence có ngày trong kỳ; daily cost ledger hiện chưa bao phủ toàn bộ chi phí.",
+    groups,
+  };
+}
+
 function currentMonthKey(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -98,6 +260,35 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
       ),
     ]);
     const guardrails = parseGuardrails(assumptions);
+    const asOfDate = localDateKey(now);
+
+    const actualMarker = values.findIndex((row) =>
+      String(row[0] ?? "").trim().startsWith("CƠ SỞ DỮ LIỆU ACTUAL"),
+    );
+    const actualLines: FinanceActualCostLine[] = [];
+    if (actualMarker >= 0) {
+      for (let index = actualMarker + 2; index < values.length; index += 1) {
+        const row = values[index] ?? [];
+        const businessUnit = String(row[0] ?? "").trim();
+        if (businessUnit === "LƯU Ý" || String(row[0] ?? "").startsWith("P&L BRIDGE")) break;
+        const group = String(row[1] ?? "").trim();
+        const item = String(row[2] ?? "").trim();
+        if (!businessUnit || !group || !item) continue;
+        const evidence = String(row[7] ?? "").trim();
+        const rawAmount = parseMillionVnd(row[4]);
+        actualLines.push({
+          businessUnit,
+          group,
+          item,
+          source: String(row[3] ?? "").trim(),
+          amountVnd: parseEvidenceAmount(evidence, rawAmount),
+          evidenceState: String(row[5] ?? "NEED VERIFY").trim() || "NEED VERIFY",
+          updatedAt: String(row[6] ?? "").trim(),
+          evidence,
+        });
+      }
+    }
+    const events = actualLines.flatMap((line) => parseEvidenceEvents(line, monthKey));
 
     const marker = values.findIndex((row) =>
       String(row[0] ?? "").trim().startsWith("DỰ TOÁN OPEX"),
@@ -106,8 +297,11 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
       return {
         state: "NEED_VERIFY",
         monthKey,
+        asOfDate,
         periodLabel: "MTD " + monthKey,
         lines: [],
+        actualLines,
+        events,
         guardrails,
         notes: ["Không tìm thấy vùng DỰ TOÁN OPEX trong FIN-HOSPITALITY-001."],
       };
@@ -136,8 +330,11 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
     return {
       state: lines.length ? "PARTIAL" : "NEED_VERIFY",
       monthKey,
+      asOfDate,
       periodLabel: "MTD " + monthKey,
       lines,
+      actualLines,
+      events,
       guardrails,
       notes: [
         "Nguồn: FIN-HOSPITALITY-001 / " + sheetName + ".",
@@ -149,8 +346,11 @@ export async function getFinanceControlSnapshot(now = new Date()): Promise<Finan
     return {
       state: "NEED_VERIFY",
       monthKey,
+      asOfDate: localDateKey(now),
       periodLabel: "MTD " + monthKey,
       lines: [],
+      actualLines: [],
+      events: [],
       guardrails: [],
       notes: ["Không đọc được FIN-HOSPITALITY-001 ở lần tải này."],
     };

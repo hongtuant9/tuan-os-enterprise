@@ -73,7 +73,9 @@ const KIOTVIET_EXPENSE_TAXONOMY = [
   ["M14","Thuế / Phí hoạt động","Hotel + F&B","Sổ quỹ > [TCE-C09]","THEO LOẠI","Phân biệt khoản được tính chi phí và khoản nộp hộ/không thuộc KQKD."],
   ["M15","Khác có chứng từ","Hotel + F&B","Sổ quỹ > [TCE-C12]","CÓ","Chỉ dùng khi không thuộc nhóm cụ thể; bắt buộc ghi chú rõ."],
   ["M16","Gas / nhiên liệu bếp","F&B","Sổ quỹ > [TCE-C16]","CÓ","Theo dõi riêng để đánh giá hiệu suất vận hành bếp."],
-  ["M17","CAPEX / Gốc vay / Tạm ứng / Chuyển quỹ","Hotel + F&B","Sổ quỹ > [TCE-N02/N03/N04/N05]","KHÔNG","Theo dõi dòng tiền riêng; không đưa vào OPEX/lợi nhuận kỳ."],
+  ["M17","Thuê mặt bằng / thuê tài sản","Hotel + F&B","Sổ quỹ > [TCE-C17]","CÓ","Ghi rõ cơ sở và kỳ thuê; đặt cọc không tính vào chi phí kỳ."],
+  ["M18","Lãi vay / chi phí tài chính","Hotel + F&B","Sổ quỹ > [TCE-C18]","CÓ","Tách phần gốc vay sang [TCE-N03]."],
+  ["M19","CAPEX / Gốc vay / Tạm ứng / Chuyển quỹ / Chủ rút","Hotel + F&B","Sổ quỹ > [TCE-N02/N03/N04/N05/N06]","KHÔNG","Theo dõi dòng tiền riêng; không đưa vào OPEX/lợi nhuận kỳ."],
 ] as const;
 
 const KIOTVIET_REVENUE_TAXONOMY = [
@@ -488,7 +490,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       snapshot: typeof hotelCashflow,
     ) => {
       for (const row of snapshot.rows) {
-        if (row.isReceipt !== false || /hủy|huỷ|cancel|void/i.test(row.status)) continue;
+        if (
+          row.isReceipt !== false ||
+          row.usedForFinancialReporting === false ||
+          /hủy|huỷ|cancel|void/i.test(row.status)
+        ) continue;
         const unit =
           cashflowBranchNames.get(system + "|" + row.branchId) ||
           (system === "Hotel" ? "KiotViet Hotel" : "Cozy Garden");

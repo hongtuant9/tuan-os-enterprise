@@ -261,17 +261,6 @@ async function safeHotelAvailability(dateKey: string): Promise<HotelAvailability
   }
 }
 
-function revenueCostEstimate(hotelRevenue: number, fnbRevenue: number, elapsedDays: number) {
-  const monthFactor = Math.max(0.01, elapsedDays / 30);
-  const homestayCost = 55_000_000 * monthFactor + hotelRevenue * 0.3;
-  const cozyCost = 45_470_000 * monthFactor + fnbRevenue * 0.37;
-  const cost = homestayCost + cozyCost;
-  const revenue = hotelRevenue + fnbRevenue;
-  const profit = revenue - cost;
-  const margin = revenue ? (profit / revenue) * 100 : 0;
-  return { cost, profit, margin };
-}
-
 function priorityRank(priority: string) {
   if (priority === "high" || priority === "P0") return 0;
   if (priority === "medium" || priority === "P1") return 1;
@@ -540,7 +529,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         financeActions: [
           "1. Chuẩn hóa Loại chi/Loại thu và cách nhập trên KiotViet Hotel + F&B theo bảng chuẩn; không đổi nhóm món đang bán trong giờ hoạt động.",
           "2. Mọi khoản mua hàng phải đi qua Nhập hàng; mọi OPEX khác qua Sổ quỹ; lương qua Bảng lương. Không nhập lại cùng một chi phí ở hai nơi.",
-          "3. Chỉ bật đồng bộ chi phí vào TCE khi có đường đọc KiotViet được xác minh; không dùng FIN-HOSPITALITY/Drive làm nguồn giao dịch thay thế.",
+          "3. Chỉ bật đồng bộ chi phí vào TCE khi có đường đọc KiotViet được xác minh; không dùng nguồn giao dịch bên ngoài KiotViet làm fallback.",
         ],
         financeCoverageNotes: [
           kiotVietOnlyCoverage,

@@ -358,12 +358,19 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
     const branchRows = [...hotelTodayRows, ...cozyTodayRows];
     const cashflowReadReady = hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED";
-    const allCashflowRows = [...hotelCashflow.rows, ...fnbCashflow.rows];
+    const allCashflowRows = [...hotelCashflow.rows, ...fnbCashflow.rows]
+      .filter((row) => !/hủy|huỷ|cancel|void/i.test(row.status));
+    const unknownDirectionCount = cashflowReadReady
+      ? allCashflowRows.filter((row) => row.isReceipt === null).length
+      : 0;
     const expenseCashflowRows = cashflowReadReady
-      ? allCashflowRows.filter((row) => row.isReceipt === false && !/hủy|cancel/i.test(row.status))
+      ? allCashflowRows.filter((row) => row.isReceipt === false)
       : [];
     const unclassifiedExpenseCount = expenseCashflowRows.filter((row) => row.usedForFinancialReporting === null).length;
-    const costClassificationReady = cashflowReadReady && unclassifiedExpenseCount === 0;
+    const costClassificationReady =
+      cashflowReadReady &&
+      unknownDirectionCount === 0 &&
+      unclassifiedExpenseCount === 0;
     const periodCostActual = cashflowReadReady
       ? expenseCashflowRows
           .filter((row) => row.usedForFinancialReporting === true)
@@ -390,7 +397,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           "Chi phí": costClassificationReady
             ? "KiotViet cashflow Actual đã phân loại KQKD đầy đủ · " + period.label
             : cashflowReadReady
-              ? "KIOTVIET ONLY · còn " + unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD"
+              ? "KIOTVIET ONLY · " +
+                (unknownDirectionCount > 0 ? unknownDirectionCount + " phiếu chưa xác định Thu/Chi; " : "") +
+                (unclassifiedExpenseCount > 0 ? unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD" : "")
               : "KIOTVIET ONLY · Cashflow API chưa VERIFIED",
           "Lợi nhuận gộp": periodProfitActual === null ? "Fail closed: chưa đủ chi phí từ KiotViet để kết luận lợi nhuận" : "Doanh thu KiotViet − chi phí cashflow KiotViet",
           "Biên lợi nhuận": periodMarginActual === null ? "Fail closed: không dùng dữ liệu ngoài KiotViet" : "Tính từ doanh thu và chi phí KiotViet Actual",
@@ -455,7 +464,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const kiotVietOnlyCoverage = costClassificationReady
       ? "KiotViet Hotel/F&B cashflow VERIFIED và toàn bộ phiếu chi trong kỳ đã có trạng thái KQKD; không dùng nguồn ngoài."
       : cashflowReadReady
-        ? "Cashflow KiotViet đọc được nhưng còn " + unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD; lợi nhuận giữ NEED VERIFY."
+        ? "Cashflow KiotViet đọc được nhưng còn " +
+          unknownDirectionCount + " phiếu chưa xác định Thu/Chi và " +
+          unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD; lợi nhuận giữ NEED VERIFY."
         : "Nguồn tài chính runtime chỉ KiotViet Hotel/F&B. Doanh thu Public API đang LIVE; cashflow F&B/Hotel hiện HOLD nên chi phí giữ NEED VERIFY.";
     const costCategoryRows = KIOTVIET_EXPENSE_TAXONOMY.map((row, i) => [
       String(i + 1),
@@ -535,7 +546,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Chi phí vận hành": costClassificationReady
           ? "KiotViet cashflow Actual đã phân loại KQKD · " + period.label
           : cashflowReadReady
-            ? "KiotViet-only: còn " + unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD"
+            ? "KiotViet-only: " +
+              unknownDirectionCount + " phiếu chưa xác định Thu/Chi; " +
+              unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD"
             : "KiotViet-only: chờ kênh đọc Sổ quỹ/chi phí được hỗ trợ",
         "Dòng tiền ròng": "Chờ KiotViet Sổ quỹ",
         "Số dư tiền mặt": "Chờ KiotViet Sổ quỹ",
@@ -555,7 +568,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             ? "HOLD — Public API F&B/Hotel chưa expose cashflow"
             : costClassificationReady
               ? "LIVE — cashflow VERIFIED + KQKD classified"
-              : "PARTIAL — " + unclassifiedExpenseCount + " phiếu chi chưa xác định KQKD"],
+              : "PARTIAL — " + unknownDirectionCount + " chưa xác định Thu/Chi; " + unclassifiedExpenseCount + " chưa xác định KQKD"],
           ["Fallback ngoài KiotViet", "DISABLED"],
         ],
         financeBranches: [

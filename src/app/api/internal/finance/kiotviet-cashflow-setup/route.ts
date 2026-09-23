@@ -4,6 +4,7 @@ import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
   TCE_KIOTVIET_CASHFLOW_TAXONOMY_VERSION,
+  TCE_KIOTVIET_CASHFLOW_V1_TO_V2,
   type KiotVietCashflowSystem,
 } from "@/server/integrations/kiotviet/cashflow-taxonomy";
 
@@ -50,6 +51,14 @@ export async function GET(request: Request) {
       fnb: serialize("F&B"),
       hotel: serialize("Hotel"),
     },
+    summary: {
+      fnbExpenseTypes: serialize("F&B").filter((item) => item.direction === "CHI").length,
+      hotelExpenseTypes: serialize("Hotel").filter((item) => item.direction === "CHI").length,
+      distinctCanonicalTypes: Object.keys(TCE_KIOTVIET_CASHFLOW_V1_TO_V2).length > 0
+        ? new Set([...serialize("F&B"), ...serialize("Hotel")].map((item) => item.code)).size
+        : 0,
+    },
+    legacyV1ToV2: TCE_KIOTVIET_CASHFLOW_V1_TO_V2,
     providerCapability: {
       readCashflow: {
         retailPublicApi: "GET /cashflow is documented for Retail only",

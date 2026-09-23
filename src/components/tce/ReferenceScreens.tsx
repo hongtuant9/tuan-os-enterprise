@@ -521,13 +521,13 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
           <Section
             title="Danh mục Loại thu / Loại chi cần setup trong Sổ quỹ"
-            subtitle="Dùng đúng tên [TCE-Cxx/Nxx/Rxx] trên cả KiotViet Hotel và F&B; không tạo dữ liệu giao dịch song song trong TCE"
+            subtitle="Taxonomy v2 lean: dùng đúng mã [TCE-C/F/H/N/Rxx]; F&B 17 loại chi, Hotel 19 loại chi; không tạo dữ liệu giao dịch song song trong TCE"
             className="col-span-12 h-[520px]"
             icon="▤"
           >
             <DataTable
-              columns={["Mã","Tên cần tạo","Áp dụng","Thu/Chi","KQKD","Nhân viên dùng khi","Quy tắc"]}
-              rows={28}
+              columns={["Mã","Tên cần tạo","Áp dụng","Thu/Chi","KQKD","Phân loại kế toán","Nhân viên dùng khi","Quy tắc"]}
+              rows={23}
               data={data?.tables.financeCashflowGroupSetup}
             />
           </Section>

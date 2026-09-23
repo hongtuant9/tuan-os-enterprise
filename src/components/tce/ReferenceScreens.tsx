@@ -485,7 +485,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section
             id="cost-analysis"
             title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")}
-            subtitle="Chỉ tính khoản chi đã ghi nhận cho đúng kỳ; không chia chi phí tháng xuống ngày/tuần"
+            subtitle="Nguồn duy nhất: KiotViet Hotel + KiotViet F&B; không dùng Drive/Sheet làm nguồn giao dịch"
             className="col-span-12 lg:col-span-8 h-[300px]"
             icon="◫"
           >
@@ -497,7 +497,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
           <Section
             title="Phạm vi dữ liệu chi phí"
-            subtitle="Để tránh hiểu nhầm 0 đ = không có chi phí thực tế"
+            subtitle="Doanh thu API đã LIVE; chi phí chỉ hiện khi đọc được trực tiếp từ KiotViet"
             className="col-span-12 lg:col-span-4 h-[300px]"
             icon="!"
           >
@@ -508,8 +508,8 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             />
           </Section>
           <Section
-            title="Chi tiết khoản chi có ngày chứng từ"
-            subtitle="Dùng để kiểm tra ngày/tuần; các khoản dồn tích không có ngày không bị phân bổ giả"
+            title="Chi tiết khoản chi từ KiotViet"
+            subtitle="Không dựng dữ liệu từ nguồn ngoài; hiện HOLD khi Public API chưa expose Sổ quỹ"
             className="col-span-12 h-[250px]"
             icon="▤"
           >
@@ -520,20 +520,44 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             />
           </Section>
           <Section
-            title="Phân tích MTD & mức kiểm soát"
-            subtitle="Chi phí MTD gồm Actual/Temp Actual/Accrual/Forecast; dùng để theo dõi, không thay thế báo cáo Actual theo kỳ"
-            className="col-span-12 h-[340px]"
+            title="Chuẩn hạng mục CHI trên KiotViet"
+            subtitle="Mỗi khoản chi phải vào đúng module; tránh nhập trùng giữa Nhập hàng, Bảng lương và Sổ quỹ"
+            className="col-span-12 h-[360px]"
             icon="◫"
           >
             <DataTable
-              columns={["#","Đơn vị","Nhóm / hạng mục","Giá trị MTD","% DT đơn vị","Loại số","Kiểm soát","Trần / cơ sở","Evidence"]}
-              rows={6}
-              data={data?.tables.financeCostGroups}
+              columns={["Mã","Nhóm chi phí","Áp dụng","Nhập tại KiotViet","Hạch toán KQKD","Nguyên tắc"]}
+              rows={18}
+              data={data?.tables.financeExpenseTaxonomy}
+            />
+          </Section>
+          <Section
+            title="Chuẩn hạng mục THU trên KiotViet"
+            subtitle="Doanh thu bán hàng/dịch vụ phải phát sinh từ hóa đơn; không lập Phiếu thu thủ công trùng doanh thu"
+            className="col-span-12 lg:col-span-7 h-[330px]"
+            icon="▮"
+          >
+            <DataTable
+              columns={["Mã","Hệ thống","Nhóm doanh thu","Ghi nhận tại","Quy tắc phân tích"]}
+              rows={16}
+              data={data?.tables.financeRevenueTaxonomy}
+            />
+          </Section>
+          <Section
+            title="Trạng thái API KiotViet"
+            subtitle="Read-only probe đã kiểm tra trên production; không dùng endpoint không được KiotViet hỗ trợ"
+            className="col-span-12 lg:col-span-5 h-[330px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["#","Hệ","Đối tượng","Method","Trạng thái","Kết quả"]}
+              rows={9}
+              data={data?.tables.financeApiCapabilities}
             />
           </Section>
           <Section
             title="Nguồn lợi nhuận"
-            subtitle="Doanh thu Actual; chi phí và lợi nhuận hiện đang là Ước tính/Mô hình cho tới khi Actual cost PASS"
+            subtitle="Doanh thu lấy trực tiếp từ KiotViet; chi phí/lợi nhuận giữ NEED VERIFY cho tới khi có cost feed KiotViet"
             className="col-span-12 lg:col-span-7 h-[300px]"
             icon="▮"
           >
@@ -558,7 +582,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
           <Section
             title="Sản phẩm / dịch vụ tạo lợi nhuận"
-            subtitle="Tự động xếp hạng Top/Bottom khi đủ invoice detail + cost evidence; không suy diễn khi thiếu dữ liệu"
+            subtitle="Chỉ dùng invoice detail + cost từ KiotViet; không nối COST-001/FIN-HOSPITALITY vào kết quả"
             className="col-span-12 lg:col-span-7 h-[235px]"
             icon="▣"
           >

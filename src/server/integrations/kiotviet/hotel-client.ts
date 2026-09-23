@@ -79,6 +79,15 @@ export class KiotVietHotelClient {
     return this.request(`/public/invoice${query ? `?${query}` : ""}`);
   }
 
+  /**
+   * Read-only capability probe for Hotel cashflow.
+   * Official Hotel Public API does not currently document cashflow; production currently returns 404.
+   * GET only, fail closed, no mutation.
+   */
+  probeCashflow(query = "pageSize=1&pageIndex=1"): Promise<KiotVietRequestResult> {
+    return this.request(`/public/cashflow${query ? `?${query}` : ""}`);
+  }
+
   private async assertSecondAvailability(guard: AvailabilityGuard): Promise<KiotVietRequestResult> {
     validateAvailabilityGuard(guard);
     const query = new URLSearchParams({

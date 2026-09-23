@@ -3,6 +3,7 @@ import { authenticateApiRequest, principalHasMinimumRole } from "@/server/auth/a
 import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
+  TCE_KIOTVIET_CASHFLOW_TAXONOMY_VERSION,
   type KiotVietCashflowSystem,
 } from "@/server/integrations/kiotviet/cashflow-taxonomy";
 
@@ -20,6 +21,7 @@ function serialize(system: KiotVietCashflowSystem) {
         : group.financialReporting === "KHONG"
           ? false
           : null,
+    accountingClass: group.accountingClass ?? null,
     staffUse: group.staffUse,
     rule: group.rule,
   }));
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     mode: "KIOTVIET_ONLY",
+    taxonomyVersion: TCE_KIOTVIET_CASHFLOW_TAXONOMY_VERSION,
     setup: {
       fnb: serialize("F&B"),
       hotel: serialize("Hotel"),

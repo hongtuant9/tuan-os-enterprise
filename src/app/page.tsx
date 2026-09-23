@@ -10,6 +10,10 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
+import {
+  fetchFnbCashflowActual,
+  fetchHotelCashflowActual,
+} from "@/server/integrations/kiotviet/cashflow-actual";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -155,6 +159,8 @@ export default async function Home({
     syncQuery,
     taskQuery,
     syncRecordsQuery,
+    hotelCashflow,
+    fnbCashflow,
   ] = await Promise.all([
     safeHotel(bounds.from, bounds.to),
     safeFnb(bounds.from, bounds.to),
@@ -169,6 +175,8 @@ export default async function Home({
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
+    fetchHotelCashflowActual(bounds.from, bounds.to),
+    fetchFnbCashflowActual(bounds.from, bounds.to),
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
@@ -203,14 +211,20 @@ export default async function Home({
     (fnb.state === "VERIFIED" ? fnb.collected : 0);
 
   // Financial runtime authority: KiotViet Hotel + KiotViet F&B only.
-  // Public APIs currently expose revenue invoices but not Sổ quỹ / expense transactions.
-  // Therefore expense/profit stay fail-closed instead of importing figures from Drive/Sheets.
-  const costRecorded = 0;
-  const profitEstimate = 0;
-  const marginEstimate = 0;
-  const profitVerified = false;
-  const costState = "NEED_VERIFY" as const;
-  const costLabel = "KIOTVIET ONLY · Sổ quỹ/chi phí chưa có Public API đọc";
+  // Expense/profit become Actual only when BOTH cashflow feeds are VERIFIED.
+  const cashflowReadReady = hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED";
+  const costRecorded = cashflowReadReady
+    ? [...hotelCashflow.rows, ...fnbCashflow.rows]
+        .filter((row) => row.isReceipt === false && row.usedForFinancialReporting !== false && !/hủy|cancel/i.test(row.status))
+        .reduce((sum, row) => sum + row.amount, 0)
+    : 0;
+  const profitEstimate = cashflowReadReady ? totalRevenue - costRecorded : 0;
+  const marginEstimate = cashflowReadReady && totalRevenue ? (profitEstimate / totalRevenue) * 100 : 0;
+  const profitVerified = cashflowReadReady;
+  const costState = cashflowReadReady ? "PARTIAL" as const : "NEED_VERIFY" as const;
+  const costLabel = cashflowReadReady
+    ? "KIOTVIET ONLY · Cashflow Actual"
+    : "KIOTVIET ONLY · Cashflow API chưa VERIFIED";
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;

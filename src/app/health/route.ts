@@ -45,6 +45,18 @@ function runtimeSignals() {
     process.env.KIOTVIET_CLIENT_SECRET?.trim() &&
     process.env.KIOTVIET_RETAILER?.trim(),
   );
+  const financeBotEnabled = process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true";
+  const financeBotWorkerEnabled = financeBotEnabled && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+  const fnbFinanceBotWebCredentialConfigured = Boolean(
+    (process.env.KIOTVIET_FNB_WEB_RETAILER?.trim() || process.env.KIOTVIET_FNB_RETAILER?.trim()) &&
+    process.env.KIOTVIET_FNB_WEB_USERNAME?.trim() &&
+    process.env.KIOTVIET_FNB_WEB_PASSWORD,
+  );
+  const hotelFinanceBotWebCredentialConfigured = Boolean(
+    (process.env.KIOTVIET_HOTEL_WEB_RETAILER?.trim() || process.env.KIOTVIET_HOTEL_FINANCE_RETAILER?.trim()) &&
+    process.env.KIOTVIET_HOTEL_WEB_USERNAME?.trim() &&
+    process.env.KIOTVIET_HOTEL_WEB_PASSWORD,
+  );
 
   return {
     companyAutopilotEnabled,
@@ -68,6 +80,12 @@ function runtimeSignals() {
     kiotVietHotelDedicatedFinanceCredentialConfigured: hotelDedicatedFinanceCredentialConfigured,
     kiotVietFnbRetailFallbackCredentialConfigured: fnbRetailFallbackCredentialConfigured,
     kiotVietCashflowReadVerification: "HOLD_PROVIDER_API",
+    kiotVietFinanceBotEnabled: financeBotEnabled,
+    kiotVietFinanceBotWorkerEnabled: financeBotWorkerEnabled,
+    kiotVietFinanceBotFnbWebCredentialConfigured: fnbFinanceBotWebCredentialConfigured,
+    kiotVietFinanceBotHotelWebCredentialConfigured: hotelFinanceBotWebCredentialConfigured,
+    kiotVietFinanceBotGroupWriteEnabled: process.env.TCE_KIOTVIET_FINANCE_BOT_GROUP_WRITE_ENABLED?.trim().toLowerCase() === "true",
+    kiotVietFinanceBotTransactionWriteEnabled: process.env.TCE_KIOTVIET_FINANCE_BOT_TRANSACTION_WRITE_ENABLED?.trim().toLowerCase() === "true",
     directBookingAutoCreateEnabled: process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true",
     openAiApiKey: process.env.OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
     receptionistOpenAiApiKey: process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
@@ -99,7 +117,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
-          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1" },
+          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1", kiotVietFinanceBot: "v1" },
           agentRegistry: 16,
           executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
@@ -116,7 +134,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1", kiotVietFinanceBot: "v1" },
         agentRegistry: 16,
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
@@ -146,7 +164,7 @@ export async function GET() {
         status: "degraded",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v1", kiotVietFinanceBot: "v1" },
         agentRegistry: 16,
           executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),

@@ -39,6 +39,8 @@ export type ExecutiveDashboardProps = {
     marginEstimate: number;
     actualCostKnown: number;
     costLabel: string;
+    costState: "PARTIAL" | "NEED_VERIFY";
+    profitVerified: boolean;
   };
   actionCenter: {
     decisions: number;
@@ -156,12 +158,14 @@ function Stat({
   tone,
   icon,
   note,
+  href,
 }: {
   label: string;
   value: string | number;
   tone: "blue" | "green" | "red" | "amber" | "violet" | "slate";
   icon: string;
   note?: string;
+  href?: string;
 }) {
   const map = {
     blue: ["from-[#fbfdff] to-[#eaf4ff]", "bg-[#2477ef]", "text-[#1768df]"],
@@ -172,8 +176,8 @@ function Stat({
     slate: ["from-[#fbfcfe] to-[#edf2f7]", "bg-[#71859d]", "text-[#536b88]"],
   } as const;
   const t = map[tone];
-  return (
-    <div className={"min-w-0 overflow-hidden rounded-[7px] bg-gradient-to-br " + t[0] + " px-2.5 py-2"}>
+  const content = (
+    <div className={"min-w-0 overflow-hidden rounded-[7px] bg-gradient-to-br " + t[0] + " px-2.5 py-2 " + (href ? "transition hover:ring-2 hover:ring-[#b9d7fb]" : "")}>
       <div className="flex items-center gap-2">
         <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-[7px] text-[14px] font-black text-white " + t[1]}><ExecIcon label={label} fallback={icon} /></span>
         <div className="min-w-0">
@@ -184,6 +188,7 @@ function Stat({
       {note ? <p className={"mt-1 whitespace-normal text-[7.5px] leading-[9px] " + t[2]}>{note}</p> : null}
     </div>
   );
+  return href ? <Link href={href} aria-label={"Xem chi tiết " + label}>{content}</Link> : content;
 }
 
 function ActionTable({ items }: { items: ExecutiveAction[] }) {
@@ -326,9 +331,16 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
           <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Actual từ KiotViet / nguồn đã xác minh · " + props.periodLabel}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
               <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="KiotViet Actual · Live" />
-              <Stat label="Chi phí" value={money(props.finance.costEstimate)} tone="red" icon="▥" note={props.finance.costLabel} />
-              <Stat label="Lợi nhuận" value={money(props.finance.profitEstimate)} tone="blue" icon="▣" note="Tự động tính toán" />
-              <Stat label="Biên lợi nhuận" value={props.finance.marginEstimate.toFixed(1).replace(".",",")+"%"} tone="amber" icon="⌕" note="Tham chiếu" />
+              <Stat
+                label="Chi phí đã ghi nhận"
+                value={money(props.finance.costEstimate)}
+                tone="red"
+                icon="▥"
+                note={(props.finance.costState === "PARTIAL" ? "PARTIAL · " : "") + "Bấm để xem theo nhóm"}
+                href={"/finance?period=" + props.period + "#cost-analysis"}
+              />
+              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "NEED VERIFY"} tone="blue" icon="▣" note="Chưa đủ Actual cost để kết luận" />
+              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "NEED VERIFY"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán" />
             </div>
             <div className="grid grid-cols-[1.75fr_1fr] gap-2 px-3 pb-3">
               <div className="rounded-[7px] border border-[#e0e9f3]">

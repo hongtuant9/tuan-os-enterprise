@@ -487,6 +487,12 @@ function MobileHR({ data }: { data?: TceTabLiveData }) {
 }
 
 function MobileFinance({ data }: { data?: TceTabLiveData }) {
+  const periodCostRows = data?.tables.financePeriodCostGroups?.length
+    ? data.tables.financePeriodCostGroups.map((r) => [((r[1] ?? "—") + " · " + (r[2] ?? "—")), r[3] ?? "—", r[5] ?? "—"])
+    : [["Không có khoản chi có ngày trong kỳ","0 đ","PARTIAL"]];
+  const periodEventRows = data?.tables.financePeriodCostEvents?.length
+    ? data.tables.financePeriodCostEvents.map((r) => [r[1] ?? "—", ((r[2] ?? "—") + " · " + (r[3] ?? "—")), r[5] ?? "—"])
+    : [["—","Không có khoản chi có ngày chứng từ","0 đ"]];
   const costRows = data?.tables.financeCostGroups?.length
     ? data.tables.financeCostGroups.map((r) => [((r[1] ?? "—") + " · " + (r[2] ?? "—")), r[3] ?? "—", r[6] ?? "—"])
     : [["Chưa có chi phí Actual","—","NEED VERIFY"]];
@@ -499,14 +505,23 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
 
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title="Phân tích nhóm chi phí" subtitle="MTD tháng hiện tại · chi lớn → nhỏ">
+      <MobileSection title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")} subtitle="Chỉ khoản chi đã ghi nhận đúng kỳ">
+        <RowTable rows={periodCostRows} cols={3}/>
+        <p className="mt-[5px] text-[6px] text-[#6f83a5]">{data?.tables.financeCostCoverage?.[2]?.[1] ?? "Coverage chi phí: NEED VERIFY"}</p>
+      </MobileSection>
+
+      <MobileSection title="Chi tiết khoản chi có ngày" subtitle="Không phân bổ chi phí tháng xuống ngày/tuần">
+        <RowTable rows={periodEventRows} cols={3}/>
+      </MobileSection>
+
+      <MobileSection title="Phân tích MTD & mức kiểm soát" subtitle="Actual / Temp Actual / Accrual / Forecast">
         <RowTable rows={costRows} cols={3}/>
-        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Giá trị có dấu ~ là [Ước tính/Mô hình]. Actual cost chưa đủ thì không tự gắn “Đạt chuẩn”.</p>
+        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Các dòng chưa final Actual chỉ được gắn THEO DÕI / NEED VERIFY.</p>
       </MobileSection>
 
       <MobileSection title="Nguồn lợi nhuận" subtitle="Cơ sở / service line đóng góp lợi nhuận">
         <RowTable rows={profitRows} cols={3}/>
-        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Doanh thu lấy từ KiotViet Actual; chi phí và lợi nhuận hiện là mô hình cho tới khi FIN-HOSPITALITY-001 PASS.</p>
+        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Doanh thu lấy từ KiotViet Actual; lợi nhuận giữ NEED VERIFY cho tới khi chi phí Actual đầy đủ.</p>
       </MobileSection>
 
       <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Top/Bottom chỉ bật khi đủ cost evidence">

@@ -7,6 +7,10 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
+import {
+  fetchFnbCashflowActual,
+  fetchHotelCashflowActual,
+} from "@/server/integrations/kiotviet/cashflow-actual";
 import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
 
@@ -314,12 +318,18 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
       safeFnb(monthStart + "T00:00:00", today + "T23:59:59"),
       container.dashboard.stats(),
+      screen === "finance"
+        ? fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59")
+        : Promise.resolve(null),
+      screen === "finance"
+        ? fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59")
+        : Promise.resolve(null),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -405,9 +415,36 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       );
     }
 
-    const kiotVietOnlyCoverage =
-      "Nguồn tài chính runtime chỉ KiotViet Hotel/F&B. Doanh thu Public API đang LIVE; Sổ quỹ/chi phí chưa có endpoint Public API đọc nên chi phí giữ NEED VERIFY.";
-
+    const cashflowReadReady = hotelCashflow?.state === "VERIFIED" && fnbCashflow?.state === "VERIFIED";
+    const periodCostActual = cashflowReadReady
+      ? [...(hotelCashflow?.rows ?? []), ...(fnbCashflow?.rows ?? [])]
+          .filter((row) => row.isReceipt === false && row.usedForFinancialReporting !== false && !/hủy|cancel/i.test(row.status))
+          .reduce((sum, row) => sum + row.amount, 0)
+      : 0;
+    const periodProfitActual = cashflowReadReady ? periodRevenue - periodCostActual : null;
+    const periodMarginActual = cashflowReadReady && periodRevenue > 0 && periodProfitActual !== null
+      ? (periodProfitActual / periodRevenue) * 100
+      : null;
+    const cashflowRows = cashflowReadReady
+      ? [...(hotelCashflow?.rows ?? []).map((row) => ({...row, system: "Hotel"})), ...(fnbCashflow?.rows ?? []).map((row) => ({...row, system: "F&B"}))]
+          .filter((row) => row.isReceipt === false)
+          .sort((a, b) => b.transDate.localeCompare(a.transDate))
+          .map((row, i) => [
+            String(i + 1),
+            row.transDate ? row.transDate.slice(0, 16).replace("T", " ") : "—",
+            row.system,
+            row.cashFlowGroupId || "—",
+            row.description || row.partnerName || "—",
+            money(row.amount),
+            row.usedForFinancialReporting === true ? "KQKD" : row.usedForFinancialReporting === false ? "KHÔNG KQKD" : "NEED VERIFY",
+            row.code || "—",
+          ])
+      : [
+          ["—","—","KiotViet","—","Cashflow API chưa được provider hỗ trợ/xác minh","—","HOLD","—"],
+        ];
+    const kiotVietOnlyCoverage = cashflowReadReady
+      ? "KiotViet Hotel/F&B cashflow VERIFIED cho kỳ đang chọn; không dùng nguồn ngoài."
+      : "Nguồn tài chính runtime chỉ KiotViet Hotel/F&B. Doanh thu Public API đang LIVE; cashflow F&B/Hotel hiện HOLD nên chi phí giữ NEED VERIFY.";
     const costCategoryRows = KIOTVIET_EXPENSE_TAXONOMY.map((row, i) => [
       String(i + 1),
       row[2],
@@ -463,34 +500,32 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-        "Chi phí vận hành": "NEED VERIFY",
+        "Chi phí vận hành": cashflowReadReady ? money(periodCostActual) : "NEED VERIFY",
         "Dòng tiền ròng": "NEED VERIFY",
         "Số dư tiền mặt": "NEED VERIFY",
         "Công nợ phải trả": "NEED VERIFY",
         "Nợ vay": "NEED VERIFY",
-        "Lợi nhuận vận hành ước tính": "NEED VERIFY",
-        "Tỷ lệ chi phí / doanh thu": "NEED VERIFY",
+        "Lợi nhuận vận hành ước tính": periodProfitActual === null ? "NEED VERIFY" : money(periodProfitActual),
+        "Tỷ lệ chi phí / doanh thu": cashflowReadReady && periodRevenue > 0 ? pct((periodCostActual / periodRevenue) * 100) : "NEED VERIFY",
       },
       {
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
-        "Chi phí vận hành": "KiotViet-only: chờ kênh đọc Sổ quỹ/chi phí được hỗ trợ",
+        "Chi phí vận hành": cashflowReadReady ? "KiotViet cashflow Actual · " + period.label : "KiotViet-only: chờ kênh đọc Sổ quỹ/chi phí được hỗ trợ",
         "Dòng tiền ròng": "Chờ KiotViet Sổ quỹ",
         "Số dư tiền mặt": "Chờ KiotViet Sổ quỹ",
         "Công nợ phải trả": "Chờ KiotViet Nhập hàng/Nhà cung cấp",
         "Nợ vay": "Chỉ nhập theo Phiếu chi/thu KiotViet, không dùng dữ liệu ngoài",
-        "Lợi nhuận vận hành ước tính": "Fail closed cho tới khi chi phí từ KiotViet đầy đủ",
-        "Tỷ lệ chi phí / doanh thu": "Fail closed cho tới khi chi phí từ KiotViet đầy đủ",
+        "Lợi nhuận vận hành ước tính": periodProfitActual === null ? "Fail closed cho tới khi chi phí từ KiotViet đầy đủ" : "Doanh thu KiotViet Actual − cashflow expense KiotViet Actual",
+        "Tỷ lệ chi phí / doanh thu": periodMarginActual === null ? "Fail closed cho tới khi chi phí từ KiotViet đầy đủ" : "Tính trên cashflow expense KiotViet Actual",
       },
       {
         financePeriodCostGroups: costCategoryRows,
-        financePeriodCostEvents: [
-          ["—","—","KiotViet","—","Chưa có Public API đọc Sổ quỹ/chi phí cho kỳ đang chọn","—","HOLD","KiotViet Hotel/F&B"],
-        ],
+        financePeriodCostEvents: cashflowRows,
         financeCostCoverage: [
           ["Kỳ", period.label],
           ["Nguồn tài chính", "KiotViet Hotel + KiotViet F&B ONLY"],
           ["Doanh thu API", bothTodayVerified ? "LIVE" : "PARTIAL"],
-          ["Chi phí API", "HOLD — Public API chưa expose Sổ quỹ/Purchase Orders"],
+          ["Chi phí API", cashflowReadReady ? "LIVE — KiotViet cashflow VERIFIED" : "HOLD — Public API F&B/Hotel chưa expose cashflow"],
           ["Fallback ngoài KiotViet", "DISABLED"],
         ],
         financeBranches: [
@@ -534,7 +569,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         financeCoverageNotes: [
           kiotVietOnlyCoverage,
           "Public API read đã xác minh: F&B invoices/categories/products = 200; Hotel branches/categories/products/invoices = 200.",
-          "Public API expense read đã xác minh HOLD: F&B cashflow/purchaseorders = 404; Hotel cashflow/purchaseorder/supplier = 404; F&B token gọi Retail purchaseorders/cashflow = 401.",
+          "Cashflow adapter đang hoạt động fail-closed: khi F&B/Hotel GET cashflow trả 200 sẽ tự nhận dữ liệu; hiện provider vẫn trả HOLD/unsupported.",
         ],
       },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",

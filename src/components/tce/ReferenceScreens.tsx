@@ -124,7 +124,7 @@ const meta: Record<ScreenKey, ScreenMeta> = {
       { label: "Dòng tiền ròng", value: "—", delta: "↗", note: "Cash in − cash out", tone: "green", icon: "↗" },
       { label: "Số dư tiền mặt", value: "—", delta: "↗", note: "Cash position", tone: "blue", icon: "▣" },
       { label: "Công nợ phải trả", value: "—", delta: "↘", note: "AP / obligations", tone: "amber", icon: "▱" },
-      { label: "Nợ vay", value: "—", delta: "↗", note: "FIN-HOSPITALITY-001", tone: "violet", icon: "▥" },
+      { label: "Nợ vay", value: "—", delta: "↗", note: "KiotViet Sổ quỹ · NEED VERIFY", tone: "violet", icon: "▥" },
     ],
   },
   reports: {
@@ -582,7 +582,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           </Section>
           <Section
             title="Sản phẩm / dịch vụ tạo lợi nhuận"
-            subtitle="Chỉ dùng invoice detail + cost từ KiotViet; không nối COST-001/FIN-HOSPITALITY vào kết quả"
+            subtitle="Chỉ dùng invoice detail + cost từ KiotViet; không nối nguồn giao dịch bên ngoài vào kết quả"
             className="col-span-12 lg:col-span-7 h-[235px]"
             icon="▣"
           >

@@ -97,11 +97,11 @@ const KIOTVIET_API_CAPABILITIES = [
   ["F&B","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
   ["F&B","Categories","GET","LIVE","HTTP 200 · dùng mapping nhóm sản phẩm"],
   ["F&B","Products + Inventory Cost","GET","LIVE","HTTP 200 · có invoice detail + product cost hiện tại"],
-  ["F&B","Sổ quỹ / Cashflow","GET","HOLD","Public F&B API trả 404"],
+  ["F&B","Sổ quỹ / Cashflow","GET","HOLD","Retail finance connector đã sẵn sàng; credential hiện tại chưa tương thích, native F&B API trả 404"],
   ["F&B","Purchase Orders","GET","HOLD","Public F&B API trả 404; Retail endpoint trả 401 với F&B token"],
   ["Hotel","Branches / Categories / Products","GET","LIVE","HTTP 200"],
   ["Hotel","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
-  ["Hotel","Sổ quỹ / Cashflow","GET","HOLD","Public Hotel API trả 404"],
+  ["Hotel","Sổ quỹ / Cashflow","GET","HOLD","Cần finance Retail credential riêng; native Hotel API trả 404"],
   ["Hotel","Purchase Orders / Suppliers","GET","HOLD","Public Hotel API trả 404"],
 ] as const;
 

@@ -333,10 +333,10 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
               <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="KiotViet Actual · Live" />
               <Stat
                 label="Chi phí đã ghi nhận"
-                value={money(props.finance.costEstimate)}
+                value={props.finance.costState === "NEED_VERIFY" ? "NEED VERIFY" : money(props.finance.costEstimate)}
                 tone="red"
                 icon="▥"
-                note={(props.finance.costState === "PARTIAL" ? "PARTIAL · " : "") + "Bấm để xem theo nhóm"}
+                note={(props.finance.costState === "NEED_VERIFY" ? "KIOTVIET ONLY · " : props.finance.costState === "PARTIAL" ? "PARTIAL · " : "") + "Bấm để xem theo nhóm"}
                 href={"/finance?period=" + props.period + "#cost-analysis"}
               />
               <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "NEED VERIFY"} tone="blue" icon="▣" note="Chưa đủ Actual cost để kết luận" />

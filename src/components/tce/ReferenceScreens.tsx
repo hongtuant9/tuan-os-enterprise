@@ -520,6 +520,18 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             />
           </Section>
           <Section
+            title="Danh mục Loại thu / Loại chi cần setup trong Sổ quỹ"
+            subtitle="Dùng đúng tên [TCE-Cxx/Nxx/Rxx] trên cả KiotViet Hotel và F&B; không tạo dữ liệu giao dịch song song trong TCE"
+            className="col-span-12 h-[520px]"
+            icon="▤"
+          >
+            <DataTable
+              columns={["Mã","Tên cần tạo","Áp dụng","Thu/Chi","KQKD","Nhân viên dùng khi","Quy tắc"]}
+              rows={28}
+              data={data?.tables.financeCashflowGroupSetup}
+            />
+          </Section>
+          <Section
             title="Chuẩn hạng mục CHI trên KiotViet"
             subtitle="Mỗi khoản chi phải vào đúng module; tránh nhập trùng giữa Nhập hàng, Bảng lương và Sổ quỹ"
             className="col-span-12 h-[360px]"
@@ -527,7 +539,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           >
             <DataTable
               columns={["Mã","Nhóm chi phí","Áp dụng","Nhập tại KiotViet","Hạch toán KQKD","Nguyên tắc"]}
-              rows={18}
+              rows={19}
               data={data?.tables.financeExpenseTaxonomy}
             />
           </Section>
@@ -551,7 +563,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           >
             <DataTable
               columns={["#","Hệ","Đối tượng","Method","Trạng thái","Kết quả"]}
-              rows={9}
+              rows={11}
               data={data?.tables.financeApiCapabilities}
             />
           </Section>

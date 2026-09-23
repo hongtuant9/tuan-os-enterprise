@@ -527,7 +527,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           >
             <DataTable
               columns={["Mã","Tên cần tạo","Áp dụng","Thu/Chi","KQKD","Nhân viên dùng khi","Quy tắc"]}
-              rows={25}
+              rows={28}
               data={data?.tables.financeCashflowGroupSetup}
             />
           </Section>
@@ -539,7 +539,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           >
             <DataTable
               columns={["Mã","Nhóm chi phí","Áp dụng","Nhập tại KiotViet","Hạch toán KQKD","Nguyên tắc"]}
-              rows={17}
+              rows={19}
               data={data?.tables.financeExpenseTaxonomy}
             />
           </Section>

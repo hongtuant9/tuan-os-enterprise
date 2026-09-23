@@ -211,6 +211,7 @@ function Section({
   action,
   className = "",
   icon = "▣",
+  id,
 }: {
   title: string;
   subtitle?: string;
@@ -218,9 +219,10 @@ function Section({
   action?: ReactNode;
   className?: string;
   icon?: string;
+  id?: string;
 }) {
   return (
-    <section className={"flex min-h-0 flex-col overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
+    <section id={id} className={"scroll-mt-3 flex min-h-0 flex-col overflow-hidden rounded-[10px] border border-[#dce8f4] bg-white shadow-[0_3px_14px_rgba(33,72,120,0.035)] " + className}>
       <div className="flex min-h-[44px] shrink-0 items-center justify-between gap-3 border-b border-[#edf3f8] px-3 py-2">
         <div className="flex min-w-0 items-start gap-2">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f4ff] text-[13px] font-bold text-[#1768df]"><UiIcon kind={title + " " + icon} className="h-[15px] w-[15px]" /></span>

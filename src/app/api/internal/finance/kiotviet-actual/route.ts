@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateApiRequest, principalHasMinimumRole } from "@/server/auth/api-auth";
 import { fetchFnbRevenueActual, fetchHotelRevenueActual } from "@/server/integrations/kiotviet/revenue-actual";
+import { fetchFnbCashflowActual, fetchHotelCashflowActual } from "@/server/integrations/kiotviet/cashflow-actual";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,17 +24,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "from/to must be ISO-like YYYY-MM-DD or datetime" }, { status: 400 });
   }
 
-  const [hotel, fnb] = await Promise.all([
+  const [hotel, fnb, hotelCashflow, fnbCashflow] = await Promise.all([
     fetchHotelRevenueActual(from!, to!),
     fetchFnbRevenueActual(from!, to!),
+    fetchHotelCashflowActual(from!, to!),
+    fetchFnbCashflowActual(from!, to!),
   ]);
 
   return NextResponse.json({
     ok: hotel.state === "VERIFIED" && fnb.state === "VERIFIED",
     generatedAt: new Date().toISOString(),
     period: { from, to },
-    homestay: hotel,
-    cozyGarden: fnb,
+    revenue: {
+      homestay: hotel,
+      cozyGarden: fnb,
+    },
+    cashflow: {
+      hotel: hotelCashflow,
+      fnb: fnbCashflow,
+      expenseReadReady: hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED",
+      fallbackOutsideKiotViet: false,
+    },
   }, {
     headers: { "Cache-Control": "no-store" },
   });

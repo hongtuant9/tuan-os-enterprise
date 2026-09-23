@@ -5,6 +5,7 @@ import {
   cashflowGroupsFor,
   TCE_KIOTVIET_CASHFLOW_TAXONOMY_VERSION,
   TCE_KIOTVIET_CASHFLOW_V1_TO_V2,
+  TCE_KIOTVIET_LEGACY_NAME_MIGRATION,
   type KiotVietCashflowSystem,
 } from "@/server/integrations/kiotviet/cashflow-taxonomy";
 
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
         : 0,
     },
     legacyV1ToV2: TCE_KIOTVIET_CASHFLOW_V1_TO_V2,
+    legacyNameMigration: TCE_KIOTVIET_LEGACY_NAME_MIGRATION,
     providerCapability: {
       readCashflow: {
         retailPublicApi: "GET /cashflow is documented for Retail only",

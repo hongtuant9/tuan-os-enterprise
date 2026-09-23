@@ -287,7 +287,6 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const monthFnb = fnbMonth.state === "VERIFIED" ? fnbMonth.revenue : 0;
     const periodRevenue = periodHotel + periodFnb;
     const monthRevenue = monthHotel + monthFnb;
-    const estimatePeriod = revenueCostEstimate(periodHotel, periodFnb, period.elapsedDays);
     const estimateMonth = revenueCostEstimate(monthHotel, monthFnb, Math.max(1, Number(today.slice(8, 10))));
     const bothPeriodVerified = hotelPeriod.state === "VERIFIED" && fnbPeriod.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
@@ -296,7 +295,6 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const fnbToday = fnbPeriod;
     const todayFnb = periodFnb;
     const todayRevenue = periodRevenue;
-    const estimateToday = estimatePeriod;
     const bothTodayVerified = bothPeriodVerified;
 
     const hotelTodayByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
@@ -377,7 +375,6 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const homestayVariableCost = periodHotel * 0.30;
     const cozyFixedCost = 45_470_000 * periodFactor;
     const cozyVariableCost = periodFnb * 0.37;
-    const modelCostTotal = homestayFixedCost + homestayVariableCost + cozyFixedCost + cozyVariableCost;
 
     const fallbackCostGroups = [
       {

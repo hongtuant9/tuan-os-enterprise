@@ -21,6 +21,7 @@ export type KiotVietCashflowSnapshot = {
     isReceipt: boolean | null;
     usedForFinancialReporting: boolean | null;
     cashFlowGroupId: string;
+    cashFlowGroupName: string;
     method: string;
     partnerName: string;
     description: string;
@@ -68,6 +69,12 @@ function normalize(source: KiotVietCashflowSnapshot["source"], from: string, to:
       isReceipt,
       usedForFinancialReporting: boolOrNull(row.usedForFinancialReporting),
       cashFlowGroupId: String(row.cashFlowGroupId ?? ""),
+      cashFlowGroupName: String(
+        row.cashFlowGroupName ??
+        (row.cashFlowGroup && typeof row.cashFlowGroup === "object"
+          ? (row.cashFlowGroup as Record<string, unknown>).name ?? ""
+          : "")
+      ),
       method: String(row.method ?? ""),
       partnerName: String(row.partnerName ?? ""),
       description: String(row.description ?? row.Description ?? ""),
@@ -113,28 +120,60 @@ function hold(
   };
 }
 
+function totalOf(payload: unknown, fallback: number) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const root = payload as Record<string, unknown>;
+  const direct = Number(root.total);
+  if (Number.isFinite(direct)) return direct;
+  const result = root.result;
+  if (result && typeof result === "object") {
+    const nested = Number((result as Record<string, unknown>).total);
+    if (Number.isFinite(nested)) return nested;
+  }
+  return fallback;
+}
+
 export async function fetchFnbCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
   const retail = new KiotVietRetailFinanceClient("fnb");
-  const query = new URLSearchParams({
-    startDate: from,
-    endDate: to,
-    pageSize: "100",
-    currentItem: "0",
-    includeBranch: "true",
-    includeUser: "true",
-    includeAccount: "true",
-  });
 
   if (retail.isConfigured()) {
+    const all: Row[] = [];
+    let currentItem = 0;
+    let lastStatus = 200;
+    let unsupported = false;
+
     try {
-      const result = await retail.listCashflow(query.toString());
-      if (result.ok) {
-        const out = normalize("KIOTVIET_FNB", from, to, rows(result.data), result.status);
-        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng.");
-        return out;
+      for (let page = 0; page < 1000; page += 1) {
+        const query = new URLSearchParams({
+          startDate: from,
+          endDate: to,
+          pageSize: "100",
+          currentItem: String(currentItem),
+          includeBranch: "true",
+          includeUser: "true",
+          includeAccount: "true",
+        });
+        const result = await retail.listCashflow(query.toString());
+        lastStatus = result.status;
+        if (!result.ok) {
+          if ([401, 403, 404].includes(result.status)) {
+            unsupported = true;
+            break;
+          }
+          return hold("KIOTVIET_FNB", from, to, result.status, "KiotViet F&B finance cashflow lỗi HTTP " + result.status + ".");
+        }
+
+        const batch = rows(result.data);
+        all.push(...batch);
+        const total = totalOf(result.data, all.length);
+        currentItem += batch.length;
+        if (batch.length === 0 || all.length >= total || batch.length < 100) break;
       }
-      if (![401, 403, 404].includes(result.status)) {
-        return hold("KIOTVIET_FNB", from, to, result.status, "KiotViet F&B finance cashflow lỗi HTTP " + result.status + ".");
+
+      if (!unsupported) {
+        const out = normalize("KIOTVIET_FNB", from, to, all, lastStatus);
+        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng; phân trang đến hết kỳ.");
+        return out;
       }
     } catch {
       // Fall through to native F&B capability probe. Never use external data.
@@ -143,41 +182,81 @@ export async function fetchFnbCashflowActual(from: string, to: string): Promise<
 
   const native = new KiotVietFnbClient();
   if (!native.isConfigured()) return hold("KIOTVIET_FNB", from, to, 0, "KiotViet F&B chưa cấu hình API.");
-  const result = await native.probeCashflow(query.toString());
-  if (!result.ok) {
-    return hold(
-      "KIOTVIET_FNB",
-      from,
-      to,
-      result.status,
-      "F&B cashflow chưa có finance Retail credential tương thích; native F&B Public API cũng chưa hỗ trợ /cashflow.",
-    );
+
+  const all: Row[] = [];
+  let currentItem = 0;
+  let lastStatus = 200;
+  for (let page = 0; page < 1000; page += 1) {
+    const query = new URLSearchParams({
+      startDate: from,
+      endDate: to,
+      pageSize: "100",
+      currentItem: String(currentItem),
+      includeBranch: "true",
+      includeUser: "true",
+      includeAccount: "true",
+    });
+    const result = await native.probeCashflow(query.toString());
+    lastStatus = result.status;
+    if (!result.ok) {
+      return hold(
+        "KIOTVIET_FNB",
+        from,
+        to,
+        result.status,
+        "F&B cashflow chưa có finance Retail credential tương thích; native F&B Public API cũng chưa hỗ trợ /cashflow.",
+      );
+    }
+    const batch = rows(result.data);
+    all.push(...batch);
+    const total = totalOf(result.data, all.length);
+    currentItem += batch.length;
+    if (batch.length === 0 || all.length >= total || batch.length < 100) break;
   }
-  return normalize("KIOTVIET_FNB", from, to, rows(result.data), result.status);
+  return normalize("KIOTVIET_FNB", from, to, all, lastStatus);
 }
 
 export async function fetchHotelCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
   const retail = new KiotVietRetailFinanceClient("hotel");
-  const retailQuery = new URLSearchParams({
-    startDate: from,
-    endDate: to,
-    pageSize: "100",
-    currentItem: "0",
-    includeBranch: "true",
-    includeUser: "true",
-    includeAccount: "true",
-  });
 
   if (retail.isConfigured()) {
+    const all: Row[] = [];
+    let currentItem = 0;
+    let lastStatus = 200;
+    let unsupported = false;
+
     try {
-      const result = await retail.listCashflow(retailQuery.toString());
-      if (result.ok) {
-        const out = normalize("KIOTVIET_HOTEL", from, to, rows(result.data), result.status);
-        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng.");
-        return out;
+      for (let page = 0; page < 1000; page += 1) {
+        const query = new URLSearchParams({
+          startDate: from,
+          endDate: to,
+          pageSize: "100",
+          currentItem: String(currentItem),
+          includeBranch: "true",
+          includeUser: "true",
+          includeAccount: "true",
+        });
+        const result = await retail.listCashflow(query.toString());
+        lastStatus = result.status;
+        if (!result.ok) {
+          if ([401, 403, 404].includes(result.status)) {
+            unsupported = true;
+            break;
+          }
+          return hold("KIOTVIET_HOTEL", from, to, result.status, "KiotViet Hotel finance cashflow lỗi HTTP " + result.status + ".");
+        }
+
+        const batch = rows(result.data);
+        all.push(...batch);
+        const total = totalOf(result.data, all.length);
+        currentItem += batch.length;
+        if (batch.length === 0 || all.length >= total || batch.length < 100) break;
       }
-      if (![401, 403, 404].includes(result.status)) {
-        return hold("KIOTVIET_HOTEL", from, to, result.status, "KiotViet Hotel finance cashflow lỗi HTTP " + result.status + ".");
+
+      if (!unsupported) {
+        const out = normalize("KIOTVIET_HOTEL", from, to, all, lastStatus);
+        out.notes.unshift("Đọc qua KiotViet Retail Public API /cashflow bằng finance connector riêng; phân trang đến hết kỳ.");
+        return out;
       }
     } catch {
       // Fall through to native Hotel capability probe. Never use external data.
@@ -186,24 +265,34 @@ export async function fetchHotelCashflowActual(from: string, to: string): Promis
 
   const native = new KiotVietHotelClient();
   if (!native.isConfigured()) return hold("KIOTVIET_HOTEL", from, to, 0, "KiotViet Hotel chưa cấu hình API.");
-  const nativeQuery = new URLSearchParams({
-    startDate: from,
-    endDate: to,
-    pageSize: "100",
-    pageIndex: "1",
-    includeBranch: "true",
-    includeUser: "true",
-    includeAccount: "true",
-  });
-  const result = await native.probeCashflow(nativeQuery.toString());
-  if (!result.ok) {
-    return hold(
-      "KIOTVIET_HOTEL",
-      from,
-      to,
-      result.status,
-      "Hotel cashflow chưa có finance Retail credential tương thích; native Hotel Public API cũng chưa hỗ trợ /cashflow.",
-    );
+
+  const all: Row[] = [];
+  let lastStatus = 200;
+  for (let pageIndex = 1; pageIndex <= 1000; pageIndex += 1) {
+    const nativeQuery = new URLSearchParams({
+      startDate: from,
+      endDate: to,
+      pageSize: "100",
+      pageIndex: String(pageIndex),
+      includeBranch: "true",
+      includeUser: "true",
+      includeAccount: "true",
+    });
+    const result = await native.probeCashflow(nativeQuery.toString());
+    lastStatus = result.status;
+    if (!result.ok) {
+      return hold(
+        "KIOTVIET_HOTEL",
+        from,
+        to,
+        result.status,
+        "Hotel cashflow chưa có finance Retail credential tương thích; native Hotel Public API cũng chưa hỗ trợ /cashflow.",
+      );
+    }
+    const batch = rows(result.data);
+    all.push(...batch);
+    const total = totalOf(result.data, all.length);
+    if (batch.length === 0 || all.length >= total || batch.length < 100) break;
   }
-  return normalize("KIOTVIET_HOTEL", from, to, rows(result.data), result.status);
+  return normalize("KIOTVIET_HOTEL", from, to, all, lastStatus);
 }

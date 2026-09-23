@@ -659,7 +659,12 @@ export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; d
           <div className="mx-auto max-w-[1500px] px-[10px] pb-[10px] pt-[10px]">
             {m.detailHref ? <div className="absolute right-4 top-[91px] z-10"><Link href={m.detailHref} className="rounded-[5px] border border-[#b7d3f9] bg-white px-3 py-1 text-[8px] font-bold text-[#1768df]">{m.detailLabel} →</Link></div> : null}
             <div className={"grid gap-2 " + (metrics.length === 7 ? "grid-cols-7" : "grid-cols-6")}>
-              {metrics.map(metric => <MetricCard key={metric.label} metric={metric}/>)}
+              {metrics.map((metric) => {
+                const costDrilldown = (screen === "business" || screen === "finance") && /chi phí/i.test(metric.label);
+                return costDrilldown
+                  ? <Link key={metric.label} href={"/finance?period=" + (data?.period.key ?? "today") + "#cost-analysis"} className="block"><MetricCard metric={metric}/></Link>
+                  : <MetricCard key={metric.label} metric={metric}/>;
+              })}
             </div>
             <div className="mt-2">
               <Board screen={screen} data={data}/>

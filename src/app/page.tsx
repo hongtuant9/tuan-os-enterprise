@@ -209,7 +209,7 @@ export default async function Home({
   const profitEstimate = 0;
   const marginEstimate = 0;
   const profitVerified = false;
-  const costState: "NEED_VERIFY" = "NEED_VERIFY";
+  const costState = "NEED_VERIFY" as const;
   const costLabel = "KIOTVIET ONLY · Sổ quỹ/chi phí chưa có Public API đọc";
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;

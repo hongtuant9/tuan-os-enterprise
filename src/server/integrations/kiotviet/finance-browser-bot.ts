@@ -967,8 +967,8 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       if (!auth.ok || !(await goCashbook(page, input.system))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: auth.detail || "Cashbook unavailable." };
       }
-      if (!(await cashbookCreateCapability(page, system))) {
-        return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "KiotViet account does not expose Phiếu thu/Phiếu chi create controls." };
+      if (!(await cashbookCreateCapability(page, input.system))) {
+        return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "KiotViet account could not open both Phiếu thu and Phiếu chi drafts without saving." };
       }
 
       if (await searchIdempotency(page, input.idempotencyKey)) {

@@ -224,6 +224,27 @@ export class AiReceptionistService {
         : [];
       const pageEntity = typeof metadata.page_entity === "string" ? metadata.page_entity : "unknown";
       const entityPropertyName = pageEntity !== "unknown" ? getPagePersona(pageEntity).displayName : null;
+      const reservationContext = AiReceptionistRepository.toObject(metadata.reservation_context);
+      const conversationMemory = AiReceptionistRepository.toObject(metadata.conversation_memory);
+      const messages = messagesByConversation.get(row.id) ?? [];
+      const managerReadAt = typeof metadata.manager_read_at === "string" ? metadata.manager_read_at : null;
+      const managerReadAtMs = managerReadAt ? Date.parse(managerReadAt) : Number.NEGATIVE_INFINITY;
+      const unreadInbound = messages.filter((message) =>
+        message.authorship === "guest" && Date.parse(message.createdAt) > managerReadAtMs
+      );
+      const checkInText = typeof reservationContext.checkInText === "string"
+        ? reservationContext.checkInText
+        : typeof conversationMemory.check_in === "string"
+          ? conversationMemory.check_in
+          : null;
+      const checkOutText = typeof reservationContext.checkOutText === "string"
+        ? reservationContext.checkOutText
+        : typeof conversationMemory.check_out === "string"
+          ? conversationMemory.check_out
+          : null;
+      const specialRequest = typeof reservationContext.specialRequest === "string"
+        ? reservationContext.specialRequest
+        : null;
       return {
         id: row.id,
         channel: row.channel,
@@ -243,11 +264,17 @@ export class AiReceptionistService {
         reservationReference: typeof metadata.reservation_reference === "string"
           ? metadata.reservation_reference
           : null,
+        checkInText,
+        checkOutText,
+        specialRequest,
+        unread: unreadInbound.length > 0,
+        unreadCount: unreadInbound.length,
+        managerReadAt,
         upsellOffers,
         status: row.status as ReceptionistConversation["status"],
         mode: row.mode as ReceptionistConversation["mode"],
         lastMessageAt: row.last_message_at,
-        messages: messagesByConversation.get(row.id) ?? [],
+        messages,
       };
     });
 
@@ -867,6 +894,20 @@ export class AiReceptionistService {
             : "yêu cầu bổ sung"
       } yêu cầu AI Lễ tân: ${review.title}.`,
       type: "approval",
+    });
+  }
+
+  async markConversationRead(conversationId: string, actorLabel: string): Promise<void> {
+    const conversation = await this.repo.findConversationById(conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const readAt = new Date().toISOString();
+    await this.repo.updateConversation(conversationId, {
+      metadata: {
+        ...metadata,
+        manager_read_at: readAt,
+        manager_read_by: actorLabel,
+      },
     });
   }
 

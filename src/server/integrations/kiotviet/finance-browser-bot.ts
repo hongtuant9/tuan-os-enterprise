@@ -458,7 +458,11 @@ async function closeVoucherDraft(page: Page): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 350));
 }
 
-async function openVoucherDraft(page: Page, direction: KiotVietCashflowDirection): Promise<boolean> {
+async function openVoucherDraft(
+  page: Page,
+  direction: KiotVietCashflowDirection,
+  paymentMethod: FinanceVoucherInput["paymentMethod"] = "Tiền mặt"
+): Promise<boolean> {
   const labels = direction === "CHI"
     ? ["+ Phiếu chi", "+ Lập phiếu chi", "Lập phiếu chi", "Phiếu chi"]
     : ["+ Phiếu thu", "+ Lập phiếu thu", "Lập phiếu thu", "Phiếu thu"];
@@ -471,7 +475,7 @@ async function openVoucherDraft(page: Page, direction: KiotVietCashflowDirection
     if (fieldPattern.test(await visibleText(page))) return true;
   }
 
-  const methodClicked = await clickByText(page, ["Tiền mặt"]);
+  const methodClicked = await clickByText(page, [paymentMethod]);
   if (!methodClicked) return false;
   await new Promise((resolve) => setTimeout(resolve, 700));
 
@@ -979,14 +983,13 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       await goCashbook(page, input.system);
       const rowsBeforeWrite = await cashbookRows(page);
 
-      if (!(await goCashbook(page, input.system)) || !(await openVoucherDraft(page, input.direction))) {
+      if (!(await goCashbook(page, input.system)) || !(await openVoucherDraft(page, input.direction, input.paymentMethod))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Could not open voucher form." };
       }
       const groupName = cashflowGroupDisplayName(group);
       if (!(await selectGroup(page, input.direction, groupName))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Canonical cashflow group was not selectable." };
       }
-      await clickByText(page, [input.paymentMethod]);
       const amountOk = await setFieldNearLabel(page, ["Giá trị", "Số tiền"], String(Math.round(input.amount)));
       const noteOk = await setFieldNearLabel(page, ["Ghi chú", "Nội dung"], `${input.note.trim()} | ${input.idempotencyKey}`);
       const reportingOk = await setFinancialReporting(page, reporting);

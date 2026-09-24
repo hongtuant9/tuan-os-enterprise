@@ -199,67 +199,77 @@ Normalized payload giữ tối thiểu:
 Connector chịu trách nhiệm provider auth, cursor/retry và outbound delivery. AI Receptionist core chịu trách nhiệm tri thức, safety, CRM identity, lifecycle care, reply draft và audit.
 
 
-## 14. OTA Connectivity — Verified 25/09/2026
+## 14. OTA Connectivity trực tiếp — Verified 25/09/2026
 
-Kết luận sau khi đối chiếu tài liệu chính thức:
+Kết luận sau khi đối chiếu tài liệu chính thức và mailbox vận hành thực tế:
 
-- **Booking.com** có Connectivity Messaging API cho guest messages, nhưng quyền truy cập theo Connectivity Partner / machine account / connection type và endpoint entitlement. Không giả định một property đơn lẻ có thể tự tạo key để dùng trực tiếp.
-- **Agoda** có Channel Manager Messaging API. Certification yêu cầu active Channel Manager partnership, existing Supply Connectivity credentials, property entitlement và webhook setup do Agoda thực hiện.
-- **Airbnb** có API Program/Software Partner model. Host bình thường kết nối thông qua PMS/Channel Manager đã được Airbnb phê duyệt.
-- **Expedia Group** có Messaging API cho connectivity providers; Expedia công bố không nhận direct API connections từ individual properties.
-- **Hotel Link** là Connectivity Partner/Channel Manager đang dùng tại TCE. Hotel Link đã công bố tính năng **Messages from OTAs** hiện hỗ trợ **Expedia và Airbnb** trong Extranet. Booking.com/Agoda chưa được Hotel Link công bố trong tính năng OTA Messaging tại thời điểm xác minh.
+- **Booking.com** có Connectivity Messaging API nhưng quyền API thuộc Connectivity Partner / machine account / endpoint entitlement. Đồng thời Booking.com gửi một số guest-message email qua alias `@guest.booking.com` / `@property.booking.com`, cho phép reply theo thread.
+- **Agoda** có Channel Manager Messaging API; ngoài ra Agoda guest-message email dùng relay `@agoda-messaging.com` và email xác nhận rõ reply sẽ được chuyển trực tiếp tới khách.
+- **Airbnb** vận hành API theo API Program/Software Partner; host message email có `Reply-To` dạng `@reply.airbnb.com`, và nội dung email cho biết có thể reply trực tiếp.
+- **Expedia Group** có Messaging API cho connectivity providers; individual property không có direct API entitlement mặc định. Guest-message email từ Partner Central sử dụng relay `@m.expediapartnercentral.com`.
+- **Hotel Link không còn là dependency của kiến trúc OTA V1.** TCE sẽ ưu tiên direct official API khi entitlement tồn tại, nếu không thì dùng direct OTA email relay.
 
 ### 14.1 Kiến trúc OTA ưu tiên
 
 ```text
-OTA official API
-   ↓
-Connectivity Partner / Channel Manager
-   ↓
-Hotel Link (ưu tiên vì TCE đang sử dụng)
-   ↓
-TCE Connector nếu Hotel Link cấp API/webhook messaging
-   ↓
-Authenticated normalized message bridge
-   ↓
-AI Receptionist core
-   ↓
-Safety / policy / reservation context
-   ↓
-Reply
+OTA official Messaging API (nếu TCE có entitlement)
+                │
+                └──────────────┐
+                               ↓
+OTA direct message email → Gmail OAuth → OTA Email Worker
+                               ↓
+                    Normalized OTA message
+                               ↓
+                    AI Receptionist core
+                               ↓
+         reservation context + L3/L4/runtime
+                               ↓
+                 safety / manager gate
+                               ↓
+      approved relay reply address + Gmail Send
+                               ↓
+                   OTA guest conversation
 ```
 
-### 14.2 Khi không có API/webhook messaging cho TCE
+### 14.2 Direct OTA Email Worker
 
-Dùng **OTA Assist Mode**, không tuyên bố là full automation:
+Worker 24/7 dùng Google OAuth connection hiện có của TCE, không tạo credential store mới.
 
-1. Inbound notification/message được đưa vào TCE qua nguồn được phép: Hotel Link UI, OTA notification email hoặc operator copy-in.
-2. AI Receptionist tạo reply draft dựa trên reservationReference + L3/L4/runtime.
-3. Safety gate chặn giá/availability/policy nếu không có live authority.
-4. Operator hoặc connector được xác minh gửi reply qua Hotel Link/OTA.
-5. Lưu delivery evidence + audit log vào TCE.
-6. Browser DOM automation chỉ được cân nhắc sau khi manual flow ổn định, terms/provider policy cho phép, có retry/log/owner/rollback và không có API/Channel Manager path tốt hơn.
+Yêu cầu:
+- Gmail scopes: `gmail.readonly` + `gmail.send`;
+- poll tối đa 1 phút/lần;
+- chỉ đọc sender domains được allowlist;
+- `externalMessageId=gmail:<message-id>` để idempotency;
+- bắt buộc có `reservationReference` trước khi xử lý;
+- lưu check-in/check-out/special request vào reservation context nếu email cung cấp;
+- chỉ gửi nếu AI không tạo manager review;
+- chỉ gửi tới relay address domain đã allowlist;
+- ghi delivery status + external sent message id;
+- nếu có lỗi, giữ HOLD và không gửi.
 
-Không dùng Computer Vision/mouse bot làm transport mặc định cho customer-facing OTA messaging.
+Default auto-reply là **OFF**. Biến `TCE_OTA_EMAIL_AUTOREPLY_CHANNELS` chỉ được bật theo từng channel sau UAT.
 
 ### 14.3 Channel-specific route
 
-- **Expedia**: ưu tiên Hotel Link OTA Messaging; nếu Hotel Link mở API/webhook cho đối tác/PMS thì TCE tích hợp qua đó. Nếu không, Assist Mode qua Hotel Link UI/email notification.
-- **Airbnb**: ưu tiên Hotel Link OTA Messaging hoặc Airbnb-approved software integration. Không dùng undocumented Airbnb API.
-- **Booking.com**: ưu tiên Messaging API thông qua Connectivity Partner. Vì Hotel Link là Booking.com Connectivity Partner/Premier Partner, trước tiên xác minh Hotel Link có thể expose Messaging API cho TCE/PMS hay không; nếu chưa, Assist Mode.
-- **Agoda**: ưu tiên Channel Manager Messaging API thông qua Hotel Link/Agoda-certified connectivity path. Nếu Hotel Link chưa expose messaging cho Agoda, giữ Assist Mode và chờ partner entitlement.
-- **Google Maps / Business Profile**: không coi là direct-chat OTA transport; xử lý reviews/reputation riêng.
+- **Booking.com**: ưu tiên Messaging API nếu sau này có entitlement. Hiện có thể dùng direct email relay khi inbound đến từ `@guest.booking.com` / `@property.booking.com`. Không gửi tới `noreply@booking.com`.
+- **Agoda**: direct email relay được hỗ trợ cho guest-message mail có reply address riêng `@agoda-messaging.com`. Không reply marketing/no-reply address.
+- **Airbnb**: direct email relay qua `@reply.airbnb.com`; native Scheduled Quick Replies vẫn phù hợp cho welcome/check-in/check-out định kỳ.
+- **Expedia / Hotels.com**: direct email relay qua `@m.expediapartnercentral.com` chỉ bật sau UAT xác nhận round-trip. API chính thức vẫn là partner-entitlement path.
+- **Google Maps / Business Profile**: không coi là OTA messaging transport.
 
 ### 14.4 STOP conditions
 
-- Không có documented provider/partner permission.
-- Credential scope chưa VERIFIED.
-- Provider Terms cấm automation path đang xem xét.
-- Không có reservation-to-conversation identity đủ tin cậy.
-- Không chống duplicate/idempotency.
-- Không có delivery confirmation hoặc audit trail.
-- Browser session/cookie là single point of failure.
+- Sender/reply relay domain không nằm trong allowlist.
+- Không có reservation reference hoặc không map được property/conversation.
+- AI tạo manager review hoặc safety gate HOLD.
+- Có claim về giá/availability/policy nhưng thiếu live authority.
+- OAuth scope Gmail chưa VERIFIED.
+- Reply round-trip của channel chưa UAT PASS.
+- Duplicate message id.
+- Delivery không có confirmation/audit trail.
+- Bất kỳ dấu hiệu provider chặn/cấm relay automation.
 
+Browser session/cookie không phải dependency của OTA messaging V1.
 
 ## 15. OTA Assist Mode — fallback khi chưa có messaging API/webhook
 

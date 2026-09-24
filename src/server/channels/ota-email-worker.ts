@@ -1,19 +1,24 @@
+import { google } from "googleapis";
 import { parseOtaEmail } from "@/server/channels/ota-email-parser";
 import type { AiReceptionistService } from "@/server/services/ai-receptionist.service";
+import {
+  GoogleGmailScopeError,
+  GoogleNotConnectedError,
+  GoogleOAuthTokenStore,
+} from "@/server/integrations/google/token-store";
 
-type GmailMessageList = { messages?: Array<{ id?: string }> };
-type GmailHeader = { name?: string; value?: string };
+type GmailHeader = { name?: string | null; value?: string | null };
 type GmailPart = {
-  mimeType?: string;
-  body?: { data?: string };
-  headers?: GmailHeader[];
-  parts?: GmailPart[];
+  mimeType?: string | null;
+  body?: { data?: string | null };
+  headers?: GmailHeader[] | null;
+  parts?: GmailPart[] | null;
 };
 type GmailMessage = {
-  id?: string;
-  threadId?: string;
-  snippet?: string;
-  payload?: GmailPart;
+  id?: string | null;
+  threadId?: string | null;
+  snippet?: string | null;
+  payload?: GmailPart | null;
 };
 
 export type OtaEmailWorkerResult = {
@@ -28,7 +33,6 @@ export type OtaEmailWorkerResult = {
   autoSent: number;
   autoSendHeld: number;
 };
-
 
 function headerValues(message: GmailMessage): Record<string, string> {
   const out: Record<string, string> = {};
@@ -82,55 +86,7 @@ function safeSubject(subject: string): string {
   return /^re:/i.test(cleaned) ? cleaned : `Re: ${cleaned}`;
 }
 
-async function gmailSendReply(input: {
-  token: string;
-  threadId?: string;
-  to: string;
-  subject: string;
-  body: string;
-  inReplyTo?: string;
-  references?: string;
-}): Promise<string> {
-  const headers = [
-    `To: ${input.to}`,
-    `Subject: ${safeSubject(input.subject)}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
-  ];
-  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
-  if (input.references) headers.push(`References: ${input.references}`);
-  headers.push("", input.body.trim());
-  const requestBody: { raw: string; threadId?: string } = {
-    raw: encodeBase64Url(headers.join("\r\n")),
-  };
-  if (input.threadId) requestBody.threadId = input.threadId;
-
-  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(15_000),
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
-  if (!response.ok || !payload?.id) {
-    throw new Error(`gmail_send_failed:${response.status}:${payload?.error?.message?.slice(0, 120) ?? "unknown"}`);
-  }
-  return payload.id;
-}
-
-function configured(): boolean {
-  return Boolean(
-    process.env.TCE_OTA_GMAIL_CLIENT_ID?.trim() &&
-    process.env.TCE_OTA_GMAIL_CLIENT_SECRET?.trim() &&
-    process.env.TCE_OTA_GMAIL_REFRESH_TOKEN?.trim()
-  );
-}
-
-function decodeBase64Url(value?: string): string {
+function decodeBase64Url(value?: string | null): string {
   if (!value) return "";
   try {
     return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
@@ -155,7 +111,7 @@ function stripHtml(value: string): string {
     .trim();
 }
 
-function collectBody(part?: GmailPart): { plain: string[]; html: string[] } {
+function collectBody(part?: GmailPart | null): { plain: string[]; html: string[] } {
   const result = { plain: [] as string[], html: [] as string[] };
   if (!part) return result;
   const body = decodeBase64Url(part.body?.data);
@@ -190,41 +146,40 @@ function inferPageEntity(text: string): "tce" | "lavender" | "ruby" | "cozy" | "
   return "lavender";
 }
 
-async function oauthAccessToken(): Promise<string> {
-  const body = new URLSearchParams({
-    client_id: process.env.TCE_OTA_GMAIL_CLIENT_ID!.trim(),
-    client_secret: process.env.TCE_OTA_GMAIL_CLIENT_SECRET!.trim(),
-    refresh_token: process.env.TCE_OTA_GMAIL_REFRESH_TOKEN!.trim(),
-    grant_type: "refresh_token",
-  });
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(12_000),
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => null) as { access_token?: string; error?: string } | null;
-  if (!response.ok || !payload?.access_token) {
-    throw new Error(`gmail_oauth_failed:${response.status}:${payload?.error ?? "unknown"}`);
-  }
-  return payload.access_token;
-}
+async function sendReply(input: {
+  gmail: ReturnType<typeof google.gmail>;
+  threadId?: string | null;
+  to: string;
+  subject: string;
+  body: string;
+  inReplyTo?: string;
+  references?: string;
+}): Promise<string> {
+  const headers = [
+    `To: ${input.to}`,
+    `Subject: ${safeSubject(input.subject)}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+  ];
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+  headers.push("", input.body.trim());
 
-async function gmailGet<T>(token: string, path: string): Promise<T> {
-  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(15_000),
-    cache: "no-store",
+  const { data } = await input.gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: encodeBase64Url(headers.join("\r\n")),
+      threadId: input.threadId || undefined,
+    },
   });
-  if (!response.ok) throw new Error(`gmail_api_failed:${response.status}`);
-  return await response.json() as T;
+  if (!data.id) throw new Error("gmail_send_missing_message_id");
+  return data.id;
 }
 
 export async function runOtaEmailWorker(service: AiReceptionistService): Promise<OtaEmailWorkerResult> {
   const result: OtaEmailWorkerResult = {
     checkedAt: new Date().toISOString(),
-    configured: configured(),
+    configured: false,
     scanned: 0,
     actionable: 0,
     drafted: 0,
@@ -234,25 +189,44 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     autoSent: 0,
     autoSendHeld: 0,
   };
-  if (!result.configured) return result;
 
-  const token = await oauthAccessToken();
+  let auth;
+  try {
+    auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForGmail();
+    result.configured = true;
+  } catch (error) {
+    if (error instanceof GoogleNotConnectedError || error instanceof GoogleGmailScopeError) {
+      return result;
+    }
+    throw error;
+  }
+
+  const gmail = google.gmail({ version: "v1", auth });
   const query = process.env.TCE_OTA_GMAIL_QUERY?.trim()
     || "newer_than:2d (from:(@guest.booking.com) OR from:(@property.booking.com) OR from:(@agoda-messaging.com) OR from:(@airbnb.com) OR from:(@m.expediapartnercentral.com)) -in:spam -in:trash -in:sent";
-  const list = await gmailGet<GmailMessageList>(
-    token,
-    `messages?${new URLSearchParams({ q: query, maxResults: "50" }).toString()}`
-  );
 
-  for (const item of list.messages ?? []) {
+  const list = await gmail.users.messages.list({
+    userId: "me",
+    q: query,
+    maxResults: 50,
+  });
+
+  for (const item of list.data.messages ?? []) {
     if (!item.id) continue;
     result.scanned += 1;
+
     try {
-      const message = await gmailGet<GmailMessage>(token, `messages/${encodeURIComponent(item.id)}?format=full`);
+      const { data } = await gmail.users.messages.get({
+        userId: "me",
+        id: item.id,
+        format: "full",
+      });
+      const message = data as GmailMessage;
       const from = header(message, "From");
       const subject = header(message, "Subject");
       const body = bodyText(message);
       const parsed = parseOtaEmail({ from, subject, body, snippet: message.snippet });
+
       if (!parsed.channel) {
         result.contextOnly += 1;
         continue;
@@ -284,6 +258,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         forceAssistMode: true,
         testerUserId: null,
       });
+
       if (ingest.duplicate) {
         result.duplicates += 1;
         continue;
@@ -303,8 +278,8 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
       }
 
       try {
-        const sentId = await gmailSendReply({
-          token,
+        const sentId = await sendReply({
+          gmail,
           threadId: message.threadId,
           to: replyTo,
           subject,

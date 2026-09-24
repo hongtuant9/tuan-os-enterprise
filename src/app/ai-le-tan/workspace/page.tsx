@@ -7,6 +7,8 @@ import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import { getReceptionistMode, isKiotVietDirectBookingWriteEnabled } from "@/server/ai-receptionist/config";
 import { channelPolicySnapshot } from "@/server/channels/channel-policy";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,35 @@ export default async function AiReceptionistWorkspacePage() {
   }
 
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
+  let mailboxStatus = {
+    connected: false,
+    googleEmail: null as string | null,
+    connectedAt: null as string | null,
+    lastError: null as string | null,
+    gmailReadScope: false,
+    gmailSendScope: false,
+    recommendedMailbox: "tamcocexperience.guestcare@gmail.com",
+    futureDomainMailbox: "guestcare@tamcocexperience.com",
+  };
+
+  if (session) {
+    try {
+      const connection = await new GoogleOAuthConnectionsRepository(createAdminClient()).findByUserId(session.userId);
+      const scopes = new Set((connection?.scope ?? "").split(/[\s,]+/).filter(Boolean));
+      mailboxStatus = {
+        connected: Boolean(connection),
+        googleEmail: connection?.google_email ?? null,
+        connectedAt: connection?.connected_at ?? null,
+        lastError: connection?.last_error ?? null,
+        gmailReadScope: scopes.has("https://www.googleapis.com/auth/gmail.readonly"),
+        gmailSendScope: scopes.has("https://www.googleapis.com/auth/gmail.send"),
+        recommendedMailbox: "tamcocexperience.guestcare@gmail.com",
+        futureDomainMailbox: "guestcare@tamcocexperience.com",
+      };
+    } catch {
+      // Mailbox readiness is informational; do not block the AI Receptionist workspace.
+    }
+  }
   const channelSnapshot = channelPolicySnapshot();
   const channels = channelSnapshot.channels.map((channel) => ({
     id: channel.id,
@@ -70,7 +101,7 @@ export default async function AiReceptionistWorkspacePage() {
             </p>
           </div>
         )}
-        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} />
+        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatus={mailboxStatus} />
       </main>
     </div>
   );

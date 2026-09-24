@@ -47,6 +47,8 @@ function runtimeSignals() {
   );
   const financeBotEnabled = process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true";
   const financeBotWorkerEnabled = financeBotEnabled && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+  const inventoryBotEnabled = process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase() === "true";
+  const inventoryBotWorkerEnabled = inventoryBotEnabled && process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
   const fnbFinanceBotWebCredentialConfigured = Boolean(
     (process.env.KIOTVIET_FNB_WEB_RETAILER?.trim() || process.env.KIOTVIET_FNB_RETAILER?.trim()) &&
     process.env.KIOTVIET_FNB_WEB_USERNAME?.trim() &&
@@ -86,6 +88,9 @@ function runtimeSignals() {
     kiotVietFinanceBotHotelWebCredentialConfigured: hotelFinanceBotWebCredentialConfigured,
     kiotVietFinanceBotGroupWriteEnabled: process.env.TCE_KIOTVIET_FINANCE_BOT_GROUP_WRITE_ENABLED?.trim().toLowerCase() === "true",
     kiotVietFinanceBotTransactionWriteEnabled: process.env.TCE_KIOTVIET_FINANCE_BOT_TRANSACTION_WRITE_ENABLED?.trim().toLowerCase() === "true",
+    kiotVietInventoryBotEnabled: inventoryBotEnabled,
+    kiotVietInventoryBotWorkerEnabled: inventoryBotWorkerEnabled,
+    kiotVietInventoryBotWriteEnabled: false,
     directBookingAutoCreateEnabled: process.env.KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED?.trim().toLowerCase() === "true",
     openAiApiKey: process.env.OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
     receptionistOpenAiApiKey: process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim() ? "SET=yes" : "SET=no",
@@ -117,7 +122,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
-          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1" },
+          features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1", kiotVietInventoryBot: "v1-readonly" },
           agentRegistry: 16,
           executiveOrgRoles: 11,
           customerChannelStage: customerChannelStage(),
@@ -134,7 +139,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1", kiotVietInventoryBot: "v1-readonly" },
         agentRegistry: 16,
         executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),
@@ -164,7 +169,7 @@ export async function GET() {
         status: "degraded",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
-        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1" },
+        features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1", kiotVietInventoryBot: "v1-readonly" },
         agentRegistry: 16,
           executiveOrgRoles: 11,
         customerChannelStage: customerChannelStage(),

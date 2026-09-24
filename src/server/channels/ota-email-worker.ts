@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { parseOtaEmail } from "@/server/channels/ota-email-parser";
 import type { AiReceptionistService } from "@/server/services/ai-receptionist.service";
+import { getReceptionistMode } from "@/server/ai-receptionist/config";
 import {
   GoogleGmailScopeError,
   GoogleNotConnectedError,
@@ -49,6 +50,13 @@ function extractAddress(value: string): string {
   if (angle?.[1]) return angle[1].trim().toLowerCase();
   const plain = value.match(/([A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
   return plain?.[1]?.trim().toLowerCase() ?? "";
+}
+
+function automaticReplyGateOpen(): boolean {
+  if (process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() !== "true") return false;
+  if (!process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim()) return false;
+  const mode = getReceptionistMode();
+  return mode === "limited_auto" || mode === "live";
 }
 
 function autoReplyChannels(): Set<string> {
@@ -266,7 +274,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
 
       result.drafted += 1;
       const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
-      const autoSendRequested = autoReplyChannels().has(parsed.channel);
+      const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
       const autoSendAllowed = autoSendRequested
         && !ingest.reviewId
         && approvedReplyAddress(parsed.channel, replyTo)

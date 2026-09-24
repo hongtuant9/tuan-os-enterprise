@@ -363,7 +363,7 @@ async function cashbookRows(page: Page): Promise<string[]> {
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
     };
-    return Array.from(document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row']"))
+    return Array.from(document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row"))
       .filter(visible)
       .map((row) => (row.textContent || "").replace(/\s+/g, " ").trim())
       .filter(Boolean)

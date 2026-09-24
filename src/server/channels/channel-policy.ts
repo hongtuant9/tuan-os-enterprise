@@ -178,6 +178,7 @@ export function assertCustomerChannelEnabled(id: CustomerChannelId): void {
 }
 
 export function channelAllowsAutomaticUpsell(channel: string): boolean {
+  if (channel === "pilot") return true;
   const definition = CUSTOMER_CHANNELS.find((item) => item.id === channel);
   return Boolean(definition?.automaticUpsell);
 }

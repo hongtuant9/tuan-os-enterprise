@@ -3,6 +3,9 @@ set -euo pipefail
 
 ENV_FILE="${ENV_FILE:-/opt/tuan-ai/secrets/tce-app.env}"
 
+# Runtime env is injected when Docker creates the container. After an approved env-only change,
+# use the canonical deploy flow so candidate health checks and rollback protections still apply.
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "[OVH preflight] MISSING env file: $ENV_FILE"
   exit 1

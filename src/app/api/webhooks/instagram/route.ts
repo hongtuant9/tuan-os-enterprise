@@ -137,6 +137,17 @@ export async function POST(request: Request) {
 
   for (const entry of payload.entry ?? []) {
     const accountId = entry.id?.trim();
+    const configuredAccountId = process.env.INSTAGRAM_USER_ID?.trim();
+    if (!accountId || (configuredAccountId && accountId !== configuredAccountId)) {
+      await getAdminContainer().activityLog.record({
+        agent: "Instagram",
+        unit: "TCE AI",
+        message: "Instagram webhook account mismatch detected; event kept fail-closed.",
+        type: "alert",
+      });
+      continue;
+    }
+
     for (const event of entry.messaging ?? []) {
       const senderId = event.sender?.id?.trim();
       const text = event.message?.text?.trim();
@@ -186,14 +197,6 @@ export async function POST(request: Request) {
       }
     }
 
-    if (accountId && process.env.INSTAGRAM_USER_ID?.trim() && accountId !== process.env.INSTAGRAM_USER_ID?.trim()) {
-      await getAdminContainer().activityLog.record({
-        agent: "Instagram",
-        unit: "TCE AI",
-        message: "Instagram webhook account mismatch detected; event kept fail-closed.",
-        type: "alert",
-      });
-    }
   }
 
   return NextResponse.json({ ok: true, processed });

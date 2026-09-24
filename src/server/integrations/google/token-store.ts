@@ -28,6 +28,13 @@ export class GoogleAnalyticsReadScopeError extends Error {
   }
 }
 
+export class GoogleGmailScopeError extends Error {
+  constructor() {
+    super("Google Gmail readonly/send scopes are missing. Reconnect Google once to grant Gmail access for OTA messaging.");
+    this.name = "GoogleGmailScopeError";
+  }
+}
+
 export class GoogleSheetsWriteScopeError extends Error {
   constructor() {
     super("Tài khoản Google hiện chỉ có quyền đọc. Hãy kết nối lại Google một lần để cấp quyền cập nhật Master Sheet, rồi bấm Duyệt lại.");
@@ -37,6 +44,8 @@ export class GoogleSheetsWriteScopeError extends Error {
 
 const GOOGLE_SHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const GOOGLE_ANALYTICS_READ_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
+const GOOGLE_GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GOOGLE_GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 
 const REFRESH_BUFFER_MS = 60_000; // refresh a minute early to avoid racing expiry
 
@@ -89,6 +98,16 @@ export class GoogleOAuthTokenStore {
     if (!connection) throw new GoogleNotConnectedError();
     const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
     if (!scopes.has(GOOGLE_ANALYTICS_READ_SCOPE)) throw new GoogleAnalyticsReadScopeError();
+    return this.getAuthorizedClient(connection);
+  }
+
+  async getSystemAuthorizedClientForGmail(): Promise<Auth.OAuth2Client> {
+    const connection = await this.repo.findMostRecent();
+    if (!connection) throw new GoogleNotConnectedError();
+    const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
+    if (!scopes.has(GOOGLE_GMAIL_READ_SCOPE) || !scopes.has(GOOGLE_GMAIL_SEND_SCOPE)) {
+      throw new GoogleGmailScopeError();
+    }
     return this.getAuthorizedClient(connection);
   }
 

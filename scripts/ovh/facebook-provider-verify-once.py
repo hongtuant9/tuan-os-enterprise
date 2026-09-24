@@ -80,6 +80,12 @@ for version in versions:
     debug_data = debug_body.get("data") if isinstance(debug_body, dict) else {}
     debug_data = debug_data if isinstance(debug_data, dict) else {}
     scopes = debug_data.get("scopes") or []
+    granular_scopes = debug_data.get("granular_scopes") or []
+    granular_scope_names = {
+        str(item.get("scope") or "")
+        for item in granular_scopes
+        if isinstance(item, dict)
+    }
 
     page_query = urllib.parse.urlencode({
         "fields": "id,name",
@@ -97,7 +103,7 @@ for version in versions:
         "debug_http": debug_status == 200,
         "token_valid": debug_data.get("is_valid") is True,
         "app_id_matches": str(debug_data.get("app_id") or "") == app_id,
-        "pages_messaging": "pages_messaging" in scopes,
+        "pages_messaging": "pages_messaging" in scopes or "pages_messaging" in granular_scope_names,
         "page_http": page_status == 200,
         "page_matches": str(page_body.get("id") or "") == EXPECTED_PAGE_ID,
     }

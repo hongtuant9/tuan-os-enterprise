@@ -54,7 +54,6 @@ export type FinanceVoucherResult = {
   detail: string;
 };
 
-const LOGIN_URL = "https://accounts.kiotviet.vn/Login";
 const STATE_ROOT = process.env.TCE_KIOTVIET_FINANCE_BOT_STATE_DIR?.trim() || "/var/lib/tce-finance-bot";
 let browserMutex: Promise<unknown> = Promise.resolve();
 
@@ -253,26 +252,67 @@ async function login(page: Page, system: FinanceBotSystem): Promise<{ ok: boolea
   await page.goto(cfg.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
-  if (await page.$("#RetailerCode")) {
-    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    await page.type("#RetailerCode", cfg.retailer, { delay: 8 });
-    await page.type("#UserName", cfg.username, { delay: 8 });
-    await page.type("#Password", cfg.password, { delay: 8 });
-    const submit = await page.$("input[type='submit'][value*='Đăng nhập']");
-    if (!submit) return { ok: false, state: "HOLD_UI_CHANGED", detail: "Login submit control not found." };
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null),
-      submit.click(),
-    ]);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+  if (await page.$("#Password")) {
+    const navigation = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null);
+    const loginForm = await page.evaluate(
+      ({ retailer, username, password }) => {
+        const retailerInput =
+          (document.querySelector("#Retailer") as HTMLInputElement | null) ||
+          (document.querySelector("#RetailerCode") as HTMLInputElement | null);
+        const usernameInput = document.querySelector("#UserName") as HTMLInputElement | null;
+        const passwordInput = document.querySelector("#Password") as HTMLInputElement | null;
+        if (!retailerInput || !usernameInput || !passwordInput) {
+          return { filled: false, submitted: false };
+        }
+
+        const setValue = (input: HTMLInputElement, value: string) => {
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+          setter?.call(input, value);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        setValue(retailerInput, retailer);
+        setValue(usernameInput, username);
+        setValue(passwordInput, password);
+
+        const visible = (el: Element) => {
+          const node = el as HTMLElement;
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+        };
+        const submitControls = Array.from(
+          document.querySelectorAll("button#btn-login,button[type='submit'],input[type='submit']")
+        ).filter(visible);
+        const submit =
+          submitControls.find((el) =>
+            /quản lý|đăng nhập|login/i.test(
+              ((el as HTMLInputElement).value || el.textContent || "").replace(/\s+/g, " ").trim()
+            )
+          ) || submitControls[0];
+        if (!submit) return { filled: true, submitted: false };
+        (submit as HTMLElement).click();
+        return { filled: true, submitted: true };
+      },
+      { retailer: cfg.retailer, username: cfg.username, password: cfg.password }
+    );
+
+    if (!loginForm.filled) {
+      return { ok: false, state: "HOLD_UI_CHANGED", detail: "KiotViet login fields were not recognized." };
+    }
+    if (!loginForm.submitted) {
+      return { ok: false, state: "HOLD_UI_CHANGED", detail: "KiotViet login submit control was not recognized." };
+    }
+    await navigation;
+    await new Promise((resolve) => setTimeout(resolve, 2200));
   }
 
   const text = await visibleText(page);
-  if (/otp|mã xác thực|xác thực 2 lớp/i.test(text)) {
-    return { ok: false, state: "HOLD_MFA", detail: "KiotViet requires MFA/OTP for this browser profile." };
+  if (/otp|mã xác thực|xác thực 2 lớp|captcha|mã bảo mật/i.test(text)) {
+    return { ok: false, state: "HOLD_MFA", detail: "KiotViet requires an interactive login challenge for this browser profile." };
   }
   if (await page.$("#Password")) {
-    return { ok: false, state: "HOLD_CONFIG", detail: "KiotViet login did not complete; verify dedicated Finance Bot credentials." };
+    return { ok: false, state: "HOLD_CONFIG", detail: "KiotViet login was rejected or did not complete; verify the dedicated Finance Bot credentials." };
   }
 
   if (/quản lý/i.test(text) && !/sổ quỹ/i.test(text)) {
@@ -287,12 +327,40 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
   const cfg = config(system);
   if (cfg.cashbookUrl) {
     await page.goto(cfg.cashbookUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   } else {
     const clicked = await clickByText(page, ["Sổ quỹ", "Sổ Quỹ"]);
-    if (clicked) await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (!clicked) return false;
   }
-  return /sổ quỹ/i.test(await visibleText(page));
+
+  await page.waitForFunction(
+    () => {
+      const body = document.body?.innerText || "";
+      return /sổ quỹ/i.test(document.title) || /cashflow/i.test(location.href) || /sổ quỹ/i.test(body);
+    },
+    { timeout: 12_000 }
+  ).catch(() => null);
+
+  await page.waitForFunction(
+    () => {
+      const body = document.body?.innerText || "";
+      const rows = Array.from(
+        document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row")
+      );
+      const hasVisibleRow = rows.some((row) => {
+        const node = row as HTMLElement;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+      });
+      return hasVisibleRow || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
+    },
+    { timeout: 15_000 }
+  ).catch(() => null);
+
+  return page.evaluate(() => {
+    const body = document.body?.innerText || "";
+    return /sổ quỹ/i.test(document.title) || /cashflow/i.test(location.href) || /sổ quỹ/i.test(body);
+  });
 }
 
 async function cashbookRows(page: Page): Promise<string[]> {
@@ -303,7 +371,7 @@ async function cashbookRows(page: Page): Promise<string[]> {
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
     };
-    return Array.from(document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row']"))
+    return Array.from(document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row"))
       .filter(visible)
       .map((row) => (row.textContent || "").replace(/\s+/g, " ").trim())
       .filter(Boolean)

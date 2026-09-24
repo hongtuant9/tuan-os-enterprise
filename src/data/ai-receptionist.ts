@@ -14,10 +14,17 @@ export type ReceptionistMessage = {
   id: string;
   direction: "inbound" | "outbound" | "internal";
   senderType: "guest" | "ai" | "manager" | "system";
+  authorship: "guest" | "ai" | "human" | "system";
+  actorLabel: string;
   content: string;
   translatedVi: string;
   detectedLanguage?: string;
   status: "received" | "draft" | "simulated" | "sent" | "failed";
+  externalMessageId: string | null;
+  deliveredAt: string | null;
+  deliveryDetail: string | null;
+  qaPass: boolean | null;
+  editedByHuman: boolean;
   createdAt: string;
 };
 

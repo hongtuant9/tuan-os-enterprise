@@ -58,6 +58,7 @@ function isHotelPropertyName(value: unknown): value is HotelPropertyName {
 
 function toMessage(row: {
   id: string;
+  external_message_id: string | null;
   direction: string;
   sender_type: string;
   content: string;
@@ -69,14 +70,39 @@ function toMessage(row: {
   const translatedVi = typeof metadata.translated_vi === "string"
     ? metadata.translated_vi
     : row.content;
+  const senderType = row.sender_type as ReceptionistMessage["senderType"];
+  const authorship: ReceptionistMessage["authorship"] =
+    senderType === "guest" ? "guest" : senderType === "ai" ? "ai" : senderType === "manager" ? "human" : "system";
+  const actorLabel = typeof metadata.actor_label === "string"
+    ? metadata.actor_label
+    : typeof metadata.actor === "string"
+      ? metadata.actor
+      : senderType === "guest"
+        ? "Khách"
+        : senderType === "ai"
+          ? "AI Lễ tân"
+          : senderType === "manager"
+            ? "Người vận hành"
+            : "Hệ thống";
   return {
     id: row.id,
     direction: row.direction as ReceptionistMessage["direction"],
-    senderType: row.sender_type as ReceptionistMessage["senderType"],
+    senderType,
+    authorship,
+    actorLabel,
     content: row.content,
     translatedVi,
     detectedLanguage: typeof metadata.detected_language === "string" ? metadata.detected_language : undefined,
     status: row.status as ReceptionistMessage["status"],
+    externalMessageId: row.external_message_id,
+    deliveredAt: typeof metadata.delivered_at === "string"
+      ? metadata.delivered_at
+      : typeof metadata.sent_at === "string"
+        ? metadata.sent_at
+        : null,
+    deliveryDetail: typeof metadata.delivery_detail === "string" ? metadata.delivery_detail : null,
+    qaPass: typeof metadata.qa_pass === "boolean" ? metadata.qa_pass : null,
+    editedByHuman: metadata.edited_by_human === true,
     createdAt: row.created_at,
   };
 }
@@ -196,6 +222,8 @@ export class AiReceptionistService {
       const upsellOffers = Array.isArray(metadata.upsell_offers)
         ? metadata.upsell_offers.filter((value): value is string => typeof value === "string")
         : [];
+      const pageEntity = typeof metadata.page_entity === "string" ? metadata.page_entity : "unknown";
+      const entityPropertyName = pageEntity !== "unknown" ? getPagePersona(pageEntity).displayName : null;
       return {
         id: row.id,
         channel: row.channel,
@@ -203,7 +231,7 @@ export class AiReceptionistService {
         customerName: row.customer_name ?? "Khách chưa cung cấp tên",
         customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
         propertyId: row.property_id,
-        propertyName: row.property_id ? propertyNames.get(row.property_id) ?? null : null,
+        propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
         language: row.language,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
@@ -504,6 +532,8 @@ export class AiReceptionistService {
         reservation_context: input.reservationContext ?? null,
         provider_message_type: input.providerMessageType ?? null,
         assist_mode: input.forceAssistMode === true,
+        actor_label: "Khách",
+        authorship: "guest",
       },
     });
 
@@ -525,6 +555,10 @@ export class AiReceptionistService {
         page_entity: pageEntity,
         qa_pass: rendered.qa.pass,
         qa_reasons: rendered.qa.reasons,
+        actor_label: "AI Lễ tân",
+        authorship: "ai",
+        generated_at: new Date().toISOString(),
+        edited_by_human: false,
       },
     });
 
@@ -592,6 +626,7 @@ export class AiReceptionistService {
         ...metadata,
         delivery_status: input.status,
         delivery_detail: input.detail ?? null,
+        delivered_at: input.status === "sent" ? new Date().toISOString() : null,
       },
     });
   }
@@ -788,6 +823,10 @@ export class AiReceptionistService {
         resumed_after_manager_review: true,
         translated_vi: rendered.replyTranslationVi,
         detected_language: rendered.detectedLanguage,
+        actor_label: "AI Lễ tân",
+        authorship: "ai",
+        generated_at: new Date().toISOString(),
+        edited_by_human: false,
       },
     });
 

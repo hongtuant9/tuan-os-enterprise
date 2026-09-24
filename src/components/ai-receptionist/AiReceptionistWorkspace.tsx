@@ -168,8 +168,8 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   if (!selected) {
     return (
       <EmptyState
-        title="Chưa có hội thoại trực tiếp"
-        description="Dùng Phòng kiểm thử để tạo hội thoại đầu tiên. Booking OTA không được đưa vào khu vực AI Lễ tân."
+        title="Chưa có hội thoại"
+        description="Hội thoại trực tiếp và OTA Assist sẽ xuất hiện tại đây sau khi có dữ liệu inbound hợp lệ."
       />
     );
   }
@@ -239,7 +239,13 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                   }`}
                 >
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-                    {guest ? "Khách" : message.senderType === "manager" ? "Quản lý Homestay" : "AI Lễ tân"}
+                    {message.authorship === "guest"
+                      ? "Khách"
+                      : message.authorship === "human"
+                        ? `Người thật · ${message.actorLabel}`
+                        : message.authorship === "ai"
+                          ? "AI Lễ tân · AI viết"
+                          : "Hệ thống"}
                   </p>
                   <div className="grid gap-2">
                     <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)]/60 p-3">
@@ -852,7 +858,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Tác nhân AI đặt phòng, hỗ trợ khách và trải nghiệm</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ink-primary)]">Tác nhân AI Lễ tân</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Tiếp nhận khách nhắn trực tiếp, tư vấn có căn cứ, chuyển ngoại lệ cho Quản lý Homestay và tích lũy tri thức có kiểm soát. Đặt phòng từ OTA không hiển thị tại đây.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Tiếp nhận khách trực tiếp và OTA Assist, tư vấn có căn cứ, lưu toàn bộ lịch sử giao tiếp, phân biệt AI/người thật, chuyển ngoại lệ cho Quản lý và tích lũy tri thức có kiểm soát.</p>
           </div>
           <div className="flex flex-wrap gap-2"><Pill label={MODE_LABEL[dashboard.mode]} tone="accent" /><Pill label={dashboard.writeEnabled ? "Ghi KiotViet: Đã mở" : "Ghi KiotViet: Đang khóa"} tone={dashboard.writeEnabled ? "good" : "warn"} /></div>
         </div>

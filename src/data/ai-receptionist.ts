@@ -33,6 +33,8 @@ export type ReceptionistConversation = {
   intent: string;
   routedAgent: string;
   journeyEntry: string;
+  carePhase: CustomerCarePhase;
+  reservationReference: string | null;
   upsellOffers: string[];
   status: ConversationStatus;
   mode: ReceptionistMode;

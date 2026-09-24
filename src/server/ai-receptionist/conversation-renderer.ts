@@ -116,6 +116,11 @@ export async function renderSalesConversation(input: {
   styleGuidance?: string[];
   channel?: string;
   carePhase?: "pre_service" | "in_service" | "post_service" | "general";
+  reservationContext?: {
+    checkInText?: string | null;
+    checkOutText?: string | null;
+    specialRequest?: string | null;
+  };
   automaticUpsellAllowed?: boolean;
 }): Promise<ConversationRenderResult> {
   const apiKey = receptionistApiKey();
@@ -145,6 +150,9 @@ export async function renderSalesConversation(input: {
       ? "Do not upsell, remarket, redirect to direct booking, or promote an off-platform purchase on this channel."
       : "Do not upsell until the guest's primary need is addressed; then offer at most one contextually relevant next help.",
     `Customer channel: ${input.channel ?? "unknown"}. Care phase: ${input.carePhase ?? "general"}.`,
+    input.reservationContext
+      ? "RESERVATION_CONTEXT comes from the OTA message itself and may be used only for this reservation. Do not turn it into general availability, price or policy claims."
+      : "No reservation context was supplied by the channel.",
     input.carePhase === "pre_service"
       ? "For pre-service care, prioritize arrival preparation, confirmed booking facts, directions and next required details."
       : input.carePhase === "in_service"
@@ -170,6 +178,7 @@ export async function renderSalesConversation(input: {
     },
     FACT_PACK: factPack,
     RUNTIME_EVIDENCE: input.decision.evidence,
+    RESERVATION_CONTEXT: input.reservationContext ?? null,
   };
   const inputText = JSON.stringify(payload);
   const maxOutputTokens = 700;

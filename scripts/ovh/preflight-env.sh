@@ -11,6 +11,13 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+# One-shot Facebook webhook verification rebind after OVH migration.
+# This value is not an API credential; remove this block after provider verification PASS.
+if ! grep -Eq '^FACEBOOK_VERIFY_TOKEN=.+' "$ENV_FILE"; then
+  printf '%s\n' 'FACEBOOK_VERIFY_TOKEN=TCE-FB-WEBHOOK-VERIFY-20260924-V2' >> "$ENV_FILE"
+  echo "[OVH preflight] Restored Facebook webhook verification value (non-secret)."
+fi
+
 
 required=(
   NEXT_PUBLIC_SUPABASE_URL

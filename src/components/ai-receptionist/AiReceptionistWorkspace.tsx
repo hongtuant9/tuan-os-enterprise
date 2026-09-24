@@ -703,7 +703,8 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
 
 
 function AuditLog({ items }: { items: ReceptionistConversation[] }) {
-  const [windowFilter, setWindowFilter] = useState<"today" | "7d" | "30d" | "all">("7d");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [channelFilter, setChannelFilter] = useState("all");
   const [propertyFilter, setPropertyFilter] = useState("all");
   const [actorFilter, setActorFilter] = useState<"all" | "ai" | "human" | "guest" | "system">("all");
@@ -718,24 +719,22 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
   );
 
   const rows = useMemo(() => {
-    const now = Date.now();
-    const start = windowFilter === "today"
-      ? new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })).setHours(0, 0, 0, 0)
-      : windowFilter === "7d" ? now - 7 * 86400000
-      : windowFilter === "30d" ? now - 30 * 86400000
-      : 0;
+    const start = fromDate ? Date.parse(`${fromDate}T00:00:00+07:00`) : null;
+    const end = toDate ? Date.parse(`${toDate}T23:59:59+07:00`) : null;
 
     return items
       .flatMap((conversation) => conversation.messages.map((message) => ({ conversation, message })))
       .filter(({ conversation, message }) => {
-        if (start && new Date(message.createdAt).getTime() < start) return false;
+        const created = Date.parse(message.createdAt);
+        if (start != null && created < start) return false;
+        if (end != null && created > end) return false;
         if (channelFilter !== "all" && conversation.channel !== channelFilter) return false;
         if (propertyFilter !== "all" && (conversation.propertyName ?? "Chưa xác định") !== propertyFilter) return false;
         if (actorFilter !== "all" && message.authorship !== actorFilter) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.message.createdAt).getTime() - new Date(a.message.createdAt).getTime());
-  }, [items, windowFilter, channelFilter, propertyFilter, actorFilter]);
+      .sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));
+  }, [items, fromDate, toDate, channelFilter, propertyFilter, actorFilter]);
 
   function actorTone(actor: string): Tone {
     if (actor === "ai") return "accent";
@@ -772,13 +771,15 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
           </div>
           <Pill label={`${rows.length} sự kiện`} tone="accent" />
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <select value={windowFilter} onChange={(e) => setWindowFilter(e.target.value as typeof windowFilter)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
-            <option value="today">Hôm nay</option>
-            <option value="7d">7 ngày gần nhất</option>
-            <option value="30d">30 ngày gần nhất</option>
-            <option value="all">Toàn bộ</option>
-          </select>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <label className="grid gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+            Từ ngày
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ink-primary)]" />
+          </label>
+          <label className="grid gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+            Đến ngày
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ink-primary)]" />
+          </label>
           <select value={propertyFilter} onChange={(e) => setPropertyFilter(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
             <option value="all">Tất cả cơ sở</option>
             {properties.map((property) => <option key={property} value={property}>{property}</option>)}

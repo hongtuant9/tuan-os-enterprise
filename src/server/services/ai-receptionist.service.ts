@@ -58,6 +58,7 @@ function isHotelPropertyName(value: unknown): value is HotelPropertyName {
 
 function toMessage(row: {
   id: string;
+  external_message_id: string | null;
   direction: string;
   sender_type: string;
   content: string;
@@ -69,14 +70,39 @@ function toMessage(row: {
   const translatedVi = typeof metadata.translated_vi === "string"
     ? metadata.translated_vi
     : row.content;
+  const senderType = row.sender_type as ReceptionistMessage["senderType"];
+  const authorship: ReceptionistMessage["authorship"] =
+    senderType === "guest" ? "guest" : senderType === "ai" ? "ai" : senderType === "manager" ? "human" : "system";
+  const actorLabel = typeof metadata.actor_label === "string"
+    ? metadata.actor_label
+    : typeof metadata.actor === "string"
+      ? metadata.actor
+      : senderType === "guest"
+        ? "Khách"
+        : senderType === "ai"
+          ? "AI Lễ tân"
+          : senderType === "manager"
+            ? "Người vận hành"
+            : "Hệ thống";
   return {
     id: row.id,
     direction: row.direction as ReceptionistMessage["direction"],
-    senderType: row.sender_type as ReceptionistMessage["senderType"],
+    senderType,
+    authorship,
+    actorLabel,
     content: row.content,
     translatedVi,
     detectedLanguage: typeof metadata.detected_language === "string" ? metadata.detected_language : undefined,
     status: row.status as ReceptionistMessage["status"],
+    externalMessageId: row.external_message_id,
+    deliveredAt: typeof metadata.delivered_at === "string"
+      ? metadata.delivered_at
+      : typeof metadata.sent_at === "string"
+        ? metadata.sent_at
+        : null,
+    deliveryDetail: typeof metadata.delivery_detail === "string" ? metadata.delivery_detail : null,
+    qaPass: typeof metadata.qa_pass === "boolean" ? metadata.qa_pass : null,
+    editedByHuman: metadata.edited_by_human === true,
     createdAt: row.created_at,
   };
 }

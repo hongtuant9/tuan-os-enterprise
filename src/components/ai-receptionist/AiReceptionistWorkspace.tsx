@@ -41,6 +41,17 @@ type ChannelStatus = {
   providerVerification: string;
 };
 
+type MailboxStatus = {
+  connected: boolean;
+  googleEmail: string | null;
+  connectedAt: string | null;
+  lastError: string | null;
+  gmailReadScope: boolean;
+  gmailSendScope: boolean;
+  recommendedMailbox: string;
+  futureDomainMailbox: string;
+};
+
 const MODE_LABEL: Record<ReceptionistDashboard["mode"], string> = {
   off: "Đã tắt",
   simulation: "Mô phỏng",
@@ -848,7 +859,48 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
   );
 }
 
-export default function AiReceptionistWorkspace({ dashboard, canManage, channels }: { dashboard: ReceptionistDashboard; canManage: boolean; channels: ChannelStatus[] }) {
+function MailboxReadiness({ mailbox }: { mailbox: MailboxStatus }) {
+  const scopePass = mailbox.gmailReadScope && mailbox.gmailSendScope;
+  return (
+    <div className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox OTA trung tâm</p>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Readiness Gmail cho AI Lễ tân 24/7</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Chưa cutover OTA cho tới khi mailbox mới + OAuth + UAT đọc/gửi đều PASS.</p>
+        </div>
+        <Pill label={scopePass ? "Gmail scopes: PASS" : "Gmail scopes: CHƯA PASS"} tone={scopePass ? "good" : "warn"} />
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox hiện kết nối</p>
+          <p className="mt-2 break-all text-sm font-semibold text-[var(--ink-primary)]">{mailbox.googleEmail ?? "Chưa kết nối"}</p>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">{mailbox.connected ? "Google OAuth đã có kết nối" : "Chưa có Google OAuth cho tài khoản hiện tại"}</p>
+        </div>
+        <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox đề xuất</p>
+          <p className="mt-2 break-all text-sm font-semibold text-[var(--ink-primary)]">{mailbox.recommendedMailbox}</p>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">Display name: Tam Coc Experience Guest Care</p>
+        </div>
+        <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Quyền Gmail</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Pill label={mailbox.gmailReadScope ? "gmail.readonly: PASS" : "gmail.readonly: thiếu"} tone={mailbox.gmailReadScope ? "good" : "warn"} />
+            <Pill label={mailbox.gmailSendScope ? "gmail.send: PASS" : "gmail.send: thiếu"} tone={mailbox.gmailSendScope ? "good" : "warn"} />
+          </div>
+          {mailbox.lastError ? <p className="mt-2 text-xs text-[var(--status-bad)]">OAuth: {mailbox.lastError}</p> : null}
+        </div>
+        <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Đích dài hạn</p>
+          <p className="mt-2 break-all text-sm font-semibold text-[var(--ink-primary)]">{mailbox.futureDomainMailbox}</p>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">Chỉ migration sau khi forwarding + ingest + reply UAT PASS.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AiReceptionistWorkspace({ dashboard, canManage, channels, mailboxStatus }: { dashboard: ReceptionistDashboard; canManage: boolean; channels: ChannelStatus[]; mailboxStatus: MailboxStatus }) {
   const [tab, setTab] = useState<TabId>("hop-thu");
   const pendingReviews = useMemo(() => dashboard.managerReviews.filter((item) => item.status === "pending").length, [dashboard.managerReviews]);
 
@@ -866,6 +918,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       </div>
 
       <ChannelMatrix channels={channels} />
+      <MailboxReadiness mailbox={mailboxStatus} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Chỉ khách nhắn trực tiếp" />

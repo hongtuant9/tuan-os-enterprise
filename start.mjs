@@ -19,7 +19,16 @@ const cozyPurchaseWorkerEnabled = companyAutopilotEnabled && process.env.TCE_COZ
 const cozyPurchaseWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_COZY_PURCHASE_WORKER_INTERVAL_MS || 900_000));
 const kiotVietFinanceBotWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true" && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
 const kiotVietFinanceBotWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_INTERVAL_MS || 900_000));
-const kiotVietInventoryBotWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase() === "true" && process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+const kiotVietInventoryBotEnabledSetting = process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase();
+const kiotVietInventoryBotWorkerSetting = process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase();
+const kiotVietInventoryBotEnabled =
+  kiotVietInventoryBotEnabledSetting === "true" ||
+  (!kiotVietInventoryBotEnabledSetting && process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true");
+const kiotVietInventoryBotWorkerEnabled =
+  companyAutopilotEnabled &&
+  kiotVietInventoryBotEnabled &&
+  (kiotVietInventoryBotWorkerSetting === "true" ||
+    (!kiotVietInventoryBotWorkerSetting && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true"));
 const kiotVietInventoryBotWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_INTERVAL_MS || 900_000));
 
 const server = spawn(process.execPath, ["server.js"], {

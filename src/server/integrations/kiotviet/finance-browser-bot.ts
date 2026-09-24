@@ -395,6 +395,123 @@ async function openGroupPicker(page: Page, direction: KiotVietCashflowDirection)
   return true;
 }
 
+type TaxonomyReadAudit = {
+  visible: string[];
+  missing: string[];
+  hold: boolean;
+  detail: string;
+};
+
+async function auditTaxonomyReadOnly(page: Page, system: FinanceBotSystem): Promise<TaxonomyReadAudit> {
+  const expected = cashflowGroupsFor(system === "FNB" ? "F&B" : "Hotel").map(cashflowGroupDisplayName);
+  if (!(await goCashbook(page, system))) {
+    return {
+      visible: [],
+      missing: expected,
+      hold: true,
+      detail: "Sổ quỹ was not readable for taxonomy audit.",
+    };
+  }
+
+  if (system === "FNB") {
+    const visible = await page.evaluate((expectedNames) => {
+      const input = Array.from(document.querySelectorAll("input")).find(
+        (item) => (item.getAttribute("placeholder") || "").trim().toLowerCase() === "chọn loại thu/chi"
+      );
+      const select = input?.closest(".kv-select");
+      if (!select) return null;
+      const optionNames = new Set(
+        Array.from(select.querySelectorAll(".kv-list-item"))
+          .map((item) => (item.textContent || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+      );
+      return expectedNames.filter((name) => optionNames.has(name));
+    }, expected).catch(() => null);
+
+    if (!visible) {
+      return {
+        visible: [],
+        missing: expected,
+        hold: true,
+        detail: "F&B Loại thu/chi filter was not detected.",
+      };
+    }
+
+    const visibleSet = new Set(visible);
+    return {
+      visible,
+      missing: expected.filter((name) => !visibleSet.has(name)),
+      hold: false,
+      detail: `F&B taxonomy filter readable; ready=${visible.length}/${expected.length}.`,
+    };
+  }
+
+  const opened = await page.evaluate(() => {
+    const input = Array.from(document.querySelectorAll("input")).find(
+      (item) => (item.getAttribute("placeholder") || "").trim().toLowerCase() === "chọn loại thu chi"
+    ) as HTMLInputElement | undefined;
+    if (!input) return false;
+    const host = input.closest("kendo-multiselect") || input.parentElement;
+    if (!host) return false;
+    const rect = host.getBoundingClientRect();
+    for (const type of ["mousedown", "mouseup", "click"]) {
+      host.dispatchEvent(new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: rect.x + 20,
+        clientY: rect.y + 20,
+      }));
+    }
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      code: "ArrowDown",
+      keyCode: 40,
+      bubbles: true,
+    }));
+    return true;
+  }).catch(() => false);
+
+  if (!opened) {
+    return {
+      visible: [],
+      missing: expected,
+      hold: true,
+      detail: "Hotel Loại thu chi filter was not detected.",
+    };
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const visible = await page.evaluate((expectedNames) => {
+    const optionNames = new Set(
+      Array.from(document.querySelectorAll("li[role='option'],.k-list-item"))
+        .map((item) => (item.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+    );
+    return expectedNames.filter((name) => optionNames.has(name));
+  }, expected).catch(() => null);
+
+  await page.keyboard.press("Escape").catch(() => undefined);
+
+  if (!visible) {
+    return {
+      visible: [],
+      missing: expected,
+      hold: true,
+      detail: "Hotel taxonomy options could not be read.",
+    };
+  }
+
+  const visibleSet = new Set(visible);
+  return {
+    visible,
+    missing: expected.filter((name) => !visibleSet.has(name)),
+    hold: false,
+    detail: `Hotel taxonomy filter readable; ready=${visible.length}/${expected.length}.`,
+  };
+}
+
 async function createGroupFromOpenPicker(page: Page, name: string): Promise<boolean> {
   if (!(await clickByText(page, ["Tạo mới", "+ Tạo mới"]))) return false;
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -599,11 +716,29 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
       let detail = `Sổ quỹ readable; rows=${rows.length}.`;
 
       if (setupTaxonomy) {
-        const result = await ensureGroups(page, system);
-        taxonomyVisible = result.filter((item) => item.status === "EXISTS" || item.status === "CREATED").length;
-        taxonomyMissing = result.filter((item) => item.status === "MISSING" || item.status === "HOLD").map((item) => item.name);
-        state = taxonomyMissing.length === 0 ? "SETUP_VERIFIED" : result.some((item) => item.status === "HOLD") ? "HOLD_UI_CHANGED" : "READ_VERIFIED";
-        detail = `Taxonomy audit: expected=${expected.length}, ready=${taxonomyVisible}, missing_or_hold=${taxonomyMissing.length}.`;
+        let audit = await auditTaxonomyReadOnly(page, system);
+        taxonomyVisible = audit.visible.length;
+        taxonomyMissing = audit.missing;
+
+        if (audit.hold) {
+          state = "HOLD_UI_CHANGED";
+          detail = audit.detail;
+        } else if (taxonomyMissing.length === 0) {
+          state = "SETUP_VERIFIED";
+          detail = `Taxonomy read-back verified: expected=${expected.length}, ready=${taxonomyVisible}, missing=0.`;
+        } else if (flag("TCE_KIOTVIET_FINANCE_BOT_GROUP_WRITE_ENABLED")) {
+          await ensureGroups(page, system);
+          audit = await auditTaxonomyReadOnly(page, system);
+          taxonomyVisible = audit.visible.length;
+          taxonomyMissing = audit.missing;
+          state = !audit.hold && taxonomyMissing.length === 0 ? "SETUP_VERIFIED" : "HOLD_UI_CHANGED";
+          detail = state === "SETUP_VERIFIED"
+            ? `Taxonomy create/read-back verified: expected=${expected.length}, ready=${taxonomyVisible}, missing=0.`
+            : `Taxonomy write/read-back did not fully verify: ready=${taxonomyVisible}/${expected.length}, missing=${taxonomyMissing.length}.`;
+        } else {
+          state = "READ_VERIFIED";
+          detail = `Taxonomy read-only audit: expected=${expected.length}, ready=${taxonomyVisible}, missing=${taxonomyMissing.length}; group write remains disabled.`;
+        }
       }
 
       if (state === "SETUP_VERIFIED" && flag("TCE_KIOTVIET_FINANCE_BOT_TRANSACTION_WRITE_ENABLED")) {

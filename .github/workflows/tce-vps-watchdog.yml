@@ -91,16 +91,30 @@ jobs:
                  f"cmiBrowserEnabled={signals.get('cmiBrowserEnabled')!r}")
           expect(signals.get("cmiQueueWorkerEnabled") is True,
                  f"cmiQueueWorkerEnabled={signals.get('cmiQueueWorkerEnabled')!r}")
-          expect(signals.get("nonFacebookOpenChannelCount") == 0,
-                 f"nonFacebookOpenChannelCount={signals.get('nonFacebookOpenChannelCount')!r}")
+          expect(signals.get("omnichannelWorkerEnabled") is True,
+                 f"omnichannelWorkerEnabled={signals.get('omnichannelWorkerEnabled')!r}")
           expect(signals.get("kiotVietWriteEnabled") is False,
                  f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}")
           expect(signals.get("directBookingAutoCreateEnabled") is False,
                  f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}")
 
           open_channels = signals.get("openCustomerChannels") or []
-          expect(open_channels == ["facebook"],
-                 f"openCustomerChannels={open_channels!r}")
+          expect("facebook" in open_channels,
+                 f"facebook missing from openCustomerChannels={open_channels!r}")
+
+          matrix = {item.get("id"): item for item in (signals.get("omnichannelChannels") or [])}
+          for channel_id in open_channels:
+              channel = matrix.get(channel_id)
+              expect(channel is not None, f"missing omnichannel matrix entry for {channel_id!r}")
+              if not channel:
+                  continue
+              expect(channel.get("readiness") != "UNAVAILABLE_PROVIDER",
+                     f"{channel_id} provider is unavailable")
+              expect(channel.get("providerConfig") in ("CONFIGURED", "NOT_REQUIRED"),
+                     f"{channel_id} providerConfig={channel.get('providerConfig')!r}")
+              if signals.get("pilotOutboundEnabled") is True and channel.get("transport") != "api_bridge":
+                  expect(channel.get("providerVerification") == "VERIFIED_PILOT",
+                         f"{channel_id} outbound requires VERIFIED_PILOT, got {channel.get('providerVerification')!r}")
 
           if errors:
               print("WATCHDOG FAIL")

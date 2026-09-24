@@ -275,6 +275,11 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         pageEntity,
         carePhase: parsed.carePhase,
         reservationReference: parsed.reservationReference,
+        reservationContext: {
+          checkInText: parsed.checkInText,
+          checkOutText: parsed.checkOutText,
+          specialRequest: parsed.specialRequest,
+        },
         providerMessageType: `email_${parsed.eventType}`,
         forceAssistMode: true,
         testerUserId: null,

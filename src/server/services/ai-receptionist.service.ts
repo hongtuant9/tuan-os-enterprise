@@ -378,6 +378,9 @@ export class AiReceptionistService {
       persona,
       history: priorMessages,
       styleGuidance,
+      channel: input.channel,
+      carePhase,
+      automaticUpsellAllowed: channelAllowsAutomaticUpsell(input.channel),
     });
     decision = {
       ...decision,

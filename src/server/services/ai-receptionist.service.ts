@@ -418,7 +418,8 @@ export class AiReceptionistService {
       care_phase: carePhase,
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
-      channel_auto_upsell_allowed: channelAllowsAutomaticUpsell(input.channel),
+      assist_mode: input.forceAssistMode === true,
+      channel_auto_upsell_allowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
       conversation_memory: {
         customer_name: decision.metadataPatch.customer_name ?? null,
         customer_contact: decision.metadataPatch.customer_contact ?? null,
@@ -435,7 +436,7 @@ export class AiReceptionistService {
     const recentUpsell = await this.repo.findRecentUpsellEvents(customerId, since24h);
     const rawJourney = typeof decision.metadataPatch.journey_entry === "string" ? decision.metadataPatch.journey_entry : "GENERAL";
     const journeyEntry: JourneyEntry = (["HOMESTAY", "COZY", "EXPERIENCE", "EXPLORE", "GENERAL"] as const).includes(rawJourney as JourneyEntry) ? rawJourney as JourneyEntry : "GENERAL";
-    const runtimeUpsellPlan = channelAllowsAutomaticUpsell(input.channel)
+    const runtimeUpsellPlan = input.forceAssistMode === true ? [] : channelAllowsAutomaticUpsell(input.channel)
       ? buildUpsellPlan(journeyEntry, {
           offersShownLast24h: recentUpsell.filter((event) => event.event_type === "shown").length,
           rejectedOffers: recentUpsell.filter((event) => event.event_type === "rejected").map((event) => event.offer_code),
@@ -493,10 +494,11 @@ export class AiReceptionistService {
         care_phase: carePhase,
         reservation_reference: input.reservationReference ?? null,
         provider_message_type: input.providerMessageType ?? null,
+        assist_mode: input.forceAssistMode === true,
       },
     });
 
-    const outboundEnabled = pilotConversationAllowed && isPilotOutboundEnabled() && (mode === "limited_auto" || mode === "live");
+    const outboundEnabled = input.forceAssistMode !== true && pilotConversationAllowed && isPilotOutboundEnabled() && (mode === "limited_auto" || mode === "live");
     const outboundStatus = outboundEnabled ? "draft" : "simulated";
     const outbound = await this.repo.createMessage({
       conversation_id: conversation.id,

@@ -44,6 +44,15 @@ def get_json(url: str) -> tuple[int, dict]:
             body = {}
         return exc.code, body
 
+def safe_error(body: dict) -> tuple[str, str, str]:
+    error = body.get("error") if isinstance(body, dict) else {}
+    error = error if isinstance(error, dict) else {}
+    return (
+        str(error.get("type") or "none")[:40],
+        str(error.get("code") or "none")[:20],
+        str(error.get("error_subcode") or "none")[:20],
+    )
+
 env = load_env(ENV_PATH)
 app_id = env.get("FACEBOOK_APP_ID", "")
 app_secret = env.get("FACEBOOK_APP_SECRET", "")
@@ -81,6 +90,9 @@ for version in versions:
     )
     page_body = page_body if isinstance(page_body, dict) else {}
 
+    debug_type, debug_code, debug_subcode = safe_error(debug_body)
+    page_type, page_code, page_subcode = safe_error(page_body)
+
     checks = {
         "debug_http": debug_status == 200,
         "token_valid": debug_data.get("is_valid") is True,
@@ -103,7 +115,10 @@ for version in versions:
         f"token_valid={checks['token_valid']} "
         f"app_id_matches={checks['app_id_matches']} "
         f"pages_messaging={checks['pages_messaging']} "
-        f"page_matches={checks['page_matches']}"
+        f"page_matches={checks['page_matches']} "
+        f"token_len={len(page_token)} prefix_eaa={page_token.startswith('EAA')} "
+        f"debug_error={debug_type}/{debug_code}/{debug_subcode} "
+        f"page_error={page_type}/{page_code}/{page_subcode}"
     )
 
 set_env(ENV_PATH, "FACEBOOK_PILOT_VERIFIED", "false")

@@ -16,6 +16,7 @@ export type FinanceBotState =
   | "HOLD_CONFIG"
   | "HOLD_MFA"
   | "HOLD_UI_CHANGED"
+  | "HOLD_PERMISSION"
   | "READ_VERIFIED"
   | "SETUP_VERIFIED"
   | "CREATE_READY"
@@ -377,6 +378,24 @@ async function cashbookRows(page: Page): Promise<string[]> {
       .filter(Boolean)
       .slice(0, 500);
   });
+}
+
+async function cashbookCreateCapability(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+    const visible = (el: Element) => {
+      const node = el as HTMLElement;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+    };
+    const controls = Array.from(document.querySelectorAll("button,a,[role='button']"))
+      .filter(visible)
+      .map((el) => normalize((el as HTMLElement).innerText || el.textContent || ""));
+    const hasReceipt = controls.some((text) => text === "phiếu thu" || text.includes("lập phiếu thu"));
+    const hasPayment = controls.some((text) => text === "phiếu chi" || text.includes("lập phiếu chi"));
+    return hasReceipt && hasPayment;
+  }).catch(() => false);
 }
 
 async function openVoucherDraft(page: Page, direction: KiotVietCashflowDirection): Promise<boolean> {
@@ -764,7 +783,14 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
       }
 
       if (state === "SETUP_VERIFIED" && flag("TCE_KIOTVIET_FINANCE_BOT_TRANSACTION_WRITE_ENABLED")) {
-        state = "CREATE_READY";
+        const createAllowed = await cashbookCreateCapability(page);
+        if (createAllowed) {
+          state = "CREATE_READY";
+          detail += " CREATE controls verified for this KiotViet account.";
+        } else {
+          state = "HOLD_PERMISSION";
+          detail += " Transaction write is enabled, but KiotViet does not expose both Phiếu thu and Phiếu chi controls for this account.";
+        }
       }
 
       const snapshot: FinanceBotSnapshot = {
@@ -829,6 +855,9 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       const auth = await login(page, input.system);
       if (!auth.ok || !(await goCashbook(page, input.system))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: auth.detail || "Cashbook unavailable." };
+      }
+      if (!(await cashbookCreateCapability(page))) {
+        return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "KiotViet account does not expose Phiếu thu/Phiếu chi create controls." };
       }
 
       if (await searchIdempotency(page, input.idempotencyKey)) {

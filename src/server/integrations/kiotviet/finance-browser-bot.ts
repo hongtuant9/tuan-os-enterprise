@@ -482,19 +482,40 @@ async function auditTaxonomyReadOnly(page: Page, system: FinanceBotSystem): Prom
     };
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const visible = await page.evaluate((expectedNames) => {
-    const optionNames = new Set(
-      Array.from(document.querySelectorAll("li[role='option'],.k-list-item"))
+  let hotelRead: { matched: string[]; optionCount: number } | null = null;
+  for (const delay of [700, 900, 1200]) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    hotelRead = await page.evaluate((expectedNames) => {
+      const optionNames = Array.from(document.querySelectorAll("li[role='option'],.k-list-item"))
         .map((item) => (item.textContent || "").replace(/\s+/g, " ").trim())
-        .filter(Boolean)
-    );
-    return expectedNames.filter((name) => optionNames.has(name));
-  }, expected).catch(() => null);
+        .filter(Boolean);
+      const optionSet = new Set(optionNames);
+      return {
+        matched: expectedNames.filter((name) => optionSet.has(name)),
+        optionCount: optionNames.length,
+      };
+    }, expected).catch(() => null);
+
+    if (hotelRead && hotelRead.optionCount > 0) break;
+
+    await page.evaluate(() => {
+      const input = Array.from(document.querySelectorAll("input")).find(
+        (item) => (item.getAttribute("placeholder") || "").trim().toLowerCase() === "chọn loại thu chi"
+      ) as HTMLInputElement | undefined;
+      if (!input) return;
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        keyCode: 40,
+        bubbles: true,
+      }));
+    }).catch(() => undefined);
+  }
 
   await page.keyboard.press("Escape").catch(() => undefined);
 
-  if (!visible) {
+  if (!hotelRead || hotelRead.optionCount === 0) {
     return {
       visible: [],
       missing: expected,
@@ -503,12 +524,13 @@ async function auditTaxonomyReadOnly(page: Page, system: FinanceBotSystem): Prom
     };
   }
 
+  const visible = hotelRead.matched;
   const visibleSet = new Set(visible);
   return {
     visible,
     missing: expected.filter((name) => !visibleSet.has(name)),
     hold: false,
-    detail: `Hotel taxonomy filter readable; ready=${visible.length}/${expected.length}.`,
+    detail: `Hotel taxonomy filter readable; options=${hotelRead.optionCount}, ready=${visible.length}/${expected.length}.`,
   };
 }
 

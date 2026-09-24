@@ -90,6 +90,20 @@ function flag(name: string, fallback = false): boolean {
   return value === "true";
 }
 
+function inventoryBotEnabled(): boolean {
+  const explicit = process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase();
+  if (explicit === "true") return true;
+  if (explicit === "false") return false;
+  return process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function inventoryBotWorkerEnabled(): boolean {
+  const explicit = process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase();
+  if (explicit === "true") return true;
+  if (explicit === "false") return false;
+  return process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+}
+
 function prefix(system: InventoryBotSystem) {
   return system === "FNB" ? "KIOTVIET_FNB" : "KIOTVIET_HOTEL";
 }
@@ -115,8 +129,8 @@ function config(system: InventoryBotSystem) {
 export function inventoryBotConfigStatus(system: InventoryBotSystem) {
   const cfg = config(system);
   return {
-    enabled: flag("TCE_KIOTVIET_INVENTORY_BOT_ENABLED"),
-    workerEnabled: flag("TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED"),
+    enabled: inventoryBotEnabled(),
+    workerEnabled: inventoryBotWorkerEnabled(),
     writeEnabled: false,
     retailerConfigured: Boolean(cfg.retailer),
     usernameConfigured: Boolean(cfg.username),
@@ -443,7 +457,7 @@ export async function runInventoryBotRead(
     const cfg = config(system);
     const definitions = MODULES[system];
 
-    if (!flag("TCE_KIOTVIET_INVENTORY_BOT_ENABLED")) {
+    if (!inventoryBotEnabled()) {
       const snapshot: InventoryBotSnapshot = {
         system,
         state: "DISABLED",

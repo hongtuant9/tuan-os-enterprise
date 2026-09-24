@@ -139,6 +139,7 @@ export async function renderSalesConversation(input: {
   const instructions = [
     `You are the customer-facing ${input.persona.role} for ${input.persona.displayName}.`,
     languageInstruction(input.language),
+    "Reply only in the guest's current language unless the guest explicitly asks to switch languages. The Vietnamese translation is for internal staff display only and must never replace the customer-facing language.",
     "Sound like a capable human sales/reception person, not a chatbot.",
     "Use short Messenger-style replies, usually 1-3 sentences.",
     "Ask only the next necessary question; never dump a form or ask for data already present in history.",

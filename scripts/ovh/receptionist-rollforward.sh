@@ -159,14 +159,10 @@ if not all([app_id, app_secret, page_token]):
     raise SystemExit(0)
 
 def fetch(url):
-    p = subprocess.run(
-        ["curl", "-fsS", "--connect-timeout", "8", "--max-time", "15", url],
-        capture_output=True, text=True
-    )
-    if p.returncode != 0:
-        return None
     try:
-        return json.loads(p.stdout)
+        req = Request(url, headers={"User-Agent": "TCE-Receptionist-Rollforward/1.0"})
+        with urlopen(req, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
     except Exception:
         return None
 

@@ -305,3 +305,59 @@ Hotel Link / OTA email / operator
 ```
 
 Đây là fallback chính thức cho tới khi Hotel Link hoặc OTA cấp messaging API/webhook được xác minh.
+
+
+## 16. Nhật ký kiểm toán giao tiếp — giai đoạn đầu
+
+Mục tiêu bắt buộc: Owner phải biết **AI đã nói gì, khi nào, ở cơ sở nào, trên kênh nào và ai là người viết**.
+
+Không tạo bảng audit mới nếu dữ liệu hiện có đã đủ. Tái sử dụng:
+- `ai_conversations`: channel, property, customer, reservation context, care phase.
+- `ai_messages`: direction, sender_type, content, status, metadata, created_at, external_message_id.
+- `ai_manager_reviews`: quyết định và người duyệt ngoại lệ.
+
+Chuẩn attribution:
+- `guest`: khách viết.
+- `ai`: AI Lễ tân tạo nội dung.
+- `human`: Tuấn/lễ tân/người vận hành viết từ phiên đăng nhập đã định danh.
+- `system`: workflow/system note.
+- nếu AI tạo draft rồi người thật sửa: metadata `edited_by_human=true` và giữ provenance AI → Human.
+- delivery phải ghi `delivered_at`, delivery status và external/provider message ID khi có.
+
+Control Center phải cho lọc tối thiểu theo:
+- thời gian ICT;
+- cơ sở;
+- kênh;
+- AI / người thật / khách / hệ thống;
+- trạng thái draft / chưa gửi / đã gửi / lỗi.
+
+Giới hạn attribution:
+- nếu người thật gửi trực tiếp bên ngoài TCE Control Center và provider/shared mailbox không cung cấp actor identity, hệ thống chỉ được ghi `Human external`; không được đoán đó là Tuấn hay lễ tân.
+- muốn phân biệt Tuấn và từng lễ tân một cách chắc chắn, phản hồi người thật phải đi qua TCE workspace có login riêng hoặc provider phải trả actor identity.
+
+## 17. Mailbox trung tâm cho Hospitality
+
+Không dùng email cá nhân `hongtuant9@gmail.com` làm mailbox vận hành lâu dài cho toàn hệ sinh thái.
+
+Tên chuyển tiếp đề xuất khi vẫn dùng Gmail miễn phí:
+- `tamcocexperience.guestcare@gmail.com`
+- Display name: **Tam Coc Experience Guest Care**
+
+Tên khuyến nghị dài hạn khi dùng domain doanh nghiệp:
+- `guestcare@tamcocexperience.com`
+
+Lý do chọn **Guest Care** thay vì Lavender/Booking/Reservations:
+- dùng chung Lavender, Ruby và Cozy Garden;
+- bao phủ trước/trong/sau dịch vụ, không chỉ booking;
+- không phụ thuộc một OTA hoặc một property;
+- sau này có thể thêm alias `reservations@`, `stay@`, `cozy@` nhưng cùng inbox/CRM.
+
+Migration mailbox phải theo từng channel:
+1. tạo mailbox;
+2. cấu hình bảo mật + recovery + 2FA;
+3. kết nối OAuth read-only trước;
+4. chạy shadow ingestion/UAT;
+5. xác minh reply relay từng OTA;
+6. mới đổi email property trên OTA/extranet;
+7. giữ forwarding từ mailbox cũ trong giai đoạn chuyển tiếp;
+8. chỉ bật auto-reply cho từng OTA sau UAT PASS.

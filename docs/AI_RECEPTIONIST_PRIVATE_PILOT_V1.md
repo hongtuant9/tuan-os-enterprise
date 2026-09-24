@@ -259,3 +259,39 @@ Không dùng Computer Vision/mouse bot làm transport mặc định cho customer
 - Không chống duplicate/idempotency.
 - Không có delivery confirmation hoặc audit trail.
 - Browser session/cookie là single point of failure.
+
+
+## 15. OTA Assist Mode — fallback khi chưa có messaging API/webhook
+
+Endpoint nội bộ:
+
+`POST /api/ai-receptionist/ota-assist`
+
+Yêu cầu:
+- authenticated user từ role `manager` trở lên hoặc machine caller có `N8N_API_KEY`;
+- `channel` thuộc Booking.com / Agoda / Airbnb / Expedia / Tripadvisor;
+- `reservationReference` bắt buộc;
+- `externalMessageId` bắt buộc để chống xử lý trùng;
+- `content` bắt buộc.
+
+Kết quả:
+- lưu inbound message + reservation context vào cùng AI Receptionist conversation core;
+- phân loại care phase trước/trong/sau dịch vụ;
+- tạo draft reply dựa trên L3/L4/runtime;
+- `automaticOutbound=false` bắt buộc;
+- trả `delivery=MANUAL_REVIEW_REQUIRED`;
+- không tạo OTA off-platform upsell;
+- không gửi trực tiếp ra OTA.
+
+Luồng vận hành:
+
+```text
+Hotel Link / OTA email / operator
+  → OTA Assist endpoint
+  → AI draft + safety gate
+  → Manager/operator review
+  → gửi thủ công trong Hotel Link/OTA
+  → ghi delivery evidence khi có connector chính thức
+```
+
+Đây là fallback chính thức cho tới khi Hotel Link hoặc OTA cấp messaging API/webhook được xác minh.

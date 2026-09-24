@@ -42,6 +42,12 @@ export type ReceptionistConversation = {
   journeyEntry: string;
   carePhase: CustomerCarePhase;
   reservationReference: string | null;
+  checkInText: string | null;
+  checkOutText: string | null;
+  specialRequest: string | null;
+  unread: boolean;
+  unreadCount: number;
+  managerReadAt: string | null;
   upsellOffers: string[];
   status: ConversationStatus;
   mode: ReceptionistMode;

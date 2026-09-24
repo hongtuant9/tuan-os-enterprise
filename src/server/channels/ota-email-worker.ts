@@ -238,7 +238,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
 
   const token = await oauthAccessToken();
   const query = process.env.TCE_OTA_GMAIL_QUERY?.trim()
-    || "newer_than:2d (from:booking.com OR from:airbnb.com OR from:agoda.com OR from:agoda.global OR from:expediagroup.com OR from:expediapartnercentral.com) -in:spam -in:trash";
+    || "newer_than:2d (from:(@guest.booking.com) OR from:(@property.booking.com) OR from:(@agoda-messaging.com) OR from:(@airbnb.com) OR from:(@m.expediapartnercentral.com)) -in:spam -in:trash -in:sent";
   const list = await gmailGet<GmailMessageList>(
     token,
     `messages?${new URLSearchParams({ q: query, maxResults: "50" }).toString()}`

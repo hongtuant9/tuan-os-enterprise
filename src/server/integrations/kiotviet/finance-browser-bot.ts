@@ -463,25 +463,73 @@ async function openVoucherDraft(
   direction: KiotVietCashflowDirection,
   paymentMethod: FinanceVoucherInput["paymentMethod"] = "Tiền mặt"
 ): Promise<boolean> {
-  const labels = direction === "CHI"
-    ? ["+ Phiếu chi", "+ Lập phiếu chi", "Lập phiếu chi", "Phiếu chi"]
-    : ["+ Phiếu thu", "+ Lập phiếu thu", "Lập phiếu thu", "Phiếu thu"];
+  const buttonText = direction === "CHI" ? "Phiếu chi" : "Phiếu thu";
   const fieldPattern = new RegExp(direction === "CHI" ? "Loại chi" : "Loại thu", "i");
-  const clicked = await clickByText(page, labels);
+
+  const clicked = await page.evaluate((label) => {
+    const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+    const visible = (el: Element) => {
+      const node = el as HTMLElement;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+    };
+    const button = Array.from(document.querySelectorAll("button"))
+      .filter(visible)
+      .find((el) => normalize((el as HTMLElement).innerText || el.textContent || "") === normalize(label));
+    if (!button) return false;
+    (button as HTMLElement).click();
+    return true;
+  }, buttonText).catch(() => false);
   if (!clicked) return false;
 
-  for (const delay of [350, 650]) {
+  for (const delay of [300, 500]) {
     await new Promise((resolve) => setTimeout(resolve, delay));
     if (fieldPattern.test(await visibleText(page))) return true;
   }
 
-  const methodClicked = await clickByText(page, [paymentMethod]);
-  if (!methodClicked) return false;
-  await new Promise((resolve) => setTimeout(resolve, 700));
+  const aliases =
+    paymentMethod === "Ngân hàng"
+      ? ["Ngân hàng", "Tài khoản ngân hàng"]
+      : [paymentMethod];
 
+  const methodClicked = await page.evaluate((wantedLabels) => {
+    const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+    const wanted = wantedLabels.map(normalize);
+    const visible = (el: Element) => {
+      const node = el as HTMLElement;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+    };
+    const selectors = [
+      ".kv-float-container-open .kv-list-item",
+      ".k-popup a.bk-item",
+      ".k-popup li",
+      "kendo-popup .k-list-item",
+      "[role='option']",
+    ];
+    for (const selector of selectors) {
+      const match = Array.from(document.querySelectorAll(selector))
+        .filter(visible)
+        .find((el) => wanted.includes(normalize((el as HTMLElement).innerText || el.textContent || "")));
+      if (match) {
+        const action =
+          match.matches("a,button,[role='option'],.kv-list-item")
+            ? match
+            : match.querySelector("a,button") || match;
+        (action as HTMLElement).click();
+        return true;
+      }
+    }
+    return false;
+  }, aliases).catch(() => false);
+  if (!methodClicked) return false;
+
+  await new Promise((resolve) => setTimeout(resolve, 800));
   const text = await visibleText(page);
   if (/không có quyền|không được phép|permission|access denied/i.test(text)) return false;
-  return fieldPattern.test(text);
+  return fieldPattern.test(text) && /\bLưu\b/i.test(text);
 }
 
 async function cashbookCreateCapability(page: Page, system: FinanceBotSystem): Promise<boolean> {

@@ -30,6 +30,8 @@ const kiotVietInventoryBotWorkerEnabled =
   (kiotVietInventoryBotWorkerSetting === "true" ||
     (!kiotVietInventoryBotWorkerSetting && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true"));
 const kiotVietInventoryBotWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_INTERVAL_MS || 900_000));
+const omnichannelWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OMNICHANNEL_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const omnichannelWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OMNICHANNEL_WORKER_INTERVAL_MS || 60_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -53,6 +55,7 @@ const syncWorkerToken = deriveToken("tce-sync-worker-v1");
 const cozyPurchaseWorkerToken = deriveToken("tce-cozy-purchase-worker-v1");
 const kiotVietFinanceBotWorkerToken = deriveToken("kiotviet-finance-bot-worker-v1");
 const kiotVietInventoryBotWorkerToken = deriveToken("kiotviet-inventory-bot-worker-v1");
+const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -241,6 +244,47 @@ async function kiotVietInventoryBotWorkerLoop() {
   }
 }
 
+async function omnichannelWorkerTick() {
+  if (!omnichannelWorkerEnabled || !omnichannelWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/omnichannel/worker",
+      "x-tce-omnichannel-worker-token",
+      omnichannelWorkerToken,
+      120000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE Omnichannel] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped && ((payload?.activePollers ?? 0) > 0 || (payload?.ready?.length ?? 0) > 0)) {
+      console.log(
+        `[TCE Omnichannel] checked=${payload?.checked ?? 0} active_pollers=${payload?.activePollers ?? 0} ready=${payload?.ready?.length ?? 0} holds=${payload?.holds?.length ?? 0}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE Omnichannel] ${message}`);
+  }
+}
+
+async function omnichannelWorkerLoop() {
+  if (!omnichannelWorkerEnabled) {
+    console.log("[TCE Omnichannel] disabled");
+    return;
+  }
+  if (!omnichannelWorkerToken) {
+    console.error("[TCE Omnichannel] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE Omnichannel] enabled interval_ms=${omnichannelWorkerIntervalMs}`);
+  await sleep(25000);
+  while (!stopping) {
+    await omnichannelWorkerTick();
+    await sleep(omnichannelWorkerIntervalMs);
+  }
+}
+
 async function cozyPurchaseWorkerTick() {
   if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
   try {
@@ -377,3 +421,4 @@ void syncWorkerLoop();
 void cozyPurchaseWorkerLoop();
 void kiotVietFinanceBotWorkerLoop();
 void kiotVietInventoryBotWorkerLoop();
+void omnichannelWorkerLoop();

@@ -2,7 +2,6 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import {
-  financeBotConfigStatus,
   runFinanceBotRead,
   type FinanceBotSystem,
 } from "@/server/integrations/kiotviet/finance-browser-bot";
@@ -35,8 +34,7 @@ export async function POST(req: NextRequest) {
   const systems: FinanceBotSystem[] = ["FNB", "HOTEL"];
   const results = [];
   for (const system of systems) {
-    const setup = financeBotConfigStatus(system).groupWriteEnabled;
-    results.push(await runFinanceBotRead(system, setup));
+    results.push(await runFinanceBotRead(system, true));
   }
 
   const container = getAdminContainer();

@@ -568,6 +568,9 @@ export class AiReceptionistService {
       reply: decision.reply,
       reviewId,
       outboundMessageId: outbound.id,
+      qaPass: rendered.qa.pass,
+      qaReasons: rendered.qa.reasons,
+      usedGenerativeRenderer: rendered.usedGenerativeRenderer,
       duplicate: false,
     };
   }

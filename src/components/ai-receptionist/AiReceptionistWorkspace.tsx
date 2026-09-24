@@ -57,6 +57,13 @@ const CHANNEL_LABEL: Record<string, string> = {
   pilot: "Tài khoản kiểm thử",
 };
 
+const CARE_PHASE_LABEL: Record<string, string> = {
+  pre_service: "Trước dịch vụ",
+  in_service: "Trong dịch vụ",
+  post_service: "Sau dịch vụ",
+  general: "Chưa xác định",
+};
+
 const STATUS_LABEL: Record<string, string> = {
   new: "Mới",
   active: "Đang tư vấn",
@@ -266,6 +273,16 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <dt className="text-xs text-[var(--ink-muted)]">Điểm vào hành trình</dt>
             <dd className="mt-1 text-[var(--ink-primary)]">{selected.journeyEntry}</dd>
           </div>
+          <div>
+            <dt className="text-xs text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt>
+            <dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd>
+          </div>
+          {selected.reservationReference ? (
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Mã đặt chỗ / tham chiếu</dt>
+              <dd className="mt-1 break-all font-mono text-xs text-[var(--ink-secondary)]">{selected.reservationReference}</dd>
+            </div>
+          ) : null}
           {selected.upsellOffers.length > 0 ? (
             <div>
               <dt className="text-xs text-[var(--ink-muted)]">Bán thêm phù hợp</dt>

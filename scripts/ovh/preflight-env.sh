@@ -8,10 +8,6 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-ROLLFORWARD_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/receptionist-rollforward.sh"
-if [ -f "$ROLLFORWARD_SCRIPT" ]; then
-  ENV_FILE="$ENV_FILE" STATE_DIR="${STATE_DIR:-/opt/tuan-ai/deploy-state}" bash "$ROLLFORWARD_SCRIPT"
-fi
 
 required=(
   NEXT_PUBLIC_SUPABASE_URL

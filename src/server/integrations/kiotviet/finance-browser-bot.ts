@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import {
@@ -56,7 +56,62 @@ export type FinanceVoucherResult = {
 };
 
 const STATE_ROOT = process.env.TCE_KIOTVIET_FINANCE_BOT_STATE_DIR?.trim() || "/var/lib/tce-finance-bot";
+const VOUCHER_LEDGER_FILE = join(STATE_ROOT, "voucher-idempotency-ledger.json");
 let browserMutex: Promise<unknown> = Promise.resolve();
+
+type VoucherLedgerState = "PENDING" | "CREATED_VERIFIED" | "UNKNOWN_AFTER_WRITE";
+type VoucherLedgerEntry = {
+  system: FinanceBotSystem;
+  idempotencyKey: string;
+  state: VoucherLedgerState;
+  groupCode: string;
+  direction: KiotVietCashflowDirection;
+  amount: number;
+  updatedAt: string;
+  detail: string;
+};
+
+function voucherLedgerKey(input: Pick<FinanceVoucherInput, "system" | "idempotencyKey">) {
+  return `${input.system}:${input.idempotencyKey}`;
+}
+
+async function readVoucherLedger(): Promise<Record<string, VoucherLedgerEntry>> {
+  try {
+    const raw = await readFile(VOUCHER_LEDGER_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, VoucherLedgerEntry> : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeVoucherLedger(ledger: Record<string, VoucherLedgerEntry>) {
+  await mkdir(STATE_ROOT, { recursive: true });
+  const tmp = VOUCHER_LEDGER_FILE + ".tmp";
+  await writeFile(tmp, JSON.stringify(ledger, null, 2), "utf8");
+  await rename(tmp, VOUCHER_LEDGER_FILE);
+}
+
+async function setVoucherLedger(input: FinanceVoucherInput, state: VoucherLedgerState, detail: string) {
+  const ledger = await readVoucherLedger();
+  ledger[voucherLedgerKey(input)] = {
+    system: input.system,
+    idempotencyKey: input.idempotencyKey,
+    state,
+    groupCode: input.groupCode,
+    direction: input.direction,
+    amount: Math.round(input.amount),
+    updatedAt: new Date().toISOString(),
+    detail,
+  };
+  await writeVoucherLedger(ledger);
+}
+
+async function clearVoucherLedger(input: FinanceVoucherInput) {
+  const ledger = await readVoucherLedger();
+  delete ledger[voucherLedgerKey(input)];
+  await writeVoucherLedger(ledger);
+}
 
 function flag(name: string, fallback = false): boolean {
   const value = process.env[name]?.trim().toLowerCase();
@@ -642,7 +697,9 @@ async function searchIdempotency(page: Page, key: string): Promise<boolean> {
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
     };
     const inputs = Array.from(document.querySelectorAll("input")).filter(visible) as HTMLInputElement[];
-    const input = inputs.find((el) => /tìm|mã phiếu|ghi chú/i.test(el.placeholder || ""));
+    const noteInput = inputs.find((el) => /ghi chú|nội dung/i.test(el.placeholder || ""));
+    const fallback = inputs.find((el) => /tìm|mã phiếu/i.test(el.placeholder || ""));
+    const input = noteInput || fallback;
     if (!input) return false;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     setter?.call(input, value);
@@ -653,7 +710,7 @@ async function searchIdempotency(page: Page, key: string): Promise<boolean> {
     return true;
   }, key);
   if (!filled) return false;
-  await new Promise((resolve) => setTimeout(resolve, 650));
+  await new Promise((resolve) => setTimeout(resolve, 800));
   return (await visibleText(page)).includes(key);
 }
 
@@ -835,6 +892,27 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Amount is outside safety bounds." };
     }
 
+    const ledger = await readVoucherLedger();
+    const existingLedger = ledger[voucherLedgerKey(input)];
+    if (existingLedger?.state === "CREATED_VERIFIED") {
+      return {
+        ok: true,
+        state: "ALREADY_EXISTS",
+        idempotencyKey: input.idempotencyKey,
+        readBackVerified: true,
+        detail: "Persistent idempotency ledger already contains a verified KiotViet write; no duplicate write performed.",
+      };
+    }
+    if (existingLedger?.state === "PENDING" || existingLedger?.state === "UNKNOWN_AFTER_WRITE") {
+      return {
+        ok: false,
+        state: "UNKNOWN_AFTER_WRITE",
+        idempotencyKey: input.idempotencyKey,
+        readBackVerified: false,
+        detail: "Persistent idempotency ledger contains an unresolved prior attempt. Do not retry automatically; reconcile this key first.",
+      };
+    }
+
     const groups = cashflowGroupsFor(input.system === "FNB" ? "F&B" : "Hotel");
     const group = groups.find((item) => item.code === input.groupCode && item.direction === input.direction);
     if (!group) {
@@ -850,6 +928,7 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
 
     const browser = await launch(input.system);
     let writeAttempted = false;
+    let saveStarted = false;
     try {
       const page = await browser.newPage();
       const auth = await login(page, input.system);
@@ -861,8 +940,12 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       }
 
       if (await searchIdempotency(page, input.idempotencyKey)) {
+        await setVoucherLedger(input, "CREATED_VERIFIED", "Existing KiotViet voucher found during pre-write idempotency search.");
         return { ok: true, state: "ALREADY_EXISTS", idempotencyKey: input.idempotencyKey, readBackVerified: true, detail: "Existing KiotViet voucher found; no duplicate write performed." };
       }
+
+      await goCashbook(page, input.system);
+      const rowsBeforeWrite = await cashbookRows(page);
 
       if (!(await goCashbook(page, input.system)) || !(await openVoucherDraft(page, input.direction))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Could not open voucher form." };
@@ -879,19 +962,36 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Voucher preflight field mapping failed; no save was attempted." };
       }
 
-      if (!(await saveVoucher(page))) {
+      await setVoucherLedger(input, "PENDING", "Pre-save guard recorded before the unique KiotViet Save action.");
+      saveStarted = true;
+      const saved = await saveVoucher(page);
+      if (!saved) {
+        saveStarted = false;
+        await clearVoucherLedger(input);
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "Unique Save button was not verified; no write was attempted." };
       }
       writeAttempted = true;
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await new Promise((resolve) => setTimeout(resolve, 1400));
 
       await goCashbook(page, input.system);
       const found = await searchIdempotency(page, input.idempotencyKey);
-      const readback = await visibleText(page);
-      const groupVerified = readback.includes(groupName);
+      await goCashbook(page, input.system);
+      const rowsAfterWrite = await cashbookRows(page);
+      const beforeSet = new Set(rowsBeforeWrite);
+      const newRows = rowsAfterWrite.filter((row) => !beforeSet.has(row));
       const amountDigits = String(Math.round(input.amount));
-      const amountVerified = readback.replace(/[^0-9]/g, "").includes(amountDigits);
-      const verified = found && groupVerified && amountVerified;
+      const matchingNewRow = newRows.find((row) => {
+        const normalized = row.replace(/\s+/g, " ").trim();
+        return normalized.includes(groupName) && normalized.replace(/[^0-9]/g, "").includes(amountDigits);
+      });
+      const verified = Boolean(matchingNewRow) && (found || input.system === "HOTEL");
+
+      if (verified) {
+        await setVoucherLedger(input, "CREATED_VERIFIED", "KiotViet voucher created and read-back verified by new-row delta.");
+      } else {
+        await setVoucherLedger(input, "UNKNOWN_AFTER_WRITE", "Save was attempted but full KiotViet read-back verification did not pass.");
+      }
+
       return {
         ok: verified,
         state: verified ? "CREATED_VERIFIED" : "UNKNOWN_AFTER_WRITE",
@@ -899,12 +999,19 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
         readBackVerified: verified,
         detail: verified
           ? "KiotViet voucher created and read-back verified."
-          : "Write may have occurred but full read-back did not pass. Do not retry automatically; reconcile by idempotency key.",
+          : "Write may have occurred but full read-back did not pass. Persistent ledger blocks automatic retry; reconcile by idempotency key.",
       };
     } catch (error) {
+      if (saveStarted || writeAttempted) {
+        await setVoucherLedger(
+          input,
+          "UNKNOWN_AFTER_WRITE",
+          error instanceof Error ? error.message : "Unknown Finance Bot error after save started."
+        ).catch(() => undefined);
+      }
       return {
         ok: false,
-        state: writeAttempted ? "UNKNOWN_AFTER_WRITE" : "HOLD",
+        state: saveStarted || writeAttempted ? "UNKNOWN_AFTER_WRITE" : "HOLD",
         idempotencyKey: input.idempotencyKey,
         readBackVerified: false,
         detail: error instanceof Error ? error.message : "Unknown Finance Bot error",

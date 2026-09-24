@@ -77,6 +77,14 @@ function runtimeSignals() {
     executiveWorkerEnabled: companyAutopilotEnabled && process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     syncWorkerEnabled: companyAutopilotEnabled && process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     omnichannelWorkerEnabled: companyAutopilotEnabled && process.env.TCE_OMNICHANNEL_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    otaEmailWorkerEnabled: companyAutopilotEnabled && process.env.TCE_OTA_EMAIL_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    otaEmailGmailConfig: [
+      process.env.TCE_OTA_GMAIL_CLIENT_ID,
+      process.env.TCE_OTA_GMAIL_CLIENT_SECRET,
+      process.env.TCE_OTA_GMAIL_REFRESH_TOKEN,
+    ].every((value) => Boolean(value?.trim())) ? "CONFIGURED" : "NOT_CONFIGURED",
+    otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")
+      .split(",").map((value) => value.trim()).filter(Boolean),
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
     openCustomerChannels,

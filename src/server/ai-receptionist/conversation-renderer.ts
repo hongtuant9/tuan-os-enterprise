@@ -114,6 +114,9 @@ export async function renderSalesConversation(input: {
   persona: PagePersona;
   history: ReceptionistMessage[];
   styleGuidance?: string[];
+  channel?: string;
+  carePhase?: "pre_service" | "in_service" | "post_service" | "general";
+  automaticUpsellAllowed?: boolean;
 }): Promise<ConversationRenderResult> {
   const apiKey = receptionistApiKey();
   if (!apiKey) return fallback(input.decision, input.language, input.guestText);
@@ -138,7 +141,17 @@ export async function renderSalesConversation(input: {
     "Never invent price, availability, policy, opening hours, service inclusions, reviews, discounts, or booking confirmation.",
     "Business facts may come ONLY from FACT_PACK or RUNTIME_EVIDENCE below.",
     "If facts are missing or the decision is held, phrase the response naturally as checking/confirming without exposing internal workflow.",
-    "Do not upsell until the guest's primary need is addressed; then offer at most one contextually relevant next help.",
+    input.automaticUpsellAllowed === false
+      ? "Do not upsell, remarket, redirect to direct booking, or promote an off-platform purchase on this channel."
+      : "Do not upsell until the guest's primary need is addressed; then offer at most one contextually relevant next help.",
+    `Customer channel: ${input.channel ?? "unknown"}. Care phase: ${input.carePhase ?? "general"}.`,
+    input.carePhase === "pre_service"
+      ? "For pre-service care, prioritize arrival preparation, confirmed booking facts, directions and next required details."
+      : input.carePhase === "in_service"
+        ? "For in-service care, prioritize immediate operational help and issue resolution before any sales suggestion."
+        : input.carePhase === "post_service"
+          ? "For post-service care, prioritize unresolved issues, thanks and appropriate follow-up; do not pressure for another purchase."
+          : "Handle the current customer need first.",
     `Tone: ${input.persona.tone.join(", ")}.`,
     input.styleGuidance?.length
       ? `OWNER-APPROVED CONVERSATION STYLE GUIDANCE (style only, never business facts): ${input.styleGuidance.join(" | ")}`

@@ -30,6 +30,16 @@ const TABS = [
 type TabId = (typeof TABS)[number][0];
 type Tone = "good" | "warn" | "bad" | "accent" | "muted";
 
+type ChannelStatus = {
+  id: string;
+  label: string;
+  readiness: string;
+  transport: string;
+  mode: "PRIVATE_PILOT" | "CLOSED";
+  providerConfig: string;
+  providerVerification: string;
+};
+
 const MODE_LABEL: Record<ReceptionistDashboard["mode"], string> = {
   off: "Đã tắt",
   simulation: "Mô phỏng",
@@ -45,6 +55,13 @@ const CHANNEL_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp",
   instagram: "Instagram",
   pilot: "Tài khoản kiểm thử",
+};
+
+const CARE_PHASE_LABEL: Record<string, string> = {
+  pre_service: "Trước dịch vụ",
+  in_service: "Trong dịch vụ",
+  post_service: "Sau dịch vụ",
+  general: "Chưa xác định",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -256,6 +273,16 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <dt className="text-xs text-[var(--ink-muted)]">Điểm vào hành trình</dt>
             <dd className="mt-1 text-[var(--ink-primary)]">{selected.journeyEntry}</dd>
           </div>
+          <div>
+            <dt className="text-xs text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt>
+            <dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd>
+          </div>
+          {selected.reservationReference ? (
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Mã đặt chỗ / tham chiếu</dt>
+              <dd className="mt-1 break-all font-mono text-xs text-[var(--ink-secondary)]">{selected.reservationReference}</dd>
+            </div>
+          ) : null}
           {selected.upsellOffers.length > 0 ? (
             <div>
               <dt className="text-xs text-[var(--ink-muted)]">Bán thêm phù hợp</dt>
@@ -606,7 +633,56 @@ function PilotLab({ backlog, mode }: { backlog: string[]; mode: ReceptionistDash
   );
 }
 
-export default function AiReceptionistWorkspace({ dashboard, canManage }: { dashboard: ReceptionistDashboard; canManage: boolean }) {
+function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
+  const visible = channels.filter((channel) =>
+    ["website", "facebook", "instagram", "whatsapp", "email", "booking", "agoda", "airbnb", "expedia", "google_maps"].includes(channel.id)
+  );
+
+  function tone(channel: ChannelStatus): Tone {
+    if (channel.mode === "PRIVATE_PILOT" && channel.providerVerification === "VERIFIED_PILOT") return "good";
+    if (channel.mode === "PRIVATE_PILOT") return "warn";
+    if (channel.readiness === "UNAVAILABLE_PROVIDER") return "bad";
+    return "muted";
+  }
+
+  function state(channel: ChannelStatus): string {
+    if (channel.readiness === "UNAVAILABLE_PROVIDER") return "Không khả dụng";
+    if (channel.mode === "PRIVATE_PILOT" && channel.providerVerification === "VERIFIED_PILOT") return "Đã xác minh";
+    if (channel.mode === "PRIVATE_PILOT") return "Đã mở · chờ xác minh";
+    if (channel.readiness === "PENDING_PARTNER_API") return "Chờ API đối tác";
+    if (channel.readiness === "PENDING_AUTH") return "Chờ xác thực";
+    if (channel.readiness === "ADAPTER_READY") return "Adapter sẵn sàng";
+    return "Đang khóa";
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kênh 24/7</p>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Trạng thái Omnichannel</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Kênh chỉ tự động phản hồi khi provider, xác minh và cổng outbound cùng PASS.</p>
+        </div>
+        <Pill label="FAIL-CLOSED" tone="warn" />
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {visible.map((channel) => (
+          <div key={channel.id} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-semibold text-[var(--ink-primary)]">{channel.label}</p>
+              <Pill label={state(channel)} tone={tone(channel)} />
+            </div>
+            <p className="mt-2 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
+              {channel.transport} · {channel.providerConfig}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function AiReceptionistWorkspace({ dashboard, canManage, channels }: { dashboard: ReceptionistDashboard; canManage: boolean; channels: ChannelStatus[] }) {
   const [tab, setTab] = useState<TabId>("hop-thu");
   const pendingReviews = useMemo(() => dashboard.managerReviews.filter((item) => item.status === "pending").length, [dashboard.managerReviews]);
 
@@ -622,6 +698,8 @@ export default function AiReceptionistWorkspace({ dashboard, canManage }: { dash
           <div className="flex flex-wrap gap-2"><Pill label={MODE_LABEL[dashboard.mode]} tone="accent" /><Pill label={dashboard.writeEnabled ? "Ghi KiotViet: Đã mở" : "Ghi KiotViet: Đang khóa"} tone={dashboard.writeEnabled ? "good" : "warn"} /></div>
         </div>
       </div>
+
+      <ChannelMatrix channels={channels} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Chỉ khách nhắn trực tiếp" />

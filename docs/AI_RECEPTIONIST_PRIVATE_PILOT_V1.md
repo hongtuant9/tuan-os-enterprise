@@ -140,3 +140,60 @@ KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED=false
 ```
 
 Không xóa conversation, message, review, knowledge candidate hoặc audit log. Rollback code về commit production trước thay đổi.
+
+
+## 13. Omnichannel V1 — 24/09/2026
+
+Owner đã duyệt mở rộng kiến trúc sang **AI Lễ tân 24/7 đa kênh**, nhưng activation vẫn theo từng cổng (progressive gate), không mở đồng loạt.
+
+Kiến trúc chung:
+
+```text
+Channel adapter / official provider API
+  → normalized customer message
+  → customer identity + conversation memory
+  → pre-service / in-service / post-service care phase
+  → L3/L4/runtime knowledge resolver
+  → decision + safety gate
+  → conversation renderer + QA
+  → channel delivery adapter
+  → delivery status + audit log
+```
+
+Trạng thái adapter:
+- Facebook Messenger: webhook adapter hiện hành; private pilot.
+- Instagram Direct: webhook adapter có sẵn nhưng CLOSED cho tới khi auth/probe/UAT PASS.
+- WhatsApp: webhook adapter có sẵn nhưng CLOSED cho tới khi Cloud API auth/probe/UAT PASS.
+- Website chat: dùng authenticated normalized-message bridge; public widget chỉ mở sau security/UAT.
+- Email: cần mailbox OAuth/API + polling/idempotency trước khi mở.
+- Booking.com / Agoda / Airbnb / Expedia / Tripadvisor: chỉ dùng official connectivity/partner API. Không dùng browser automation làm transport customer-facing.
+- Google Maps / Business Profile: dùng discovery/review/reputation workflow; không coi là direct chat transport.
+
+Quy tắc thương mại:
+- OTA không tự upsell/off-platform remarketing trong V1.
+- Không tự xác nhận giá, availability, policy hoặc booking nếu thiếu authority live.
+- Booking/financial/pricing write tiếp tục khóa bằng approval riêng.
+- Một channel chỉ được outbound tự động khi provider verification + allowlist/UAT + mode gate đều PASS.
+
+VPS chạy `TCE Omnichannel Worker` để giữ readiness/polling lane 24/7. Worker fail closed: provider chưa cấu hình/xác minh hoặc chưa có adapter chính thức thì trả HOLD, không gọi API giả và không gửi khách.
+
+
+### 13.1 Machine bridge dùng chung
+
+Website/Email/OTA connector có thể đẩy inbound message qua endpoint authenticated hiện có:
+
+`POST /api/ai-receptionist/messages`
+
+Machine caller dùng `x-api-key` khớp `N8N_API_KEY`; không tạo public unauthenticated ingestion endpoint.
+
+Normalized payload giữ tối thiểu:
+- `channel`
+- `externalConversationId`
+- `externalMessageId` để chống xử lý trùng
+- `content`
+- `pageEntity`
+- `carePhase` nếu provider đã biết
+- `reservationReference` nếu là OTA/booking context
+- `providerMessageType`
+
+Connector chịu trách nhiệm provider auth, cursor/retry và outbound delivery. AI Receptionist core chịu trách nhiệm tri thức, safety, CRM identity, lifecycle care, reply draft và audit.

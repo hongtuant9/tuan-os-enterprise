@@ -82,6 +82,7 @@ function runtimeSignals() {
       ? "GOOGLE_OAUTH_CLIENT_CONFIGURED"
       : "NOT_CONFIGURED",
     otaEmailCredentialStore: "google_oauth_connections",
+    otaEmailAutoReplyEnabled: process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")
       .split(",").map((value) => value.trim()).filter(Boolean),
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",

@@ -18,6 +18,8 @@ import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDr
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
 import { buildIdentityCandidates } from "@/server/ai-receptionist/customer-identity";
 import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
+import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
+import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
@@ -343,6 +345,14 @@ export class AiReceptionistService {
     }
 
     const guestLanguage = detectGuestLanguage(input.content);
+    const inferredCarePhase = inferCustomerCarePhase(input.content, input.carePhase);
+    const previousCarePhase = typeof existingMetadata.care_phase === "string"
+      && ["pre_service", "in_service", "post_service", "general"].includes(existingMetadata.care_phase)
+      ? existingMetadata.care_phase as CustomerCarePhase
+      : null;
+    const carePhase = inferredCarePhase === "general" && previousCarePhase
+      ? previousCarePhase
+      : inferredCarePhase;
     const pageEntity = input.pageEntity
       ?? (typeof existingMetadata.page_entity === "string" ? existingMetadata.page_entity : "unknown");
     const persona = getPagePersona(pageEntity);
@@ -395,6 +405,10 @@ export class AiReceptionistService {
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
       page_entity: pageEntity,
       preferred_language: rendered.detectedLanguage,
+      care_phase: carePhase,
+      reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
+      provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      channel_auto_upsell_allowed: channelAllowsAutomaticUpsell(input.channel),
       conversation_memory: {
         customer_name: decision.metadataPatch.customer_name ?? null,
         customer_contact: decision.metadataPatch.customer_contact ?? null,
@@ -411,10 +425,12 @@ export class AiReceptionistService {
     const recentUpsell = await this.repo.findRecentUpsellEvents(customerId, since24h);
     const rawJourney = typeof decision.metadataPatch.journey_entry === "string" ? decision.metadataPatch.journey_entry : "GENERAL";
     const journeyEntry: JourneyEntry = (["HOMESTAY", "COZY", "EXPERIENCE", "EXPLORE", "GENERAL"] as const).includes(rawJourney as JourneyEntry) ? rawJourney as JourneyEntry : "GENERAL";
-    const runtimeUpsellPlan = buildUpsellPlan(journeyEntry, {
-      offersShownLast24h: recentUpsell.filter((event) => event.event_type === "shown").length,
-      rejectedOffers: recentUpsell.filter((event) => event.event_type === "rejected").map((event) => event.offer_code),
-    });
+    const runtimeUpsellPlan = channelAllowsAutomaticUpsell(input.channel)
+      ? buildUpsellPlan(journeyEntry, {
+          offersShownLast24h: recentUpsell.filter((event) => event.event_type === "shown").length,
+          rejectedOffers: recentUpsell.filter((event) => event.event_type === "rejected").map((event) => event.offer_code),
+        })
+      : [];
     mergedMetadata.upsell_offers = runtimeUpsellPlan.map((item) => item.offer);
 
     const conversation = await this.repo.upsertConversation({
@@ -464,6 +480,9 @@ export class AiReceptionistService {
         translated_vi: rendered.guestTranslationVi,
         detected_language: rendered.detectedLanguage,
         page_entity: pageEntity,
+        care_phase: carePhase,
+        reservation_reference: input.reservationReference ?? null,
+        provider_message_type: input.providerMessageType ?? null,
       },
     });
 
@@ -524,7 +543,7 @@ export class AiReceptionistService {
       businessUnitId: hospitalityBusinessUnitId,
       message: decision.review
         ? `Đã chuyển yêu cầu thử nghiệm sang Quản lý Homestay: ${decision.review.title}.`
-        : "Đã xử lý một tin nhắn khách trong chế độ thử nghiệm.",
+        : `Đã xử lý tin nhắn khách từ kênh ${input.channel} trong chế độ ${mode}.`,
       type: decision.review ? "alert" : "action",
     });
 

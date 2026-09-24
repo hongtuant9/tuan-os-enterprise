@@ -124,6 +124,28 @@ export async function decideManagerReviewAction(input: {
   }
 }
 
+export async function markConversationReadAction(
+  conversationId: string
+): Promise<ActionResult> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để đánh dấu hội thoại đã đọc." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được cập nhật trạng thái đọc." };
+  }
+  try {
+    await getAdminContainer().aiReceptionist.markConversationRead(
+      conversationId,
+      session.email ?? "Quản lý Homestay"
+    );
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể đánh dấu hội thoại đã đọc." };
+  }
+}
+
 export async function backfillConversationTranslationsAction(
   conversationId: string
 ): Promise<ActionResult<{ updated: number; skipped: number }>> {

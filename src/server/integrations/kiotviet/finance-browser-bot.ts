@@ -435,8 +435,8 @@ async function cashbookRows(page: Page): Promise<string[]> {
   });
 }
 
-async function cashbookCreateCapability(page: Page): Promise<boolean> {
-  return page.evaluate(() => {
+async function closeVoucherDraft(page: Page): Promise<void> {
+  const closed = await page.evaluate(() => {
     const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
     const visible = (el: Element) => {
       const node = el as HTMLElement;
@@ -444,21 +444,53 @@ async function cashbookCreateCapability(page: Page): Promise<boolean> {
       const rect = node.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
     };
-    const controls = Array.from(document.querySelectorAll("button,a,[role='button']"))
-      .filter(visible)
-      .map((el) => normalize((el as HTMLElement).innerText || el.textContent || ""));
-    const hasReceipt = controls.some((text) => text === "phiếu thu" || text.includes("lập phiếu thu"));
-    const hasPayment = controls.some((text) => text === "phiếu chi" || text.includes("lập phiếu chi"));
-    return hasReceipt && hasPayment;
+    const dialogs = Array.from(document.querySelectorAll("[role='dialog'],.modal,.k-window,.kv-modal,.bk-modal"))
+      .filter(visible);
+    const scope = dialogs.find((dialog) => /loại thu|loại chi|tạo phiếu thu|tạo phiếu chi/i.test(dialog.textContent || ""));
+    if (!scope) return false;
+    const buttons = Array.from(scope.querySelectorAll("button,a,[role='button']")).filter(visible);
+    const close = buttons.find((el) => ["bỏ qua", "đóng"].includes(normalize((el as HTMLElement).innerText || el.textContent || "")));
+    if (!close) return false;
+    (close as HTMLElement).click();
+    return true;
   }).catch(() => false);
+  if (!closed) await page.keyboard.press("Escape").catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 350));
 }
 
 async function openVoucherDraft(page: Page, direction: KiotVietCashflowDirection): Promise<boolean> {
-  const labels = direction === "CHI" ? ["+ Phiếu chi", "+ Lập phiếu chi", "Lập phiếu chi", "Phiếu chi"] : ["+ Phiếu thu", "+ Lập phiếu thu", "Lập phiếu thu", "Phiếu thu"];
+  const labels = direction === "CHI"
+    ? ["+ Phiếu chi", "+ Lập phiếu chi", "Lập phiếu chi", "Phiếu chi"]
+    : ["+ Phiếu thu", "+ Lập phiếu thu", "Lập phiếu thu", "Phiếu thu"];
+  const fieldPattern = new RegExp(direction === "CHI" ? "Loại chi" : "Loại thu", "i");
   const clicked = await clickByText(page, labels);
   if (!clicked) return false;
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  return new RegExp(direction === "CHI" ? "Loại chi" : "Loại thu", "i").test(await visibleText(page));
+
+  for (const delay of [350, 650]) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (fieldPattern.test(await visibleText(page))) return true;
+  }
+
+  const methodClicked = await clickByText(page, ["Tiền mặt"]);
+  if (!methodClicked) return false;
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  const text = await visibleText(page);
+  if (/không có quyền|không được phép|permission|access denied/i.test(text)) return false;
+  return fieldPattern.test(text);
+}
+
+async function cashbookCreateCapability(page: Page, system: FinanceBotSystem): Promise<boolean> {
+  for (const direction of ["THU", "CHI"] as const) {
+    if (!(await goCashbook(page, system))) return false;
+    const opened = await openVoucherDraft(page, direction);
+    if (!opened) {
+      await closeVoucherDraft(page);
+      return false;
+    }
+    await closeVoucherDraft(page);
+  }
+  return true;
 }
 
 async function openGroupPicker(page: Page, direction: KiotVietCashflowDirection): Promise<boolean> {
@@ -840,7 +872,7 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
       }
 
       if (state === "SETUP_VERIFIED" && flag("TCE_KIOTVIET_FINANCE_BOT_TRANSACTION_WRITE_ENABLED")) {
-        const createAllowed = await cashbookCreateCapability(page);
+        const createAllowed = await cashbookCreateCapability(page, system);
         if (createAllowed) {
           state = "CREATE_READY";
           detail += " CREATE controls verified for this KiotViet account.";
@@ -935,7 +967,7 @@ export async function createFinanceVoucher(input: FinanceVoucherInput): Promise<
       if (!auth.ok || !(await goCashbook(page, input.system))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: auth.detail || "Cashbook unavailable." };
       }
-      if (!(await cashbookCreateCapability(page))) {
+      if (!(await cashbookCreateCapability(page, system))) {
         return { ok: false, state: "HOLD", idempotencyKey: input.idempotencyKey, readBackVerified: false, detail: "KiotViet account does not expose Phiếu thu/Phiếu chi create controls." };
       }
 

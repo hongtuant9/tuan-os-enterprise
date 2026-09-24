@@ -5,7 +5,7 @@ import { facebookLegacyPageId, facebookPageEntityMap, parseStringMapEnv } from "
 
 export const dynamic = "force-dynamic";
 
-type ProbeChannel = "facebook" | "whatsapp";
+type ProbeChannel = "facebook" | "instagram" | "whatsapp";
 
 type GraphError = {
   message?: string;
@@ -82,6 +82,38 @@ async function probeFacebook() {
   return { ...(await probeFacebookToken(token, pageId)), mode: "single_page_legacy", pageId, entity: entityMap[pageId] ?? "unknown" };
 }
 
+async function probeInstagram() {
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
+  const accountId = process.env.INSTAGRAM_USER_ID?.trim();
+  const version = process.env.INSTAGRAM_GRAPH_API_VERSION?.trim() || "v26.0";
+  if (!token || !accountId) {
+    return { ok: false, reachable: false, reason: "missing_instagram_credentials" };
+  }
+
+  const profileUrl = new URL(`https://graph.instagram.com/${version}/${encodeURIComponent(accountId)}`);
+  profileUrl.searchParams.set("fields", "id,username");
+  profileUrl.searchParams.set("access_token", token);
+  const response = await fetch(profileUrl, {
+    signal: AbortSignal.timeout(12_000),
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => null) as {
+    id?: string;
+    username?: string;
+    error?: GraphError;
+  } | null;
+
+  return {
+    ok: response.ok && body?.id === accountId,
+    reachable: true,
+    httpStatus: response.status,
+    accountId: response.ok ? body?.id ?? null : null,
+    username: response.ok ? body?.username ?? null : null,
+    identityMatchesExpectedId: response.ok ? body?.id === accountId : false,
+    error: safeGraphError(body?.error),
+  };
+}
+
 async function probeWhatsApp() {
   const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
@@ -112,7 +144,7 @@ export async function POST(request: Request) {
   let channel: ProbeChannel;
   try {
     const payload = await request.json() as { channel?: string };
-    if (payload.channel !== "facebook" && payload.channel !== "whatsapp") {
+    if (payload.channel !== "facebook" && payload.channel !== "instagram" && payload.channel !== "whatsapp") {
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 });
     }
     channel = payload.channel;
@@ -123,7 +155,7 @@ export async function POST(request: Request) {
   const snapshot = channelPolicySnapshot();
   const policy = snapshot.channels.find((item) => item.id === channel) ?? null;
   try {
-    const probe = channel === "facebook" ? await probeFacebook() : await probeWhatsApp();
+    const probe = channel === "facebook" ? await probeFacebook() : channel === "instagram" ? await probeInstagram() : await probeWhatsApp();
     return NextResponse.json(
       { channel, stage: snapshot.stage, policy, probe, checkedAt: new Date().toISOString() },
       { headers: { "Cache-Control": "no-store" } },

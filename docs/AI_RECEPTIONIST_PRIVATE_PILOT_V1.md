@@ -176,3 +176,24 @@ Quy tắc thương mại:
 - Một channel chỉ được outbound tự động khi provider verification + allowlist/UAT + mode gate đều PASS.
 
 VPS chạy `TCE Omnichannel Worker` để giữ readiness/polling lane 24/7. Worker fail closed: provider chưa cấu hình/xác minh hoặc chưa có adapter chính thức thì trả HOLD, không gọi API giả và không gửi khách.
+
+
+### 13.1 Machine bridge dùng chung
+
+Website/Email/OTA connector có thể đẩy inbound message qua endpoint authenticated hiện có:
+
+`POST /api/ai-receptionist/messages`
+
+Machine caller dùng `x-api-key` khớp `N8N_API_KEY`; không tạo public unauthenticated ingestion endpoint.
+
+Normalized payload giữ tối thiểu:
+- `channel`
+- `externalConversationId`
+- `externalMessageId` để chống xử lý trùng
+- `content`
+- `pageEntity`
+- `carePhase` nếu provider đã biết
+- `reservationReference` nếu là OTA/booking context
+- `providerMessageType`
+
+Connector chịu trách nhiệm provider auth, cursor/retry và outbound delivery. AI Receptionist core chịu trách nhiệm tri thức, safety, CRM identity, lifecycle care, reply draft và audit.

@@ -11,6 +11,7 @@ type GmailPart = {
 };
 type GmailMessage = {
   id?: string;
+  threadId?: string;
   snippet?: string;
   payload?: GmailPart;
 };
@@ -24,7 +25,102 @@ export type OtaEmailWorkerResult = {
   duplicates: number;
   contextOnly: number;
   failed: number;
+  autoSent: number;
+  autoSendHeld: number;
 };
+
+
+function headerValues(message: GmailMessage): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of message.payload?.headers ?? []) {
+    const name = item.name?.trim().toLowerCase();
+    const value = item.value?.trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
+}
+
+function extractAddress(value: string): string {
+  const angle = value.match(/<([^<>\s]+@[^<>\s]+)>/);
+  if (angle?.[1]) return angle[1].trim().toLowerCase();
+  const plain = value.match(/([A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+  return plain?.[1]?.trim().toLowerCase() ?? "";
+}
+
+function autoReplyChannels(): Set<string> {
+  const raw = process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim().toLowerCase() || "";
+  return new Set(raw.split(",").map((item) => item.trim()).filter(Boolean));
+}
+
+function approvedReplyAddress(channel: string, address: string): boolean {
+  const normalized = address.toLowerCase();
+  if (channel === "booking") {
+    return normalized.endsWith("@guest.booking.com") || normalized.endsWith("@property.booking.com");
+  }
+  if (channel === "agoda") {
+    return normalized.endsWith("@agoda-messaging.com") && !normalized.startsWith("notifications@");
+  }
+  if (channel === "airbnb") {
+    return normalized.endsWith("@reply.airbnb.com");
+  }
+  if (channel === "expedia") {
+    return normalized.endsWith("@m.expediapartnercentral.com");
+  }
+  return false;
+}
+
+function encodeBase64Url(value: string): string {
+  return Buffer.from(value, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function safeSubject(subject: string): string {
+  const cleaned = subject.replace(/[\r\n]+/g, " ").trim();
+  return /^re:/i.test(cleaned) ? cleaned : `Re: ${cleaned}`;
+}
+
+async function gmailSendReply(input: {
+  token: string;
+  threadId?: string;
+  to: string;
+  subject: string;
+  body: string;
+  inReplyTo?: string;
+  references?: string;
+}): Promise<string> {
+  const headers = [
+    `To: ${input.to}`,
+    `Subject: ${safeSubject(input.subject)}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+  ];
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+  headers.push("", input.body.trim());
+  const requestBody: { raw: string; threadId?: string } = {
+    raw: encodeBase64Url(headers.join("\r\n")),
+  };
+  if (input.threadId) requestBody.threadId = input.threadId;
+
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!response.ok || !payload?.id) {
+    throw new Error(`gmail_send_failed:${response.status}:${payload?.error?.message?.slice(0, 120) ?? "unknown"}`);
+  }
+  return payload.id;
+}
 
 function configured(): boolean {
   return Boolean(
@@ -135,6 +231,8 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     duplicates: 0,
     contextOnly: 0,
     failed: 0,
+    autoSent: 0,
+    autoSendHeld: 0,
   };
   if (!result.configured) return result;
 
@@ -166,6 +264,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
 
       result.actionable += 1;
       const pageEntity = inferPageEntity(`${subject}\n${body.slice(0, 2500)}`);
+      const headers = headerValues(message);
       const ingest = await service.ingestGuestMessage({
         channel: parsed.channel,
         externalConversationId: `${parsed.channel}:${parsed.reservationReference}`,
@@ -180,8 +279,51 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         forceAssistMode: true,
         testerUserId: null,
       });
-      if (ingest.duplicate) result.duplicates += 1;
-      else result.drafted += 1;
+      if (ingest.duplicate) {
+        result.duplicates += 1;
+        continue;
+      }
+
+      result.drafted += 1;
+      const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
+      const autoSendRequested = autoReplyChannels().has(parsed.channel);
+      const autoSendAllowed = autoSendRequested
+        && !ingest.reviewId
+        && approvedReplyAddress(parsed.channel, replyTo)
+        && Boolean(ingest.outboundMessageId);
+
+      if (!autoSendAllowed) {
+        result.autoSendHeld += 1;
+        continue;
+      }
+
+      try {
+        const sentId = await gmailSendReply({
+          token,
+          threadId: message.threadId,
+          to: replyTo,
+          subject,
+          body: ingest.reply,
+          inReplyTo: headers["message-id"],
+          references: headers["references"] || headers["message-id"],
+        });
+        if (ingest.outboundMessageId) {
+          await service.markOutboundDelivery(ingest.outboundMessageId, {
+            status: "sent",
+            externalMessageId: `gmail:${sentId}`,
+            detail: `OTA email relay sent via approved ${parsed.channel} reply address`,
+          });
+        }
+        result.autoSent += 1;
+      } catch {
+        if (ingest.outboundMessageId) {
+          await service.markOutboundDelivery(ingest.outboundMessageId, {
+            status: "failed",
+            detail: "OTA email relay send failed",
+          });
+        }
+        result.failed += 1;
+      }
     } catch {
       result.failed += 1;
     }

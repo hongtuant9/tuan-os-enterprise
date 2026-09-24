@@ -270,6 +270,9 @@ export class AiReceptionistService {
     reply: string;
     reviewId: string | null;
     outboundMessageId: string | null;
+    qaPass: boolean;
+    qaReasons: string[];
+    usedGenerativeRenderer: boolean;
     duplicate: boolean;
   }> {
     const externalMessageId = input.externalMessageId?.trim() || null;
@@ -282,6 +285,9 @@ export class AiReceptionistService {
           reply: "Tin nhắn đã được xử lý trước đó.",
           reviewId: null,
           outboundMessageId: null,
+          qaPass: false,
+          qaReasons: ["duplicate_message"],
+          usedGenerativeRenderer: false,
           duplicate: true,
         };
       }

@@ -19,7 +19,10 @@ if ! grep -Eq '^FACEBOOK_VERIFY_TOKEN=.+' "$ENV_FILE"; then
 fi
 
 
-# One-shot strict provider verification for the approved Facebook private pilot.\npython3 "$APP_ROOT/scripts/ovh/facebook-provider-verify-once.py" "$ENV_FILE"\n\nrequired=(
+# One-shot strict provider verification for the approved Facebook private pilot.
+python3 "$APP_ROOT/scripts/ovh/facebook-provider-verify-once.py" "$ENV_FILE"
+
+required=(
   NEXT_PUBLIC_SUPABASE_URL
   NEXT_PUBLIC_SUPABASE_ANON_KEY
   SUPABASE_SERVICE_ROLE_KEY

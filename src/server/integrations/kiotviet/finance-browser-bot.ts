@@ -343,10 +343,18 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
   await page.waitForFunction(
     () => {
       const body = document.body?.innerText || "";
-      const rows = document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row");
-      return rows.length > 0 || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
+      const rows = Array.from(
+        document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row")
+      );
+      const hasVisibleRow = rows.some((row) => {
+        const node = row as HTMLElement;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+      });
+      return hasVisibleRow || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
     },
-    { timeout: 12_000 }
+    { timeout: 15_000 }
   ).catch(() => null);
 
   return page.evaluate(() => {

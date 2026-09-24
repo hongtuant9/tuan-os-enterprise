@@ -90,11 +90,17 @@ recover_key() {
       return 0
     fi
   done < <(
-    find "$SEARCH_ROOT" -type f \
-      \( -name '*.env' -o -name '*.env.*' -o -name '*backup*' -o -name '*secret*' \) \
-      -size -2097152c \
-      ! -path '*/.git/*' \
-      2>/dev/null | sort
+    {
+      for root in "$SEARCH_ROOT" /root /home/tuanadmin; do
+        [ -d "$root" ] || continue
+        find "$root" -type f \
+          \( -name '*.env' -o -name '*.env.*' -o -name '*backup*' -o -name '*secret*' \) \
+          -size -2097152c \
+          ! -path '*/.git/*' \
+          ! -path '*/node_modules/*' \
+          2>/dev/null
+      done
+    } | sort -u
   )
 
   log "$key=SET=no"

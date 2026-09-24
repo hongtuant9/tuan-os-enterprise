@@ -67,7 +67,7 @@ function autoReplyChannels(): Set<string> {
 function approvedReplyAddress(channel: string, address: string): boolean {
   const normalized = address.toLowerCase();
   if (channel === "booking") {
-    return normalized.endsWith("@guest.booking.com") || normalized.endsWith("@property.booking.com");
+    return normalized.endsWith("@guest.booking.com");
   }
   if (channel === "agoda") {
     return normalized.endsWith("@agoda-messaging.com") && !normalized.startsWith("notifications@");
@@ -76,7 +76,7 @@ function approvedReplyAddress(channel: string, address: string): boolean {
     return normalized.endsWith("@reply.airbnb.com");
   }
   if (channel === "expedia") {
-    return normalized.endsWith("@m.expediapartnercentral.com");
+    return false;
   }
   return false;
 }
@@ -277,6 +277,8 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
       const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
       const autoSendAllowed = autoSendRequested
         && !ingest.reviewId
+        && ingest.qaPass === true
+        && ingest.usedGenerativeRenderer === true
         && approvedReplyAddress(parsed.channel, replyTo)
         && Boolean(ingest.outboundMessageId);
 

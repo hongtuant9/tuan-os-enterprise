@@ -47,8 +47,15 @@ function runtimeSignals() {
   );
   const financeBotEnabled = process.env.TCE_KIOTVIET_FINANCE_BOT_ENABLED?.trim().toLowerCase() === "true";
   const financeBotWorkerEnabled = financeBotEnabled && process.env.TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
-  const inventoryBotEnabled = process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase() === "true";
-  const inventoryBotWorkerEnabled = inventoryBotEnabled && process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase() === "true";
+  const inventoryBotEnabledSetting = process.env.TCE_KIOTVIET_INVENTORY_BOT_ENABLED?.trim().toLowerCase();
+  const inventoryBotWorkerSetting = process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED?.trim().toLowerCase();
+  const inventoryBotEnabled =
+    inventoryBotEnabledSetting === "true" ||
+    (!inventoryBotEnabledSetting && financeBotEnabled);
+  const inventoryBotWorkerEnabled =
+    inventoryBotEnabled &&
+    (inventoryBotWorkerSetting === "true" ||
+      (!inventoryBotWorkerSetting && financeBotWorkerEnabled));
   const fnbFinanceBotWebCredentialConfigured = Boolean(
     (process.env.KIOTVIET_FNB_WEB_RETAILER?.trim() || process.env.KIOTVIET_FNB_RETAILER?.trim()) &&
     process.env.KIOTVIET_FNB_WEB_USERNAME?.trim() &&

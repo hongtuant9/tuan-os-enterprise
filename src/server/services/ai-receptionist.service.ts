@@ -222,6 +222,8 @@ export class AiReceptionistService {
       const upsellOffers = Array.isArray(metadata.upsell_offers)
         ? metadata.upsell_offers.filter((value): value is string => typeof value === "string")
         : [];
+      const pageEntity = typeof metadata.page_entity === "string" ? metadata.page_entity : "unknown";
+      const entityPropertyName = pageEntity !== "unknown" ? getPagePersona(pageEntity).displayName : null;
       return {
         id: row.id,
         channel: row.channel,
@@ -229,7 +231,7 @@ export class AiReceptionistService {
         customerName: row.customer_name ?? "Khách chưa cung cấp tên",
         customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
         propertyId: row.property_id,
-        propertyName: row.property_id ? propertyNames.get(row.property_id) ?? null : null,
+        propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
         language: row.language,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",

@@ -208,6 +208,13 @@ export class AiReceptionistService {
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
+        carePhase: typeof metadata.care_phase === "string"
+          && ["pre_service", "in_service", "post_service", "general"].includes(metadata.care_phase)
+          ? metadata.care_phase as ReceptionistConversation["carePhase"]
+          : "general",
+        reservationReference: typeof metadata.reservation_reference === "string"
+          ? metadata.reservation_reference
+          : null,
         upsellOffers,
         status: row.status as ReceptionistConversation["status"],
         mode: row.mode as ReceptionistConversation["mode"],

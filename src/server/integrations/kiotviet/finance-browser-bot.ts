@@ -335,13 +335,16 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
   await page.waitForFunction(
     () => {
       const body = document.body?.innerText || "";
-      const routeDetected =
-        /sổ quỹ/i.test(document.title) ||
-        /cashflow/i.test(location.href) ||
-        /sổ quỹ/i.test(body);
-      if (!routeDetected) return false;
+      return /sổ quỹ/i.test(document.title) || /cashflow/i.test(location.href) || /sổ quỹ/i.test(body);
+    },
+    { timeout: 12_000 }
+  ).catch(() => null);
+
+  await page.waitForFunction(
+    () => {
+      const body = document.body?.innerText || "";
       const rows = document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row");
-      return rows.length > 0 || /tổng quỹ|mã phiếu|loại thu chi/i.test(body);
+      return rows.length > 0 || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
     },
     { timeout: 12_000 }
   ).catch(() => null);

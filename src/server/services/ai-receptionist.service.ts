@@ -524,6 +524,8 @@ export class AiReceptionistService {
         reservation_context: input.reservationContext ?? null,
         provider_message_type: input.providerMessageType ?? null,
         assist_mode: input.forceAssistMode === true,
+        actor_label: "Khách",
+        authorship: "guest",
       },
     });
 
@@ -545,6 +547,10 @@ export class AiReceptionistService {
         page_entity: pageEntity,
         qa_pass: rendered.qa.pass,
         qa_reasons: rendered.qa.reasons,
+        actor_label: "AI Lễ tân",
+        authorship: "ai",
+        generated_at: new Date().toISOString(),
+        edited_by_human: false,
       },
     });
 
@@ -612,6 +618,7 @@ export class AiReceptionistService {
         ...metadata,
         delivery_status: input.status,
         delivery_detail: input.detail ?? null,
+        delivered_at: input.status === "sent" ? new Date().toISOString() : null,
       },
     });
   }
@@ -808,6 +815,10 @@ export class AiReceptionistService {
         resumed_after_manager_review: true,
         translated_vi: rendered.replyTranslationVi,
         detected_language: rendered.detectedLanguage,
+        actor_label: "AI Lễ tân",
+        authorship: "ai",
+        generated_at: new Date().toISOString(),
+        edited_by_human: false,
       },
     });
 

@@ -1,4 +1,5 @@
 export type ReceptionistMode = "off" | "simulation" | "shadow" | "limited_auto" | "live";
+export type CustomerCarePhase = "pre_service" | "in_service" | "post_service" | "general";
 export type ConversationStatus =
   | "new"
   | "active"
@@ -117,6 +118,9 @@ export type PilotMessageInput = {
   utmCampaign?: string;
   referralSource?: string;
   pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
+  carePhase?: CustomerCarePhase;
+  reservationReference?: string;
+  providerMessageType?: string;
   testerUserId?: string | null;
 };
 

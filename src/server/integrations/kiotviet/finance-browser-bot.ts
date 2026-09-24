@@ -333,10 +333,23 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
   }
 
   await page.waitForFunction(
-    () => /sổ quỹ/i.test(document.body?.innerText || ""),
-    { timeout: 10_000 }
+    () => {
+      const body = document.body?.innerText || "";
+      const routeDetected =
+        /sổ quỹ/i.test(document.title) ||
+        /cashflow/i.test(location.href) ||
+        /sổ quỹ/i.test(body);
+      if (!routeDetected) return false;
+      const rows = document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row");
+      return rows.length > 0 || /tổng quỹ|mã phiếu|loại thu chi/i.test(body);
+    },
+    { timeout: 12_000 }
   ).catch(() => null);
-  return /sổ quỹ/i.test(await visibleText(page));
+
+  return page.evaluate(() => {
+    const body = document.body?.innerText || "";
+    return /sổ quỹ/i.test(document.title) || /cashflow/i.test(location.href) || /sổ quỹ/i.test(body);
+  });
 }
 
 async function cashbookRows(page: Page): Promise<string[]> {

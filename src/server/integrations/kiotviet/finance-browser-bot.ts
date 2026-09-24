@@ -253,6 +253,7 @@ async function login(page: Page, system: FinanceBotSystem): Promise<{ ok: boolea
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   if (await page.$("#Password")) {
+    const navigation = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null);
     const loginForm = await page.evaluate(
       ({ retailer, username, password }) => {
         const retailerInput =
@@ -302,8 +303,8 @@ async function login(page: Page, system: FinanceBotSystem): Promise<{ ok: boolea
     if (!loginForm.submitted) {
       return { ok: false, state: "HOLD_UI_CHANGED", detail: "KiotViet login submit control was not recognized." };
     }
-    await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null);
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    await navigation;
+    await new Promise((resolve) => setTimeout(resolve, 2200));
   }
 
   const text = await visibleText(page);
@@ -326,11 +327,15 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
   const cfg = config(system);
   if (cfg.cashbookUrl) {
     await page.goto(cfg.cashbookUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   } else {
     const clicked = await clickByText(page, ["Sổ quỹ", "Sổ Quỹ"]);
-    if (clicked) await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (!clicked) return false;
   }
+
+  await page.waitForFunction(
+    () => /sổ quỹ/i.test(document.body?.innerText || ""),
+    { timeout: 10_000 }
+  ).catch(() => null);
   return /sổ quỹ/i.test(await visibleText(page));
 }
 

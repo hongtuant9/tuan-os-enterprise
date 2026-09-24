@@ -123,6 +123,7 @@ export type PilotMessageInput = {
   carePhase?: CustomerCarePhase;
   reservationReference?: string;
   providerMessageType?: string;
+  forceAssistMode?: boolean;
   testerUserId?: string | null;
 };
 

@@ -6,6 +6,7 @@ import { getRequestContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
 import { hasMinimumRole } from "@/server/auth/roles";
 import { getReceptionistMode, isKiotVietDirectBookingWriteEnabled } from "@/server/ai-receptionist/config";
+import { channelPolicySnapshot } from "@/server/channels/channel-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,16 @@ export default async function AiReceptionistWorkspacePage() {
   }
 
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
+  const channelSnapshot = channelPolicySnapshot();
+  const channels = channelSnapshot.channels.map((channel) => ({
+    id: channel.id,
+    label: channel.label,
+    readiness: channel.readiness,
+    transport: channel.transport,
+    mode: channel.mode,
+    providerConfig: channel.providerConfig,
+    providerVerification: channel.providerVerification,
+  }));
 
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
@@ -59,7 +70,7 @@ export default async function AiReceptionistWorkspacePage() {
             </p>
           </div>
         )}
-        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} />
+        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} />
       </main>
     </div>
   );

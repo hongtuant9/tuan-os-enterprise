@@ -1,0 +1,129 @@
+import type { CustomerCarePhase } from "@/data/ai-receptionist";
+
+export type OtaEmailChannel = "booking" | "agoda" | "airbnb" | "expedia";
+
+export type ParsedOtaEmail = {
+  channel: OtaEmailChannel | null;
+  reservationReference: string | null;
+  eventType: "guest_message" | "guest_request" | "booking_confirmation" | "arrival_reminder" | "review" | "other";
+  actionable: boolean;
+  guestText: string | null;
+  carePhase: CustomerCarePhase;
+  reason: string;
+};
+
+function normalize(value: string): string {
+  return value.replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function channelFrom(from: string, subject: string): OtaEmailChannel | null {
+  const haystack = `${from} ${subject}`.toLowerCase();
+  if (haystack.includes("booking.com") || haystack.includes("@guest.booking.com") || haystack.includes("@property.booking.com")) return "booking";
+  if (haystack.includes("agoda")) return "agoda";
+  if (haystack.includes("airbnb")) return "airbnb";
+  if (haystack.includes("expedia") || haystack.includes("expediapartnercentral")) return "expedia";
+  return null;
+}
+
+function firstMatch(text: string, patterns: RegExp[]): string | null {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
+}
+
+function reservationReference(channel: OtaEmailChannel | null, text: string): string | null {
+  if (!channel) return null;
+  const common = [
+    /(?:confirmation number|confirmation no\.?|mã số đặt phòng|reservation(?: id| number)?|booking(?: id| number)?)[\s:#-]*([A-Z0-9-]{6,24})/i,
+  ];
+  const specific: Record<OtaEmailChannel, RegExp[]> = {
+    booking: [
+      /(?:mã số đặt phòng|confirmation number)[\s:#-]*(\d{6,12})/i,
+      /(?:booking\.com)[^\n()]{0,80}\((\d{6,12})\)/i,
+    ],
+    agoda: [
+      /agoda booking id[\s:#-]*(\d{6,16})/i,
+      /(?:booking id|mã số đặt phòng)[\s:#-]*(\d{6,16})/i,
+    ],
+    airbnb: [
+      /(?:confirmation code|mã xác nhận)[\s:#-]*([A-Z0-9]{8,16})/i,
+      /\b(H[A-Z0-9]{8,15})\b/,
+    ],
+    expedia: [
+      /(?:itinerary|reservation|booking)(?: number| id)?[\s:#-]*([A-Z0-9-]{6,24})/i,
+      /(?:expedia|affiliate network)[^\n()]{0,100}\((\d{6,16})\)/i,
+    ],
+  };
+  return firstMatch(text, [...specific[channel], ...common]);
+}
+
+function classify(subject: string, body: string): ParsedOtaEmail["eventType"] {
+  const text = `${subject}\n${body.slice(0, 2500)}`.toLowerCase();
+  if (/(new review|nhận xét mới|đánh giá mới)/i.test(text)) return "review";
+  if (/(confirmed|đã xác nhận đặt phòng|booking id|new booking from|reservation confirmed)/i.test(text)) return "booking_confirmation";
+  if (/(sắp đến|arrival|arriving|check-in reminder|nhắc nhở đặt phòng)/i.test(text)) return "arrival_reminder";
+  if (/(request|yêu cầu|needs something|subject to availability|thay đổi ngày)/i.test(text)) return "guest_request";
+  if (/(message|tin nhắn|đã nhắn|said:|reply now|về: đặt phòng)/i.test(text)) return "guest_message";
+  return "other";
+}
+
+function extractGuestText(subject: string, body: string, eventType: ParsedOtaEmail["eventType"]): string | null {
+  const text = normalize(body);
+  if (!text) return null;
+  if (eventType !== "guest_message" && eventType !== "guest_request") return null;
+
+  const markers = [
+    /(?:đã nhắn|said|wrote|message from guest|tin nhắn mới từ khách)\s*[:：]\s*([\s\S]{1,1800})/i,
+    /(?:guest request|yêu cầu của khách|người đặt)\s*[:：]?\s*([\s\S]{1,1800})/i,
+  ];
+  for (const marker of markers) {
+    const match = text.match(marker);
+    if (match?.[1]) {
+      return normalize(match[1]).slice(0, 1800);
+    }
+  }
+
+  // For provider notification emails the subject is often more reliable than boilerplate-heavy HTML.
+  const combined = normalize(`${subject}\n${text}`);
+  return combined.slice(0, 1800);
+}
+
+function carePhase(eventType: ParsedOtaEmail["eventType"]): CustomerCarePhase {
+  if (eventType === "arrival_reminder" || eventType === "booking_confirmation") return "pre_service";
+  if (eventType === "review") return "post_service";
+  return "general";
+}
+
+export function parseOtaEmail(input: {
+  from: string;
+  subject: string;
+  body?: string | null;
+  snippet?: string | null;
+}): ParsedOtaEmail {
+  const body = normalize(input.body || input.snippet || "");
+  const subject = normalize(input.subject || "");
+  const channel = channelFrom(input.from || "", subject);
+  const combined = `${subject}\n${body}`;
+  const eventType = classify(subject, body);
+  const ref = reservationReference(channel, combined);
+  const guestText = extractGuestText(subject, body, eventType);
+  const actionable = Boolean(channel && ref && guestText && (eventType === "guest_message" || eventType === "guest_request"));
+
+  return {
+    channel,
+    reservationReference: ref,
+    eventType,
+    actionable,
+    guestText,
+    carePhase: carePhase(eventType),
+    reason: !channel
+      ? "unrecognized_ota_sender"
+      : !ref
+        ? "reservation_reference_missing"
+        : !guestText
+          ? "no_actionable_guest_message"
+          : "actionable_guest_message",
+  };
+}

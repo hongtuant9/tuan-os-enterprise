@@ -21,6 +21,7 @@ import type {
 
 const TABS = [
   ["hop-thu", "Hộp thư"],
+  ["nhat-ky", "Nhật ký AI"],
   ["xac-nhan", "Cần Quản lý xác nhận"],
   ["dat-phong", "Đặt phòng do AI tạo"],
   ["tri-thuc", "Đề xuất cập nhật tri thức"],
@@ -54,6 +55,13 @@ const CHANNEL_LABEL: Record<string, string> = {
   zalo: "Zalo",
   whatsapp: "WhatsApp",
   instagram: "Instagram",
+  booking: "Booking.com",
+  agoda: "Agoda",
+  airbnb: "Airbnb",
+  expedia: "Expedia",
+  tripadvisor: "Tripadvisor",
+  email: "Email",
+  other: "Kênh khác",
   pilot: "Tài khoản kiểm thử",
 };
 
@@ -105,12 +113,15 @@ function Metric({ label, value, hint }: { label: string; value: number; hint: st
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(value)) + " ICT";
 }
 
 function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
@@ -684,6 +695,152 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
   );
 }
 
+
+function AuditLog({ items }: { items: ReceptionistConversation[] }) {
+  const [windowFilter, setWindowFilter] = useState<"today" | "7d" | "30d" | "all">("7d");
+  const [channelFilter, setChannelFilter] = useState("all");
+  const [propertyFilter, setPropertyFilter] = useState("all");
+  const [actorFilter, setActorFilter] = useState<"all" | "ai" | "human" | "guest" | "system">("all");
+
+  const channels = useMemo(
+    () => [...new Set(items.map((item) => item.channel))].sort(),
+    [items],
+  );
+  const properties = useMemo(
+    () => [...new Set(items.map((item) => item.propertyName ?? "Chưa xác định"))].sort(),
+    [items],
+  );
+
+  const rows = useMemo(() => {
+    const now = Date.now();
+    const start = windowFilter === "today"
+      ? new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })).setHours(0, 0, 0, 0)
+      : windowFilter === "7d" ? now - 7 * 86400000
+      : windowFilter === "30d" ? now - 30 * 86400000
+      : 0;
+
+    return items
+      .flatMap((conversation) => conversation.messages.map((message) => ({ conversation, message })))
+      .filter(({ conversation, message }) => {
+        if (start && new Date(message.createdAt).getTime() < start) return false;
+        if (channelFilter !== "all" && conversation.channel !== channelFilter) return false;
+        if (propertyFilter !== "all" && (conversation.propertyName ?? "Chưa xác định") !== propertyFilter) return false;
+        if (actorFilter !== "all" && message.authorship !== actorFilter) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.message.createdAt).getTime() - new Date(a.message.createdAt).getTime());
+  }, [items, windowFilter, channelFilter, propertyFilter, actorFilter]);
+
+  function actorTone(actor: string): Tone {
+    if (actor === "ai") return "accent";
+    if (actor === "human") return "good";
+    if (actor === "guest") return "muted";
+    return "warn";
+  }
+
+  function actorLabel(actor: string): string {
+    if (actor === "ai") return "AI viết";
+    if (actor === "human") return "Người thật viết";
+    if (actor === "guest") return "Khách";
+    return "Hệ thống";
+  }
+
+  function statusLabel(status: string): string {
+    return {
+      received: "Đã nhận",
+      draft: "Bản nháp",
+      simulated: "Chưa gửi",
+      sent: "Đã gửi",
+      failed: "Gửi lỗi",
+    }[status] ?? status;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nhật ký kiểm toán giao tiếp</p>
+            <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">AI đã nói gì, khi nào, ở đâu và ai là người viết</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Thời gian hiển thị theo ICT (UTC+7). Nhật ký lấy trực tiếp từ lịch sử hội thoại đã lưu.</p>
+          </div>
+          <Pill label={`${rows.length} sự kiện`} tone="accent" />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <select value={windowFilter} onChange={(e) => setWindowFilter(e.target.value as typeof windowFilter)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+            <option value="today">Hôm nay</option>
+            <option value="7d">7 ngày gần nhất</option>
+            <option value="30d">30 ngày gần nhất</option>
+            <option value="all">Toàn bộ</option>
+          </select>
+          <select value={propertyFilter} onChange={(e) => setPropertyFilter(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+            <option value="all">Tất cả cơ sở</option>
+            {properties.map((property) => <option key={property} value={property}>{property}</option>)}
+          </select>
+          <select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+            <option value="all">Tất cả kênh</option>
+            {channels.map((channel) => <option key={channel} value={channel}>{CHANNEL_LABEL[channel] ?? channel}</option>)}
+          </select>
+          <select value={actorFilter} onChange={(e) => setActorFilter(e.target.value as typeof actorFilter)} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm">
+            <option value="all">Tất cả người viết</option>
+            <option value="ai">AI viết</option>
+            <option value="human">Người thật viết</option>
+            <option value="guest">Khách</option>
+            <option value="system">Hệ thống</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)]">
+        <table className="min-w-[1100px] w-full text-left text-xs">
+          <thead className="border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] text-[var(--ink-muted)]">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Thời gian</th>
+              <th className="px-4 py-3 font-semibold">Cơ sở / Kênh</th>
+              <th className="px-4 py-3 font-semibold">Khách / Đặt chỗ</th>
+              <th className="px-4 py-3 font-semibold">Người viết</th>
+              <th className="px-4 py-3 font-semibold">Nội dung</th>
+              <th className="px-4 py-3 font-semibold">Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ conversation, message }) => (
+              <tr key={message.id} className="border-b border-[var(--border-hairline)] align-top last:border-0">
+                <td className="whitespace-nowrap px-4 py-3 text-[var(--ink-secondary)]">{formatDateTime(message.createdAt)}</td>
+                <td className="px-4 py-3">
+                  <p className="font-semibold text-[var(--ink-primary)]">{conversation.propertyName ?? "Chưa xác định"}</p>
+                  <p className="mt-1 text-[var(--ink-muted)]">{CHANNEL_LABEL[conversation.channel] ?? conversation.channel}</p>
+                </td>
+                <td className="px-4 py-3">
+                  <p className="font-semibold text-[var(--ink-primary)]">{conversation.customerName || "Khách chưa định danh"}</p>
+                  <p className="mt-1 text-[var(--ink-muted)]">{conversation.reservationReference ? `Ref: ${conversation.reservationReference}` : "Chưa có mã đặt chỗ"}</p>
+                </td>
+                <td className="px-4 py-3">
+                  <Pill label={actorLabel(message.authorship)} tone={actorTone(message.authorship)} />
+                  <p className="mt-2 text-[var(--ink-muted)]">{message.actorLabel}</p>
+                  {message.editedByHuman ? <p className="mt-1 font-medium text-[var(--status-warn)]">AI viết · người thật đã sửa</p> : null}
+                </td>
+                <td className="max-w-[420px] px-4 py-3">
+                  <p className="whitespace-pre-wrap leading-5 text-[var(--ink-primary)]">{message.content}</p>
+                  {message.qaPass === false ? <p className="mt-2 font-medium text-[var(--status-bad)]">QA: KHÔNG ĐẠT</p> : message.qaPass === true ? <p className="mt-2 text-[var(--status-good)]">QA: Đạt</p> : null}
+                </td>
+                <td className="px-4 py-3">
+                  <Pill label={statusLabel(message.status)} tone={message.status === "sent" ? "good" : message.status === "failed" ? "bad" : message.status === "draft" ? "warn" : "muted"} />
+                  {message.deliveredAt ? <p className="mt-2 text-[var(--ink-muted)]">Gửi: {formatDateTime(message.deliveredAt)}</p> : null}
+                  {message.deliveryDetail ? <p className="mt-1 max-w-[220px] text-[var(--ink-muted)]">{message.deliveryDetail}</p> : null}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-[var(--ink-muted)]">Không có sự kiện phù hợp bộ lọc.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function AiReceptionistWorkspace({ dashboard, canManage, channels }: { dashboard: ReceptionistDashboard; canManage: boolean; channels: ChannelStatus[] }) {
   const [tab, setTab] = useState<TabId>("hop-thu");
   const pendingReviews = useMemo(() => dashboard.managerReviews.filter((item) => item.status === "pending").length, [dashboard.managerReviews]);
@@ -717,6 +874,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       </div>
 
       {tab === "hop-thu" && <Conversations items={dashboard.conversations} canManage={canManage} />}
+      {tab === "nhat-ky" && <AuditLog items={dashboard.conversations} />}
       {tab === "xac-nhan" && (dashboard.managerReviews.length ? <div className="space-y-4">{dashboard.managerReviews.map((review) => <ReviewCard key={review.id} review={review} canManage={canManage} />)}</div> : <EmptyState title="Chưa có yêu cầu cần xác nhận" description="Khi AI gặp dữ liệu thiếu, mâu thuẫn hoặc yêu cầu ngoài chính sách, yêu cầu sẽ xuất hiện tại đây." />)}
       {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={booking.status} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn (Safety Gate) mới xuất hiện. Tính năng ghi KiotViet đang khóa trong thử nghiệm riêng (Private Pilot)." />}</>}
       {tab === "tri-thuc" && (dashboard.knowledgeCandidates.length ? <div className="space-y-4">{dashboard.knowledgeCandidates.map((candidate) => <KnowledgeCard key={candidate.id} candidate={candidate} canManage={canManage} />)}</div> : <EmptyState title="Chưa có đề xuất cập nhật tri thức" description="Sau khi Quản lý xử lý ngoại lệ, AI sẽ tạo đề xuất. Đề xuất không tự động trở thành dữ liệu môi trường thật." />)}

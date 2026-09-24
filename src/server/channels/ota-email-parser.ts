@@ -50,10 +50,12 @@ function reservationReference(channel: OtaEmailChannel | null, text: string): st
     airbnb: [
       /(?:confirmation code|mã xác nhận)[\s:#-]*([A-Z0-9]{8,16})/i,
       /\b(H[A-Z0-9]{8,15})\b/,
+      /hosting\/thread\/(\d{6,20})/i,
     ],
     expedia: [
       /(?:itinerary|reservation|booking)(?: number| id)?[\s:#-]*([A-Z0-9-]{6,24})/i,
       /(?:expedia|affiliate network)[^\n()]{0,100}\((\d{6,16})\)/i,
+      /[?&]cid=([a-f0-9-]{20,64})/i,
     ],
   };
   return firstMatch(text, [...specific[channel], ...common]);
@@ -64,8 +66,8 @@ function classify(subject: string, body: string): ParsedOtaEmail["eventType"] {
   if (/(new review|nhận xét mới|đánh giá mới)/i.test(text)) return "review";
   if (/(confirmed|đã xác nhận đặt phòng|booking id|new booking from|reservation confirmed)/i.test(text)) return "booking_confirmation";
   if (/(sắp đến|arrival|arriving|check-in reminder|nhắc nhở đặt phòng)/i.test(text)) return "arrival_reminder";
-  if (/(request|yêu cầu|needs something|subject to availability|thay đổi ngày)/i.test(text)) return "guest_request";
-  if (/(message|tin nhắn|đã nhắn|said:|reply now|về: đặt phòng)/i.test(text)) return "guest_message";
+  if (/(special request|request|requested:|yêu cầu|needs something|subject to availability|thay đổi ngày)/i.test(text)) return "guest_request";
+  if (/(message|tin nhắn|đã nhắn|said:|reply now|về: đặt phòng|người đặt|gửi tin nhắn cho quý vị|thắc mắc mới từ)/i.test(text)) return "guest_message";
   return "other";
 }
 
@@ -74,20 +76,21 @@ function extractGuestText(subject: string, body: string, eventType: ParsedOtaEma
   if (!text) return null;
   if (eventType !== "guest_message" && eventType !== "guest_request") return null;
 
-  const markers = [
-    /(?:đã nhắn|said|wrote|message from guest|tin nhắn mới từ khách)\s*[:：]\s*([\s\S]{1,1800})/i,
-    /(?:guest request|yêu cầu của khách|người đặt)\s*[:：]?\s*([\s\S]{1,1800})/i,
+  const bounded = [
+    /(?:đã nhắn|said|wrote|message from guest|tin nhắn mới từ khách)\s*[:：]\s*([\s\S]{1,1800}?)(?=\n\s*(?:đồng ý|subject to availability|reservation details|chi tiết đặt phòng|©|$))/i,
+    /(?:gửi tin nhắn cho quý vị)\s*["“]\s*([\s\S]{1,1800}?)\s*["”](?=\s*(?:\n|$))/i,
+    /(?:người đặt)\s*\n+([\s\S]{1,1800}?)(?=\n\s*(?:được dịch tự động|\[trả lời\]|nhận phòng|check-in|$))/i,
+    /(?:thắc mắc mới từ[^\n]*\n(?:[^\n]*\n){0,3})([\s\S]{1,1800}?)(?=\n\s*(?:nội dung trên được tự động dịch|did you know|replying to this email|$))/i,
+    /(?:requested:)\s*([^\n]{1,800})/i,
   ];
-  for (const marker of markers) {
+  for (const marker of bounded) {
     const match = text.match(marker);
     if (match?.[1]) {
       return normalize(match[1]).slice(0, 1800);
     }
   }
 
-  // For provider notification emails the subject is often more reliable than boilerplate-heavy HTML.
-  const combined = normalize(`${subject}\n${text}`);
-  return combined.slice(0, 1800);
+  return null;
 }
 
 function carePhase(eventType: ParsedOtaEmail["eventType"]): CustomerCarePhase {

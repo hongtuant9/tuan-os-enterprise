@@ -649,6 +649,7 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
     if (channel.readiness === "UNAVAILABLE_PROVIDER") return "Không khả dụng";
     if (channel.mode === "PRIVATE_PILOT" && channel.providerVerification === "VERIFIED_PILOT") return "Đã xác minh";
     if (channel.mode === "PRIVATE_PILOT") return "Đã mở · chờ xác minh";
+    if (channel.readiness === "EMAIL_RELAY_READY") return "Email relay sẵn sàng";
     if (channel.readiness === "PARTNER_API_ONLY") return "API chỉ qua đối tác";
     if (channel.readiness === "PENDING_PARTNER_API") return "Chờ API đối tác";
     if (channel.readiness === "PENDING_AUTH") return "Chờ xác thực";

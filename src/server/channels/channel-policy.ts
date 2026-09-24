@@ -28,6 +28,7 @@ export type ChannelReadiness =
   | "ATTRIBUTION_READY"
   | "PENDING_AUTH"
   | "PENDING_PARTNER_API"
+  | "PARTNER_API_ONLY"
   | "UNAVAILABLE_PROVIDER";
 
 export const CUSTOMER_CONVERSATION_CHANNELS = [
@@ -87,23 +88,23 @@ export const CUSTOMER_CHANNELS: readonly ChannelDefinition[] = [
   },
   {
     id: "booking", label: "Booking.com", group: "ota",
-    purpose: "Guest messaging tied to Booking.com reservations", readiness: "PENDING_PARTNER_API", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Requires Booking.com Connectivity Partner Messaging access; service upsell remains review-gated.",
+    purpose: "Guest messaging tied to Booking.com reservations", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
+    automaticUpsell: false, activationNote: "Booking.com Messaging API exists, but access is through the Connectivity Partner program/machine accounts and endpoint entitlements; do not assume direct individual-property API access.",
   },
   {
     id: "agoda", label: "Agoda", group: "ota",
-    purpose: "Guest messaging tied to Agoda reservations", readiness: "PENDING_PARTNER_API", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Requires Agoda Supply/Channel Manager Messaging access; no browser automation fallback.",
+    purpose: "Guest messaging tied to Agoda reservations", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
+    automaticUpsell: false, activationNote: "Agoda Messaging API exists for Channel Manager integrations; certification requires an active Channel Manager partnership and Supply Connectivity credentials.",
   },
   {
     id: "airbnb", label: "Airbnb", group: "ota",
-    purpose: "Guest messaging for software-connected listings", readiness: "PENDING_PARTNER_API", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Requires approved Airbnb API/software-partner access.",
+    purpose: "Guest messaging for software-connected listings", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
+    automaticUpsell: false, activationNote: "Airbnb API access is program/partner based; individual hosts normally connect through approved PMS/Channel Manager software.",
   },
   {
     id: "expedia", label: "Expedia", group: "ota",
-    purpose: "Guest messaging through Expedia lodging connectivity", readiness: "PENDING_PARTNER_API", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Requires Expedia connectivity approval; remarketing/direct-booking promotion must remain suppressed.",
+    purpose: "Guest messaging through Expedia lodging connectivity", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
+    automaticUpsell: false, activationNote: "Expedia Messaging API exists for connectivity providers; Expedia states it is not accepting direct API connections from individual properties. Remarketing/direct-booking promotion remains suppressed.",
   },
   {
     id: "tripadvisor", label: "Tripadvisor", group: "ota",

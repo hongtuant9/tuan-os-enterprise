@@ -2,7 +2,7 @@ import type { CustomerChannelId } from "@/server/channels/channel-policy";
 
 export type OtaAutomationPath =
   | "direct_partner_api"
-  | "hotel_link_messaging"
+  | "email_ingress_assist"
   | "assist_mode"
   | "not_applicable";
 
@@ -17,32 +17,32 @@ const OTA_ROUTES: Partial<Record<CustomerChannelId, OtaRoute>> = {
   booking: {
     channel: "booking",
     primary: "direct_partner_api",
-    fallback: "assist_mode",
-    reason: "Booking.com Messaging API requires Connectivity Partner access/entitlements. Verify whether Hotel Link can expose this capability before considering any direct integration.",
+    fallback: "email_ingress_assist",
+    reason: "Use Booking.com Messaging API only after Connectivity Partner/machine-account Messaging entitlement is verified. Until then, ingest direct Booking.com notification emails and generate no-send drafts.",
   },
   agoda: {
     channel: "agoda",
     primary: "direct_partner_api",
-    fallback: "assist_mode",
-    reason: "Agoda Messaging API requires an active Channel Manager partnership, Supply Connectivity credentials and property entitlement.",
+    fallback: "email_ingress_assist",
+    reason: "Use Agoda Messaging API only after Channel Manager/Supply Connectivity certification and property entitlement are verified. Until then, use direct Agoda booking/message email notifications as reservation context for Assist Mode.",
   },
   airbnb: {
     channel: "airbnb",
-    primary: "hotel_link_messaging",
-    fallback: "assist_mode",
-    reason: "Hotel Link currently exposes OTA Messaging for Airbnb; prefer the existing approved Channel Manager path over a new direct Airbnb integration.",
+    primary: "direct_partner_api",
+    fallback: "email_ingress_assist",
+    reason: "Use Airbnb API only through an approved API/software-partner program. Until direct access is approved, ingest Airbnb notification/message emails and keep outbound manual in Airbnb.",
   },
   expedia: {
     channel: "expedia",
-    primary: "hotel_link_messaging",
-    fallback: "assist_mode",
-    reason: "Hotel Link currently exposes OTA Messaging for Expedia; Expedia does not accept direct API connections from individual properties.",
+    primary: "direct_partner_api",
+    fallback: "email_ingress_assist",
+    reason: "Expedia Messaging API is for connectivity providers; individual properties do not receive direct API access. Until TCE has provider entitlement, use Expedia/Partner Central notifications plus no-send Assist Mode.",
   },
   tripadvisor: {
     channel: "tripadvisor",
     primary: "direct_partner_api",
     fallback: "assist_mode",
-    reason: "Keep closed until an official partner messaging path is verified.",
+    reason: "Keep closed until an official partner messaging path is verified; otherwise use operator-assisted draft mode only.",
   },
 };
 

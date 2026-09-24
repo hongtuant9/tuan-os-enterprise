@@ -20,7 +20,8 @@ fi
 
 
 # One-shot strict provider verification for the approved Facebook private pilot.
-python3 "$APP_ROOT/scripts/ovh/facebook-provider-verify-once.py" "$ENV_FILE"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$SCRIPT_DIR/facebook-provider-verify-once.py" "$ENV_FILE"
 
 required=(
   NEXT_PUBLIC_SUPABASE_URL

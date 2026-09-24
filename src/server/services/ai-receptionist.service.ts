@@ -387,7 +387,8 @@ export class AiReceptionistService {
       styleGuidance,
       channel: input.channel,
       carePhase,
-      automaticUpsellAllowed: channelAllowsAutomaticUpsell(input.channel),
+      reservationContext: input.reservationContext,
+      automaticUpsellAllowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
     });
     decision = {
       ...decision,
@@ -417,6 +418,7 @@ export class AiReceptionistService {
       preferred_language: rendered.detectedLanguage,
       care_phase: carePhase,
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
+      reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
       assist_mode: input.forceAssistMode === true,
       channel_auto_upsell_allowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
@@ -493,6 +495,7 @@ export class AiReceptionistService {
         page_entity: pageEntity,
         care_phase: carePhase,
         reservation_reference: input.reservationReference ?? null,
+        reservation_context: input.reservationContext ?? null,
         provider_message_type: input.providerMessageType ?? null,
         assist_mode: input.forceAssistMode === true,
       },

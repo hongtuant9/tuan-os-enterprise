@@ -10,6 +10,8 @@ export type GoogleStatusResponse = {
   connectedAt?: string;
   lastError?: string;
   analyticsReadScope?: boolean;
+  gmailReadScope?: boolean;
+  gmailSendScope?: boolean;
 };
 
 /**
@@ -52,6 +54,8 @@ export async function GET() {
     connectedAt: data.connected_at,
     lastError: data.last_error ?? undefined,
     analyticsReadScope: scopes.has("https://www.googleapis.com/auth/analytics.readonly"),
+    gmailReadScope: scopes.has("https://www.googleapis.com/auth/gmail.readonly"),
+    gmailSendScope: scopes.has("https://www.googleapis.com/auth/gmail.send"),
   };
   return NextResponse.json(body);
 }

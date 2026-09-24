@@ -21,10 +21,11 @@ export type ChannelMode = "PRIVATE_PILOT" | "CLOSED";
 export type CustomerChannelStage = "closed" | "facebook_only" | "progressive";
 export type ProviderConfigStatus = "CONFIGURED" | "PARTIAL" | "NOT_CONFIGURED" | "NOT_REQUIRED";
 export type ProviderVerificationStatus = "VERIFIED_PILOT" | "NEED_VERIFY" | "NOT_REQUIRED";
-export type ChannelTransport = "webhook" | "api_bridge" | "poll" | "provider_partner" | "attribution" | "unavailable";
+export type ChannelTransport = "webhook" | "api_bridge" | "poll" | "email_relay" | "provider_partner" | "attribution" | "unavailable";
 export type ChannelReadiness =
   | "LIVE_PILOT"
   | "ADAPTER_READY"
+  | "EMAIL_RELAY_READY"
   | "ATTRIBUTION_READY"
   | "PENDING_AUTH"
   | "PENDING_PARTNER_API"
@@ -88,23 +89,23 @@ export const CUSTOMER_CHANNELS: readonly ChannelDefinition[] = [
   },
   {
     id: "booking", label: "Booking.com", group: "ota",
-    purpose: "Guest messaging tied to Booking.com reservations", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Booking.com Messaging API exists, but access is through the Connectivity Partner program/machine accounts and endpoint entitlements; do not assume direct individual-property API access.",
+    purpose: "Guest messaging tied to Booking.com reservations", readiness: "EMAIL_RELAY_READY", transport: "email_relay",
+    automaticUpsell: false, activationNote: "Direct guest-message relay is available through Booking.com masked email aliases. Official Messaging API remains a partner-entitlement path; auto-reply stays OFF until Gmail OAuth + channel UAT PASS.",
   },
   {
     id: "agoda", label: "Agoda", group: "ota",
-    purpose: "Guest messaging tied to Agoda reservations", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Agoda Messaging API exists for Channel Manager integrations; certification requires an active Channel Manager partnership and Supply Connectivity credentials.",
+    purpose: "Guest messaging tied to Agoda reservations", readiness: "EMAIL_RELAY_READY", transport: "email_relay",
+    automaticUpsell: false, activationNote: "Agoda guest-message emails provide reply relay addresses. Official Messaging API remains partner/certification gated; auto-reply stays OFF until Gmail OAuth + channel UAT PASS.",
   },
   {
     id: "airbnb", label: "Airbnb", group: "ota",
-    purpose: "Guest messaging for software-connected listings", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Airbnb API access is program/partner based; individual hosts normally connect through approved PMS/Channel Manager software.",
+    purpose: "Guest messaging for software-connected listings", readiness: "EMAIL_RELAY_READY", transport: "email_relay",
+    automaticUpsell: false, activationNote: "Airbnb guest-message emails support reply relay; API access remains program/software-partner based. Auto-reply stays OFF until Gmail OAuth + channel UAT PASS.",
   },
   {
     id: "expedia", label: "Expedia", group: "ota",
-    purpose: "Guest messaging through Expedia lodging connectivity", readiness: "PARTNER_API_ONLY", transport: "provider_partner",
-    automaticUpsell: false, activationNote: "Expedia Messaging API exists for connectivity providers; Expedia states it is not accepting direct API connections from individual properties. Remarketing/direct-booking promotion remains suppressed.",
+    purpose: "Guest messaging through Expedia lodging connectivity", readiness: "EMAIL_RELAY_READY", transport: "email_relay",
+    automaticUpsell: false, activationNote: "Expedia Partner Central sends guest-message relay emails. Official Messaging API remains connectivity-provider gated; auto-reply stays OFF until round-trip UAT PASS. Remarketing/direct-booking promotion remains suppressed.",
   },
   {
     id: "tripadvisor", label: "Tripadvisor", group: "ota",

@@ -32,6 +32,8 @@ const kiotVietInventoryBotWorkerEnabled =
 const kiotVietInventoryBotWorkerIntervalMs = Math.max(300_000, Number(process.env.TCE_KIOTVIET_INVENTORY_BOT_WORKER_INTERVAL_MS || 900_000));
 const omnichannelWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OMNICHANNEL_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const omnichannelWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OMNICHANNEL_WORKER_INTERVAL_MS || 60_000));
+const otaEmailWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OTA_EMAIL_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const otaEmailWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OTA_EMAIL_WORKER_INTERVAL_MS || 60_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -56,6 +58,7 @@ const cozyPurchaseWorkerToken = deriveToken("tce-cozy-purchase-worker-v1");
 const kiotVietFinanceBotWorkerToken = deriveToken("kiotviet-finance-bot-worker-v1");
 const kiotVietInventoryBotWorkerToken = deriveToken("kiotviet-inventory-bot-worker-v1");
 const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
+const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -285,6 +288,47 @@ async function omnichannelWorkerLoop() {
   }
 }
 
+async function otaEmailWorkerTick() {
+  if (!otaEmailWorkerEnabled || !otaEmailWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/ota-email/worker",
+      "x-tce-ota-email-worker-token",
+      otaEmailWorkerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE OTA Email] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped && (payload?.scanned > 0 || payload?.configured === true)) {
+      console.log(
+        `[TCE OTA Email] configured=${payload?.configured ?? false} scanned=${payload?.scanned ?? 0} actionable=${payload?.actionable ?? 0} drafted=${payload?.drafted ?? 0} auto_sent=${payload?.autoSent ?? 0} held=${payload?.autoSendHeld ?? 0} failed=${payload?.failed ?? 0}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE OTA Email] ${message}`);
+  }
+}
+
+async function otaEmailWorkerLoop() {
+  if (!otaEmailWorkerEnabled) {
+    console.log("[TCE OTA Email] disabled");
+    return;
+  }
+  if (!otaEmailWorkerToken) {
+    console.error("[TCE OTA Email] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE OTA Email] enabled interval_ms=${otaEmailWorkerIntervalMs}`);
+  await sleep(35000);
+  while (!stopping) {
+    await otaEmailWorkerTick();
+    await sleep(otaEmailWorkerIntervalMs);
+  }
+}
+
 async function cozyPurchaseWorkerTick() {
   if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
   try {
@@ -422,3 +466,4 @@ void cozyPurchaseWorkerLoop();
 void kiotVietFinanceBotWorkerLoop();
 void kiotVietInventoryBotWorkerLoop();
 void omnichannelWorkerLoop();
+void otaEmailWorkerLoop();

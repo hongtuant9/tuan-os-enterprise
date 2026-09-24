@@ -40,6 +40,9 @@ export async function POST(request: Request) {
       utmSource: payload.utmSource,
       utmCampaign: payload.utmCampaign,
       referralSource: payload.referralSource,
+      carePhase: payload.carePhase,
+      reservationReference: payload.reservationReference,
+      providerMessageType: payload.providerMessageType,
       testerUserId: principal.kind === "user" ? principal.userId : null,
     });
 

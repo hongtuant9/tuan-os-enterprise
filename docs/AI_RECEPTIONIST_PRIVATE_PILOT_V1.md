@@ -197,3 +197,65 @@ Normalized payload giữ tối thiểu:
 - `providerMessageType`
 
 Connector chịu trách nhiệm provider auth, cursor/retry và outbound delivery. AI Receptionist core chịu trách nhiệm tri thức, safety, CRM identity, lifecycle care, reply draft và audit.
+
+
+## 14. OTA Connectivity — Verified 25/09/2026
+
+Kết luận sau khi đối chiếu tài liệu chính thức:
+
+- **Booking.com** có Connectivity Messaging API cho guest messages, nhưng quyền truy cập theo Connectivity Partner / machine account / connection type và endpoint entitlement. Không giả định một property đơn lẻ có thể tự tạo key để dùng trực tiếp.
+- **Agoda** có Channel Manager Messaging API. Certification yêu cầu active Channel Manager partnership, existing Supply Connectivity credentials, property entitlement và webhook setup do Agoda thực hiện.
+- **Airbnb** có API Program/Software Partner model. Host bình thường kết nối thông qua PMS/Channel Manager đã được Airbnb phê duyệt.
+- **Expedia Group** có Messaging API cho connectivity providers; Expedia công bố không nhận direct API connections từ individual properties.
+- **Hotel Link** là Connectivity Partner/Channel Manager đang dùng tại TCE. Hotel Link đã công bố tính năng **Messages from OTAs** hiện hỗ trợ **Expedia và Airbnb** trong Extranet. Booking.com/Agoda chưa được Hotel Link công bố trong tính năng OTA Messaging tại thời điểm xác minh.
+
+### 14.1 Kiến trúc OTA ưu tiên
+
+```text
+OTA official API
+   ↓
+Connectivity Partner / Channel Manager
+   ↓
+Hotel Link (ưu tiên vì TCE đang sử dụng)
+   ↓
+TCE Connector nếu Hotel Link cấp API/webhook messaging
+   ↓
+Authenticated normalized message bridge
+   ↓
+AI Receptionist core
+   ↓
+Safety / policy / reservation context
+   ↓
+Reply
+```
+
+### 14.2 Khi không có API/webhook messaging cho TCE
+
+Dùng **OTA Assist Mode**, không tuyên bố là full automation:
+
+1. Inbound notification/message được đưa vào TCE qua nguồn được phép: Hotel Link UI, OTA notification email hoặc operator copy-in.
+2. AI Receptionist tạo reply draft dựa trên reservationReference + L3/L4/runtime.
+3. Safety gate chặn giá/availability/policy nếu không có live authority.
+4. Operator hoặc connector được xác minh gửi reply qua Hotel Link/OTA.
+5. Lưu delivery evidence + audit log vào TCE.
+6. Browser DOM automation chỉ được cân nhắc sau khi manual flow ổn định, terms/provider policy cho phép, có retry/log/owner/rollback và không có API/Channel Manager path tốt hơn.
+
+Không dùng Computer Vision/mouse bot làm transport mặc định cho customer-facing OTA messaging.
+
+### 14.3 Channel-specific route
+
+- **Expedia**: ưu tiên Hotel Link OTA Messaging; nếu Hotel Link mở API/webhook cho đối tác/PMS thì TCE tích hợp qua đó. Nếu không, Assist Mode qua Hotel Link UI/email notification.
+- **Airbnb**: ưu tiên Hotel Link OTA Messaging hoặc Airbnb-approved software integration. Không dùng undocumented Airbnb API.
+- **Booking.com**: ưu tiên Messaging API thông qua Connectivity Partner. Vì Hotel Link là Booking.com Connectivity Partner/Premier Partner, trước tiên xác minh Hotel Link có thể expose Messaging API cho TCE/PMS hay không; nếu chưa, Assist Mode.
+- **Agoda**: ưu tiên Channel Manager Messaging API thông qua Hotel Link/Agoda-certified connectivity path. Nếu Hotel Link chưa expose messaging cho Agoda, giữ Assist Mode và chờ partner entitlement.
+- **Google Maps / Business Profile**: không coi là direct-chat OTA transport; xử lý reviews/reputation riêng.
+
+### 14.4 STOP conditions
+
+- Không có documented provider/partner permission.
+- Credential scope chưa VERIFIED.
+- Provider Terms cấm automation path đang xem xét.
+- Không có reservation-to-conversation identity đủ tin cậy.
+- Không chống duplicate/idempotency.
+- Không có delivery confirmation hoặc audit trail.
+- Browser session/cookie là single point of failure.

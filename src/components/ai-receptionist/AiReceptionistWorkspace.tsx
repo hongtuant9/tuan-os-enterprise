@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
+  markConversationReadAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
   getHomestayRoomOptionsAction,
@@ -137,12 +138,44 @@ function formatDateTime(value: string) {
 
 function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState(items[0]?.id ?? "");
+  const firstConversation = items[0];
+  const firstMessage = firstConversation?.messages[firstConversation.messages.length - 1];
+  const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
+  const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
+  const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
   const [translationPending, startTranslationTransition] = useTransition();
+  const [readPending, startReadTransition] = useTransition();
+
   const selected = items.find((item) => item.id === selectedId) ?? items[0];
+  const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
+    ?? selected?.messages[selected.messages.length - 1];
+  const unreadTotal = items.filter((item) => item.unread && !readLocally.has(item.id)).length;
+  const filteredItems = items.filter((item) =>
+    inboxFilter === "all" || (item.unread && !readLocally.has(item.id))
+  );
+
+  function selectConversation(item: ReceptionistConversation) {
+    setSelectedId(item.id);
+    const last = item.messages[item.messages.length - 1];
+    setSelectedMessageId(last?.id ?? "");
+
+    if (!canManage || !item.unread || readLocally.has(item.id)) return;
+    setReadLocally((current) => {
+      const next = new Set(current);
+      next.add(item.id);
+      return next;
+    });
+    startReadTransition(async () => {
+      const result = await markConversationReadAction(item.id);
+      if (!result.ok) {
+        setFeedbackStatus(result.error);
+      }
+    });
+  }
 
   function backfillTranslations() {
     if (!selected) return;
@@ -176,6 +209,29 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     });
   }
 
+  function compactDate(value: string) {
+    return new Intl.DateTimeFormat("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function authorLabel(message: ReceptionistConversation["messages"][number]) {
+    if (message.authorship === "guest") return "Khách";
+    if (message.authorship === "human") return `Lễ tân người thật · ${message.actorLabel}`;
+    if (message.authorship === "ai") return "AI Lễ tân · AI viết";
+    return "Hệ thống";
+  }
+
+  function authorTone(message: ReceptionistConversation["messages"][number]): Tone {
+    if (message.authorship === "ai") return "accent";
+    if (message.authorship === "human") return "good";
+    if (message.authorship === "guest") return "muted";
+    return "warn";
+  }
+
   if (!selected) {
     return (
       <EmptyState
@@ -185,168 +241,221 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     );
   }
 
+  const translationLooksMissing = Boolean(
+    selectedMessage
+      && selectedMessage.detectedLanguage
+      && selectedMessage.detectedLanguage !== "vi"
+      && selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
+  );
+
   return (
-    <div className="grid min-h-[560px] overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] lg:grid-cols-[290px_minmax(0,1fr)_280px]">
-      <div className="border-b border-[var(--border-hairline)] lg:border-b-0 lg:border-r">
-        <div className="border-b border-[var(--border-hairline)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-          Hội thoại trực tiếp
+    <div className="grid min-h-[680px] overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] xl:grid-cols-[330px_minmax(420px,1fr)_360px]">
+      <section className="border-b border-[var(--border-hairline)] xl:border-b-0 xl:border-r">
+        <div className="border-b border-[var(--border-hairline)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Danh sách tin nhắn</p>
+              <p className="mt-1 text-xs text-[var(--ink-secondary)]">{items.length} hội thoại · {unreadTotal} chưa đọc</p>
+            </div>
+            {readPending ? <Pill label="Đang đồng bộ" tone="muted" /> : null}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setInboxFilter("all")}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold ${
+                inboxFilter === "all"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                  : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              Tất cả ({items.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setInboxFilter("unread")}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold ${
+                inboxFilter === "unread"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                  : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              Tin chưa đọc ({unreadTotal})
+            </button>
+          </div>
         </div>
-        <div className="max-h-[510px] overflow-y-auto">
-          {items.map((item) => {
+
+        <div className="max-h-[620px] overflow-y-auto">
+          {filteredItems.map((item) => {
             const last = item.messages[item.messages.length - 1];
+            const unread = item.unread && !readLocally.has(item.id);
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setSelectedId(item.id)}
-                className={`w-full border-b border-[var(--border-hairline)] px-4 py-4 text-left hover:bg-[var(--surface-raised)] ${
+                onClick={() => selectConversation(item)}
+                className={`w-full border-b border-[var(--border-hairline)] px-4 py-4 text-left transition hover:bg-[var(--surface-raised)] ${
                   item.id === selected.id ? "bg-[var(--surface-raised)]" : ""
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-[var(--ink-primary)]">{item.customerName}</p>
-                  <span className="text-[10px] text-[var(--ink-muted)]">
-                    {new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit" }).format(
-                      new Date(item.lastMessageAt)
-                    )}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">{CHANNEL_LABEL[item.channel] ?? item.channel}</p>
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--ink-secondary)]">
-                  {last?.content ?? "Chưa có nội dung"}
-                </p>
-                <div className="mt-3">
-                  <Pill
-                    label={STATUS_LABEL[item.status] ?? item.status}
-                    tone={item.status === "needs_manager" ? "bad" : item.status === "waiting_guest" ? "warn" : "accent"}
-                  />
+                <div className="flex items-start gap-3">
+                  <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-[var(--accent)]" : "bg-transparent"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`truncate text-sm ${unread ? "font-bold" : "font-semibold"} text-[var(--ink-primary)]`}>
+                        {item.customerName}
+                      </p>
+                      <span className="shrink-0 text-[10px] text-[var(--ink-muted)]">{compactDate(item.lastMessageAt)}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <Pill label={CHANNEL_LABEL[item.channel] ?? item.channel} tone="accent" />
+                      {unread ? <Pill label={`${item.unreadCount} mới`} tone="warn" /> : null}
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--ink-secondary)]">
+                      {last?.content ?? "Chưa có nội dung"}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[var(--ink-muted)]">
+                      <span>Cơ sở: <strong className="font-medium text-[var(--ink-secondary)]">{item.propertyName ?? "Chưa xác định"}</strong></span>
+                      <span>Nhận phòng: <strong className="font-medium text-[var(--ink-secondary)]">{item.checkInText ?? "Chưa xác minh"}</strong></span>
+                      <span className="col-span-2">Ref: <strong className="font-mono font-medium text-[var(--ink-secondary)]">{item.reservationReference ?? "Chưa có"}</strong></span>
+                    </div>
+                  </div>
                 </div>
               </button>
             );
           })}
+          {filteredItems.length === 0 ? (
+            <div className="px-5 py-10 text-center text-xs text-[var(--ink-muted)]">
+              Không có hội thoại phù hợp bộ lọc.
+            </div>
+          ) : null}
         </div>
-      </div>
+      </section>
 
-      <div className="flex min-w-0 flex-col border-b border-[var(--border-hairline)] lg:border-b-0 lg:border-r">
+      <section className="flex min-w-0 flex-col border-b border-[var(--border-hairline)] xl:border-b-0 xl:border-r">
         <div className="border-b border-[var(--border-hairline)] px-5 py-4">
-          <p className="text-sm font-semibold text-[var(--ink-primary)]">{selected.customerName}</p>
-          <p className="mt-1 text-xs text-[var(--ink-muted)]">
-            {selected.customerContact} · {CHANNEL_LABEL[selected.channel] ?? selected.channel}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-semibold text-[var(--ink-primary)]">{selected.customerName}</p>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                {selected.propertyName ?? "Chưa xác định cơ sở"} · {CHANNEL_LABEL[selected.channel] ?? selected.channel}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" />
+              <Pill label={`AI trả lời: ${selected.language.toUpperCase()}`} tone="good" />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--ink-muted)]">
+            <span>Nhận phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkInText ?? "Chưa xác minh"}</strong></span>
+            <span>Trả phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkOutText ?? "Chưa xác minh"}</strong></span>
+            <span>Mã đặt chỗ: <strong className="font-mono text-[var(--ink-secondary)]">{selected.reservationReference ?? "Chưa có"}</strong></span>
+          </div>
         </div>
+
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
           {selected.messages.map((message) => {
-            const guest = message.senderType === "guest";
+            const guest = message.authorship === "guest";
             const internal = message.direction === "internal";
+            const active = selectedMessage?.id === message.id;
             return (
               <div key={message.id} className={`flex ${guest ? "justify-start" : "justify-end"}`}>
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                <button
+                  type="button"
+                  onClick={() => setSelectedMessageId(message.id)}
+                  className={`max-w-[88%] rounded-2xl border px-4 py-3 text-left transition ${
+                    active
+                      ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
+                      : "border-transparent"
+                  } ${
                     internal
-                      ? "border border-[var(--status-warn)]/30 bg-[var(--status-warn)]/5"
+                      ? "bg-[var(--status-warn)]/5"
                       : guest
                         ? "bg-[var(--surface-raised)]"
-                        : "bg-[var(--accent)]/15"
+                        : message.authorship === "human"
+                          ? "bg-[var(--status-good)]/10"
+                          : "bg-[var(--accent)]/12"
                   }`}
                 >
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
-                    {message.authorship === "guest"
-                      ? "Khách"
-                      : message.authorship === "human"
-                        ? `Người thật · ${message.actorLabel}`
-                        : message.authorship === "ai"
-                          ? "AI Lễ tân · AI viết"
-                          : "Hệ thống"}
-                  </p>
-                  <div className="grid gap-2">
-                    <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)]/60 p-3">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nội dung gốc</p>
-                        {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
-                    </div>
-                    <div className="rounded-lg border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-3">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">Bản dịch tiếng Việt</p>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.translatedVi}</p>
-                    </div>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <Pill label={authorLabel(message)} tone={authorTone(message)} />
+                    {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
+                    {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
                   </div>
-                  <p className="mt-2 text-[10px] text-[var(--ink-muted)]">
-                    {formatDateTime(message.createdAt)}
-                    {message.status === "simulated" ? " · Chưa gửi khách" : ""}
-                  </p>
-                </div>
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">
+                    <span>{formatDateTime(message.createdAt)}</span>
+                    <span>·</span>
+                    <span>{message.status === "sent" ? "Đã gửi" : message.status === "received" ? "Đã nhận" : message.status === "draft" ? "Bản nháp" : message.status === "simulated" ? "Chưa gửi khách" : "Gửi lỗi"}</span>
+                  </div>
+                </button>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <aside className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Bối cảnh</p>
-        <dl className="mt-4 space-y-4 text-sm">
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Cơ sở</dt>
-            <dd className="mt-1 text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Ý định</dt>
-            <dd className="mt-1 text-[var(--ink-primary)]">{selected.intent}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Tác nhân xử lý</dt>
-            <dd className="mt-1 text-[var(--ink-primary)]">{selected.routedAgent}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Điểm vào hành trình</dt>
-            <dd className="mt-1 text-[var(--ink-primary)]">{selected.journeyEntry}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt>
-            <dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd>
-          </div>
-          {selected.reservationReference ? (
-            <div>
-              <dt className="text-xs text-[var(--ink-muted)]">Mã đặt chỗ / tham chiếu</dt>
-              <dd className="mt-1 break-all font-mono text-xs text-[var(--ink-secondary)]">{selected.reservationReference}</dd>
+      <aside className="max-h-[680px] overflow-y-auto p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Dịch tiếng Việt</p>
+        {selectedMessage ? (
+          <>
+            <div className="mt-3 rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Pill label={authorLabel(selectedMessage)} tone={authorTone(selectedMessage)} />
+                <span className="text-[10px] text-[var(--ink-muted)]">{formatDateTime(selectedMessage.createdAt)}</span>
+              </div>
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">
+                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt."}
+              </p>
+              {translationLooksMissing ? (
+                <p className="mt-3 text-xs leading-5 text-[var(--status-warn)]">
+                  Message này chưa có bản dịch riêng; hệ thống đang hiển thị nội dung gốc.
+                </p>
+              ) : null}
             </div>
-          ) : null}
-          {selected.upsellOffers.length > 0 ? (
-            <div>
-              <dt className="text-xs text-[var(--ink-muted)]">Bán thêm phù hợp</dt>
-              <dd className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{selected.upsellOffers.join(" · ")}</dd>
-            </div>
-          ) : null}
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Chế độ</dt>
-            <dd className="mt-1"><Pill label={MODE_LABEL[selected.mode]} tone="accent" /></dd>
-          </div>
-          <div>
-            <dt className="text-xs text-[var(--ink-muted)]">Mã hội thoại</dt>
-            <dd className="mt-1 break-all font-mono text-xs text-[var(--ink-secondary)]">{selected.externalConversationId}</dd>
-          </div>
-        </dl>
 
-        <div className="mt-6 border-t border-[var(--border-hairline)] pt-5">
+            <div className="mt-4 rounded-xl border border-[var(--border-hairline)] bg-[var(--page)] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nội dung gốc</p>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[var(--ink-secondary)]">{selectedMessage.content}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Pill label={selectedMessage.detectedLanguage?.toUpperCase() ?? selected.language.toUpperCase()} tone="muted" />
+                {selectedMessage.authorship === "ai" ? <Pill label="Do AI viết" tone="accent" /> : null}
+                {selectedMessage.authorship === "human" ? <Pill label="Do người thật viết" tone="good" /> : null}
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--ink-muted)]">Chọn một tin nhắn trong lịch sử để xem bản dịch.</p>
+        )}
+
+        <div className="mt-5 border-t border-[var(--border-hairline)] pt-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Thông tin đặt chỗ</p>
+          <dl className="mt-3 space-y-3 text-xs">
+            <div><dt className="text-[var(--ink-muted)]">Cơ sở</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Kênh OTA</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nhận / trả phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.checkInText ?? "Chưa xác minh"} → {selected.checkOutText ?? "Chưa xác minh"}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd></div>
+            {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
+          </dl>
+        </div>
+
+        <div className="mt-5 border-t border-[var(--border-hairline)] pt-5">
           <button
             type="button"
             onClick={backfillTranslations}
             disabled={!canManage || translationPending}
             className="w-full rounded-lg border border-[var(--border-hairline)] px-3 py-2 text-xs font-semibold text-[var(--ink-primary)] disabled:opacity-40"
           >
-            {translationPending ? "Đang dịch lịch sử..." : "Dịch các message cũ sang tiếng Việt"}
+            {translationPending ? "Đang dịch lịch sử..." : "Dịch toàn bộ lịch sử sang tiếng Việt"}
           </button>
 
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Feedback huấn luyện giao tiếp</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">
-            Ghi cách anh muốn AI nói tự nhiên hơn. Feedback này chỉ là tri thức phong cách, không được dùng làm giá/policy/business fact.
-          </p>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Feedback phong cách</p>
           <textarea
             value={styleFeedback}
             onChange={(event) => setStyleFeedback(event.target.value)}
             disabled={!canManage || feedbackPending}
-            placeholder="Ví dụ: Không mở đầu bằng câu khuôn mẫu. Hỏi từng thông tin một, giọng thân thiện như nhân viên sale..."
-            className="mt-3 min-h-28 w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-xs text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
+            placeholder="Ví dụ: trả lời ngắn hơn, thân thiện hơn, hỏi từng thông tin một..."
+            className="mt-2 min-h-20 w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-xs text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
           />
           <button
             type="button"
@@ -354,7 +463,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             disabled={!canManage || feedbackPending || !styleFeedback.trim()}
             className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
           >
-            {feedbackPending ? "Đang lưu..." : "Đưa vào hàng chờ tri thức"}
+            {feedbackPending ? "Đang lưu..." : "Lưu feedback"}
           </button>
           {feedbackStatus ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
         </div>

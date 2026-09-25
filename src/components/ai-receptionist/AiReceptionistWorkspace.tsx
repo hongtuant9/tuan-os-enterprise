@@ -433,6 +433,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                     <Pill label={authorLabel(message)} tone={authorTone(message)} />
                     {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
                     {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
+                    {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
                   </div>
                   <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">

@@ -968,7 +968,7 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
   );
 }
 
-function MailboxReadiness({ mailbox }: { mailbox: MailboxStatus }) {
+function MailboxReadiness({ mailbox, canConnectGoogle }: { mailbox: MailboxStatus; canConnectGoogle: boolean }) {
   const scopePass = mailbox.gmailReadScope && mailbox.gmailSendScope;
   return (
     <div className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
@@ -1005,11 +1005,26 @@ function MailboxReadiness({ mailbox }: { mailbox: MailboxStatus }) {
           <p className="mt-1 text-xs text-[var(--ink-muted)]">Chỉ migration sau khi forwarding + ingest + reply UAT PASS.</p>
         </div>
       </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--border-hairline)] pt-4">
+        {canConnectGoogle ? (
+          <a
+            href="/api/integrations/google/oauth/start"
+            className="inline-flex items-center rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            {scopePass ? "Kết nối lại Gmail OTA" : "Kết nối Gmail OTA"}
+          </a>
+        ) : (
+          <Pill label="Chỉ Admin/Owner được kết nối Gmail" tone="muted" />
+        )}
+        <p className="text-xs leading-5 text-[var(--ink-muted)]">
+          Khi Google hỏi tài khoản, hãy đăng nhập mailbox vận hành trung tâm — không dùng email cá nhân làm kết nối mới.
+        </p>
+      </div>
     </div>
   );
 }
 
-export default function AiReceptionistWorkspace({ dashboard, canManage, channels, mailboxStatus }: { dashboard: ReceptionistDashboard; canManage: boolean; channels: ChannelStatus[]; mailboxStatus: MailboxStatus }) {
+export default function AiReceptionistWorkspace({ dashboard, canManage, canConnectGoogle, channels, mailboxStatus }: { dashboard: ReceptionistDashboard; canManage: boolean; canConnectGoogle: boolean; channels: ChannelStatus[]; mailboxStatus: MailboxStatus }) {
   const [tab, setTab] = useState<TabId>("hop-thu");
   const pendingReviews = useMemo(() => dashboard.managerReviews.filter((item) => item.status === "pending").length, [dashboard.managerReviews]);
 
@@ -1027,7 +1042,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       </div>
 
       <ChannelMatrix channels={channels} />
-      <MailboxReadiness mailbox={mailboxStatus} />
+      <MailboxReadiness mailbox={mailboxStatus} canConnectGoogle={canConnectGoogle} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Chỉ khách nhắn trực tiếp" />

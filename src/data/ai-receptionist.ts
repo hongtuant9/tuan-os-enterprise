@@ -25,6 +25,7 @@ export type ReceptionistMessage = {
   deliveryDetail: string | null;
   qaPass: boolean | null;
   editedByHuman: boolean;
+  historicalImport: boolean;
   createdAt: string;
 };
 

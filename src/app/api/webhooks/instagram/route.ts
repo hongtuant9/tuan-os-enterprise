@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
-import { assertCustomerChannelEnabled } from "@/server/channels/channel-policy";
+import { assertCustomerChannelReceiveEnabled } from "@/server/channels/channel-policy";
 import {
   getReceptionistMode,
   isPilotConversationAllowed,
@@ -54,6 +54,7 @@ async function sendInstagram(recipientId: string, text: string): Promise<string 
   const token = process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
   const accountId = process.env.INSTAGRAM_USER_ID?.trim();
   if (
+    process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true" ||
     !token ||
     !accountId ||
     !isPilotOutboundEnabled() ||
@@ -113,7 +114,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    assertCustomerChannelEnabled("instagram");
+    assertCustomerChannelReceiveEnabled("instagram");
   } catch {
     return NextResponse.json({ error: "Instagram channel closed" }, { status: 423 });
   }
@@ -165,6 +166,7 @@ export async function POST(request: Request) {
           utmSource: "instagram",
           providerMessageType: "text",
           pageEntity: instagramPageEntity(),
+          forceAssistMode: true,
           testerUserId: null,
         });
 

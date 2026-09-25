@@ -187,7 +187,8 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     mailboxesConfigured: 0,
   };
 
-  const mailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
+  const allMailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
+  const mailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity !== "cozy");
   result.mailboxesConfigured = mailboxClients.length;
   result.configured = mailboxClients.length > 0;
   if (!result.configured) return result;

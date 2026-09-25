@@ -84,6 +84,8 @@ function runtimeSignals() {
     otaEmailCredentialStore: "google_oauth_connections",
     otaEmailMailboxMode: "PER_PROPERTY",
     otaEmailCanonicalMailboxCount: 3,
+    otaEmailOperationMode: "RECEIVE_ONLY",
+    otaEmailReplyGateApproved: process.env.TCE_OTA_EMAIL_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyEnabled: process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")
       .split(",").map((value) => value.trim()).filter(Boolean),

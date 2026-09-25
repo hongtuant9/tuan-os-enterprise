@@ -284,12 +284,16 @@ function agodaDateRange(text: string): { checkInText: string | null; checkOutTex
 }
 
 function agodaGuestName(subject: string, body: string): string | null {
-  return firstMatch(subject, [
+  const subjectName = firstMatch(subject, [
     /^Reply from\s+(.+?)\s*\(/i,
     /^Inquiry by\s+(.+?)\s*\(/i,
-    /^Special Request for Booking ID\s+\d+.*$/i,
-  ]) || firstMatch(body, [
-    /(?:Tên khách chính\s*[:：]?\s*\n)([^\n]+)\s*\n([^\n]+)/i,
+  ]);
+  if (subjectName) return subjectName;
+
+  const primary = body.match(/(?:Tên khách chính\s*[:：]?\s*\n)([^\n]+)\s*\n([^\n]+)/i);
+  if (primary?.[1] && primary?.[2]) return `${normalize(primary[1])} ${normalize(primary[2])}`;
+
+  return firstMatch(body, [
     /(?:Thắc mắc mới từ|Tin nhắn mới từ)\s+([^\n]{2,120})/i,
   ]);
 }

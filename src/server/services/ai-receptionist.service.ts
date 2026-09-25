@@ -279,6 +279,7 @@ export class AiReceptionistService {
         upsellOffers,
         status: row.status as ReceptionistConversation["status"],
         mode: row.mode as ReceptionistConversation["mode"],
+        responseMode: metadata.response_mode === "auto" ? "auto" : "manual",
         lastMessageAt: row.last_message_at,
         messages,
       };
@@ -1029,6 +1030,30 @@ export class AiReceptionistService {
             : "yêu cầu bổ sung"
       } yêu cầu AI Lễ tân: ${review.title}.`,
       type: "approval",
+    });
+  }
+
+  async setConversationResponseMode(
+    conversationId: string,
+    responseMode: "manual" | "auto",
+    actorLabel: string,
+  ): Promise<void> {
+    const conversation = await this.repo.findConversationById(conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    await this.repo.updateConversation(conversationId, {
+      metadata: {
+        ...metadata,
+        response_mode: responseMode,
+        response_mode_updated_at: new Date().toISOString(),
+        response_mode_updated_by: actorLabel,
+      },
+    });
+    await this.activityLog.record({
+      agent: "AI Lễ tân",
+      unit: "Tam Cốc",
+      message: `Chế độ trả lời hội thoại ${conversationId.slice(0, 8)} → ${responseMode === "auto" ? "Tự động" : "Manual"}; outbound global vẫn chịu Safety Gate.`,
+      type: "action",
     });
   }
 

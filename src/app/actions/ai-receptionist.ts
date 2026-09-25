@@ -124,6 +124,33 @@ export async function decideManagerReviewAction(input: {
   }
 }
 
+export async function setConversationResponseModeAction(
+  conversationId: string,
+  responseMode: "manual" | "auto",
+): Promise<ActionResult> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để đổi chế độ trả lời." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được đổi chế độ trả lời." };
+  }
+  try {
+    await getAdminContainer().aiReceptionist.setConversationResponseMode(
+      conversationId,
+      responseMode,
+      session.email ?? "Quản lý Homestay",
+    );
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Không thể đổi chế độ trả lời.",
+    };
+  }
+}
+
 export async function markConversationReadAction(
   conversationId: string
 ): Promise<ActionResult> {

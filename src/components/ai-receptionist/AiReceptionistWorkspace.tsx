@@ -6,6 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
+  sendManualConversationReplyAction,
   setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
@@ -84,9 +85,9 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 const CARE_PHASE_LABEL: Record<string, string> = {
-  pre_service: "Trước dịch vụ",
-  in_service: "Trong dịch vụ",
-  post_service: "Sau dịch vụ",
+  pre_service: "Trước nhận phòng",
+  in_service: "Đang lưu trú",
+  post_service: "Đã trả phòng",
   general: "Chưa xác định",
 };
 
@@ -149,6 +150,31 @@ function formatDateTime(value: string) {
   }).format(new Date(value)) + " ICT";
 }
 
+function vietnamDateOnly(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function journeyPhaseAt(
+  value: string,
+  checkInDate: string | null,
+  checkOutDate: string | null,
+): "pre_service" | "in_service" | "post_service" | "general" {
+  const date = vietnamDateOnly(value);
+  if (checkInDate && checkOutDate) {
+    if (date < checkInDate) return "pre_service";
+    if (date >= checkInDate && date < checkOutDate) return "in_service";
+    if (date >= checkOutDate) return "post_service";
+  }
+  if (checkInDate && date < checkInDate) return "pre_service";
+  if (checkOutDate && date >= checkOutDate) return "post_service";
+  return "general";
+}
+
 function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
   const router = useRouter();
   const firstConversation = items[0];
@@ -163,6 +189,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   );
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
+  const [sendPending, startSendTransition] = useTransition();
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
@@ -243,6 +270,21 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     });
   }
 
+  function sendManualReply() {
+    if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
+    setFeedbackStatus("");
+    startSendTransition(async () => {
+      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim());
+      if (!result.ok) {
+        setFeedbackStatus(result.error);
+        return;
+      }
+      setFeedbackStatus("Đã gửi phản hồi thủ công qua relay OTA bằng mailbox đúng cơ sở.");
+      setReplyDraft("");
+      router.refresh();
+    });
+  }
+
   function backfillTranslations() {
     if (!selected) return;
     setFeedbackStatus("");
@@ -311,7 +353,12 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     selectedMessage
       && selectedMessage.detectedLanguage
       && selectedMessage.detectedLanguage !== "vi"
-      && selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
+      && (
+        !selectedMessage.translatedVi.trim()
+        || selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
+        || selectedMessage.translatedVi.trim() === "Bản dịch tiếng Việt chưa được tạo."
+        || selectedMessage.translatedVi.trim() === "Chưa có bản dịch."
+      )
   );
 
   return (

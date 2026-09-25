@@ -47,6 +47,14 @@ for key in TCE_COMPANY_AUTOPILOT_ENABLED TCE_EXECUTIVE_WORKER_ENABLED TCE_SYNC_W
   fi
 done
 
+if grep -Eqi '^TCE_TRELLO_WORKER_ENABLED=false$' "$ENV_FILE"; then
+  echo "[OVH preflight] Trello worker: DISABLED"
+elif grep -Eq '^TRELLO_API_KEY=.+' "$ENV_FILE" && grep -Eq '^TRELLO_TOKEN=.+' "$ENV_FILE"; then
+  echo "[OVH preflight] Trello runtime: SET=yes"
+else
+  echo "[OVH preflight] Trello runtime: HOLD_NO_RUNTIME_CREDENTIALS"
+fi
+
 if [ "${#missing[@]}" -gt 0 ]; then
   echo "[OVH preflight] FAIL — missing required configuration names:"
   printf ' - %s\n' "${missing[@]}"

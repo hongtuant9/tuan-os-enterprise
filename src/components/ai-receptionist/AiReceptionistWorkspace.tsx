@@ -1208,11 +1208,11 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
     if (channel.readiness === "UNAVAILABLE_PROVIDER") return "Không khả dụng";
     if (channel.mode === "PRIVATE_PILOT" && channel.providerVerification === "VERIFIED_PILOT") return "Đã xác minh";
     if (channel.mode === "PRIVATE_PILOT") return "Đã mở · chờ xác minh";
-    if (channel.readiness === "EMAIL_RELAY_READY") return "Email relay sẵn sàng";
-    if (channel.readiness === "PARTNER_API_ONLY") return "Kết nối chỉ qua đối tác";
+    if (channel.readiness === "EMAIL_RELAY_READY") return "Chuyển tiếp email sẵn sàng";
+    if (channel.readiness === "PARTNER_API_ONLY") return "Chỉ kết nối qua đối tác";
     if (channel.readiness === "PENDING_PARTNER_API") return "Chờ kết nối đối tác";
     if (channel.readiness === "PENDING_AUTH") return "Chờ xác thực";
-    if (channel.readiness === "ADAPTER_READY") return "Adapter sẵn sàng";
+    if (channel.readiness === "ADAPTER_READY") return channel.providerConfig === "CONFIGURED" ? "Bộ kết nối đã cấu hình" : "Bộ kết nối sẵn sàng";
     return "Đang khóa";
   }
 
@@ -1221,10 +1221,10 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kênh 24/7</p>
-          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Trạng thái Omnichannel</h2>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Trạng thái các kênh giao tiếp</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Kênh chỉ tự động phản hồi khi nhà cung cấp, bước xác minh và quyền gửi ra ngoài đều đạt yêu cầu.</p>
         </div>
-        <Pill label="FAIL-CLOSED" tone="warn" />
+        <Pill label="An toàn khi chưa xác minh" tone="warn" />
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {visible.map((channel) => (
@@ -1233,8 +1233,14 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
               <p className="text-sm font-semibold text-[var(--ink-primary)]">{channel.label}</p>
               <Pill label={state(channel)} tone={tone(channel)} />
             </div>
-            <p className="mt-2 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
-              {channel.transport} · {channel.providerConfig}
+            <p className="mt-2 text-[10px] leading-4 text-[var(--ink-muted)]">
+              {channel.providerConfig === "CONFIGURED"
+                ? "Cấu hình kỹ thuật: Đã thiết lập"
+                : channel.providerConfig === "PARTIAL"
+                  ? "Cấu hình kỹ thuật: Chưa đầy đủ"
+                  : channel.providerConfig === "NOT_CONFIGURED"
+                    ? "Cấu hình kỹ thuật: Chưa thiết lập"
+                    : "Cấu hình kỹ thuật: Không yêu cầu"}
             </p>
           </div>
         ))}

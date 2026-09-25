@@ -114,10 +114,11 @@ export class GoogleOAuthTokenStore {
   }
 
   async getSystemAuthorizedClientsForGmail(): Promise<AuthorizedGmailMailboxClient[]> {
-    const connections = await this.repo.findByProviders(GOOGLE_GMAIL_PROVIDER_KEYS);
     const clients: AuthorizedGmailMailboxClient[] = [];
 
-    for (const connection of connections) {
+    for (const provider of GOOGLE_GMAIL_PROVIDER_KEYS) {
+      const connection = await this.repo.findMostRecentByProvider(provider);
+      if (!connection) continue;
       const mailbox = findGmailMailboxByProvider(connection.provider);
       if (!mailbox) continue;
 

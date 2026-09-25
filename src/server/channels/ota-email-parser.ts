@@ -106,6 +106,7 @@ function extractGuestText(channel: OtaEmailChannel | null, body: string): string
     agoda: [
       /(?:mã số đặt phòng|booking id)\s*[:：]?\s*[A-Z0-9-]{6,24}\s*\n+([\s\S]{1,1800}?)(?=\n\s*(?:nội dung trên được tự động dịch|did you know|replying to this email|$))/i,
       /(?:thắc mắc mới từ[^\n]*\n[\s\S]{0,900}?)(?:mã số đặt phòng|booking id)\s*[:：]?\s*[A-Z0-9-]{6,24}\s*\n+([\s\S]{1,1800}?)(?=\n\s*(?:nội dung trên được tự động dịch|did you know|replying to this email|$))/i,
+      /(?:khách hiện tại)[\s\S]{0,700}?(?:mã số đặt phòng|booking id)\s*[:：]?\s*[A-Z0-9-]{6,24}\s+([\s\S]{1,1800}?)(?=(?:\n\s*(?:nội dung trên được tự động dịch|did you know|replying to this email))|$)/i,
     ],
     airbnb: [
       /(?:người đặt|guest|booker)\s*\n+([\s\S]{1,1800}?)(?=\n\s*(?:được dịch tự động|automatically translated|\[?trả lời|\[?reply|nhận phòng|check-in|$))/i,

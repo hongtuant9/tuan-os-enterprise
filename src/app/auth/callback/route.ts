@@ -28,17 +28,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (tokenHash && type === "recovery") {
+  if (tokenHash && (type === "recovery" || type === "magiclink")) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "recovery",
+      type,
     });
     if (!error) {
       return NextResponse.redirect(new URL(next, getPublicBaseUrl()));
     }
   }
 
-  const target = new URL("/forgot-password", getPublicBaseUrl());
+  const target = new URL(type === "magiclink" ? "/login" : "/forgot-password", getPublicBaseUrl());
   target.searchParams.set("error", "invalid_or_expired_link");
   return NextResponse.redirect(target);
 }

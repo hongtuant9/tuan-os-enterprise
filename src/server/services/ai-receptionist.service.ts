@@ -311,21 +311,19 @@ export class AiReceptionistService {
         && !message.historicalImport
         && Date.parse(message.createdAt) > managerReadAtMs
       );
-      const checkInText = typeof reservationContext.checkInText === "string"
+      const checkInDate = typeof reservationContext.checkInDate === "string" ? reservationContext.checkInDate : null;
+      const checkOutDate = typeof reservationContext.checkOutDate === "string" ? reservationContext.checkOutDate : null;
+      const memoryCheckIn = typeof conversationMemory.check_in === "string" ? conversationMemory.check_in : null;
+      const memoryCheckOut = typeof conversationMemory.check_out === "string" ? conversationMemory.check_out : null;
+      const checkInText = checkInDate && typeof reservationContext.checkInText === "string"
         ? reservationContext.checkInText
-        : typeof conversationMemory.check_in === "string"
-          ? conversationMemory.check_in
-          : null;
-      const checkOutText = typeof reservationContext.checkOutText === "string"
+        : memoryCheckIn;
+      const checkOutText = checkOutDate && typeof reservationContext.checkOutText === "string"
         ? reservationContext.checkOutText
-        : typeof conversationMemory.check_out === "string"
-          ? conversationMemory.check_out
-          : null;
+        : memoryCheckOut;
       const specialRequest = typeof reservationContext.specialRequest === "string"
         ? reservationContext.specialRequest
         : null;
-      const checkInDate = typeof reservationContext.checkInDate === "string" ? reservationContext.checkInDate : null;
-      const checkOutDate = typeof reservationContext.checkOutDate === "string" ? reservationContext.checkOutDate : null;
       const reservationGuestName = typeof reservationContext.guestName === "string" ? reservationContext.guestName : null;
       const reservationGuestPhone = typeof reservationContext.guestPhone === "string" ? reservationContext.guestPhone : null;
       const reservationGuestEmail = typeof reservationContext.guestEmail === "string" ? reservationContext.guestEmail : null;

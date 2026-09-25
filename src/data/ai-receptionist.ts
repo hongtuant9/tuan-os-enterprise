@@ -45,6 +45,10 @@ export type ReceptionistConversation = {
   intent: string;
   routedAgent: string;
   journeyEntry: string;
+  acquisitionSource: string;
+  utmSource: string | null;
+  utmCampaign: string | null;
+  referralSource: string | null;
   carePhase: CustomerCarePhase;
   journeyStage: CustomerJourneyStage;
   reservationReference: string | null;

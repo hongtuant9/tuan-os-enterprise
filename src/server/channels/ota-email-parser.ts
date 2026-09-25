@@ -273,7 +273,10 @@ function extractSpecialRequest(text: string): string | null {
     .map((line) => line.replace(/^\s*\+\s*/, "").trim())
     .filter(Boolean)
     .filter((line) => !/^(UNSPECIFIED|Special offers)$/i.test(line))
-    .filter((line) => !/^Expedia collects payment/i.test(line));
+    .filter((line) => !/^Expedia collects payment/i.test(line))
+    .filter((line) => !/^Reservation has a cancellation grace period\b/i.test(line))
+    .filter((line) => !/^Do not charge if cancelled before\b/i.test(line))
+    .filter((line) => !/^Cancellation (?:Policy|penalty)\b/i.test(line));
   return items.length ? items.join("; ").slice(0, 800) : null;
 }
 

@@ -38,6 +38,7 @@ export type ReceptionistConversation = {
   propertyId: string | null;
   propertyName: string | null;
   propertyEntity: "lavender" | "ruby" | "cozy" | "tce" | "unknown";
+  replyMode: "auto" | "manual";
   language: string;
   intent: string;
   routedAgent: string;

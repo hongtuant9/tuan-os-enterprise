@@ -53,6 +53,7 @@ export type ReceptionistConversation = {
   upsellOffers: string[];
   status: ConversationStatus;
   mode: ReceptionistMode;
+  responseMode: "manual" | "auto";
   lastMessageAt: string;
   messages: ReceptionistMessage[];
 };

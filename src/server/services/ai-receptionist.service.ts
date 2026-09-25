@@ -315,12 +315,13 @@ export class AiReceptionistService {
       const checkOutDate = typeof reservationContext.checkOutDate === "string" ? reservationContext.checkOutDate : null;
       const memoryCheckIn = typeof conversationMemory.check_in === "string" ? conversationMemory.check_in : null;
       const memoryCheckOut = typeof conversationMemory.check_out === "string" ? conversationMemory.check_out : null;
+      const otaConversation = ["booking", "agoda", "airbnb", "expedia"].includes(row.channel);
       const checkInText = checkInDate && typeof reservationContext.checkInText === "string"
         ? reservationContext.checkInText
-        : memoryCheckIn;
+        : otaConversation ? null : memoryCheckIn;
       const checkOutText = checkOutDate && typeof reservationContext.checkOutText === "string"
         ? reservationContext.checkOutText
-        : memoryCheckOut;
+        : otaConversation ? null : memoryCheckOut;
       const specialRequest = typeof reservationContext.specialRequest === "string"
         ? reservationContext.specialRequest
         : null;
@@ -341,8 +342,13 @@ export class AiReceptionistService {
         id: row.id,
         channel: row.channel,
         externalConversationId: row.external_conversation_id,
-        customerName: row.customer_name ?? reservationGuestName ?? "Khách chưa cung cấp tên",
-        customerContact: row.customer_contact ?? reservationGuestPhone ?? reservationGuestEmail ?? "Chưa có thông tin liên hệ",
+        customerName: reservationGuestName
+          ?? (row.customer_name && row.customer_name !== "Khách chưa cung cấp tên" ? row.customer_name : null)
+          ?? "Khách chưa cung cấp tên",
+        customerContact: reservationGuestPhone
+          ?? reservationGuestEmail
+          ?? (row.customer_contact && row.customer_contact !== "Chưa có thông tin liên hệ" ? row.customer_contact : null)
+          ?? "Chưa có thông tin liên hệ",
         propertyId: row.property_id,
         propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
         propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")

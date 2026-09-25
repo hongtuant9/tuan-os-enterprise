@@ -483,46 +483,67 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <span>Nhận phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkInText ?? "Chưa xác minh"}</strong></span>
             <span>Trả phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkOutText ?? "Chưa xác minh"}</strong></span>
             <span>Mã đặt chỗ: <strong className="font-mono text-[var(--ink-secondary)]">{selected.reservationReference ?? "Chưa có"}</strong></span>
+            <span>Khách: <strong className="text-[var(--ink-secondary)]">{selected.guestCount ?? "Chưa xác minh"}</strong></span>
           </div>
+          {selected.historyCompleteness === "partial_email_only" ? (
+            <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
+              Lịch sử hiện lấy từ email relay nên có thể thiếu các phản hồi đã gửi trực tiếp trong hộp chat OTA. Hệ thống không coi phần thiếu là lịch sử đầy đủ.
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
-          {selected.messages.map((message) => {
+          {selected.messages.map((message, index) => {
             const guest = message.authorship === "guest";
             const internal = message.direction === "internal";
             const active = selectedMessage?.id === message.id;
+            const phase = journeyPhaseAt(message.createdAt, selected.checkInDate, selected.checkOutDate);
+            const previous = index > 0 ? selected.messages[index - 1] : null;
+            const previousPhase = previous
+              ? journeyPhaseAt(previous.createdAt, selected.checkInDate, selected.checkOutDate)
+              : null;
+            const showPhase = index === 0 || phase !== previousPhase;
             return (
-              <div key={message.id} className={`flex ${guest ? "justify-start" : "justify-end"}`}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMessageId(message.id)}
-                  className={`max-w-[88%] rounded-2xl border px-4 py-3 text-left transition ${
-                    active
-                      ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
-                      : "border-transparent"
-                  } ${
-                    internal
-                      ? "bg-[var(--status-warn)]/5"
-                      : guest
-                        ? "bg-[var(--surface-raised)]"
-                        : message.authorship === "human"
-                          ? "bg-[var(--status-good)]/10"
-                          : "bg-[var(--accent)]/12"
-                  }`}
-                >
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Pill label={authorLabel(message)} tone={authorTone(message)} />
-                    {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
-                    {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
-                    {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
+              <div key={message.id}>
+                {showPhase ? (
+                  <div className="my-3 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-[var(--border-hairline)]" />
+                    <Pill label={CARE_PHASE_LABEL[phase] ?? "Chưa xác định"} tone="muted" />
+                    <div className="h-px flex-1 bg-[var(--border-hairline)]" />
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">
-                    <span>{formatDateTime(message.createdAt)}</span>
-                    <span>·</span>
-                    <span>{message.status === "sent" ? "Đã gửi" : message.status === "received" ? "Đã nhận" : message.status === "draft" ? "Bản nháp" : message.status === "simulated" ? "Chưa gửi khách" : "Gửi lỗi"}</span>
-                  </div>
-                </button>
+                ) : null}
+                <div className={`flex ${guest ? "justify-start" : "justify-end"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMessageId(message.id)}
+                    className={`max-w-[88%] rounded-2xl border px-4 py-3 text-left transition ${
+                      active
+                        ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
+                        : "border-transparent"
+                    } ${
+                      internal
+                        ? "bg-[var(--status-warn)]/5"
+                        : guest
+                          ? "bg-[var(--surface-raised)]"
+                          : message.authorship === "human"
+                            ? "bg-[var(--status-good)]/10"
+                            : "bg-[var(--accent)]/12"
+                    }`}
+                  >
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Pill label={authorLabel(message)} tone={authorTone(message)} />
+                      {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
+                      {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
+                      {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">
+                      <span>{formatDateTime(message.createdAt)}</span>
+                      <span>·</span>
+                      <span>{message.status === "sent" ? "Đã gửi" : message.status === "received" ? "Đã nhận" : message.status === "draft" ? "Bản nháp" : message.status === "simulated" ? "Chưa gửi khách" : "Gửi lỗi"}</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             );
           })}

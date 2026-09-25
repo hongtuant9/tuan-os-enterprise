@@ -104,9 +104,9 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
     id: "manager_agent", name: "Manager Agent", domain: "operations", mode: "active", permission: "L1_SAFE",
     mission: "Tổng hợp Daily Brief, ưu tiên, blocker, approval và exception cho Tuấn.",
     sources: ["TASK-001", "APPROVAL-001", "L3 Master", "runtime logs"],
-    capabilities: ["briefing", "priority triage", "exception routing", "approval queue"],
+    capabilities: ["briefing", "priority triage", "exception routing", "approval queue", "task decomposition", "Trello execution mirror"],
     outputs: [{ label: "AI Manager / Daily Brief", href: "/ai-manager", kind: "report" }, { label: "TASK-001", href: "https://docs.google.com/spreadsheets/d/1uVG0L9FzcPBgOCk5IyWNuYVneCCgupqg-SH0TcERSjM/edit", kind: "task" }, { label: "APPROVAL-001", href: "https://docs.google.com/spreadsheets/d/15LzFRdk9z0UClYMTNadcCLvEnpDNVsopcSIPlchrDUk/edit", kind: "task" }],
-    guardrails: ["recommend only for critical decisions", "no invented KPI"],
+    guardrails: ["recommend only for critical decisions", "no invented KPI", "TASK-001 remains task SSOT", "no DONE without evidence", "Trello sync failure must be explicit HOLD/blocker"],
   },  {
     id: "marketing_manager", name: "AI Marketing Manager", domain: "growth", mode: "active", permission: "L2_APPROVAL",
     mission: "Hoạt động như CMO AI đầy đủ: quản trị brand/portfolio, market & competitor intelligence, chiến lược đa kênh, campaign/content, paid-media proposal, funnel/direct growth, attribution, budget/ROI proposal và báo cáo tuần/tháng cho TCE.",

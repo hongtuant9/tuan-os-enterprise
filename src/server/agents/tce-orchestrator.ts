@@ -5,6 +5,7 @@ import { assertTceAiBudget, estimatePreflightCostUsd, recordTceAiUsage } from ".
 import { buildManagerItems } from "@/server/ai-operations/manager-data";
 import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "@/server/ai-operations/control-plane";
 import { DOCUMENT_GOVERNANCE_PROMPT } from "@/server/ai-governance/document-governance";
+import { executionGovernanceInstruction } from "./execution-governance";
 
 export type TceAgentReply = {
   agent: string;
@@ -249,6 +250,7 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
     "Không bịa giá, availability, policy, transaction hoặc KPI. NEED VERIFY/HOLD phải fail closed.",
     "Owner directive 2026-09-16: non-financial technical/operational mutation có thể tự chạy khi source verified, có read-back/evidence/rollback; financial/cost/budget/payment/refund/price mutation phải chờ Owner approval.",
     "Không bao giờ hiển thị password, private key, API key, access token, refresh token hoặc service-role secret.",
+    executionGovernanceInstruction(),
     "Trả lời tiếng Việt có dấu, trực tiếp, nêu status/evidence/blocker rõ ràng.",
     DOCUMENT_GOVERNANCE_PROMPT,
   ].join("\n");

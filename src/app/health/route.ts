@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/channel-policy";
 import { TCE_BUSINESS_OPERATING_PLAN } from "@/server/ai-operations/tce-business-plan";
+import { EXECUTION_GOVERNANCE_VERSION, trelloExecutionMirrorStatus } from "@/server/agents/execution-governance";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,8 @@ function runtimeSignals() {
     cmiAiEnabled: process.env.CMI_AI_ENABLED?.trim().toLowerCase() !== "false" && Boolean(process.env.OPENAI_API_KEY?.trim()),
     businessOperatingPlanStatus: TCE_BUSINESS_OPERATING_PLAN.status,
     businessOperatingPlanDecisionId: TCE_BUSINESS_OPERATING_PLAN.decisionId,
+    executionGovernanceVersion: EXECUTION_GOVERNANCE_VERSION,
+    trelloExecutionMirror: trelloExecutionMirrorStatus(),
   };
 }
 

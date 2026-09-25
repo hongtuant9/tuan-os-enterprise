@@ -308,7 +308,7 @@ function KpiGrid({ items }: { items: Kpi[] }) {
               <span className={"grid h-[27px] w-[27px] shrink-0 place-items-center rounded-[7px] text-[13px] font-extrabold text-white " + t.icon}>{item.icon}</span>
               <div className="min-w-0 pt-[1px]">
                 <p className="truncate text-[7px] text-[#6a80a6]">{item.label}</p>
-                <p className="mt-[3px] truncate text-[12px] font-extrabold leading-none text-[#071b45]">{item.value}</p>
+                <p className="mt-[3px] truncate text-[12px] font-extrabold leading-none text-[#071b45]">{viDisplay(item.value)}</p>
                 <p className={"mt-[5px] text-[8px] font-bold " + (item.down ? "text-[#ff4354]" : t.delta)}>{item.delta || "↑"}</p>
               </div>
             </div>
@@ -329,6 +329,50 @@ function MobileSection({ title, subtitle, children, className = "" }: { title: s
   );
 }
 
+function viDisplay(value: string | number | null | undefined) {
+  const text = String(value ?? "—");
+  const exact: Record<string, string> = {
+    NEED_VERIFY: "CẦN XÁC MINH",
+    "NEED VERIFY": "CẦN XÁC MINH",
+    IN_PROGRESS: "ĐANG THỰC HIỆN",
+    WAITING_APPROVAL: "CHỜ PHÊ DUYỆT",
+    BLOCKED: "ĐANG BỊ CHẶN",
+    HOLD: "TẠM DỪNG",
+    PARTIAL: "CHƯA ĐẦY ĐỦ",
+    VERIFIED: "ĐÃ XÁC MINH",
+    PASS: "ĐẠT",
+    FAIL: "KHÔNG ĐẠT",
+    DONE: "HOÀN THÀNH",
+    READY: "SẴN SÀNG",
+    TODO: "CHƯA THỰC HIỆN",
+    OPEN: "ĐANG MỞ",
+    ONLINE: "HOẠT ĐỘNG",
+    OFFLINE: "NGOẠI TUYẾN",
+    PENDING: "ĐANG CHỜ",
+    APPROVED: "ĐÃ DUYỆT",
+    REJECTED: "ĐÃ TỪ CHỐI",
+    CANCELLED: "ĐÃ HỦY",
+  };
+  const upper = text.toUpperCase();
+  if (exact[upper]) return exact[upper];
+  return text
+    .replace(/NEED[_ ]VERIFY/gi, "CẦN XÁC MINH")
+    .replace(/IN_PROGRESS/gi, "ĐANG THỰC HIỆN")
+    .replace(/WAITING_APPROVAL/gi, "CHỜ PHÊ DUYỆT")
+    .replace(/\bBLOCKED\b/gi, "ĐANG BỊ CHẶN")
+    .replace(/\bPARTIAL\b/gi, "CHƯA ĐẦY ĐỦ")
+    .replace(/\bVERIFIED\b/gi, "ĐÃ XÁC MINH")
+    .replace(/\bActual\b/g, "thực tế")
+    .replace(/\bruntime\b/gi, "hệ thống đang vận hành")
+    .replace(/\bsync\b/gi, "đồng bộ")
+    .replace(/\bprovider\b/gi, "nhà cung cấp")
+    .replace(/\bconnector\b/gi, "kết nối")
+    .replace(/\bevidence\b/gi, "bằng chứng")
+    .replace(/\bworkflow\b/gi, "quy trình")
+    .replace(/\btask\b/gi, "công việc")
+    .replace(/\bagent\b/gi, "trợ lý AI");
+}
+
 function RowTable({ rows, cols = 3 }: { rows: string[][]; cols?: number }) {
   const minWidth = Math.max(320, cols * 92);
   return (
@@ -336,7 +380,7 @@ function RowTable({ rows, cols = 3 }: { rows: string[][]; cols?: number }) {
       <div className="space-y-[2px]" style={{ minWidth }}>
       {rows.map((row, i) => (
         <div key={i} className={"grid min-h-[24px] items-center rounded-[5px] px-[5px] text-[7px] text-[#19325c] " + (i % 2 === 0 ? "bg-[#f6f9fd]" : "bg-white")} style={{ gridTemplateColumns: "repeat(" + cols + ", minmax(78px, 1fr))" }}>
-          {row.map((cell, j) => <span key={j} className={"whitespace-normal break-words pr-1 " + (j === 0 ? "font-semibold" : "")}>{cell}</span>)}
+          {row.map((cell, j) => <span key={j} className={"whitespace-normal break-words pr-1 " + (j === 0 ? "font-semibold" : "")}>{viDisplay(cell)}</span>)}
         </div>
       ))}
       </div>

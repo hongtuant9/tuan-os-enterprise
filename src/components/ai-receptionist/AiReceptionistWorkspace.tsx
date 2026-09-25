@@ -597,18 +597,29 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             />
             <button
               type="button"
-              disabled
-              title="Cổng outbound đang khóa trong giai đoạn nhận dữ liệu và QA"
-              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white opacity-40"
+              onClick={sendManualReply}
+              disabled={
+                !canManage
+                || responseMode !== "manual"
+                || !selected.manualSendReady
+                || !replyDraft.trim()
+                || sendPending
+              }
+              title={responseMode !== "manual" ? "Tự động vẫn đang khóa" : selected.manualSendReason}
+              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Gửi
+              {sendPending ? "Đang gửi..." : "Gửi"}
             </button>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Pill label="Outbound: ĐANG KHÓA" tone="warn" />
+            {responseMode === "manual" && selected.manualSendReady
+              ? <Pill label="Manual Send: SẴN SÀNG" tone="good" />
+              : <Pill label={responseMode === "auto" ? "Auto Send: ĐANG KHÓA" : "Manual Send: CHƯA SẴN SÀNG"} tone="warn" />}
             <span className="text-[10px] text-[var(--ink-muted)]">
-              Chưa gửi qua OTA/email. Chỉ mở sau khi AI trả lời đạt QA và có approval riêng.
+              {responseMode === "auto"
+                ? "AI có thể tạo nháp nhưng chưa được tự gửi. Auto chỉ mở sau QA + approval riêng."
+                : selected.manualSendReason}
             </span>
           </div>
           {feedbackStatus ? <p className="mt-2 text-xs text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
@@ -625,11 +636,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                 <span className="text-[10px] text-[var(--ink-muted)]">{formatDateTime(selectedMessage.createdAt)}</span>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">
-                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt."}
+                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt — provider dịch tự động hiện chưa được cấu hình."}
               </p>
               {translationLooksMissing ? (
                 <p className="mt-3 text-xs leading-5 text-[var(--status-warn)]">
-                  Message này chưa có bản dịch riêng; hệ thống đang hiển thị nội dung gốc.
+                  Chưa có bản dịch riêng. Hệ thống giữ nguyên nội dung gốc và không tự suy diễn bản dịch.
                 </p>
               ) : null}
             </div>
@@ -651,10 +662,23 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         <div className="mt-5 border-t border-[var(--border-hairline)] pt-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Thông tin đặt chỗ</p>
           <dl className="mt-3 space-y-3 text-xs">
+            <div><dt className="text-[var(--ink-muted)]">Khách</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.customerName}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Liên hệ</dt><dd className="mt-1 break-all text-[var(--ink-primary)]">{selected.customerContact}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Cơ sở</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Kênh OTA</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Mã đặt chỗ</dt><dd className="mt-1 font-mono text-[var(--ink-primary)]">{selected.reservationReference ?? "Chưa có"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nhận / trả phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.checkInText ?? "Chưa xác minh"} → {selected.checkOutText ?? "Chưa xác minh"}</dd></div>
+            <div>
+              <dt className="text-[var(--ink-muted)]">Số khách / phòng</dt>
+              <dd className="mt-1 text-[var(--ink-primary)]">
+                {selected.guestCount ?? "Chưa xác minh"} khách
+                {selected.adults != null ? ` · ${selected.adults} người lớn` : ""}
+                {selected.children != null ? ` · ${selected.children} trẻ em` : ""}
+                {selected.roomCount != null ? ` · ${selected.roomCount} phòng` : ""}
+              </dd>
+            </div>
             <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa xác minh"}</dd></div>
             {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
           </dl>
         </div>

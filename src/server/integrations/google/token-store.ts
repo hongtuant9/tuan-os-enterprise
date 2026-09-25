@@ -150,6 +150,13 @@ export class GoogleOAuthTokenStore {
     return clients;
   }
 
+  async getAuthorizedClientForGmailEntity(entity: GmailMailboxEntity): Promise<AuthorizedGmailMailboxClient> {
+    const clients = await this.getSystemAuthorizedClientsForGmail();
+    const client = clients.find((item) => item.entity === entity);
+    if (!client) throw new GoogleNotConnectedError();
+    return client;
+  }
+
   async getSystemAuthorizedClientForGmail(): Promise<Auth.OAuth2Client> {
     const clients = await this.getSystemAuthorizedClientsForGmail();
     if (clients[0]) return clients[0].auth;

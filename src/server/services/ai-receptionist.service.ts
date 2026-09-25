@@ -103,6 +103,7 @@ function toMessage(row: {
     deliveryDetail: typeof metadata.delivery_detail === "string" ? metadata.delivery_detail : null,
     qaPass: typeof metadata.qa_pass === "boolean" ? metadata.qa_pass : null,
     editedByHuman: metadata.edited_by_human === true,
+    historicalImport: metadata.historical_import === true,
     createdAt: row.created_at,
   };
 }
@@ -230,7 +231,9 @@ export class AiReceptionistService {
       const managerReadAt = typeof metadata.manager_read_at === "string" ? metadata.manager_read_at : null;
       const managerReadAtMs = managerReadAt ? Date.parse(managerReadAt) : Number.NEGATIVE_INFINITY;
       const unreadInbound = messages.filter((message) =>
-        message.authorship === "guest" && Date.parse(message.createdAt) > managerReadAtMs
+        message.authorship === "guest"
+        && !message.historicalImport
+        && Date.parse(message.createdAt) > managerReadAtMs
       );
       const checkInText = typeof reservationContext.checkInText === "string"
         ? reservationContext.checkInText

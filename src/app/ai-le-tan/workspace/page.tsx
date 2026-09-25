@@ -12,6 +12,7 @@ import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-o
 import {
   GMAIL_MAILBOXES,
   GOOGLE_GMAIL_PROVIDER_KEYS,
+  googleMailboxEmailMatches,
 } from "@/server/integrations/google/gmail-mailboxes";
 
 export const dynamic = "force-dynamic";
@@ -82,9 +83,7 @@ export default async function AiReceptionistWorkspacePage() {
           purpose: mailbox.purpose,
           connected: Boolean(connection),
           googleEmail,
-          emailMatchesCanonical: Boolean(
-            googleEmail && googleEmail.trim().toLowerCase() === mailbox.canonicalEmail.toLowerCase()
-          ),
+          emailMatchesCanonical: googleMailboxEmailMatches(googleEmail, mailbox.canonicalEmail),
           connectedAt: connection?.connected_at ?? null,
           lastError: connection?.last_error ?? null,
           gmailReadScope: scopes.has("https://www.googleapis.com/auth/gmail.readonly"),

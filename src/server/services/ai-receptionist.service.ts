@@ -253,6 +253,9 @@ export class AiReceptionistService {
         customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
         propertyId: row.property_id,
         propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
+        propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")
+          ? pageEntity as "lavender" | "ruby" | "cozy" | "tce"
+          : "unknown",
         language: row.language,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",

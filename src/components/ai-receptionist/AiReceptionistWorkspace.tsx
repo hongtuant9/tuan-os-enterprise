@@ -289,7 +289,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         setFeedbackStatus(result.error);
         return;
       }
-      setFeedbackStatus("Đã gửi phản hồi thủ công qua relay OTA bằng mailbox đúng cơ sở.");
+      setFeedbackStatus("Đã gửi phản hồi thủ công qua chuyển tiếp từ kênh đặt phòng bằng mailbox đúng cơ sở.");
       setReplyDraft("");
       router.refresh();
     });
@@ -354,7 +354,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     return (
       <EmptyState
         title="Chưa có hội thoại"
-        description="Hội thoại trực tiếp và OTA Assist sẽ xuất hiện tại đây sau khi có dữ liệu inbound hợp lệ."
+        description="Hội thoại trực tiếp và hỗ trợ kênh đặt phòng sẽ xuất hiện tại đây sau khi có dữ liệu đến hợp lệ."
       />
     );
   }
@@ -500,7 +500,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           </div>
           {selected.historyCompleteness === "partial_email_only" ? (
             <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
-              <strong>Lịch sử trao đổi chưa đầy đủ — cần kiểm tra trên OTA.</strong> Dữ liệu hiện lấy từ email relay nên có thể thiếu phản hồi đã gửi trực tiếp trong hộp chat OTA. Không mặc định khách chưa được trả lời chỉ vì email không có phản hồi.
+              <strong>Lịch sử trao đổi chưa đầy đủ — cần kiểm tra trên kênh đặt phòng.</strong> Dữ liệu hiện lấy từ email relay nên có thể thiếu phản hồi đã gửi trực tiếp trong hộp chat của kênh đặt phòng. Không mặc định khách chưa được trả lời chỉ vì email không có phản hồi.
             </div>
           ) : null}
         </div>
@@ -656,7 +656,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                 <span className="text-[10px] text-[var(--ink-muted)]">{formatDateTime(selectedMessage.createdAt)}</span>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">
-                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt — provider dịch tự động hiện chưa được cấu hình."}
+                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt — dịch vụ dịch tự động hiện chưa được cấu hình."}
               </p>
               {translationLooksMissing ? (
                 <p className="mt-3 text-xs leading-5 text-[var(--status-warn)]">
@@ -687,7 +687,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <div><dt className="text-[var(--ink-muted)]">Khách</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.customerName}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Liên hệ</dt><dd className="mt-1 break-all text-[var(--ink-primary)]">{selected.customerContact}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Cơ sở</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd></div>
-            <div><dt className="text-[var(--ink-muted)]">Kênh OTA</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Kênh đặt phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Mã đặt chỗ</dt><dd className="mt-1 font-mono text-[var(--ink-primary)]">{selected.reservationReference ?? "Chưa có"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nhận / trả phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.checkInText ?? "Chưa xác minh"} → {selected.checkOutText ?? "Chưa xác minh"}</dd></div>
             <div>
@@ -702,7 +702,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage} tone={selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"} /></dd></div>
             <div><dt className="text-[var(--ink-muted)]">Trạng thái xử lý hội thoại</dt><dd className="mt-1"><Pill label={STATUS_LABEL[selected.status] ?? selected.status} tone={selected.status === "needs_manager" ? "bad" : selected.status === "closed" ? "muted" : "warn"} /></dd></div>
             <div><dt className="text-[var(--ink-muted)]">Trạng thái đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationStatus === "cancelled" ? "Đã hủy" : selected.reservationStatus === "confirmed" ? "Đã xác nhận" : "Chưa xác minh"}</dd></div>
-            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa đồng bộ được nguồn đặt phòng đã xác minh"}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "Tin nhắn khách được chuyển tiếp từ kênh đặt phòng" : "Chưa đồng bộ được nguồn đặt phòng đã xác minh"}</dd></div>
             {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
             {selected.reservationMissingReasons.length > 0 ? (
               <div>
@@ -1068,8 +1068,8 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
     if (channel.mode === "PRIVATE_PILOT" && channel.providerVerification === "VERIFIED_PILOT") return "Đã xác minh";
     if (channel.mode === "PRIVATE_PILOT") return "Đã mở · chờ xác minh";
     if (channel.readiness === "EMAIL_RELAY_READY") return "Email relay sẵn sàng";
-    if (channel.readiness === "PARTNER_API_ONLY") return "API chỉ qua đối tác";
-    if (channel.readiness === "PENDING_PARTNER_API") return "Chờ API đối tác";
+    if (channel.readiness === "PARTNER_API_ONLY") return "Kết nối chỉ qua đối tác";
+    if (channel.readiness === "PENDING_PARTNER_API") return "Chờ kết nối đối tác";
     if (channel.readiness === "PENDING_AUTH") return "Chờ xác thực";
     if (channel.readiness === "ADAPTER_READY") return "Adapter sẵn sàng";
     return "Đang khóa";
@@ -1081,7 +1081,7 @@ function ChannelMatrix({ channels }: { channels: ChannelStatus[] }) {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kênh 24/7</p>
           <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Trạng thái Omnichannel</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Kênh chỉ tự động phản hồi khi provider, xác minh và cổng outbound cùng PASS.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Kênh chỉ tự động phản hồi khi nhà cung cấp, bước xác minh và quyền gửi ra ngoài đều đạt yêu cầu.</p>
         </div>
         <Pill label="FAIL-CLOSED" tone="warn" />
       </div>
@@ -1278,7 +1278,7 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
         {mailboxes.map((mailbox) => {
           const scopePass = mailbox.gmailReadScope && mailbox.gmailSendScope;
           const ready = mailbox.connected && mailbox.emailMatchesCanonical && scopePass && !mailbox.lastError;
-          const purposeLabel = mailbox.purpose === "ota_guest_care" ? "OTA + Guest Care" : "Direct Customer Care";
+          const purposeLabel = mailbox.purpose === "ota_guest_care" ? "Kênh đặt phòng + Chăm sóc khách" : "Chăm sóc khách trực tiếp";
           return (
             <div key={mailbox.entity} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--page)] p-4">
               <div className="flex items-start justify-between gap-3">
@@ -1334,7 +1334,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Tác nhân AI đặt phòng, hỗ trợ khách và trải nghiệm</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ink-primary)]">Tác nhân AI Lễ tân</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Tiếp nhận khách trực tiếp và OTA Assist, tư vấn có căn cứ, lưu toàn bộ lịch sử giao tiếp, phân biệt AI/người thật, chuyển ngoại lệ cho Quản lý và tích lũy tri thức có kiểm soát.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Tiếp nhận khách trực tiếp và hỗ trợ kênh đặt phòng, tư vấn có căn cứ, lưu toàn bộ lịch sử giao tiếp, phân biệt AI/người thật, chuyển ngoại lệ cho Quản lý và tích lũy tri thức có kiểm soát.</p>
           </div>
           <div className="flex flex-wrap gap-2"><Pill label={MODE_LABEL[dashboard.mode]} tone="accent" /><Pill label={dashboard.writeEnabled ? "Ghi KiotViet: Đã mở" : "Ghi KiotViet: Đang khóa"} tone={dashboard.writeEnabled ? "good" : "warn"} /></div>
         </div>
@@ -1346,7 +1346,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Chỉ khách nhắn trực tiếp" />
         <Metric label="Cần Quản lý xác nhận" value={dashboard.metrics.pendingManagerReviews} hint="Thiếu căn cứ hoặc ngoại lệ" />
-        <Metric label="Đặt phòng AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Không bao gồm kênh OTA" />
+        <Metric label="Đặt phòng AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Không bao gồm kênh đặt phòng" />
         <Metric label="Đề xuất tri thức" value={dashboard.metrics.pendingKnowledgeCandidates} hint="Chưa tự động xuất bản" />
       </div>
 

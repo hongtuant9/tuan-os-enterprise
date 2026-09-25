@@ -42,18 +42,34 @@ export class GoogleOAuthConnectionsRepository {
     return data;
   }
 
-  async findByProviders(providers: readonly string[]): Promise<Row[]> {
+  async findByUserIdAndProviders(userId: string, providers: readonly string[]): Promise<Row[]> {
     if (providers.length === 0) return [];
     const { data, error } = await this.db
       .from("google_oauth_connections")
       .select("*")
+      .eq("user_id", userId)
       .in("provider", [...providers])
       .order("connected_at", { ascending: true });
     if (error) {
-      logSupabaseError("findByProviders", error);
+      logSupabaseError("findByUserIdAndProviders", error);
       throw error;
     }
     return data ?? [];
+  }
+
+  async findMostRecentByProvider(provider: string): Promise<Row | null> {
+    const { data, error } = await this.db
+      .from("google_oauth_connections")
+      .select("*")
+      .eq("provider", provider)
+      .order("connected_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      logSupabaseError("findMostRecentByProvider", error);
+      throw error;
+    }
+    return data;
   }
 
   /**

@@ -9,6 +9,10 @@ import { getReceptionistMode, isKiotVietDirectBookingWriteEnabled } from "@/serv
 import { channelPolicySnapshot } from "@/server/channels/channel-policy";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
+import {
+  GMAIL_MAILBOXES,
+  GOOGLE_GMAIL_PROVIDER_KEYS,
+} from "@/server/integrations/google/gmail-mailboxes";
 
 export const dynamic = "force-dynamic";
 
@@ -46,31 +50,48 @@ export default async function AiReceptionistWorkspacePage() {
   }
 
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
-  let mailboxStatus = {
+  let mailboxStatuses = GMAIL_MAILBOXES.map((mailbox) => ({
+    entity: mailbox.entity,
+    propertyLabel: mailbox.propertyLabel,
+    canonicalEmail: mailbox.canonicalEmail,
+    purpose: mailbox.purpose,
     connected: false,
     googleEmail: null as string | null,
+    emailMatchesCanonical: false,
     connectedAt: null as string | null,
     lastError: null as string | null,
     gmailReadScope: false,
     gmailSendScope: false,
-    recommendedMailbox: "tamcocexperience.guestcare@gmail.com",
-    futureDomainMailbox: "guestcare@tamcocexperience.com",
-  };
+    oauthHref: `/api/integrations/google/oauth/start?mailbox=${mailbox.entity}`,
+  }));
 
   if (session) {
     try {
-      const connection = await new GoogleOAuthConnectionsRepository(createAdminClient()).findByUserId(session.userId);
-      const scopes = new Set((connection?.scope ?? "").split(/[\s,]+/).filter(Boolean));
-      mailboxStatus = {
-        connected: Boolean(connection),
-        googleEmail: connection?.google_email ?? null,
-        connectedAt: connection?.connected_at ?? null,
-        lastError: connection?.last_error ?? null,
-        gmailReadScope: scopes.has("https://www.googleapis.com/auth/gmail.readonly"),
-        gmailSendScope: scopes.has("https://www.googleapis.com/auth/gmail.send"),
-        recommendedMailbox: "tamcocexperience.guestcare@gmail.com",
-        futureDomainMailbox: "guestcare@tamcocexperience.com",
-      };
+      const repo = new GoogleOAuthConnectionsRepository(createAdminClient());
+      const connections = await repo.findByUserIdAndProviders(session.userId, GOOGLE_GMAIL_PROVIDER_KEYS);
+      const byProvider = new Map(connections.map((connection) => [connection.provider, connection]));
+
+      mailboxStatuses = GMAIL_MAILBOXES.map((mailbox) => {
+        const connection = byProvider.get(mailbox.provider);
+        const scopes = new Set((connection?.scope ?? "").split(/[\s,]+/).filter(Boolean));
+        const googleEmail = connection?.google_email ?? null;
+        return {
+          entity: mailbox.entity,
+          propertyLabel: mailbox.propertyLabel,
+          canonicalEmail: mailbox.canonicalEmail,
+          purpose: mailbox.purpose,
+          connected: Boolean(connection),
+          googleEmail,
+          emailMatchesCanonical: Boolean(
+            googleEmail && googleEmail.trim().toLowerCase() === mailbox.canonicalEmail.toLowerCase()
+          ),
+          connectedAt: connection?.connected_at ?? null,
+          lastError: connection?.last_error ?? null,
+          gmailReadScope: scopes.has("https://www.googleapis.com/auth/gmail.readonly"),
+          gmailSendScope: scopes.has("https://www.googleapis.com/auth/gmail.send"),
+          oauthHref: `/api/integrations/google/oauth/start?mailbox=${mailbox.entity}`,
+        };
+      });
     } catch {
       // Mailbox readiness is informational; do not block the AI Receptionist workspace.
     }
@@ -101,7 +122,7 @@ export default async function AiReceptionistWorkspacePage() {
             </p>
           </div>
         )}
-        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatus={mailboxStatus} />
+        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatuses={mailboxStatuses} />
       </main>
     </div>
   );

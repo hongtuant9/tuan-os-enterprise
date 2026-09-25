@@ -122,9 +122,14 @@ function toMessage(row: {
   created_at: string;
 }): ReceptionistMessage {
   const metadata = AiReceptionistRepository.toObject(row.metadata);
+  const detectedLanguage = typeof metadata.detected_language === "string"
+    ? metadata.detected_language
+    : detectGuestLanguage(row.content).code;
   const translatedVi = typeof metadata.translated_vi === "string"
     ? metadata.translated_vi
-    : row.content;
+    : detectedLanguage === "vi"
+      ? row.content
+      : "";
   const senderType = row.sender_type as ReceptionistMessage["senderType"];
   const authorship: ReceptionistMessage["authorship"] =
     senderType === "guest" ? "guest" : senderType === "ai" ? "ai" : senderType === "manager" ? "human" : "system";
@@ -147,7 +152,7 @@ function toMessage(row: {
     actorLabel,
     content: row.content,
     translatedVi,
-    detectedLanguage: typeof metadata.detected_language === "string" ? metadata.detected_language : undefined,
+    detectedLanguage,
     status: row.status as ReceptionistMessage["status"],
     externalMessageId: row.external_message_id,
     deliveredAt: typeof metadata.delivered_at === "string"
@@ -499,14 +504,20 @@ export class AiReceptionistService {
     }
 
     const guestLanguage = detectGuestLanguage(input.content);
+    const effectiveReservationContext = mergeReservationContext(existingMetadata.reservation_context, input.reservationContext);
+    const contextCheckInDate = typeof effectiveReservationContext.checkInDate === "string" ? effectiveReservationContext.checkInDate : null;
+    const contextCheckOutDate = typeof effectiveReservationContext.checkOutDate === "string" ? effectiveReservationContext.checkOutDate : null;
+    const reservationCarePhase = carePhaseFromReservationDates(contextCheckInDate, contextCheckOutDate);
     const inferredCarePhase = inferCustomerCarePhase(input.content, input.carePhase);
     const previousCarePhase = typeof existingMetadata.care_phase === "string"
       && ["pre_service", "in_service", "post_service", "general"].includes(existingMetadata.care_phase)
       ? existingMetadata.care_phase as CustomerCarePhase
       : null;
-    const carePhase = inferredCarePhase === "general" && previousCarePhase
-      ? previousCarePhase
-      : inferredCarePhase;
+    const carePhase = reservationCarePhase !== "general"
+      ? reservationCarePhase
+      : inferredCarePhase === "general" && previousCarePhase
+        ? previousCarePhase
+        : inferredCarePhase;
     const pageEntity = input.pageEntity
       ?? (typeof existingMetadata.page_entity === "string" ? existingMetadata.page_entity : "unknown");
     const persona = getPagePersona(pageEntity);
@@ -534,7 +545,7 @@ export class AiReceptionistService {
       styleGuidance,
       channel: input.channel,
       carePhase,
-      reservationContext: input.reservationContext,
+      reservationContext: effectiveReservationContext as PilotMessageInput["reservationContext"],
       automaticUpsellAllowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
     });
     decision = {
@@ -565,7 +576,7 @@ export class AiReceptionistService {
       preferred_language: rendered.detectedLanguage,
       care_phase: carePhase,
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
-      reservation_context: mergeReservationContext(existingMetadata.reservation_context, input.reservationContext),
+      reservation_context: effectiveReservationContext,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
       source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
       reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
@@ -754,6 +765,39 @@ export class AiReceptionistService {
     };
   }
 
+
+  async enrichReservationContext(input: {
+    channel: string;
+    externalConversationId: string;
+    reservationReference: string;
+    pageEntity: string;
+    reservationContext: PilotMessageInput["reservationContext"];
+  }): Promise<boolean> {
+    const existing = await this.repo.findConversation(input.channel, input.externalConversationId);
+    if (!existing) return false;
+    const metadata = AiReceptionistRepository.toObject(existing.metadata);
+    const mergedContext = mergeReservationContext(metadata.reservation_context, input.reservationContext);
+    const checkInDate = typeof mergedContext.checkInDate === "string" ? mergedContext.checkInDate : null;
+    const checkOutDate = typeof mergedContext.checkOutDate === "string" ? mergedContext.checkOutDate : null;
+    const carePhase = carePhaseFromReservationDates(checkInDate, checkOutDate);
+    const guestName = typeof mergedContext.guestName === "string" ? mergedContext.guestName : null;
+    const guestPhone = typeof mergedContext.guestPhone === "string" ? mergedContext.guestPhone : null;
+    const guestEmail = typeof mergedContext.guestEmail === "string" ? mergedContext.guestEmail : null;
+
+    await this.repo.updateConversation(existing.id, {
+      customer_name: existing.customer_name ?? guestName,
+      customer_contact: existing.customer_contact ?? guestPhone ?? guestEmail,
+      metadata: {
+        ...metadata,
+        page_entity: input.pageEntity,
+        reservation_reference: input.reservationReference,
+        reservation_context: mergedContext,
+        care_phase: carePhase !== "general" ? carePhase : (metadata.care_phase ?? "general"),
+        reservation_enriched_at: new Date().toISOString(),
+      },
+    });
+    return true;
+  }
 
   async ingestProviderContext(input: {
     channel: string;
@@ -1175,19 +1219,35 @@ export class AiReceptionistService {
 
     for (const message of messages) {
       const metadata = AiReceptionistRepository.toObject(message.metadata);
-      if (typeof metadata.translated_vi === "string" && metadata.translated_vi.trim()) {
-        skipped++;
-        continue;
-      }
       const detected = typeof metadata.detected_language === "string"
         ? metadata.detected_language
         : detectGuestLanguage(message.content).code;
+      const currentTranslation = typeof metadata.translated_vi === "string" ? metadata.translated_vi.trim() : "";
+      const placeholder = currentTranslation === "Bản dịch tiếng Việt chưa được tạo."
+        || currentTranslation === "Chưa có bản dịch."
+        || (detected !== "vi" && currentTranslation === message.content.trim());
+      if (currentTranslation && !placeholder) {
+        skipped++;
+        continue;
+      }
       const translated = await translateToVietnamese(message.content, detected);
+      if (detected !== "vi" && translated.trim() === message.content.trim()) {
+        await this.repo.updateMessage(message.id, {
+          metadata: {
+            ...metadata,
+            detected_language: detected,
+            translation_status: "pending_provider",
+          },
+        });
+        skipped++;
+        continue;
+      }
       await this.repo.updateMessage(message.id, {
         metadata: {
           ...metadata,
           translated_vi: translated,
           detected_language: detected,
+          translation_status: "translated",
           translation_backfilled: true,
         },
       });

@@ -91,6 +91,9 @@ function runtimeSignals() {
     otaEmailAutoReplyEnabled: process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")
       .split(",").map((value) => value.trim()).filter(Boolean),
+    metaGatewayMode: "RECEIVE_ONLY",
+    metaReceiveOnlyChannels: snapshot.receiveOnlyChannels,
+    metaReplyGateApproved: process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true",
     facebookProviderConfig: facebook?.providerConfig ?? "NOT_CONFIGURED",
     facebookProviderVerification: facebook?.providerVerification ?? "NEED_VERIFY",
     openCustomerChannels,
@@ -100,6 +103,7 @@ function runtimeSignals() {
       readiness: channel.readiness,
       transport: channel.transport,
       mode: channel.mode,
+      receiveEnabled: channel.receiveEnabled,
       providerConfig: channel.providerConfig,
       providerVerification: channel.providerVerification,
       automaticUpsell: channel.automaticUpsell,

@@ -25,6 +25,7 @@ export type ReceptionistMessage = {
   deliveryDetail: string | null;
   qaPass: boolean | null;
   editedByHuman: boolean;
+  historicalImport: boolean;
   createdAt: string;
 };
 
@@ -36,6 +37,7 @@ export type ReceptionistConversation = {
   customerContact: string;
   propertyId: string | null;
   propertyName: string | null;
+  propertyEntity: "lavender" | "ruby" | "cozy" | "tce" | "unknown";
   language: string;
   intent: string;
   routedAgent: string;
@@ -136,6 +138,11 @@ export type PilotMessageInput = {
   carePhase?: CustomerCarePhase;
   reservationReference?: string;
   providerMessageType?: string;
+  sourceMailbox?: string | null;
+  replyMailbox?: string | null;
+  providerThreadId?: string | null;
+  providerReplyTo?: string | null;
+  historicalImport?: boolean;
   reservationContext?: {
     checkInText?: string | null;
     checkOutText?: string | null;

@@ -25,17 +25,35 @@ export class GoogleOAuthConnectionsRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findByUserId(userId: string): Promise<Row | null> {
+    return this.findByUserIdAndProvider(userId, PROVIDER);
+  }
+
+  async findByUserIdAndProvider(userId: string, provider: string): Promise<Row | null> {
     const { data, error } = await this.db
       .from("google_oauth_connections")
       .select("*")
       .eq("user_id", userId)
-      .eq("provider", PROVIDER)
+      .eq("provider", provider)
       .maybeSingle();
     if (error) {
-      logSupabaseError("findByUserId", error);
+      logSupabaseError("findByUserIdAndProvider", error);
       throw error;
     }
     return data;
+  }
+
+  async findByProviders(providers: readonly string[]): Promise<Row[]> {
+    if (providers.length === 0) return [];
+    const { data, error } = await this.db
+      .from("google_oauth_connections")
+      .select("*")
+      .in("provider", [...providers])
+      .order("connected_at", { ascending: true });
+    if (error) {
+      logSupabaseError("findByProviders", error);
+      throw error;
+    }
+    return data ?? [];
   }
 
   /**
@@ -69,25 +87,42 @@ export class GoogleOAuthConnectionsRepository {
       accessTokenExpiresAt: string | null;
     }
   ): Promise<Row> {
+    return this.upsertForUserProvider(userId, PROVIDER, input);
+  }
+
+  async upsertForUserProvider(
+    userId: string,
+    provider: string,
+    input: {
+      googleEmail: string | null;
+      accessToken: string | null;
+      refreshToken: string | null;
+      tokenType: string | null;
+      scope: string | null;
+      accessTokenExpiresAt: string | null;
+    }
+  ): Promise<Row> {
     const { data, error } = await this.db
       .from("google_oauth_connections")
       .upsert(
         {
           user_id: userId,
-          provider: PROVIDER,
+          provider,
           google_email: input.googleEmail,
           access_token: input.accessToken,
           refresh_token: input.refreshToken,
           token_type: input.tokenType,
           scope: input.scope,
           access_token_expires_at: input.accessTokenExpiresAt,
+          connected_at: new Date().toISOString(),
+          last_error: null,
         },
         { onConflict: "user_id,provider" }
       )
       .select("*")
       .single();
     if (error) {
-      logSupabaseError("upsertForUser", error);
+      logSupabaseError("upsertForUserProvider", error);
       throw error;
     }
     return data;

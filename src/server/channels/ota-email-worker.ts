@@ -266,6 +266,16 @@ export async function runOtaEmailWorker(
   const maxResults = options.backfill ? 100 : 50;
 
   for (const mailbox of mailboxClients) {
+    if (
+      options.backfill
+      && options.pageTokens
+      && Object.prototype.hasOwnProperty.call(options.pageTokens, mailbox.entity)
+      && options.pageTokens[mailbox.entity] === null
+    ) {
+      result.nextPageTokens[mailbox.entity] = null;
+      continue;
+    }
+
     const gmail = google.gmail({ version: "v1", auth: mailbox.auth });
 
     let messages: Array<{ id?: string | null }> = [];
@@ -349,6 +359,17 @@ export async function runOtaEmailWorker(
             )
           : parsed.reservationContext;
         const carePhase = deriveCarePhase(enrichedContext.checkInDate, enrichedContext.checkOutDate);
+        if (parsed.reservationReference && hasReservationContext(enrichedContext)) {
+          const enriched = await service.enrichReservationContext({
+            channel: parsed.channel,
+            externalConversationId: conversationKey,
+            reservationReference: parsed.reservationReference,
+            pageEntity: mailbox.entity,
+            reservationContext: enrichedContext,
+          });
+          if (enriched) result.contextStored += 1;
+        }
+
         const ingest = await service.ingestGuestMessage({
           channel: parsed.channel,
           externalConversationId: conversationKey,

@@ -6,6 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
+  setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
   getHomestayRoomOptionsAction,
@@ -157,6 +158,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
+  const [replyDraft, setReplyDraft] = useState(
+    [...(firstConversation?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
+  );
+  const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
+  const [responseModePending, startResponseModeTransition] = useTransition();
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
@@ -188,12 +194,20 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    setResponseMode(first?.responseMode ?? "manual");
+    setReplyDraft(
+      [...(first?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
+    );
   }
 
   function selectConversation(item: ReceptionistConversation) {
     setSelectedId(item.id);
     const last = item.messages[item.messages.length - 1];
     setSelectedMessageId(last?.id ?? "");
+    setResponseMode(item.responseMode);
+    setReplyDraft(
+      [...item.messages].reverse().find((message) => message.authorship === "ai")?.content ?? ""
+    );
 
     if (!canManage || !item.unread || readLocally.has(item.id)) return;
     setReadLocally((current) => {
@@ -206,6 +220,26 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
       if (!result.ok) {
         setFeedbackStatus(result.error);
       }
+    });
+  }
+
+  function changeResponseMode(next: "manual" | "auto") {
+    if (!selected || !canManage || responseModePending) return;
+    setFeedbackStatus("");
+    setResponseMode(next);
+    startResponseModeTransition(async () => {
+      const result = await setConversationResponseModeAction(selected.id, next);
+      if (!result.ok) {
+        setResponseMode(selected.responseMode);
+        setFeedbackStatus(result.error);
+        return;
+      }
+      setFeedbackStatus(
+        next === "auto"
+          ? "Đã chọn Tự động, nhưng cổng gửi ra khách vẫn đang khóa cho tới khi QA PASS và CEO duyệt."
+          : "Đã chọn Manual. AI chỉ tạo nháp; người thật kiểm tra trước khi gửi."
+      );
+      router.refresh();
     });
   }
 
@@ -445,6 +479,71 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               </div>
             );
           })}
+        </div>
+
+        <div className="border-t border-[var(--border-hairline)] bg-[var(--page)] p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Trả lời khách</p>
+              <p className="mt-1 text-[11px] text-[var(--ink-secondary)]">
+                {responseMode === "manual"
+                  ? "Manual: AI tạo nháp, người thật kiểm tra trước khi gửi."
+                  : "Tự động: AI được chọn làm người trả lời, nhưng cổng gửi hiện vẫn khóa."}
+              </p>
+            </div>
+            <div className="flex rounded-lg border border-[var(--border-hairline)] bg-[var(--surface)] p-1">
+              <button
+                type="button"
+                onClick={() => changeResponseMode("manual")}
+                disabled={!canManage || responseModePending}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                  responseMode === "manual"
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--ink-secondary)]"
+                }`}
+              >
+                Manual
+              </button>
+              <button
+                type="button"
+                onClick={() => changeResponseMode("auto")}
+                disabled={!canManage || responseModePending}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                  responseMode === "auto"
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--ink-secondary)]"
+                }`}
+              >
+                Tự động
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <textarea
+              value={replyDraft}
+              onChange={(event) => setReplyDraft(event.target.value)}
+              disabled={!canManage}
+              placeholder="AI sẽ tạo nội dung gợi ý tại đây. Ở Manual, Tuấn/lễ tân có thể sửa trước khi gửi."
+              className="min-h-24 flex-1 resize-y rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              disabled
+              title="Cổng outbound đang khóa trong giai đoạn nhận dữ liệu và QA"
+              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white opacity-40"
+            >
+              Gửi
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Pill label="Outbound: ĐANG KHÓA" tone="warn" />
+            <span className="text-[10px] text-[var(--ink-muted)]">
+              Chưa gửi qua OTA/email. Chỉ mở sau khi AI trả lời đạt QA và có approval riêng.
+            </span>
+          </div>
+          {feedbackStatus ? <p className="mt-2 text-xs text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
         </div>
       </section>
 

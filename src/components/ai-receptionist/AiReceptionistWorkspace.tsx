@@ -243,11 +243,15 @@ function journeyPhaseAt(
 
 function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
   const router = useRouter();
-  const firstConversation = items[0];
+  const initialDirectItems = items.filter((item) => !isOtaConversation(item));
+  const initialScope: InboxScope = initialDirectItems.length > 0 ? "direct" : "ota";
+  const firstConversation = initialScope === "direct"
+    ? initialDirectItems[0]
+    : items.find(isOtaConversation) ?? items[0];
   const firstMessage = firstConversation?.messages[firstConversation.messages.length - 1];
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
-  const [inboxScope, setInboxScope] = useState<InboxScope>("direct");
+  const [inboxScope, setInboxScope] = useState<InboxScope>(initialScope);
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
@@ -464,7 +468,9 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                   key={scope}
                   type="button"
                   onClick={() => changeScope(scope)}
-                  className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
+                  disabled={count === 0}
+                  title={count === 0 && scope === "direct" ? "Chưa có hội thoại trực tiếp đã nhận vào hệ thống." : undefined}
+                  className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                     inboxScope === scope
                       ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
                       : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
@@ -475,6 +481,9 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               );
             })}
           </div>
+          <p className="mt-2 text-[10px] leading-4 text-[var(--ink-muted)]">
+            Khách trực tiếp gồm Website, Facebook, Instagram, WhatsApp, Zalo và Email. Google Maps/Google Search được ghi là nguồn tiếp cận và liên kết với kênh hội thoại thực tế của khách.
+          </p>
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <div>
@@ -610,7 +619,6 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
                 {CUSTOMER_JOURNEY_STEPS.map((step, index) => {
                   const activeIndex = currentJourneyStep(selected);
-                  const done = index < activeIndex;
                   const active = index === activeIndex;
                   return (
                     <div
@@ -618,12 +626,10 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                       className={`rounded-lg border px-2 py-2 text-center text-[10px] font-semibold ${
                         active
                           ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                          : done
-                            ? "border-[var(--status-good)]/30 bg-[var(--status-good)]/5 text-[var(--status-good)]"
-                            : "border-[var(--border-hairline)] text-[var(--ink-muted)]"
+                          : "border-[var(--border-hairline)] text-[var(--ink-muted)]"
                       }`}
                     >
-                      {done ? "✓ " : active ? "● " : ""}{step}
+                      {active ? "● " : ""}{step}
                     </div>
                   );
                 })}
@@ -701,7 +707,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Trả lời khách</p>
               <p className="mt-1 text-[11px] text-[var(--ink-secondary)]">
                 {responseMode === "manual"
-                  ? "Manual: AI tạo nháp, người thật kiểm tra trước khi gửi."
+                  ? "Thủ công: AI tạo nháp, người thật kiểm tra trước khi gửi."
                   : "Tự động: AI được chọn làm người trả lời, nhưng cổng gửi hiện vẫn khóa."}
               </p>
             </div>
@@ -716,7 +722,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                     : "text-[var(--ink-secondary)]"
                 }`}
               >
-                Manual
+                Thủ công
               </button>
               <button
                 type="button"
@@ -760,11 +766,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {responseMode === "manual" && selected.manualSendReady
-              ? <Pill label="Manual Send: SẴN SÀNG" tone="good" />
-              : <Pill label={responseMode === "auto" ? "Auto Send: ĐANG KHÓA" : "Manual Send: CHƯA SẴN SÀNG"} tone="warn" />}
+              ? <Pill label="Gửi thủ công: SẴN SÀNG" tone="good" />
+              : <Pill label={responseMode === "auto" ? "Gửi tự động: ĐANG KHÓA" : "Gửi thủ công: CHƯA SẴN SÀNG"} tone="warn" />}
             <span className="text-[10px] text-[var(--ink-muted)]">
               {responseMode === "auto"
-                ? "AI có thể tạo nháp nhưng chưa được tự gửi. Auto chỉ mở sau QA + approval riêng."
+                ? "AI có thể tạo nháp nhưng chưa được tự gửi. Tự động chỉ mở sau kiểm tra chất lượng và phê duyệt riêng."
                 : selected.manualSendReason}
             </span>
           </div>

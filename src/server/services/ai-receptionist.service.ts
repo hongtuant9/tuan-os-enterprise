@@ -93,6 +93,21 @@ function carePhaseFromReservationDates(checkInDate: string | null, checkOutDate:
   return "general";
 }
 
+function journeyStageFromReservationDates(
+  checkInDate: string | null,
+  checkOutDate: string | null,
+): ReceptionistConversation["journeyStage"] {
+  const today = currentVietnamDate();
+  if (!checkInDate && !checkOutDate) return "unknown";
+  if (checkInDate && today < checkInDate) return "pre_arrival";
+  if (checkInDate && today === checkInDate) return "arrival_today";
+  if (checkOutDate && today === checkOutDate) return "departure_today";
+  if (checkOutDate && today > checkOutDate) return "post_stay";
+  if (checkInDate && checkOutDate && today > checkInDate && today < checkOutDate) return "in_house";
+  if (checkInDate && !checkOutDate && today > checkInDate) return "in_house";
+  return "unknown";
+}
+
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, "utf8")
     .toString("base64")
@@ -359,6 +374,7 @@ export class AiReceptionistService {
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
         carePhase: currentCarePhase !== "general" ? currentCarePhase : storedCarePhase,
+        journeyStage: journeyStageFromReservationDates(checkInDate, checkOutDate),
         reservationReference: typeof metadata.reservation_reference === "string"
           ? metadata.reservation_reference
           : null,

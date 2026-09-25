@@ -137,6 +137,11 @@ export type PilotMessageInput = {
   carePhase?: CustomerCarePhase;
   reservationReference?: string;
   providerMessageType?: string;
+  sourceMailbox?: string | null;
+  replyMailbox?: string | null;
+  providerThreadId?: string | null;
+  providerReplyTo?: string | null;
+  historicalImport?: boolean;
   reservationContext?: {
     checkInText?: string | null;
     checkOutText?: string | null;

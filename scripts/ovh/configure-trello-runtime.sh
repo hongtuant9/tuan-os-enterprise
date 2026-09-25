@@ -81,3 +81,23 @@ else
   echo "[Trello config] HOLD — chưa tìm thấy deploy script chuẩn; không restart thủ công."
   exit 2
 fi
+
+echo "[Trello config] Xác minh runtime sau deploy."
+if docker inspect tce-control-center --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -qx 'TRELLO_API_KEY'; then
+  echo "TRELLO_API_KEY(runtime): SET=yes"
+else
+  echo "TRELLO_API_KEY(runtime): SET=no"
+fi
+if docker inspect tce-control-center --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -qx 'TRELLO_TOKEN'; then
+  echo "TRELLO_TOKEN(runtime): SET=yes"
+else
+  echo "TRELLO_TOKEN(runtime): SET=no"
+fi
+HEALTH="$(curl -fsS http://127.0.0.1:3000/health 2>/dev/null || true)"
+MIRROR="$(printf '%s' "$HEALTH" | sed -n 's/.*"trelloExecutionMirror":"\([^"]*\)".*/\1/p')"
+echo "trelloExecutionMirror=${MIRROR:-UNKNOWN}"
+if [ "$MIRROR" != "ACTIVE" ]; then
+  echo "[Trello config] HOLD — credential đã nhập nhưng runtime chưa ACTIVE."
+  exit 3
+fi
+echo "[Trello config] PASS — Trello runtime ACTIVE."

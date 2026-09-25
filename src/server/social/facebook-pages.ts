@@ -4,6 +4,7 @@ export const DEFAULT_FACEBOOK_LEGACY_PAGE_ID = "1297673160095513";
 
 const DEFAULT_FACEBOOK_PAGE_ENTITY_MAP: Record<string, Exclude<FacebookPageEntity, "unknown">> = {
   "1297673160095513": "tce",
+  "61594466060644": "tce",
   "275468216666914": "lavender",
   "827630224304044": "ruby",
   "479015061953519": "cozy",

@@ -175,6 +175,26 @@ export function isCustomerChannelEnabled(id: CustomerChannelId): boolean {
   return customerChannelMode(id) === "PRIVATE_PILOT";
 }
 
+export function receiveOnlyCustomerChannels(): Set<CustomerChannelId> {
+  const raw = process.env.TCE_RECEIVE_ONLY_CUSTOMER_CHANNELS?.trim() || "";
+  const requested = raw.split(",").map((item) => item.trim()).filter(Boolean) as CustomerChannelId[];
+  return new Set(requested.filter((item) => {
+    if (!isCustomerConversationChannel(item)) return false;
+    const definition = channelDefinition(item);
+    return Boolean(definition && definition.readiness !== "UNAVAILABLE_PROVIDER");
+  }));
+}
+
+export function isCustomerChannelReceiveEnabled(id: CustomerChannelId): boolean {
+  return isCustomerChannelEnabled(id) || receiveOnlyCustomerChannels().has(id);
+}
+
+export function assertCustomerChannelReceiveEnabled(id: CustomerChannelId): void {
+  if (!isCustomerChannelReceiveEnabled(id)) {
+    throw new Error(`Customer channel ${id} receive path is CLOSED by TCE channel policy.`);
+  }
+}
+
 export function assertCustomerChannelEnabled(id: CustomerChannelId): void {
   if (!isCustomerChannelEnabled(id)) throw new Error(`Customer channel ${id} is CLOSED by TCE channel policy.`);
 }
@@ -254,11 +274,14 @@ function providerEvidence(id: CustomerChannelId): {
 }
 
 export function channelPolicySnapshot() {
+  const receiveOnly = receiveOnlyCustomerChannels();
   return {
     stage: customerChannelStage(),
+    receiveOnlyChannels: [...receiveOnly],
     channels: CUSTOMER_CHANNELS.map((channel) => ({
       ...channel,
       mode: customerChannelMode(channel.id),
+      receiveEnabled: isCustomerChannelEnabled(channel.id) || receiveOnly.has(channel.id),
       ...providerEvidence(channel.id),
     })),
   };

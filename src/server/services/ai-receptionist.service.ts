@@ -303,12 +303,27 @@ export class AiReceptionistService {
       const specialRequest = typeof reservationContext.specialRequest === "string"
         ? reservationContext.specialRequest
         : null;
+      const checkInDate = typeof reservationContext.checkInDate === "string" ? reservationContext.checkInDate : null;
+      const checkOutDate = typeof reservationContext.checkOutDate === "string" ? reservationContext.checkOutDate : null;
+      const reservationGuestName = typeof reservationContext.guestName === "string" ? reservationContext.guestName : null;
+      const reservationGuestPhone = typeof reservationContext.guestPhone === "string" ? reservationContext.guestPhone : null;
+      const reservationGuestEmail = typeof reservationContext.guestEmail === "string" ? reservationContext.guestEmail : null;
+      const guestCount = typeof reservationContext.guestCount === "number" ? reservationContext.guestCount : null;
+      const adults = typeof reservationContext.adults === "number" ? reservationContext.adults : null;
+      const children = typeof reservationContext.children === "number" ? reservationContext.children : null;
+      const roomCount = typeof reservationContext.roomCount === "number" ? reservationContext.roomCount : null;
+      const currentCarePhase = carePhaseFromReservationDates(checkInDate, checkOutDate);
+      const storedCarePhase = typeof metadata.care_phase === "string"
+          && ["pre_service", "in_service", "post_service", "general"].includes(metadata.care_phase)
+        ? metadata.care_phase as ReceptionistConversation["carePhase"]
+        : "general";
+      const manualSend = manualSendEligibility(row.channel, metadata);
       return {
         id: row.id,
         channel: row.channel,
         externalConversationId: row.external_conversation_id,
-        customerName: row.customer_name ?? "Khách chưa cung cấp tên",
-        customerContact: row.customer_contact ?? "Chưa có thông tin liên hệ",
+        customerName: row.customer_name ?? reservationGuestName ?? "Khách chưa cung cấp tên",
+        customerContact: row.customer_contact ?? reservationGuestPhone ?? reservationGuestEmail ?? "Chưa có thông tin liên hệ",
         propertyId: row.property_id,
         propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
         propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")
@@ -318,16 +333,25 @@ export class AiReceptionistService {
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
-        carePhase: typeof metadata.care_phase === "string"
-          && ["pre_service", "in_service", "post_service", "general"].includes(metadata.care_phase)
-          ? metadata.care_phase as ReceptionistConversation["carePhase"]
-          : "general",
+        carePhase: currentCarePhase !== "general" ? currentCarePhase : storedCarePhase,
         reservationReference: typeof metadata.reservation_reference === "string"
           ? metadata.reservation_reference
           : null,
         checkInText,
         checkOutText,
         specialRequest,
+        checkInDate,
+        checkOutDate,
+        guestCount,
+        adults,
+        children,
+        roomCount,
+        reservationDataSource: typeof reservationContext.source === "string" ? reservationContext.source : null,
+        historyCompleteness: row.channel === "booking" || row.channel === "agoda" || row.channel === "airbnb" || row.channel === "expedia"
+          ? "partial_email_only"
+          : "unknown",
+        manualSendReady: manualSend.ready,
+        manualSendReason: manualSend.reason,
         unread: unreadInbound.length > 0,
         unreadCount: unreadInbound.length,
         managerReadAt,
@@ -541,7 +565,7 @@ export class AiReceptionistService {
       preferred_language: rendered.detectedLanguage,
       care_phase: carePhase,
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
-      reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
+      reservation_context: mergeReservationContext(existingMetadata.reservation_context, input.reservationContext),
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
       source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
       reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
@@ -561,7 +585,16 @@ export class AiReceptionistService {
       },
     };
 
-    const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: input.customerName ?? existing?.customer_name ?? null, customerContact: input.customerContact ?? existing?.customer_contact ?? null, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
+    const resolvedCustomerName = input.customerName
+      ?? (typeof input.reservationContext?.guestName === "string" ? input.reservationContext.guestName : null)
+      ?? existing?.customer_name
+      ?? null;
+    const resolvedCustomerContact = input.customerContact
+      ?? (typeof input.reservationContext?.guestPhone === "string" ? input.reservationContext.guestPhone : null)
+      ?? (typeof input.reservationContext?.guestEmail === "string" ? input.reservationContext.guestEmail : null)
+      ?? existing?.customer_contact
+      ?? null;
+    const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: resolvedCustomerName, customerContact: resolvedCustomerContact, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const recentUpsell = await this.repo.findRecentUpsellEvents(customerId, since24h);
     const rawJourney = typeof decision.metadataPatch.journey_entry === "string" ? decision.metadataPatch.journey_entry : "GENERAL";
@@ -581,8 +614,15 @@ export class AiReceptionistService {
       property_id: input.propertyId ?? existing?.property_id ?? null,
       channel: input.channel,
       external_conversation_id: externalConversationId,
-      customer_name: input.customerName ?? existing?.customer_name ?? null,
-      customer_contact: input.customerContact ?? existing?.customer_contact ?? null,
+      customer_name: input.customerName
+        ?? (typeof input.reservationContext?.guestName === "string" ? input.reservationContext.guestName : null)
+        ?? existing?.customer_name
+        ?? null,
+      customer_contact: input.customerContact
+        ?? (typeof input.reservationContext?.guestPhone === "string" ? input.reservationContext.guestPhone : null)
+        ?? (typeof input.reservationContext?.guestEmail === "string" ? input.reservationContext.guestEmail : null)
+        ?? existing?.customer_contact
+        ?? null,
       language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi"),
       intent: typeof decision.metadataPatch.primary_intent === "string" ? decision.metadataPatch.primary_intent : "general",
       status: decision.conversationStatus,

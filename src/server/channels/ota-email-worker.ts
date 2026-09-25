@@ -279,7 +279,7 @@ export async function runOtaEmailWorker(
           acquisitionSource: `${parsed.channel}_email`,
           pageEntity: mailbox.entity,
           carePhase: parsed.carePhase,
-          reservationReference: parsed.reservationReference,
+          reservationReference: parsed.reservationReference ?? undefined,
           reservationContext: {
             checkInText: parsed.checkInText,
             checkOutText: parsed.checkOutText,

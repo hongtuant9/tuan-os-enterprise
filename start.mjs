@@ -303,7 +303,7 @@ async function otaEmailWorkerTick() {
     }
     if (!payload?.skipped && (payload?.scanned > 0 || payload?.configured === true)) {
       console.log(
-        `[TCE OTA Email] configured=${payload?.configured ?? false} mailboxes=${payload?.mailboxesConfigured ?? 0} scanned=${payload?.scanned ?? 0} actionable=${payload?.actionable ?? 0} context_stored=${payload?.contextStored ?? 0} drafted=${payload?.drafted ?? 0} auto_sent=${payload?.autoSent ?? 0} held=${payload?.autoSendHeld ?? 0} failed=${payload?.failed ?? 0}`,
+        `[TCE OTA Email] configured=${payload?.configured ?? false} mailboxes=${payload?.mailboxesConfigured ?? 0} scanned=${payload?.scanned ?? 0} actionable=${payload?.actionable ?? 0} filtered_non_guest=${payload?.filteredNonGuest ?? 0} extraction_miss=${payload?.extractionMiss ?? 0} drafted=${payload?.drafted ?? 0} auto_sent=${payload?.autoSent ?? 0} held=${payload?.autoSendHeld ?? 0} failed=${payload?.failed ?? 0}`,
       );
     }
   } catch (error) {

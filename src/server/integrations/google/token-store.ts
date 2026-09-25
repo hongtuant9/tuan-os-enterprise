@@ -11,6 +11,7 @@ import type { Database } from "@/lib/supabase/types";
 import {
   GOOGLE_GMAIL_PROVIDER_KEYS,
   findGmailMailboxByProvider,
+  googleMailboxEmailMatches,
   type GmailMailboxEntity,
 } from "@/server/integrations/google/gmail-mailboxes";
 
@@ -127,8 +128,8 @@ export class GoogleOAuthTokenStore {
         continue;
       }
 
-      const connectedEmail = connection.google_email?.trim().toLowerCase();
-      if (!connectedEmail || connectedEmail !== mailbox.canonicalEmail.toLowerCase()) {
+      const connectedEmail = connection.google_email;
+      if (!googleMailboxEmailMatches(connectedEmail, mailbox.canonicalEmail)) {
         await this.repo.markError(connection.id, "Connected Google email does not match canonical mailbox.");
         continue;
       }

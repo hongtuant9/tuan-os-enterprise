@@ -46,3 +46,26 @@ export function findGmailMailboxByProvider(provider: string | null | undefined):
   if (!provider) return null;
   return GMAIL_MAILBOXES.find((item) => item.provider === provider) ?? null;
 }
+
+
+export function normalizeGoogleMailboxEmail(email: string | null | undefined): string {
+  const normalized = (email ?? "").trim().toLowerCase();
+  const at = normalized.lastIndexOf("@");
+  if (at <= 0) return normalized;
+
+  let local = normalized.slice(0, at);
+  let domain = normalized.slice(at + 1);
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (domain === "gmail.com") local = local.replace(/\./g, "");
+
+  return `${local}@${domain}`;
+}
+
+export function googleMailboxEmailMatches(
+  actual: string | null | undefined,
+  canonical: string | null | undefined,
+): boolean {
+  const left = normalizeGoogleMailboxEmail(actual);
+  const right = normalizeGoogleMailboxEmail(canonical);
+  return Boolean(left && right && left === right);
+}

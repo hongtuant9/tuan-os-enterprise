@@ -15,7 +15,10 @@ import {
   GOOGLE_OAUTH_STATE_COOKIE,
   GOOGLE_OAUTH_TARGET_COOKIE,
 } from "@/server/integrations/google/oauth-client";
-import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
+import {
+  findGmailMailbox,
+  googleMailboxEmailMatches,
+} from "@/server/integrations/google/gmail-mailboxes";
 import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
 import { buildContainer } from "@/server/container";
 
@@ -175,7 +178,7 @@ export async function GET(request: NextRequest) {
 
     if (
       mailbox
-      && (!googleEmail || googleEmail.trim().toLowerCase() !== mailbox.canonicalEmail.toLowerCase())
+      && !googleMailboxEmailMatches(googleEmail, mailbox.canonicalEmail)
     ) {
       throw new WrongGoogleAccountError();
     }

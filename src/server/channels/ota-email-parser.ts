@@ -173,6 +173,9 @@ function parseDateOnly(value: string | null): string | null {
     .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*,?\s+/i, "")
     .trim();
 
+  const vi = cleaned.match(/\b(\d{1,2})\s*(?:thg|tháng)\s*(\d{1,2})\s*,?\s*(20\d{2})\b/i);
+  if (vi) return `${vi[3]}-${String(Number(vi[2])).padStart(2, "0")}-${String(Number(vi[1])).padStart(2, "0")}`;
+
   const iso = cleaned.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (iso) return `${iso[1]}-${String(Number(iso[2])).padStart(2, "0")}-${String(Number(iso[3])).padStart(2, "0")}`;
 
@@ -270,6 +273,48 @@ function extractSpecialRequest(text: string): string | null {
   return items.length ? items.join("; ").slice(0, 800) : null;
 }
 
+function agodaDateRange(text: string): { checkInText: string | null; checkOutText: string | null } {
+  const viRange = text.match(/\b(\d{1,2}\s*(?:thg|tháng)\s*\d{1,2}\s*,?\s*20\d{2})\s*[-–]\s*(\d{1,2}\s*(?:thg|tháng)\s*\d{1,2}\s*,?\s*20\d{2})\b/i);
+  if (viRange) return { checkInText: normalize(viRange[1]!), checkOutText: normalize(viRange[2]!) };
+
+  const ymdRange = text.match(/\b(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*[-–]\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\b/);
+  if (ymdRange) return { checkInText: normalize(ymdRange[1]!), checkOutText: normalize(ymdRange[2]!) };
+
+  return { checkInText: null, checkOutText: null };
+}
+
+function agodaGuestName(subject: string, body: string): string | null {
+  const subjectName = firstMatch(subject, [
+    /^Reply from\s+(.+?)\s*\(/i,
+    /^Inquiry by\s+(.+?)\s*\(/i,
+  ]);
+  if (subjectName) return subjectName;
+
+  const primary = body.match(/(?:Tên khách chính\s*[:：]?\s*\n)([^\n]+)\s*\n([^\n]+)/i);
+  if (primary?.[1] && primary?.[2]) return `${normalize(primary[1])} ${normalize(primary[2])}`;
+
+  return firstMatch(body, [
+    /(?:Thắc mắc mới từ|Tin nhắn mới từ)\s+([^\n]{2,120})/i,
+  ]);
+}
+
+function normalizeAgodaGuestName(value: string | null): string | null {
+  if (!value) return null;
+  return normalize(value.replace(/\n+/g, " ")).replace(/\s{2,}/g, " ").trim() || null;
+}
+
+function agodaGuestCounts(text: string): { guestCount: number | null; adults: number | null; children: number | null; roomCount: number | null } {
+  const adults = parsePositiveInt(firstMatch(text, [/(\d+)\s*(?:người lớn|adults?)/i]));
+  const children = parsePositiveInt(firstMatch(text, [/(\d+)\s*(?:trẻ em|children|child)/i]));
+  const roomCount = parsePositiveInt(firstMatch(text, [/(\d+)\s*(?:phòng|rooms?)/i]));
+  return {
+    guestCount: adults != null ? adults + (children ?? 0) : null,
+    adults,
+    children,
+    roomCount,
+  };
+}
+
 export function parseOtaReservationContext(input: {
   from: string;
   replyTo?: string | null;
@@ -285,20 +330,35 @@ export function parseOtaReservationContext(input: {
   const ref = reservationReference(channel, combined);
 
   const rawGuestName = strictBlockValue(body, ["Guest name", "Guest"]);
-  const guestName = rawGuestName
+  const genericGuestName = rawGuestName
     ? rawGuestName.replace(/\s+\([^()]{2,60}\)\s*$/, "").trim()
     : firstMatch(body, [
         /(?:new message from a guest\s*\n+)([^\n]{2,120})\s+(?:said|wrote)\s*:/i,
         /(?:thắc mắc mới từ|inquiry by)\s+([^\n]{2,120})/i,
       ]);
-  const checkInText = strictBlockValue(body, ["Check-in", "Nhận phòng"]);
-  const checkOutText = strictBlockValue(body, ["Check-out", "Trả phòng"]);
+  const guestName = channel === "agoda"
+    ? normalizeAgodaGuestName(agodaGuestName(subject, body) || genericGuestName)
+    : genericGuestName;
+
+  const genericCheckInText = strictBlockValue(body, ["Check-in", "Nhận phòng"]);
+  const genericCheckOutText = strictBlockValue(body, ["Check-out", "Trả phòng"]);
+  const agodaRange = channel === "agoda" ? agodaDateRange(body) : { checkInText: null, checkOutText: null };
+  const rawCheckInText = channel === "agoda" ? (agodaRange.checkInText ?? genericCheckInText) : genericCheckInText;
+  const rawCheckOutText = channel === "agoda" ? (agodaRange.checkOutText ?? genericCheckOutText) : genericCheckOutText;
+  const checkInDate = parseDateOnly(rawCheckInText);
+  const checkOutDate = parseDateOnly(rawCheckOutText);
+  const checkInText = checkInDate ? rawCheckInText : null;
+  const checkOutText = checkOutDate ? rawCheckOutText : null;
+
   const totalGuestValue = strictBlockValue(body, ["Number of guests", "Total guests", "Số khách"]);
   const roomValue = strictBlockValue(body, ["Number of rooms booked", "Total rooms", "Rooms booked"]);
-  const adults = parsePositiveInt(totalGuestValue?.match(/(\d+)\s*adults?/i)?.[0] ?? null);
-  const children = parsePositiveInt(totalGuestValue?.match(/(\d+)\s*(?:children|child)/i)?.[0] ?? null);
-  const guestCount = parsePositiveInt(totalGuestValue);
-  const roomCount = parsePositiveInt(roomValue);
+  const agodaCounts = channel === "agoda"
+    ? agodaGuestCounts(body)
+    : { guestCount: null, adults: null, children: null, roomCount: null };
+  const adults = agodaCounts.adults ?? parsePositiveInt(totalGuestValue?.match(/(\d+)\s*adults?/i)?.[0] ?? null);
+  const children = agodaCounts.children ?? parsePositiveInt(totalGuestValue?.match(/(\d+)\s*(?:children|child)/i)?.[0] ?? null);
+  const guestCount = agodaCounts.guestCount ?? parsePositiveInt(totalGuestValue);
+  const roomCount = agodaCounts.roomCount ?? parsePositiveInt(roomValue);
   const contact = extractContactBlock(body);
   const propertyName = strictBlockValue(body, ["Property name"]);
   const source = /CONGRATULATIONS! You(?:’|')ve received a new booking|kvhotel-cm\.com|KiotViet Corporation/i.test(combined)
@@ -320,8 +380,8 @@ export function parseOtaReservationContext(input: {
       roomCount,
       checkInText,
       checkOutText,
-      checkInDate: parseDateOnly(checkInText),
-      checkOutDate: parseDateOnly(checkOutText),
+      checkInDate,
+      checkOutDate,
       specialRequest: extractSpecialRequest(body),
       propertyName,
       source,

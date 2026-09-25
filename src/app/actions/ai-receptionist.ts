@@ -146,6 +146,37 @@ export async function markConversationReadAction(
   }
 }
 
+export async function setConversationReplyModeAction(input: {
+  conversationId: string;
+  replyMode: "auto" | "manual";
+}): Promise<ActionResult> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để đổi chế độ trả lời." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được đổi chế độ trả lời." };
+  }
+  if (!["auto", "manual"].includes(input.replyMode)) {
+    return { ok: false, error: "Chế độ trả lời không hợp lệ." };
+  }
+
+  try {
+    await getAdminContainer().aiReceptionist.setConversationReplyMode(
+      input.conversationId,
+      input.replyMode,
+      session.email ?? "Quản lý Homestay"
+    );
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Không thể đổi chế độ trả lời.",
+    };
+  }
+}
+
 export async function backfillConversationTranslationsAction(
   conversationId: string
 ): Promise<ActionResult<{ updated: number; skipped: number }>> {

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, createPublicKey, timingSafeEqual, verify as verifyCrypto } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { assertCustomerChannelReceiveEnabled } from "@/server/channels/channel-policy";
@@ -25,18 +25,50 @@ function safeString(value: unknown, max = 500): string | undefined {
   return text ? text.slice(0, max) : undefined;
 }
 
-function verifySignature(raw: string, timestamp: string | null, signature: string | null): boolean {
-  const secret = process.env.TCE_WEBSITE_BRIDGE_SECRET?.trim();
-  if (!secret || !timestamp || !signature?.startsWith("sha256=")) return false;
-
+function timestampValid(timestamp: string | null): timestamp is string {
+  if (!timestamp) return false;
   const ts = Number(timestamp);
-  if (!Number.isFinite(ts)) return false;
-  if (Math.abs(Date.now() - ts) > MAX_CLOCK_SKEW_MS) return false;
+  return Number.isFinite(ts) && Math.abs(Date.now() - ts) <= MAX_CLOCK_SKEW_MS;
+}
 
+function verifyEd25519(raw: string, timestamp: string, signature: string | null): boolean {
+  const publicKeyBase64 = process.env.TCE_WEBSITE_BRIDGE_PUBLIC_KEY?.trim();
+  if (!publicKeyBase64 || !signature) return false;
+  try {
+    const rawKey = Buffer.from(publicKeyBase64, "base64");
+    const sig = Buffer.from(signature, "base64");
+    if (rawKey.length !== 32 || sig.length !== 64) return false;
+
+    const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
+    const key = createPublicKey({
+      key: Buffer.concat([spkiPrefix, rawKey]),
+      format: "der",
+      type: "spki",
+    });
+    return verifyCrypto(null, Buffer.from(`${timestamp}.${raw}`), key, sig);
+  } catch {
+    return false;
+  }
+}
+
+function verifyHmac(raw: string, timestamp: string, signature: string | null): boolean {
+  const secret = process.env.TCE_WEBSITE_BRIDGE_SECRET?.trim();
+  if (!secret || !signature?.startsWith("sha256=")) return false;
   const expected = `sha256=${createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}`;
   const a = Buffer.from(expected);
   const b = Buffer.from(signature);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function verifySignature(
+  raw: string,
+  timestamp: string | null,
+  ed25519Signature: string | null,
+  hmacSignature: string | null,
+): boolean {
+  if (!timestampValid(timestamp)) return false;
+  if (verifyEd25519(raw, timestamp, ed25519Signature)) return true;
+  return verifyHmac(raw, timestamp, hmacSignature);
 }
 
 export async function POST(request: Request) {
@@ -59,6 +91,7 @@ export async function POST(request: Request) {
   if (!verifySignature(
     raw,
     request.headers.get("x-tce-timestamp"),
+    request.headers.get("x-tce-signature-ed25519"),
     request.headers.get("x-tce-signature"),
   )) {
     return NextResponse.json({ error: "Invalid website bridge signature" }, { status: 401 });

@@ -193,7 +193,7 @@ function todayInVietnam(): string {
   }).format(new Date());
 }
 
-function deriveCarePhase(checkInDate: string | null, checkOutDate: string | null): CustomerCarePhase {
+export function deriveCarePhase(checkInDate: string | null, checkOutDate: string | null): CustomerCarePhase {
   const today = todayInVietnam();
   if (checkInDate && checkOutDate) {
     if (today < checkInDate) return "pre_service";
@@ -217,6 +217,44 @@ function extractContactBlock(text: string): { guestEmail: string | null; guestPh
     guestEmail: preferredEmail,
     guestPhone: phoneLine ? normalize(phoneLine) : null,
   };
+}
+
+export function mergeOtaReservationContext(
+  base: ParsedReservationContext,
+  incoming: ParsedReservationContext,
+): ParsedReservationContext {
+  const preferIncoming = incoming.source === "channel_manager_notification";
+  const pick = <T>(left: T | null, right: T | null): T | null =>
+    preferIncoming ? (right ?? left) : (left ?? right);
+  return {
+    guestName: pick(base.guestName, incoming.guestName),
+    guestEmail: pick(base.guestEmail, incoming.guestEmail),
+    guestPhone: pick(base.guestPhone, incoming.guestPhone),
+    guestCount: pick(base.guestCount, incoming.guestCount),
+    adults: pick(base.adults, incoming.adults),
+    children: pick(base.children, incoming.children),
+    roomCount: pick(base.roomCount, incoming.roomCount),
+    checkInText: pick(base.checkInText, incoming.checkInText),
+    checkOutText: pick(base.checkOutText, incoming.checkOutText),
+    checkInDate: pick(base.checkInDate, incoming.checkInDate),
+    checkOutDate: pick(base.checkOutDate, incoming.checkOutDate),
+    specialRequest: pick(base.specialRequest, incoming.specialRequest),
+    propertyName: pick(base.propertyName, incoming.propertyName),
+    source: preferIncoming ? incoming.source : (base.source !== "unknown" ? base.source : incoming.source),
+  };
+}
+
+export function hasReservationContext(context: ParsedReservationContext): boolean {
+  return Boolean(
+    context.guestName
+    || context.guestEmail
+    || context.guestPhone
+    || context.guestCount != null
+    || context.roomCount != null
+    || context.checkInDate
+    || context.checkOutDate
+    || context.specialRequest
+  );
 }
 
 function extractSpecialRequest(text: string): string | null {

@@ -56,6 +56,61 @@ function isHotelPropertyName(value: unknown): value is HotelPropertyName {
   return typeof value === "string" && value in HOTEL_BRANCH_BY_PROPERTY;
 }
 
+function mergeReservationContext(
+  existingValue: unknown,
+  incomingValue: PilotMessageInput["reservationContext"] | null | undefined,
+): Record<string, Json> {
+  const existing = AiReceptionistRepository.toObject(existingValue as Json);
+  const incoming = incomingValue ?? {};
+  const merged: Record<string, Json> = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value !== null && value !== undefined && value !== "") merged[key] = value as Json;
+  }
+  return merged;
+}
+
+function currentVietnamDate(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function carePhaseFromReservationDates(checkInDate: string | null, checkOutDate: string | null): CustomerCarePhase {
+  const today = currentVietnamDate();
+  if (checkInDate && checkOutDate) {
+    if (today < checkInDate) return "pre_service";
+    if (today >= checkInDate && today < checkOutDate) return "in_service";
+    if (today >= checkOutDate) return "post_service";
+  }
+  if (checkInDate && today < checkInDate) return "pre_service";
+  if (checkOutDate && today >= checkOutDate) return "post_service";
+  return "general";
+}
+
+function manualSendEligibility(channel: string, metadata: Record<string, Json>): { ready: boolean; reason: string } {
+  if (process.env.TCE_OTA_EMAIL_MANUAL_SEND_ENABLED?.trim().toLowerCase() !== "true") {
+    return { ready: false, reason: "Manual Send chưa được bật ở runtime." };
+  }
+  const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.toLowerCase() : "";
+  const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox : "";
+  const subject = typeof metadata.provider_subject === "string" ? metadata.provider_subject : "";
+  const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id : "";
+  if (!replyMailbox || !replyTo || !threadId || !subject) {
+    return { ready: false, reason: "Thiếu relay address/thread/subject đã xác minh." };
+  }
+  const approved =
+    (channel === "booking" && replyTo.endsWith("@guest.booking.com"))
+    || (channel === "agoda" && replyTo.endsWith("@agoda-messaging.com") && !replyTo.startsWith("notifications@"))
+    || (channel === "airbnb" && replyTo.endsWith("@reply.airbnb.com"))
+    || (channel === "expedia" && replyTo.endsWith("@m.expediapartnercentral.com"));
+  return approved
+    ? { ready: true, reason: "Manual Send sẵn sàng qua OTA email relay." }
+    : { ready: false, reason: "Kênh/relay address chưa đạt allowlist Manual Send." };
+}
+
 function toMessage(row: {
   id: string;
   external_message_id: string | null;

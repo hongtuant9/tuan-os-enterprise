@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
-import { assertCustomerChannelEnabled } from "@/server/channels/channel-policy";
+import { assertCustomerChannelReceiveEnabled } from "@/server/channels/channel-policy";
 import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
 import {
   facebookLegacyPageId,
@@ -55,7 +55,7 @@ function verifySignature(raw: string, signature: string | null): boolean {
 
 async function sendMessenger(pageId: string, recipientId: string, text: string): Promise<{ sent: boolean; messageId: string | null }> {
   const token = pageAccessToken(pageId);
-  if (!token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) || !["limited_auto", "live"].includes(getReceptionistMode())) {
+  if (process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true" || !token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) || !["limited_auto", "live"].includes(getReceptionistMode())) {
     return { sent: false, messageId: null };
   }
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  try { assertCustomerChannelEnabled("facebook"); } catch { return NextResponse.json({ error: "Facebook channel closed" }, { status: 423 }); }
+  try { assertCustomerChannelReceiveEnabled("facebook"); } catch { return NextResponse.json({ error: "Facebook receive path closed" }, { status: 423 }); }
   const raw = await request.text();
   if (!verifySignature(raw, request.headers.get("x-hub-signature-256"))) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   let payload: MetaWebhook;
@@ -127,6 +127,8 @@ export async function POST(request: Request) {
           acquisitionSource: `facebook_${entity}_messenger`,
           utmSource: "facebook",
           pageEntity: entity,
+          providerMessageType: "text",
+          forceAssistMode: true,
           testerUserId: null,
         });
         if (!result.duplicate) {

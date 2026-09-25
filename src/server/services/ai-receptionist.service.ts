@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { google } from "googleapis";
 import type { Json } from "@/lib/supabase/types";
 import type {
   AiBookingRecord,
@@ -13,6 +14,8 @@ import type {
 import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.repository";
 import { ActivityLogService } from "@/server/services/activity-log.service";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
+import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
+import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
@@ -88,6 +91,19 @@ function carePhaseFromReservationDates(checkInDate: string | null, checkOutDate:
   if (checkInDate && today < checkInDate) return "pre_service";
   if (checkOutDate && today >= checkOutDate) return "post_service";
   return "general";
+}
+
+function encodeBase64Url(value: string): string {
+  return Buffer.from(value, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function safeEmailSubject(subject: string): string {
+  const cleaned = subject.replace(/[\r\n]+/g, " ").trim();
+  return /^re:/i.test(cleaned) ? cleaned : `Re: ${cleaned}`;
 }
 
 function manualSendEligibility(channel: string, metadata: Record<string, Json>): { ready: boolean; reason: string } {
@@ -582,6 +598,9 @@ export class AiReceptionistService {
       reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
       provider_thread_id: input.providerThreadId ?? existingMetadata.provider_thread_id ?? null,
       provider_reply_to: input.providerReplyTo ?? existingMetadata.provider_reply_to ?? null,
+      provider_subject: input.providerSubject ?? existingMetadata.provider_subject ?? null,
+      provider_message_id_header: input.providerMessageIdHeader ?? existingMetadata.provider_message_id_header ?? null,
+      provider_references: input.providerReferences ?? existingMetadata.provider_references ?? null,
       historical_import: input.historicalImport === true || existingMetadata.historical_import === true,
       assist_mode: input.forceAssistMode === true,
       channel_auto_upsell_allowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
@@ -680,6 +699,9 @@ export class AiReceptionistService {
         reply_mailbox: input.replyMailbox ?? null,
         provider_thread_id: input.providerThreadId ?? null,
         provider_reply_to: input.providerReplyTo ?? null,
+        provider_subject: input.providerSubject ?? null,
+        provider_message_id_header: input.providerMessageIdHeader ?? null,
+        provider_references: input.providerReferences ?? null,
         historical_import: input.historicalImport === true,
         assist_mode: input.forceAssistMode === true,
         actor_label: "Khách",
@@ -765,6 +787,36 @@ export class AiReceptionistService {
     };
   }
 
+
+  async enrichConversationTransport(input: {
+    channel: string;
+    externalConversationId: string;
+    providerThreadId?: string | null;
+    providerReplyTo?: string | null;
+    providerSubject?: string | null;
+    providerMessageIdHeader?: string | null;
+    providerReferences?: string | null;
+    replyMailbox?: string | null;
+    sourceMailbox?: string | null;
+  }): Promise<boolean> {
+    const existing = await this.repo.findConversation(input.channel, input.externalConversationId);
+    if (!existing) return false;
+    const metadata = AiReceptionistRepository.toObject(existing.metadata);
+    await this.repo.updateConversation(existing.id, {
+      metadata: {
+        ...metadata,
+        provider_thread_id: input.providerThreadId ?? metadata.provider_thread_id ?? null,
+        provider_reply_to: input.providerReplyTo ?? metadata.provider_reply_to ?? null,
+        provider_subject: input.providerSubject ?? metadata.provider_subject ?? null,
+        provider_message_id_header: input.providerMessageIdHeader ?? metadata.provider_message_id_header ?? null,
+        provider_references: input.providerReferences ?? metadata.provider_references ?? null,
+        reply_mailbox: input.replyMailbox ?? metadata.reply_mailbox ?? null,
+        source_mailbox: input.sourceMailbox ?? metadata.source_mailbox ?? null,
+        transport_enriched_at: new Date().toISOString(),
+      },
+    });
+    return true;
+  }
 
   async enrichReservationContext(input: {
     channel: string;
@@ -1170,6 +1222,103 @@ export class AiReceptionistService {
       } yêu cầu AI Lễ tân: ${review.title}.`,
       type: "approval",
     });
+  }
+
+  async sendManualConversationReply(input: {
+    conversationId: string;
+    content: string;
+    actorLabel: string;
+  }): Promise<{ messageId: string; externalMessageId: string }> {
+    const content = input.content.trim();
+    if (!content) throw new Error("Nội dung trả lời không được để trống.");
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    if (metadata.response_mode === "auto") {
+      throw new Error("Hội thoại đang ở chế độ Tự động. Chuyển sang Manual trước khi người thật gửi.");
+    }
+    const eligibility = manualSendEligibility(conversation.channel, metadata);
+    if (!eligibility.ready) throw new Error(eligibility.reason);
+
+    const entity = typeof metadata.page_entity === "string" ? metadata.page_entity : "";
+    const mailbox = findGmailMailbox(entity);
+    if (!mailbox || mailbox.purpose !== "ota_guest_care") {
+      throw new Error("Không xác định được mailbox OTA của cơ sở.");
+    }
+    const clients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
+    const mailboxClient = clients.find((item) => item.entity === mailbox.entity);
+    if (!mailboxClient) throw new Error("Mailbox Gmail của cơ sở chưa được OAuth hợp lệ.");
+
+    const replyTo = String(metadata.provider_reply_to ?? "");
+    const subject = String(metadata.provider_subject ?? "");
+    const threadId = String(metadata.provider_thread_id ?? "");
+    const inReplyTo = typeof metadata.provider_message_id_header === "string"
+      ? metadata.provider_message_id_header
+      : "";
+    const references = typeof metadata.provider_references === "string"
+      ? metadata.provider_references
+      : inReplyTo;
+
+    const headers = [
+      `To: ${replyTo}`,
+      `Subject: ${safeEmailSubject(subject)}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+    ];
+    if (inReplyTo) headers.push(`In-Reply-To: ${inReplyTo}`);
+    if (references) headers.push(`References: ${references}`);
+    headers.push("", content);
+
+    const gmail = google.gmail({ version: "v1", auth: mailboxClient.auth });
+    const { data } = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: {
+        raw: encodeBase64Url(headers.join("\r\n")),
+        threadId,
+      },
+    });
+    if (!data.id) throw new Error("Gmail không trả về message id sau khi gửi.");
+
+    const detected = detectGuestLanguage(content).code;
+    const message = await this.repo.createMessage({
+      conversation_id: conversation.id,
+      external_message_id: `gmail:${mailbox.entity}:${data.id}`,
+      direction: "outbound",
+      sender_type: "manager",
+      content,
+      status: "sent",
+      evidence: {
+        transport: "ota_email_relay",
+        manual_send: true,
+        outbound_sent: true,
+        channel: conversation.channel,
+        mailbox: mailbox.canonicalEmail,
+      },
+      metadata: {
+        authorship: "human",
+        actor_label: input.actorLabel,
+        edited_by_human: true,
+        detected_language: detected,
+        translated_vi: detected === "vi" ? content : "",
+        delivery_status: "sent",
+        delivered_at: new Date().toISOString(),
+        delivery_detail: `Manual Send qua ${conversation.channel} relay / ${mailbox.propertyLabel}`,
+        response_mode: "manual",
+      },
+    });
+
+    await this.repo.updateConversation(conversation.id, {
+      last_message_at: new Date().toISOString(),
+      status: "active",
+    });
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: `Manual Send: đã gửi phản hồi ${conversation.channel} từ ${mailbox.propertyLabel}; Auto vẫn khóa.`,
+      type: "action",
+    });
+
+    return { messageId: message.id, externalMessageId: data.id };
   }
 
   async setConversationResponseMode(

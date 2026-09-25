@@ -31,6 +31,8 @@ export type OtaEmailWorkerResult = {
   autoSent: number;
   autoSendHeld: number;
   contextStored: number;
+  filteredNonGuest: number;
+  extractionMiss: number;
   mailboxesConfigured: number;
   nextPageTokens: Record<string, string | null>;
 };
@@ -198,6 +200,8 @@ export async function runOtaEmailWorker(
     autoSent: 0,
     autoSendHeld: 0,
     contextStored: 0,
+    filteredNonGuest: 0,
+    extractionMiss: 0,
     mailboxesConfigured: 0,
     nextPageTokens: {},
   };
@@ -248,55 +252,27 @@ export async function runOtaEmailWorker(
         const body = bodyText(message);
         const headers = headerValues(message);
         const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
-        const parsed = parseOtaEmail({ from, subject, body, snippet: message.snippet });
+        const parsed = parseOtaEmail({ from, replyTo, subject, body, snippet: message.snippet });
 
         if (!parsed.channel) {
           result.contextOnly += 1;
           continue;
         }
 
-        if (!parsed.actionable || !parsed.guestText || !parsed.reservationReference) {
-          const shouldStoreContext = Boolean(
-            parsed.reservationReference
-            || ["booking_confirmation", "arrival_reminder", "review", "guest_request", "guest_message"].includes(parsed.eventType)
-          );
-          if (!shouldStoreContext) {
-            result.contextOnly += 1;
-            continue;
-          }
+        if (!parsed.relayVerified) {
+          result.filteredNonGuest += 1;
+          continue;
+        }
 
-          const context = await service.ingestProviderContext({
-            channel: parsed.channel,
-            externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`,
-            externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
-            content: [subject, body].filter(Boolean).join("\n\n").slice(0, 8000),
-            pageEntity: mailbox.entity,
-            carePhase: parsed.carePhase,
-            reservationReference: parsed.reservationReference,
-            reservationContext: {
-              checkInText: parsed.checkInText,
-              checkOutText: parsed.checkOutText,
-              specialRequest: parsed.specialRequest,
-            },
-            providerMessageType: `email_${parsed.eventType}`,
-            sourceMailbox: mailbox.googleEmail,
-            replyMailbox: mailbox.googleEmail,
-            providerThreadId: message.threadId ?? null,
-            providerReplyTo: replyTo || null,
-            historicalImport: options.backfill === true,
-          });
-          if (context.duplicate) {
-            result.duplicates += 1;
-          } else {
-            result.contextStored += 1;
-          }
+        if (!parsed.actionable || !parsed.guestText) {
+          result.extractionMiss += 1;
           continue;
         }
 
         result.actionable += 1;
         const ingest = await service.ingestGuestMessage({
           channel: parsed.channel,
-          externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference}`,
+          externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`,
           externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
           content: parsed.guestText,
           scenarioTag: "OTA_EMAIL_INGRESS",

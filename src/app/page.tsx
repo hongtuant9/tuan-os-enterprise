@@ -111,10 +111,32 @@ function toAction(item: ReturnType<typeof buildManagerItems>[number]): Executive
     priority: item.priority,
     title: vietnameseTaskTitle(item.title),
     unit: "TCE",
-    owner: item.owner || item.agent || "Trợ lý Chánh văn phòng AI",
+    owner: vietnameseOwner(item.owner || item.agent || "Trợ lý Chánh văn phòng AI"),
     due: item.dueDate,
     status: item.pendingCeoApproval ? "Chờ quyết định" : item.status === "BLOCKED" ? "Bị chặn" : item.status === "IN_PROGRESS" ? "Đang theo dõi" : "Chờ xử lý",
   };
+}
+
+function vietnameseOwner(owner: string) {
+  return owner
+    .replace(/AI CTO/gi, "Giám đốc Công nghệ AI")
+    .replace(/\bCTO\b/gi, "Giám đốc Công nghệ")
+    .replace(/AI CMO/gi, "Giám đốc Tiếp thị AI")
+    .replace(/\bCMO\b/gi, "Giám đốc Tiếp thị")
+    .replace(/AI CCO/gi, "Giám đốc Kinh doanh AI")
+    .replace(/\bCCO\b/gi, "Giám đốc Kinh doanh")
+    .replace(/AI COO/gi, "Giám đốc Vận hành AI")
+    .replace(/\bCOO\b/gi, "Giám đốc Vận hành")
+    .replace(/AI CFO/gi, "Giám đốc Tài chính AI")
+    .replace(/\bCFO\b/gi, "Giám đốc Tài chính")
+    .replace(/AI CHRO/gi, "Giám đốc Nhân sự AI")
+    .replace(/\bCHRO\b/gi, "Giám đốc Nhân sự")
+    .replace(/AI CXO/gi, "Giám đốc Trải nghiệm AI")
+    .replace(/\bCXO\b/gi, "Giám đốc Trải nghiệm")
+    .replace(/Audit\s*&\s*Risk/gi, "Kiểm toán & Rủi ro")
+    .replace(/AI Knowledge Manager/gi, "Trợ lý Quản trị Tri thức")
+    .replace(/TUAN OS\s*—\s*AI CEO Delegate/gi, "TUAN OS — Điều hành AI")
+    .replace(/AI CEO Delegate/gi, "Điều hành AI");
 }
 
 function vietnameseTaskTitle(title: string) {
@@ -144,7 +166,19 @@ function vietnameseTaskTitle(title: string) {
     .replace(/Gate Review/gi, "Rà soát điều kiện chuyển giai đoạn")
     .replace(/Daily/gi, "Hằng ngày")
     .replace(/Weekly/gi, "Hằng tuần")
-    .replace(/Monthly/gi, "Hằng tháng");
+    .replace(/Monthly/gi, "Hằng tháng")
+    .replace(/AI Operations Stability Gate/gi, "Cổng kiểm tra ổn định vận hành AI")
+    .replace(/Operations Stability Gate/gi, "Cổng kiểm tra ổn định vận hành")
+    .replace(/AI\/Human\s*\+\s*Mailbox/gi, "AI/người thật và hộp thư")
+    .replace(/Human\s*\+\s*Mailbox/gi, "người thật và hộp thư")
+    .replace(/Continuous Knowledge Governance/gi, "Quản trị tri thức liên tục")
+    .replace(/Knowledge Governance/gi, "Quản trị tri thức")
+    .replace(/freshness/gi, "độ mới dữ liệu")
+    .replace(/AI Agent/gi, "trợ lý AI")
+    .replace(/AI Operations/gi, "Vận hành AI")
+    .replace(/Stability Gate/gi, "cổng kiểm tra ổn định")
+    .replace(/Mailbox/gi, "hộp thư")
+    .replace(/Human/gi, "người thật");
 }
 
 function taskBucket(text: string) {
@@ -281,10 +315,10 @@ export default async function Home({
     { name: "KiotViet F&B", status: fnb.state === "VERIFIED" ? "online" : "hold", note: fnb.notes.join(" ") },
     { name: "TASK-001", status: sourceStatus(taskSync?.last_synced_at, taskSync?.status), note: taskSync?.last_error || "Nguồn công việc chính thức trên Google Drive" },
     { name: "APPROVAL-001", status: sourceStatus(approvalSync?.last_synced_at, approvalSync?.status), note: approvalSync?.last_error || "Nguồn phê duyệt chính thức trên Google Drive" },
-    { name: "L3 Master Data", status: sourceStatus(l3Sync?.last_synced_at, l3Sync?.status), note: l3Sync?.last_error || "Dữ liệu chuẩn dùng cho khách hàng" },
+    { name: "Dữ liệu chuẩn cấp L3", status: sourceStatus(l3Sync?.last_synced_at, l3Sync?.status), note: l3Sync?.last_error || "Dữ liệu chuẩn dùng cho khách hàng" },
     { name: "AI-Lễ tân", status: "online", note: "Dữ liệu vận hành trên Supabase" },
-    { name: "AI Agents", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " trợ lý AI đang hoạt động" },
-    { name: "Server (VPS)", status: "online", note: "Trang được tạo trực tiếp từ hệ thống đang vận hành" },
+    { name: "Trợ lý AI", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " trợ lý AI đang hoạt động" },
+    { name: "Máy chủ (VPS)", status: "online", note: "Trang được tạo trực tiếp từ hệ thống đang vận hành" },
     { name: "Google Ads", status: "partial", note: "Chưa đọc được chi phí quảng cáo thực tế; số dự toán luôn có nhãn rõ ràng" },
   ];
   const verifiedSources = sources.filter((item) => item.status === "online").length;

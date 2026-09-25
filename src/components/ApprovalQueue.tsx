@@ -12,7 +12,7 @@ const STATUS_BADGE: Record<ApprovalStatus, { label: string; tone: "warn" | "good
   rejected: { label: "Đã từ chối", tone: "bad" },
 };
 
-const SEVERITY_WEIGHT: Record<string, number> = { critical: 40, high: 30, medium: 20, low: 10 };
+const SEVERITY_WEIGHT: Record<string, number> = { khẩn cấp: 40, cao: 30, trung bình: 20, thấp: 10 };
 const HISTORY_DAYS = 30;
 
 function formatSubmittedAt(iso: string) {
@@ -20,18 +20,18 @@ function formatSubmittedAt(iso: string) {
 }
 
 function severityWeight(approval: Approval) {
-  return SEVERITY_WEIGHT[(approval.severity || "medium").toLowerCase()] ?? 20;
+  return SEVERITY_WEIGHT[(approval.severity || "trung bình").toLowerCase()] ?? 20;
 }
 
 function executionNeedsAttention(approval: Approval) {
   const execution = (approval.executionStatus || "").toLowerCase();
-  return execution.includes("conflict") || execution.includes("failed") || execution.includes("critical") || execution.includes("error");
+  return execution.includes("conflict") || execution.includes("failed") || execution.includes("khẩn cấp") || execution.includes("error");
 }
 
 function isUrgent(approval: Approval) {
   if (approval.status !== "pending") return false;
-  const severity = (approval.severity || "medium").toLowerCase();
-  return severity === "critical" || severity === "high" || executionNeedsAttention(approval);
+  const severity = (approval.severity || "trung bình").toLowerCase();
+  return severity === "khẩn cấp" || severity === "cao" || executionNeedsAttention(approval);
 }
 
 function pendingSort(a: Approval, b: Approval) {
@@ -60,36 +60,36 @@ function MasterChangeDetails({ approval }: { approval: Approval }) {
       </div>
       <div>
         <p className="font-semibold text-amber-200">Nguồn phát hiện</p>
-        <p className="mt-1 text-[var(--ink-secondary)]">{approval.sourceChannel || "AI Master Data Steward"}</p>
+        <p className="mt-1 text-[var(--ink-secondary)]">{approval.sourceChannel || "Trợ lý quản trị dữ liệu chuẩn"}</p>
         {approval.evidenceUrl ? <a className="text-sky-300 underline" href={approval.evidenceUrl} target="_blank" rel="noreferrer">Xem bằng chứng</a> : null}
       </div>
       <div className="rounded-lg bg-black/20 p-3">
         <p className="text-[var(--ink-muted)]">Giá trị hiện tại</p>
-        <p className="mt-1 break-words text-sm font-medium text-rose-200">{approval.currentValue === "" ? "(trống)" : approval.currentValue}</p>
+        <p className="mt-1 break-words text-sm font-trung bình text-rose-200">{approval.currentValue === "" ? "(trống)" : approval.currentValue}</p>
       </div>
       <div className="rounded-lg bg-black/20 p-3">
-        <p className="text-[var(--ink-muted)]">AI đề xuất</p>
-        <p className="mt-1 break-words text-sm font-medium text-emerald-200">{approval.proposedValue === "" ? "(xóa giá trị)" : approval.proposedValue}</p>
+        <p className="text-[var(--ink-muted)]">Đề xuất của AI</p>
+        <p className="mt-1 break-words text-sm font-trung bình text-emerald-200">{approval.proposedValue === "" ? "(xóa giá trị)" : approval.proposedValue}</p>
       </div>
       <div className="md:col-span-2">
         <p className="text-[var(--ink-muted)]">Đề xuất xử lý</p>
         <p className="mt-1 leading-5 text-[var(--ink-secondary)]">{approval.aiRecommendation || approval.summary}</p>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           <div className="rounded-lg bg-white/[0.04] p-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Phân loại & độ tin cậy</p>
-            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.changeClass || "BUSINESS_TRUTH"} · Confidence: {approval.confidence || "chưa chấm"}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Phân loại & mức độ tin cậy</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.changeClass || "BUSINESS_TRUTH"} · Độ tin cậy: {approval.confidence || "chưa chấm"}</p>
           </div>
           <div className="rounded-lg bg-white/[0.04] p-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Tác động</p>
             <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.impactSummary || "Chưa có mô tả tác động chi tiết."}</p>
           </div>
           <div className="rounded-lg bg-white/[0.04] p-2 md:col-span-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kế hoạch rollback</p>
-            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.rollbackPlan || "Khôi phục giá trị trước thay đổi và xác minh read-back."}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kế hoạch khôi phục</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.rollbackPlan || "Khôi phục giá trị trước thay đổi và xác minh lại kết quả sau thay đổi."}</p>
           </div>
         </div>
         <p className="mt-2 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
-          Change ID: {approval.changeKey || approval.id} · Mức độ: {approval.severity || "medium"} · Thực thi: {approval.executionStatus || "awaiting_approval"}
+          Mã thay đổi: {approval.changeKey || approval.id} · Mức độ: {approval.severity || "trung bình"} · Thực thi: {approval.executionStatus || "đang chờ phê duyệt"}
         </p>
         {approval.executionNote ? <p className="mt-2 rounded-lg bg-white/[0.04] p-2 text-[var(--ink-secondary)]">{approval.executionNote}</p> : null}
       </div>
@@ -107,7 +107,7 @@ function ApprovalCard({
   onDecision: (id: string, status: ApprovalStatus) => void;
 }) {
   const badge = STATUS_BADGE[approval.status];
-  const severity = (approval.severity || "medium").toUpperCase();
+  const severity = (approval.severity || "trung bình").toUpperCase();
   const urgent = isUrgent(approval);
 
   return (
@@ -118,7 +118,7 @@ function ApprovalCard({
             <h3 className="text-sm font-semibold text-[var(--ink-primary)]">{approval.title}</h3>
             <Badge label={badge.label} tone={badge.tone} />
             {urgent ? <span className="rounded-full border border-rose-500/30 bg-rose-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-rose-300">ƯU TIÊN</span> : null}
-            {approval.requestType === "master_data_change" ? <span className="rounded-full border border-sky-500/20 bg-sky-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-sky-300">MASTER DATA</span> : null}
+            {approval.requestType === "master_data_change" ? <span className="rounded-full border border-sky-500/20 bg-sky-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-sky-300">DỮ LIỆU CHUẨN</span> : null}
             {approval.severity ? <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{severity}</span> : null}
           </div>
           <p className="text-sm text-[var(--ink-secondary)]">{approval.summary}</p>
@@ -126,10 +126,10 @@ function ApprovalCard({
         </div>
         {approval.status === "pending" ? (
           <div className="flex shrink-0 gap-2">
-            <button type="button" disabled={busy} onClick={() => onDecision(approval.id, "approved")} className="rounded-lg bg-[var(--status-good)] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" disabled={busy} onClick={() => onDecision(approval.id, "approved")} className="rounded-lg bg-[var(--status-good)] px-3 py-1.5 text-xs font-trung bình text-white transition-opacity hover:opacity-90 disabled:cursor-not-althấped disabled:opacity-40">
               {busy ? "Đang xử lý..." : "Duyệt"}
             </button>
-            <button type="button" disabled={busy} onClick={() => onDecision(approval.id, "rejected")} className="rounded-lg border border-[var(--border-hairline)] px-3 py-1.5 text-xs font-medium text-[var(--ink-secondary)] transition-colors hover:border-[var(--status-bad)]/50 hover:text-[var(--status-bad)] disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" disabled={busy} onClick={() => onDecision(approval.id, "rejected")} className="rounded-lg border border-[var(--border-hairline)] px-3 py-1.5 text-xs font-trung bình text-[var(--ink-secondary)] transition-colors hover:border-[var(--status-bad)]/50 hover:text-[var(--status-bad)] disabled:cursor-not-althấped disabled:opacity-40">
               {busy ? "Đang xử lý..." : "Từ chối"}
             </button>
           </div>
@@ -200,7 +200,7 @@ export default function ApprovalQueue({ approvals: initialApprovals }: { approva
           <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hàng chờ phê duyệt</h2>
           <span className="text-xs text-[var(--ink-muted)]">{pendingCount} quyết định đang chờ anh · {urgent.length} ưu tiên cao</span>
         </div>
-        <a href="/api/integrations/google/oauth/start" className="inline-flex w-fit items-center rounded-lg border border-sky-500/30 bg-sky-500/[0.08] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/[0.14]">
+        <a href="/api/integrations/google/oauth/start" className="inline-flex w-fit items-center rounded-lg border border-sky-500/30 bg-sky-500/[0.08] px-3 py-1.5 text-xs font-trung bình text-sky-300 hover:bg-sky-500/[0.14]">
           Kết nối lại Google
         </a>
       </div>

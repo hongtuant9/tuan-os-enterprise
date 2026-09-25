@@ -484,6 +484,11 @@ export class AiReceptionistService {
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
       reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
+      reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
+      provider_thread_id: input.providerThreadId ?? existingMetadata.provider_thread_id ?? null,
+      provider_reply_to: input.providerReplyTo ?? existingMetadata.provider_reply_to ?? null,
+      historical_import: input.historicalImport === true || existingMetadata.historical_import === true,
       assist_mode: input.forceAssistMode === true,
       channel_auto_upsell_allowed: input.forceAssistMode === true ? false : channelAllowsAutomaticUpsell(input.channel),
       conversation_memory: {
@@ -561,6 +566,11 @@ export class AiReceptionistService {
         reservation_reference: input.reservationReference ?? null,
         reservation_context: input.reservationContext ?? null,
         provider_message_type: input.providerMessageType ?? null,
+        source_mailbox: input.sourceMailbox ?? null,
+        reply_mailbox: input.replyMailbox ?? null,
+        provider_thread_id: input.providerThreadId ?? null,
+        provider_reply_to: input.providerReplyTo ?? null,
+        historical_import: input.historicalImport === true,
         assist_mode: input.forceAssistMode === true,
         actor_label: "Khách",
         authorship: "guest",
@@ -660,6 +670,11 @@ export class AiReceptionistService {
       specialRequest?: string | null;
     } | null;
     providerMessageType?: string | null;
+    sourceMailbox?: string | null;
+    replyMailbox?: string | null;
+    providerThreadId?: string | null;
+    providerReplyTo?: string | null;
+    historicalImport?: boolean;
   }): Promise<{ conversationId: string; messageId: string; duplicate: boolean }> {
     const externalMessageId = input.externalMessageId?.trim() || null;
     if (externalMessageId) {
@@ -686,6 +701,11 @@ export class AiReceptionistService {
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
       reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
+      reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
+      provider_thread_id: input.providerThreadId ?? existingMetadata.provider_thread_id ?? null,
+      provider_reply_to: input.providerReplyTo ?? existingMetadata.provider_reply_to ?? null,
+      historical_import: input.historicalImport === true || existingMetadata.historical_import === true,
       acquisition_source: `${input.channel}_email`,
       ingest_mode: "receive_only",
       reply_allowed: false,
@@ -728,6 +748,11 @@ export class AiReceptionistService {
         reservation_reference: input.reservationReference ?? null,
         reservation_context: input.reservationContext ?? null,
         provider_message_type: input.providerMessageType ?? null,
+        source_mailbox: input.sourceMailbox ?? null,
+        reply_mailbox: input.replyMailbox ?? null,
+        provider_thread_id: input.providerThreadId ?? null,
+        provider_reply_to: input.providerReplyTo ?? null,
+        historical_import: input.historicalImport === true,
         actor_label: `${input.channel.toUpperCase()} OTA`,
         authorship: "system",
         receive_only: true,

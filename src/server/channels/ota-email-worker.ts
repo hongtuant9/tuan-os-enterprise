@@ -2,11 +2,7 @@ import { google } from "googleapis";
 import { parseOtaEmail } from "@/server/channels/ota-email-parser";
 import type { AiReceptionistService } from "@/server/services/ai-receptionist.service";
 import { getReceptionistMode } from "@/server/ai-receptionist/config";
-import {
-  GoogleGmailScopeError,
-  GoogleNotConnectedError,
-  GoogleOAuthTokenStore,
-} from "@/server/integrations/google/token-store";
+import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 
 type GmailHeader = { name?: string | null; value?: string | null };
 type GmailPart = {
@@ -33,6 +29,7 @@ export type OtaEmailWorkerResult = {
   failed: number;
   autoSent: number;
   autoSendHeld: number;
+  mailboxesConfigured: number;
 };
 
 function headerValues(message: GmailMessage): Record<string, string> {
@@ -145,15 +142,6 @@ function bodyText(message: GmailMessage): string {
   return message.snippet?.trim() ?? "";
 }
 
-function inferPageEntity(text: string): "tce" | "lavender" | "ruby" | "cozy" | "unknown" {
-  const normalized = text.toLowerCase();
-  if (normalized.includes("ruby homestay")) return "ruby";
-  if (normalized.includes("lavender") || normalized.includes("tam coc lavender")) return "lavender";
-  if (normalized.includes("cozy garden")) return "cozy";
-  if (normalized.includes("tam coc experience")) return "tce";
-  return "lavender";
-}
-
 async function sendReply(input: {
   gmail: ReturnType<typeof google.gmail>;
   threadId?: string | null;
@@ -196,126 +184,132 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     failed: 0,
     autoSent: 0,
     autoSendHeld: 0,
+    mailboxesConfigured: 0,
   };
 
-  let auth;
-  try {
-    auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForGmail();
-    result.configured = true;
-  } catch (error) {
-    if (error instanceof GoogleNotConnectedError || error instanceof GoogleGmailScopeError) {
-      return result;
-    }
-    throw error;
-  }
+  const allMailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
+  const mailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity !== "cozy");
+  result.mailboxesConfigured = mailboxClients.length;
+  result.configured = mailboxClients.length > 0;
+  if (!result.configured) return result;
 
-  const gmail = google.gmail({ version: "v1", auth });
   const query = process.env.TCE_OTA_GMAIL_QUERY?.trim()
     || "newer_than:2d (from:(@guest.booking.com) OR from:(@property.booking.com) OR from:(@agoda-messaging.com) OR from:(@airbnb.com) OR from:(@m.expediapartnercentral.com)) -in:spam -in:trash -in:sent";
 
-  const list = await gmail.users.messages.list({
-    userId: "me",
-    q: query,
-    maxResults: 50,
-  });
+  for (const mailbox of mailboxClients) {
+    const gmail = google.gmail({ version: "v1", auth: mailbox.auth });
 
-  for (const item of list.data.messages ?? []) {
-    if (!item.id) continue;
-    result.scanned += 1;
-
+    let messages: Array<{ id?: string | null }> = [];
     try {
-      const { data } = await gmail.users.messages.get({
+      const list = await gmail.users.messages.list({
         userId: "me",
-        id: item.id,
-        format: "full",
+        q: query,
+        maxResults: 50,
       });
-      const message = data as GmailMessage;
-      const from = header(message, "From");
-      const subject = header(message, "Subject");
-      const body = bodyText(message);
-      const parsed = parseOtaEmail({ from, subject, body, snippet: message.snippet });
-
-      if (!parsed.channel) {
-        result.contextOnly += 1;
-        continue;
-      }
-      if (!parsed.actionable || !parsed.guestText || !parsed.reservationReference) {
-        result.contextOnly += 1;
-        continue;
-      }
-
-      result.actionable += 1;
-      const pageEntity = inferPageEntity(`${subject}\n${body.slice(0, 2500)}`);
-      const headers = headerValues(message);
-      const ingest = await service.ingestGuestMessage({
-        channel: parsed.channel,
-        externalConversationId: `${parsed.channel}:${parsed.reservationReference}`,
-        externalMessageId: `gmail:${item.id}`,
-        content: parsed.guestText,
-        scenarioTag: "OTA_EMAIL_INGRESS",
-        acquisitionSource: `${parsed.channel}_email`,
-        pageEntity,
-        carePhase: parsed.carePhase,
-        reservationReference: parsed.reservationReference,
-        reservationContext: {
-          checkInText: parsed.checkInText,
-          checkOutText: parsed.checkOutText,
-          specialRequest: parsed.specialRequest,
-        },
-        providerMessageType: `email_${parsed.eventType}`,
-        forceAssistMode: true,
-        testerUserId: null,
-      });
-
-      if (ingest.duplicate) {
-        result.duplicates += 1;
-        continue;
-      }
-
-      result.drafted += 1;
-      const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
-      const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
-      const autoSendAllowed = autoSendRequested
-        && !ingest.reviewId
-        && ingest.qaPass === true
-        && ingest.usedGenerativeRenderer === true
-        && approvedReplyAddress(parsed.channel, replyTo)
-        && Boolean(ingest.outboundMessageId);
-
-      if (!autoSendAllowed) {
-        result.autoSendHeld += 1;
-        continue;
-      }
-
-      try {
-        const sentId = await sendReply({
-          gmail,
-          threadId: message.threadId,
-          to: replyTo,
-          subject,
-          body: ingest.reply,
-          inReplyTo: headers["message-id"],
-          references: headers["references"] || headers["message-id"],
-        });
-        if (ingest.outboundMessageId) {
-          await service.markOutboundDelivery(ingest.outboundMessageId, {
-            status: "sent",
-            externalMessageId: `gmail:${sentId}`,
-            detail: `OTA email relay sent via approved ${parsed.channel} reply address`,
-          });
-        }
-        result.autoSent += 1;
-      } catch {
-        if (ingest.outboundMessageId) {
-          await service.markOutboundDelivery(ingest.outboundMessageId, {
-            status: "failed",
-            detail: "OTA email relay send failed",
-          });
-        }
-        result.failed += 1;
-      }
+      messages = list.data.messages ?? [];
     } catch {
       result.failed += 1;
+      continue;
+    }
+
+    for (const item of messages) {
+      if (!item.id) continue;
+      result.scanned += 1;
+
+      try {
+        const { data } = await gmail.users.messages.get({
+          userId: "me",
+          id: item.id,
+          format: "full",
+        });
+        const message = data as GmailMessage;
+        const from = header(message, "From");
+        const subject = header(message, "Subject");
+        const body = bodyText(message);
+        const parsed = parseOtaEmail({ from, subject, body, snippet: message.snippet });
+
+        if (!parsed.channel) {
+          result.contextOnly += 1;
+          continue;
+        }
+        if (!parsed.actionable || !parsed.guestText || !parsed.reservationReference) {
+          result.contextOnly += 1;
+          continue;
+        }
+
+        result.actionable += 1;
+        const headers = headerValues(message);
+        const ingest = await service.ingestGuestMessage({
+          channel: parsed.channel,
+          externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference}`,
+          externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
+          content: parsed.guestText,
+          scenarioTag: "OTA_EMAIL_INGRESS",
+          acquisitionSource: `${parsed.channel}_email`,
+          pageEntity: mailbox.entity,
+          carePhase: parsed.carePhase,
+          reservationReference: parsed.reservationReference,
+          reservationContext: {
+            checkInText: parsed.checkInText,
+            checkOutText: parsed.checkOutText,
+            specialRequest: parsed.specialRequest,
+          },
+          providerMessageType: `email_${parsed.eventType}`,
+          forceAssistMode: true,
+          testerUserId: null,
+        });
+
+        if (ingest.duplicate) {
+          result.duplicates += 1;
+          continue;
+        }
+
+        result.drafted += 1;
+        const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
+        const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
+        const autoSendAllowed = autoSendRequested
+          && mailbox.entity !== "cozy"
+          && !ingest.reviewId
+          && ingest.qaPass === true
+          && ingest.usedGenerativeRenderer === true
+          && approvedReplyAddress(parsed.channel, replyTo)
+          && Boolean(ingest.outboundMessageId);
+
+        if (!autoSendAllowed) {
+          result.autoSendHeld += 1;
+          continue;
+        }
+
+        try {
+          const sentId = await sendReply({
+            gmail,
+            threadId: message.threadId,
+            to: replyTo,
+            subject,
+            body: ingest.reply,
+            inReplyTo: headers["message-id"],
+            references: headers["references"] || headers["message-id"],
+          });
+          if (ingest.outboundMessageId) {
+            await service.markOutboundDelivery(ingest.outboundMessageId, {
+              status: "sent",
+              externalMessageId: `gmail:${mailbox.entity}:${sentId}`,
+              detail: `OTA email relay sent via approved ${parsed.channel} reply address for ${mailbox.entity}`,
+            });
+          }
+          result.autoSent += 1;
+        } catch {
+          if (ingest.outboundMessageId) {
+            await service.markOutboundDelivery(ingest.outboundMessageId, {
+              status: "failed",
+              detail: `OTA email relay send failed for ${mailbox.entity}`,
+            });
+          }
+          result.failed += 1;
+        }
+      } catch {
+        result.failed += 1;
+      }
     }
   }
 

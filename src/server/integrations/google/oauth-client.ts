@@ -2,24 +2,32 @@ import "server-only";
 import { google, Auth } from "googleapis";
 import { GaxiosError } from "gaxios";
 
-/** Name of the short-lived CSRF-state cookie shared between /oauth/start and /oauth/callback. */
+/** Short-lived cookies shared between /oauth/start and /oauth/callback. */
 export const GOOGLE_OAUTH_STATE_COOKIE = "google_oauth_state";
+export const GOOGLE_OAUTH_TARGET_COOKIE = "google_oauth_target";
 
 /**
- * Least-privilege scopes for the Drive/Sheets/Docs sync framework.
- * Sheets needs write access because approved Master Data changes are applied
- * server-side and then verified with a read-back. Drive metadata and Docs stay read-only.
+ * Keep the long-lived system Google connection separate from per-property Gmail
+ * connections. Customer-care mailboxes receive Gmail-only permissions; they must
+ * never inherit Drive/Sheets/Analytics access.
  */
-export const GOOGLE_OAUTH_SCOPES = [
+export const GOOGLE_SYNC_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/documents.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/analytics.readonly",
+];
+
+export const GOOGLE_GMAIL_SCOPES = [
+  "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
 ];
+
+/** Backward-compatible alias for existing sync callers. */
+export const GOOGLE_OAUTH_SCOPES = GOOGLE_SYNC_SCOPES;
 
 export class GoogleOAuthConfigError extends Error {
   constructor(message: string) {
@@ -79,7 +87,12 @@ export function createOAuth2Client(redirectUri: string): Auth.OAuth2Client {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function buildGoogleAuthUrl(params: { redirectUri: string; state: string }): string {
+export function buildGoogleAuthUrl(params: {
+  redirectUri: string;
+  state: string;
+  scopes?: readonly string[];
+  loginHint?: string;
+}): string {
   const client = createOAuth2Client(params.redirectUri);
 
   return client.generateAuthUrl({
@@ -87,9 +100,10 @@ export function buildGoogleAuthUrl(params: { redirectUri: string; state: string 
     // Always force the consent screen so Google reissues a refresh_token —
     // without this it's only returned on a user's very first authorization.
     prompt: "consent",
-    include_granted_scopes: true,
-    scope: GOOGLE_OAUTH_SCOPES,
+    include_granted_scopes: false,
+    scope: [...(params.scopes ?? GOOGLE_SYNC_SCOPES)],
     state: params.state,
+    login_hint: params.loginHint,
   });
 }
 

@@ -13,7 +13,9 @@ import {
   GoogleOAuthConfigError,
   GoogleTokenExchangeError,
   GOOGLE_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_TARGET_COOKIE,
 } from "@/server/integrations/google/oauth-client";
+import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
 import { GoogleOAuthConnectionsRepository } from "@/server/repositories/google-oauth-connections.repository";
 import { buildContainer } from "@/server/container";
 
@@ -35,7 +37,17 @@ function toSafeErrorCode(error: unknown): string {
   if (error instanceof NoRefreshTokenError) {
     return "no_refresh_token";
   }
+  if (error instanceof WrongGoogleAccountError) {
+    return "wrong_google_account";
+  }
   return "token_exchange_failed";
+}
+
+class WrongGoogleAccountError extends Error {
+  constructor() {
+    super("The selected Google account does not match the canonical mailbox target.");
+    this.name = "WrongGoogleAccountError";
+  }
 }
 
 class NoRefreshTokenError extends Error {
@@ -57,7 +69,11 @@ class NoRefreshTokenError extends Error {
  * values are never assigned to an Error we construct or rethrow.
  */
 function logGoogleOAuthCallbackFailure(error: unknown): void {
-  if (error instanceof GoogleTokenExchangeError || error instanceof NoRefreshTokenError) {
+  if (
+    error instanceof GoogleTokenExchangeError
+    || error instanceof NoRefreshTokenError
+    || error instanceof WrongGoogleAccountError
+  ) {
     return;
   }
 
@@ -99,14 +115,23 @@ function logGoogleOAuthCallbackFailure(error: unknown): void {
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const appUrl = getPublicAppUrl();
-  const syncStatusUrl = new URL("/#sync-status", appUrl);
+  const targetCookie = request.cookies.get(GOOGLE_OAUTH_TARGET_COOKIE)?.value ?? "general";
+  const mailbox = targetCookie === "general" ? null : findGmailMailbox(targetCookie);
+  const returnUrl = mailbox
+    ? new URL("/ai-le-tan/workspace", appUrl)
+    : new URL("/#sync-status", appUrl);
+
+  function clearOAuthCookies(response: NextResponse) {
+    response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
+    response.cookies.delete(GOOGLE_OAUTH_TARGET_COOKIE);
+    return response;
+  }
 
   function redirectWithError(code: string) {
-    const target = new URL(syncStatusUrl);
+    const target = new URL(returnUrl);
     target.searchParams.set("google_oauth_error", code);
-    const response = NextResponse.redirect(target);
-    response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
-    return response;
+    if (mailbox) target.searchParams.set("google_mailbox", mailbox.entity);
+    return clearOAuthCookies(NextResponse.redirect(target));
   }
 
   const googleError = url.searchParams.get("error");
@@ -124,7 +149,7 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get("state");
   const cookieState = request.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)?.value;
 
-  if (!code || !state || !cookieState || state !== cookieState) {
+  if (!code || !state || !cookieState || state !== cookieState || (targetCookie !== "general" && !mailbox)) {
     return redirectWithError("invalid_state");
   }
 
@@ -133,7 +158,8 @@ export async function GET(request: NextRequest) {
     const tokens = await exchangeCodeForTokens(code, redirectUri);
 
     const connections = new GoogleOAuthConnectionsRepository(createAdminClient());
-    const existing = await connections.findByUserId(session.userId);
+    const provider = mailbox?.provider ?? "google";
+    const existing = await connections.findByUserIdAndProvider(session.userId, provider);
 
     const refreshToken = tokens.refresh_token ?? existing?.refresh_token ?? null;
     if (!refreshToken) {
@@ -147,7 +173,14 @@ export async function GET(request: NextRequest) {
     authClient.setCredentials({ access_token: tokens.access_token });
     const googleEmail = (await fetchGoogleAccountEmail(authClient)) ?? existing?.google_email ?? null;
 
-    await connections.upsertForUser(session.userId, {
+    if (
+      mailbox
+      && (!googleEmail || googleEmail.trim().toLowerCase() !== mailbox.canonicalEmail.toLowerCase())
+    ) {
+      throw new WrongGoogleAccountError();
+    }
+
+    await connections.upsertForUserProvider(session.userId, provider, {
       googleEmail,
       accessToken: tokens.access_token,
       refreshToken,
@@ -157,17 +190,18 @@ export async function GET(request: NextRequest) {
     });
 
     await buildContainer(db).activityLog.record({
-      agent: "Sync Engine",
+      agent: mailbox ? "AI Receptionist" : "Sync Engine",
       unit: "System",
-      message: `Google account connected by ${session.email ?? session.userId}.`,
+      message: mailbox
+        ? `Google Gmail mailbox connected for ${mailbox.propertyLabel} by ${session.email ?? session.userId}.`
+        : `Google account connected by ${session.email ?? session.userId}.`,
       type: "info",
     });
 
-    const successUrl = new URL(syncStatusUrl);
+    const successUrl = new URL(returnUrl);
     successUrl.searchParams.set("google_connected", "1");
-    const response = NextResponse.redirect(successUrl);
-    response.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
-    return response;
+    if (mailbox) successUrl.searchParams.set("google_mailbox", mailbox.entity);
+    return clearOAuthCookies(NextResponse.redirect(successUrl));
   } catch (error) {
     logGoogleOAuthCallbackFailure(error);
     return redirectWithError(toSafeErrorCode(error));

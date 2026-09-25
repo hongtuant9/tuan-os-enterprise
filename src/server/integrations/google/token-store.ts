@@ -8,8 +8,20 @@ import {
   refreshAccessToken,
 } from "@/server/integrations/google/oauth-client";
 import type { Database } from "@/lib/supabase/types";
+import {
+  GOOGLE_GMAIL_PROVIDER_KEYS,
+  findGmailMailboxByProvider,
+  type GmailMailboxEntity,
+} from "@/server/integrations/google/gmail-mailboxes";
 
 type ConnectionRow = Database["public"]["Tables"]["google_oauth_connections"]["Row"];
+
+export type AuthorizedGmailMailboxClient = {
+  entity: GmailMailboxEntity;
+  provider: string;
+  googleEmail: string;
+  auth: Auth.OAuth2Client;
+};
 
 export class GoogleNotConnectedError extends Error {
   constructor() {
@@ -101,7 +113,48 @@ export class GoogleOAuthTokenStore {
     return this.getAuthorizedClient(connection);
   }
 
+  async getSystemAuthorizedClientsForGmail(): Promise<AuthorizedGmailMailboxClient[]> {
+    const clients: AuthorizedGmailMailboxClient[] = [];
+
+    for (const provider of GOOGLE_GMAIL_PROVIDER_KEYS) {
+      const connection = await this.repo.findMostRecentByProvider(provider);
+      if (!connection) continue;
+      const mailbox = findGmailMailboxByProvider(connection.provider);
+      if (!mailbox) continue;
+
+      const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
+      if (!scopes.has(GOOGLE_GMAIL_READ_SCOPE) || !scopes.has(GOOGLE_GMAIL_SEND_SCOPE)) {
+        continue;
+      }
+
+      const connectedEmail = connection.google_email?.trim().toLowerCase();
+      if (!connectedEmail || connectedEmail !== mailbox.canonicalEmail.toLowerCase()) {
+        await this.repo.markError(connection.id, "Connected Google email does not match canonical mailbox.");
+        continue;
+      }
+
+      try {
+        clients.push({
+          entity: mailbox.entity,
+          provider: mailbox.provider,
+          googleEmail: mailbox.canonicalEmail,
+          auth: await this.getAuthorizedClient(connection),
+        });
+      } catch {
+        // getAuthorizedClient() records a safe error on the connection.
+        // Keep other property mailboxes running instead of failing the whole worker.
+      }
+    }
+
+    return clients;
+  }
+
   async getSystemAuthorizedClientForGmail(): Promise<Auth.OAuth2Client> {
+    const clients = await this.getSystemAuthorizedClientsForGmail();
+    if (clients[0]) return clients[0].auth;
+
+    // Transitional fallback for deployments that still have Gmail scopes on the
+    // legacy system-wide Google connection. Remove only after all mailbox UATs PASS.
     const connection = await this.repo.findMostRecent();
     if (!connection) throw new GoogleNotConnectedError();
     const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));

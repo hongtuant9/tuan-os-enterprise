@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient as createRequestClient } from "@/lib/supabase/server";
 import { getCurrentSession } from "@/server/auth/session";
@@ -7,11 +7,14 @@ import {
   buildGoogleAuthUrl,
   getGoogleOAuthRedirectUri,
   getPublicAppUrl,
+  GOOGLE_GMAIL_SCOPES,
   GOOGLE_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_TARGET_COOKIE,
 } from "@/server/integrations/google/oauth-client";
+import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
 
 /** Connecting a Google account is a sensitive, human, admin+ action — not automatable via x-api-key. */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
 
@@ -24,10 +27,20 @@ export async function GET() {
 
   const state = randomUUID();
   const redirectUri = getGoogleOAuthRedirectUri();
+  const mailboxParam = request.nextUrl.searchParams.get("mailbox");
+  const mailbox = mailboxParam ? findGmailMailbox(mailboxParam) : null;
+  if (mailboxParam && !mailbox) {
+    return NextResponse.json({ error: "Unknown Gmail mailbox target" }, { status: 400 });
+  }
 
   let authUrl: string;
   try {
-    authUrl = buildGoogleAuthUrl({ redirectUri, state });
+    authUrl = buildGoogleAuthUrl({
+      redirectUri,
+      state,
+      scopes: mailbox ? GOOGLE_GMAIL_SCOPES : undefined,
+      loginHint: mailbox?.canonicalEmail,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Google OAuth is not configured." },
@@ -37,6 +50,13 @@ export async function GET() {
 
   const response = NextResponse.redirect(authUrl);
   response.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+  response.cookies.set(GOOGLE_OAUTH_TARGET_COOKIE, mailbox?.entity ?? "general", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -7,7 +7,12 @@ import urllib.parse
 import urllib.request
 
 ENV_PATH = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/opt/tuan-ai/secrets/tce-app.env")
-EXPECTED_PAGE_ID = "1297673160095513"
+EXPECTED_PAGES = {
+    "1297673160095513": "tce",
+    "479015061953519": "cozy",
+    "275468216666914": "lavender",
+    "827630224304044": "ruby",
+}
 
 def load_env(path: pathlib.Path) -> dict[str, str]:
     env: dict[str, str] = {}
@@ -43,6 +48,8 @@ def get_json(url: str) -> tuple[int, dict]:
         except Exception:
             body = {}
         return exc.code, body
+    except Exception:
+        return 0, {}
 
 def safe_error(body: dict) -> tuple[str, str, str]:
     error = body.get("error") if isinstance(body, dict) else {}
@@ -53,79 +60,83 @@ def safe_error(body: dict) -> tuple[str, str, str]:
         str(error.get("error_subcode") or "none")[:20],
     )
 
+def hold(reason: str) -> None:
+    set_env(ENV_PATH, "FACEBOOK_PILOT_VERIFIED", "false")
+    print(f"[Facebook verifier] HOLD reason={reason}")
+    raise SystemExit(0)
+
 env = load_env(ENV_PATH)
 app_id = env.get("FACEBOOK_APP_ID", "")
 app_secret = env.get("FACEBOOK_APP_SECRET", "")
-page_token = env.get("FACEBOOK_PAGE_ACCESS_TOKEN", "")
-configured_version = env.get("FACEBOOK_GRAPH_API_VERSION", "").strip()
+verify_token = env.get("FACEBOOK_VERIFY_TOKEN", "")
+configured_version = env.get("FACEBOOK_GRAPH_API_VERSION", "").strip() or "v26.0"
+raw_map = env.get("FACEBOOK_PAGE_ACCESS_TOKENS_JSON", "")
 
-if not all([app_id, app_secret, page_token, env.get("FACEBOOK_VERIFY_TOKEN", "")]):
-    set_env(ENV_PATH, "FACEBOOK_PILOT_VERIFIED", "false")
-    print("[Facebook verifier] HOLD reason=missing_required_runtime_config")
-    raise SystemExit(0)
+if not all([app_id, app_secret, verify_token, raw_map]):
+    hold("missing_required_runtime_config")
 
-versions: list[str] = []
-for version in [configured_version, "v26.0", "v25.0", "v24.0", "v23.0"]:
-    if version and version not in versions:
-        versions.append(version)
+try:
+    page_tokens = json.loads(raw_map)
+except Exception:
+    hold("invalid_page_token_map_json")
 
-for version in versions:
+if not isinstance(page_tokens, dict):
+    hold("invalid_page_token_map_type")
+
+missing = sorted(set(EXPECTED_PAGES) - set(page_tokens))
+if missing:
+    hold("missing_expected_page_tokens")
+
+app_query = urllib.parse.urlencode({"access_token": f"{app_id}|{app_secret}"})
+app_status, app_body = get_json(f"https://graph.facebook.com/{configured_version}/app?{app_query}")
+app_ok = app_status == 200 and str(app_body.get("id") or "") == app_id
+if not app_ok:
+    et, ec, es = safe_error(app_body)
+    print(f"[Facebook verifier] HOLD app_http={app_status} app_match={app_ok} app_error={et}/{ec}/{es}")
+    hold("app_credentials_invalid")
+
+for page_id, entity in EXPECTED_PAGES.items():
+    token = str(page_tokens.get(page_id) or "").strip()
+    if not token:
+        hold(f"empty_page_token:{entity}")
+
+    page_query = urllib.parse.urlencode({"fields": "id,name", "access_token": token})
+    page_status, page_body = get_json(
+        f"https://graph.facebook.com/{configured_version}/{page_id}?{page_query}"
+    )
+    page_match = page_status == 200 and str(page_body.get("id") or "") == page_id
+    if not page_match:
+        et, ec, es = safe_error(page_body)
+        print(f"[Facebook verifier] HOLD page={entity} page_http={page_status} page_match={page_match} page_error={et}/{ec}/{es}")
+        hold(f"page_token_invalid:{entity}")
+
     debug_query = urllib.parse.urlencode({
-        "input_token": page_token,
+        "input_token": token,
         "access_token": f"{app_id}|{app_secret}",
     })
     debug_status, debug_body = get_json(
-        f"https://graph.facebook.com/{version}/debug_token?{debug_query}"
+        f"https://graph.facebook.com/{configured_version}/debug_token?{debug_query}"
     )
-    debug_data = debug_body.get("data") if isinstance(debug_body, dict) else {}
-    debug_data = debug_data if isinstance(debug_data, dict) else {}
-    scopes = debug_data.get("scopes") or []
-    granular_scopes = debug_data.get("granular_scopes") or []
-    granular_scope_names = {
+    data = debug_body.get("data") if isinstance(debug_body, dict) else {}
+    data = data if isinstance(data, dict) else {}
+    scopes = set(data.get("scopes") or [])
+    granular = {
         str(item.get("scope") or "")
-        for item in granular_scopes
+        for item in (data.get("granular_scopes") or [])
         if isinstance(item, dict)
     }
-
-    page_query = urllib.parse.urlencode({
-        "fields": "id,name",
-        "access_token": page_token,
-    })
-    page_status, page_body = get_json(
-        f"https://graph.facebook.com/{version}/me?{page_query}"
-    )
-    page_body = page_body if isinstance(page_body, dict) else {}
-
-    debug_type, debug_code, debug_subcode = safe_error(debug_body)
-    page_type, page_code, page_subcode = safe_error(page_body)
-
-    checks = {
-        "debug_http": debug_status == 200,
-        "token_valid": debug_data.get("is_valid") is True,
-        "app_id_matches": str(debug_data.get("app_id") or "") == app_id,
-        "pages_messaging": "pages_messaging" in scopes or "pages_messaging" in granular_scope_names,
-        "page_http": page_status == 200,
-        "page_matches": str(page_body.get("id") or "") == EXPECTED_PAGE_ID,
-    }
-    if all(checks.values()):
-        set_env(ENV_PATH, "FACEBOOK_PILOT_VERIFIED", "true")
+    valid = data.get("is_valid") is True
+    app_match = str(data.get("app_id") or "") == app_id
+    messaging = "pages_messaging" in scopes or "pages_messaging" in granular
+    if not (debug_status == 200 and valid and app_match and messaging):
+        et, ec, es = safe_error(debug_body)
         print(
-            f"[Facebook verifier] PASS version={version} "
-            f"page_id={EXPECTED_PAGE_ID} page_name={str(page_body.get('name') or '')[:80]}"
+            f"[Facebook verifier] HOLD page={entity} debug_http={debug_status} "
+            f"token_valid={valid} app_match={app_match} pages_messaging={messaging} "
+            f"debug_error={et}/{ec}/{es}"
         )
-        raise SystemExit(0)
+        hold(f"page_permission_probe_failed:{entity}")
 
-    print(
-        f"[Facebook verifier] HOLD version={version} "
-        f"debug_http={debug_status} page_http={page_status} "
-        f"token_valid={checks['token_valid']} "
-        f"app_id_matches={checks['app_id_matches']} "
-        f"pages_messaging={checks['pages_messaging']} "
-        f"page_matches={checks['page_matches']} "
-        f"token_len={len(page_token)} prefix_eaa={page_token.startswith('EAA')} "
-        f"debug_error={debug_type}/{debug_code}/{debug_subcode} "
-        f"page_error={page_type}/{page_code}/{page_subcode}"
-    )
-
+print(f"[Facebook verifier] PROVIDER_PASS pages={len(EXPECTED_PAGES)} version={configured_version}")
 set_env(ENV_PATH, "FACEBOOK_PILOT_VERIFIED", "false")
-print("[Facebook verifier] HOLD reason=strict_provider_probe_failed")
+print("[Facebook verifier] HOLD reason=provider_pass_waiting_webhook_and_uat")

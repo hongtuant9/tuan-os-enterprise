@@ -29,6 +29,7 @@ export type OtaEmailWorkerResult = {
   failed: number;
   autoSent: number;
   autoSendHeld: number;
+  contextStored: number;
   mailboxesConfigured: number;
 };
 
@@ -50,6 +51,7 @@ function extractAddress(value: string): string {
 }
 
 function automaticReplyGateOpen(): boolean {
+  if (process.env.TCE_OTA_EMAIL_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true") return false;
   if (process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() !== "true") return false;
   if (!process.env.AI_RECEPTIONIST_OPENAI_API_KEY?.trim()) return false;
   const mode = getReceptionistMode();
@@ -184,6 +186,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     failed: 0,
     autoSent: 0,
     autoSendHeld: 0,
+    contextStored: 0,
     mailboxesConfigured: 0,
   };
 
@@ -194,7 +197,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
   if (!result.configured) return result;
 
   const query = process.env.TCE_OTA_GMAIL_QUERY?.trim()
-    || "newer_than:2d (from:(@guest.booking.com) OR from:(@property.booking.com) OR from:(@agoda-messaging.com) OR from:(@airbnb.com) OR from:(@m.expediapartnercentral.com)) -in:spam -in:trash -in:sent";
+    || "newer_than:2d (from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com)) -in:spam -in:trash -in:sent";
 
   for (const mailbox of mailboxClients) {
     const gmail = google.gmail({ version: "v1", auth: mailbox.auth });
@@ -232,8 +235,37 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
           result.contextOnly += 1;
           continue;
         }
+
         if (!parsed.actionable || !parsed.guestText || !parsed.reservationReference) {
-          result.contextOnly += 1;
+          const shouldStoreContext = Boolean(
+            parsed.reservationReference
+            || ["booking_confirmation", "arrival_reminder", "review", "guest_request", "guest_message"].includes(parsed.eventType)
+          );
+          if (!shouldStoreContext) {
+            result.contextOnly += 1;
+            continue;
+          }
+
+          const context = await service.ingestProviderContext({
+            channel: parsed.channel,
+            externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`,
+            externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
+            content: [subject, body].filter(Boolean).join("\n\n").slice(0, 8000),
+            pageEntity: mailbox.entity,
+            carePhase: parsed.carePhase,
+            reservationReference: parsed.reservationReference,
+            reservationContext: {
+              checkInText: parsed.checkInText,
+              checkOutText: parsed.checkOutText,
+              specialRequest: parsed.specialRequest,
+            },
+            providerMessageType: `email_${parsed.eventType}`,
+          });
+          if (context.duplicate) {
+            result.duplicates += 1;
+          } else {
+            result.contextStored += 1;
+          }
           continue;
         }
 

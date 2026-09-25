@@ -106,6 +106,8 @@ export default async function AiReceptionistWorkspacePage() {
     providerVerification: channel.providerVerification,
   }));
 
+  const replyGateApproved = process.env.TCE_OTA_EMAIL_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true";
+
   return (
     <div className="flex min-h-screen bg-[var(--page)]">
       <Sidebar />
@@ -121,7 +123,7 @@ export default async function AiReceptionistWorkspacePage() {
             </p>
           </div>
         )}
-        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatuses={mailboxStatuses} />
+        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatuses={mailboxStatuses} replyGateApproved={replyGateApproved} />
       </main>
     </div>
   );

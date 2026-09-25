@@ -643,6 +643,110 @@ export class AiReceptionistService {
   }
 
 
+  async ingestProviderContext(input: {
+    channel: string;
+    externalConversationId: string;
+    externalMessageId?: string | null;
+    content: string;
+    pageEntity: string;
+    carePhase: CustomerCarePhase;
+    reservationReference?: string | null;
+    reservationContext?: {
+      checkInText?: string | null;
+      checkOutText?: string | null;
+      specialRequest?: string | null;
+    } | null;
+    providerMessageType?: string | null;
+  }): Promise<{ conversationId: string; messageId: string; duplicate: boolean }> {
+    const externalMessageId = input.externalMessageId?.trim() || null;
+    if (externalMessageId) {
+      const duplicate = await this.repo.findMessageByExternalId(externalMessageId);
+      if (duplicate) {
+        return {
+          conversationId: duplicate.conversation_id,
+          messageId: duplicate.id,
+          duplicate: true,
+        };
+      }
+    }
+
+    const existing = await this.repo.findConversation(input.channel, input.externalConversationId);
+    const hospitalityBusinessUnitId = await this.repo.findHospitalityBusinessUnitId();
+    const existingMetadata = existing
+      ? AiReceptionistRepository.toObject(existing.metadata)
+      : ({} as Record<string, Json>);
+    const now = new Date().toISOString();
+    const metadata: Record<string, Json> = {
+      ...existingMetadata,
+      page_entity: input.pageEntity,
+      care_phase: input.carePhase,
+      reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
+      reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
+      provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      acquisition_source: `${input.channel}_email`,
+      ingest_mode: "receive_only",
+      reply_allowed: false,
+      channel_auto_upsell_allowed: false,
+    };
+
+    const conversation = await this.repo.upsertConversation({
+      id: existing?.id,
+      business_unit_id: existing?.business_unit_id ?? hospitalityBusinessUnitId,
+      customer_id: existing?.customer_id ?? null,
+      property_id: existing?.property_id ?? null,
+      channel: input.channel,
+      external_conversation_id: input.externalConversationId,
+      customer_name: existing?.customer_name ?? null,
+      customer_contact: existing?.customer_contact ?? null,
+      language: existing?.language ?? "und",
+      intent: input.providerMessageType ?? existing?.intent ?? "ota_context",
+      status: existing?.status ?? "active",
+      mode: getReceptionistMode(),
+      last_message_at: now,
+      metadata,
+    });
+
+    const message = await this.repo.createMessage({
+      conversation_id: conversation.id,
+      external_message_id: externalMessageId,
+      direction: "inbound",
+      sender_type: "system",
+      content: input.content.trim(),
+      status: "received",
+      evidence: {
+        source: input.channel,
+        transport: "email_relay",
+        receive_only: true,
+        outbound_sent: false,
+      },
+      metadata: {
+        page_entity: input.pageEntity,
+        care_phase: input.carePhase,
+        reservation_reference: input.reservationReference ?? null,
+        reservation_context: input.reservationContext ?? null,
+        provider_message_type: input.providerMessageType ?? null,
+        actor_label: `${input.channel.toUpperCase()} OTA`,
+        authorship: "system",
+        receive_only: true,
+        reply_allowed: false,
+      },
+    });
+
+    await this.activityLog.record({
+      agent: "AI Lễ tân",
+      unit: "Tam Cốc",
+      businessUnitId: hospitalityBusinessUnitId,
+      message: `Đã nhận thông tin ${input.providerMessageType ?? "OTA"} từ ${input.channel} cho ${input.pageEntity}; chưa tạo/gửi phản hồi khách.`,
+      type: "info",
+    });
+
+    return {
+      conversationId: conversation.id,
+      messageId: message.id,
+      duplicate: false,
+    };
+  }
+
   async markOutboundDelivery(messageId: string, input: { status: "sent" | "failed"; externalMessageId?: string | null; detail?: string | null }): Promise<void> {
     const existing = await this.repo.findMessageById(messageId);
     const metadata = existing ? AiReceptionistRepository.toObject(existing.metadata) : {};

@@ -91,6 +91,15 @@ const CARE_PHASE_LABEL: Record<string, string> = {
   general: "Chưa xác định",
 };
 
+const JOURNEY_STAGE_LABEL: Record<string, string> = {
+  pre_arrival: "Trước nhận phòng",
+  arrival_today: "Nhận phòng hôm nay",
+  in_house: "Đang lưu trú",
+  departure_today: "Trả phòng hôm nay",
+  post_stay: "Sau lưu trú",
+  unknown: "Chưa xác định",
+};
+
 const PROPERTY_FILTER_LABEL: Record<PropertyFilter, string> = {
   all: "Tất cả",
   lavender: "Lavender",
@@ -475,7 +484,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" />
+              <Pill label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage} tone={selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"} />
               <Pill label={`AI trả lời: ${selected.language.toUpperCase()}`} tone="good" />
             </div>
           </div>
@@ -677,7 +686,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                 {selected.roomCount != null ? ` · ${selected.roomCount} phòng` : ""}
               </dd>
             </div>
-            <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage} tone={selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"} /></dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa xác minh"}</dd></div>
             {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
           </dl>

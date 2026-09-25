@@ -47,6 +47,16 @@ export type ReceptionistConversation = {
   checkInText: string | null;
   checkOutText: string | null;
   specialRequest: string | null;
+  checkInDate: string | null;
+  checkOutDate: string | null;
+  guestCount: number | null;
+  adults: number | null;
+  children: number | null;
+  roomCount: number | null;
+  reservationDataSource: string | null;
+  historyCompleteness: "complete" | "partial_email_only" | "unknown";
+  manualSendReady: boolean;
+  manualSendReason: string;
   unread: boolean;
   unreadCount: number;
   managerReadAt: string | null;
@@ -147,7 +157,18 @@ export type PilotMessageInput = {
   reservationContext?: {
     checkInText?: string | null;
     checkOutText?: string | null;
+    checkInDate?: string | null;
+    checkOutDate?: string | null;
     specialRequest?: string | null;
+    guestName?: string | null;
+    guestEmail?: string | null;
+    guestPhone?: string | null;
+    guestCount?: number | null;
+    adults?: number | null;
+    children?: number | null;
+    roomCount?: number | null;
+    propertyName?: string | null;
+    source?: string | null;
   };
   forceAssistMode?: boolean;
   testerUserId?: string | null;

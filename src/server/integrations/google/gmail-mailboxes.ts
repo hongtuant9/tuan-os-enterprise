@@ -16,7 +16,7 @@ export const GMAIL_MAILBOXES: readonly GmailMailboxConfig[] = [
     entity: "lavender",
     provider: "google_gmail_lavender",
     propertyLabel: "Lavender Homestay",
-    canonicalEmail: "tamcoc.lavenderhomestay@gmail.com",
+    canonicalEmail: "tamcoclavenderhomestay@gmail.com",
     purpose: "ota_guest_care",
   },
   {

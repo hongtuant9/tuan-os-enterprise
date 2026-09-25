@@ -325,7 +325,9 @@ export async function runOtaEmailWorker(
         }
 
         result.drafted += 1;
-        const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
+        const autoSendRequested = ingest.replyMode === "auto"
+          && automaticReplyGateOpen()
+          && autoReplyChannels().has(parsed.channel);
         const autoSendAllowed = autoSendRequested
           && mailbox.entity !== "cozy"
           && !ingest.reviewId

@@ -112,10 +112,8 @@ function manualSendEligibility(channel: string, metadata: Record<string, Json>):
   }
   const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.toLowerCase() : "";
   const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox : "";
-  const subject = typeof metadata.provider_subject === "string" ? metadata.provider_subject : "";
-  const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id : "";
-  if (!replyMailbox || !replyTo || !threadId || !subject) {
-    return { ready: false, reason: "Thiếu relay address/thread/subject đã xác minh." };
+  if (!replyMailbox || !replyTo) {
+    return { ready: false, reason: "Thiếu mailbox hoặc OTA relay address đã xác minh." };
   }
   const approved =
     (channel === "booking" && replyTo.endsWith("@guest.booking.com"))
@@ -123,7 +121,7 @@ function manualSendEligibility(channel: string, metadata: Record<string, Json>):
     || (channel === "airbnb" && replyTo.endsWith("@reply.airbnb.com"))
     || (channel === "expedia" && replyTo.endsWith("@m.expediapartnercentral.com"));
   return approved
-    ? { ready: true, reason: "Manual Send sẵn sàng qua OTA email relay." }
+    ? { ready: true, reason: "Manual Send sẵn sàng qua OTA email relay; Auto vẫn khóa." }
     : { ready: false, reason: "Kênh/relay address chưa đạt allowlist Manual Send." };
 }
 
@@ -1254,9 +1252,16 @@ export class AiReceptionistService {
     if (!mailboxClient) throw new Error("Mailbox Gmail của cơ sở chưa được OAuth hợp lệ.");
 
     const replyTo = String(metadata.provider_reply_to ?? "");
-    const subject = String(metadata.provider_subject ?? "");
-    const threadId = String(metadata.provider_thread_id ?? "");
-    const inReplyTo = typeof metadata.provider_message_id_header === "string"
+    const reservationReference = typeof metadata.reservation_reference === "string"
+      ? metadata.reservation_reference
+      : "";
+    const subject = String(metadata.provider_subject ?? "").trim()
+      || `${conversation.channel.toUpperCase()} guest message${reservationReference ? ` · ${reservationReference}` : ""}`;
+    const sourceMailbox = typeof metadata.source_mailbox === "string" ? metadata.source_mailbox.toLowerCase() : "";
+    const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox.toLowerCase() : "";
+    const storedThreadId = String(metadata.provider_thread_id ?? "");
+    const threadId = sourceMailbox && replyMailbox && sourceMailbox === replyMailbox ? storedThreadId : "";
+    const inReplyTo = typeof metadata.provider_message_id_header === "string" && threadId
       ? metadata.provider_message_id_header
       : "";
     const references = typeof metadata.provider_references === "string"
@@ -1278,7 +1283,7 @@ export class AiReceptionistService {
       userId: "me",
       requestBody: {
         raw: encodeBase64Url(headers.join("\r\n")),
-        threadId,
+        threadId: threadId || undefined,
       },
     });
     if (!data.id) throw new Error("Gmail không trả về message id sau khi gửi.");

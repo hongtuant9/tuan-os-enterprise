@@ -34,6 +34,7 @@ const TABS = [
 type TabId = (typeof TABS)[number][0];
 type Tone = "good" | "warn" | "bad" | "accent" | "muted";
 type PropertyFilter = "all" | "lavender" | "ruby" | "cozy";
+type InboxScope = "direct" | "ota";
 
 type ChannelStatus = {
   id: string;
@@ -100,6 +101,61 @@ const JOURNEY_STAGE_LABEL: Record<string, string> = {
   cancelled: "Đã hủy",
   unknown: "Chưa xác định",
 };
+
+const OTA_CHANNELS = new Set(["booking", "agoda", "airbnb", "expedia", "tripadvisor"]);
+
+const INBOX_SCOPE_LABEL: Record<InboxScope, string> = {
+  direct: "Khách trực tiếp & mạng xã hội",
+  ota: "Khách từ kênh đặt phòng OTA",
+};
+
+function isOtaConversation(item: ReceptionistConversation) {
+  return OTA_CHANNELS.has(item.channel);
+}
+
+function acquisitionSourceLabel(value: string) {
+  const key = value.trim().toLowerCase();
+  const labels: Record<string, string> = {
+    google_maps: "Google Maps",
+    google_search: "Google Search",
+    google_ads: "Google Ads",
+    facebook: "Facebook",
+    instagram: "Instagram",
+    website: "Website",
+    whatsapp: "WhatsApp",
+    zalo: "Zalo",
+    email: "Email",
+    referral: "Giới thiệu",
+    travel_partner: "Đối tác du lịch",
+    booking: "Booking.com",
+    agoda: "Agoda",
+    airbnb: "Airbnb",
+    expedia: "Expedia",
+    tripadvisor: "Tripadvisor",
+  };
+  return labels[key] ?? value;
+}
+
+const CUSTOMER_JOURNEY_STEPS = [
+  "Hỏi thông tin & tư vấn",
+  "Đặt phòng",
+  "Bán thêm dịch vụ",
+  "Chuẩn bị đón khách",
+  "Trong thời gian lưu trú",
+  "Sau lưu trú",
+] as const;
+
+function currentJourneyStep(item: ReceptionistConversation) {
+  if (item.journeyStage === "post_stay") return 5;
+  if (item.journeyStage === "in_house" || item.journeyStage === "departure_today") return 4;
+  if (item.journeyStage === "pre_arrival" || item.journeyStage === "arrival_today") return 3;
+  if (
+    item.upsellOffers.length > 0
+    || /upsell|tour|transport|transfer|food|drink|motorbike|xe|ăn|uống/i.test(item.intent)
+  ) return 2;
+  if (item.reservationReference || item.status === "booking_created") return 1;
+  return 0;
+}
 
 const PROPERTY_FILTER_LABEL: Record<PropertyFilter, string> = {
   all: "Tất cả",
@@ -191,6 +247,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const firstMessage = firstConversation?.messages[firstConversation.messages.length - 1];
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
+  const [inboxScope, setInboxScope] = useState<InboxScope>("direct");
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
@@ -206,15 +263,21 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const [translationPending, startTranslationTransition] = useTransition();
   const [readPending, startReadTransition] = useTransition();
 
+  const scopedItems = useMemo(
+    () => items.filter((item) => inboxScope === "ota" ? isOtaConversation(item) : !isOtaConversation(item)),
+    [items, inboxScope],
+  );
+  const directCount = useMemo(() => items.filter((item) => !isOtaConversation(item)).length, [items]);
+  const otaCount = useMemo(() => items.filter(isOtaConversation).length, [items]);
   const propertyCounts = useMemo(() => ({
-    all: items.length,
-    lavender: items.filter((item) => item.propertyEntity === "lavender").length,
-    ruby: items.filter((item) => item.propertyEntity === "ruby").length,
-    cozy: items.filter((item) => item.propertyEntity === "cozy").length,
-  }), [items]);
+    all: scopedItems.length,
+    lavender: scopedItems.filter((item) => item.propertyEntity === "lavender").length,
+    ruby: scopedItems.filter((item) => item.propertyEntity === "ruby").length,
+    cozy: scopedItems.filter((item) => item.propertyEntity === "cozy").length,
+  }), [scopedItems]);
   const propertyItems = propertyFilter === "all"
-    ? items
-    : items.filter((item) => item.propertyEntity === propertyFilter);
+    ? scopedItems
+    : scopedItems.filter((item) => item.propertyEntity === propertyFilter);
   const selected = propertyItems.find((item) => item.id === selectedId) ?? propertyItems[0];
   const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
     ?? selected?.messages[selected.messages.length - 1];
@@ -223,11 +286,24 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     inboxFilter === "all" || (item.unread && !readLocally.has(item.id))
   );
 
+  function changeScope(next: InboxScope) {
+    setInboxScope(next);
+    setPropertyFilter("all");
+    const nextItems = items.filter((item) => next === "ota" ? isOtaConversation(item) : !isOtaConversation(item));
+    const first = nextItems[0];
+    setSelectedId(first?.id ?? "");
+    setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    setResponseMode(first?.responseMode ?? "manual");
+    setReplyDraft(
+      [...(first?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
+    );
+  }
+
   function changeProperty(next: PropertyFilter) {
     setPropertyFilter(next);
     const nextItems = next === "all"
-      ? items
-      : items.filter((item) => item.propertyEntity === next);
+      ? scopedItems
+      : scopedItems.filter((item) => item.propertyEntity === next);
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
@@ -289,7 +365,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         setFeedbackStatus(result.error);
         return;
       }
-      setFeedbackStatus("Đã gửi phản hồi thủ công qua chuyển tiếp từ kênh đặt phòng bằng mailbox đúng cơ sở.");
+      setFeedbackStatus(
+        isOtaConversation(selected)
+          ? "Đã gửi phản hồi thủ công qua kênh đặt phòng theo đường gửi đã xác minh."
+          : `Đã gửi phản hồi thủ công qua ${CHANNEL_LABEL[selected.channel] ?? selected.channel} theo cổng gửi đã xác minh.`
+      );
       setReplyDraft("");
       router.refresh();
     });
@@ -375,7 +455,28 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     <div className="grid min-h-[680px] overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] xl:grid-cols-[330px_minmax(420px,1fr)_360px]">
       <section className="border-b border-[var(--border-hairline)] xl:border-b-0 xl:border-r">
         <div className="border-b border-[var(--border-hairline)] p-4">
-          <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nhóm hội thoại</p>
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            {(["direct", "ota"] as InboxScope[]).map((scope) => {
+              const count = scope === "direct" ? directCount : otaCount;
+              return (
+                <button
+                  key={scope}
+                  type="button"
+                  onClick={() => changeScope(scope)}
+                  className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
+                    inboxScope === scope
+                      ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                      : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+                  }`}
+                >
+                  {INBOX_SCOPE_LABEL[scope]} <span className="opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Danh sách tin nhắn</p>
               <p className="mt-1 text-xs text-[var(--ink-secondary)]">{propertyItems.length} hội thoại · {unreadTotal} chưa đọc</p>
@@ -469,7 +570,9 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           })}
           {filteredItems.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-[var(--ink-muted)]">
-              Không có hội thoại phù hợp bộ lọc.
+              {inboxScope === "direct"
+                ? "Chưa có hội thoại khách trực tiếp trong bộ lọc này. Facebook, Website, Instagram, WhatsApp, Zalo và Email sẽ xuất hiện tại đây khi đường nhận dữ liệu của từng kênh được xác minh và mở."
+                : "Không có hội thoại OTA phù hợp bộ lọc."}
             </div>
           ) : null}
         </div>
@@ -493,11 +596,40 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--ink-muted)]">
+            <span>Nguồn tiếp cận: <strong className="text-[var(--ink-secondary)]">{acquisitionSourceLabel(selected.acquisitionSource)}</strong></span>
+            <span>Kênh hội thoại: <strong className="text-[var(--ink-secondary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</strong></span>
+            {selected.utmCampaign ? <span>Chiến dịch: <strong className="text-[var(--ink-secondary)]">{selected.utmCampaign}</strong></span> : null}
             <span>Nhận phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkInText ?? "Chưa xác minh"}</strong></span>
             <span>Trả phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkOutText ?? "Chưa xác minh"}</strong></span>
             <span>Mã đặt chỗ: <strong className="font-mono text-[var(--ink-secondary)]">{selected.reservationReference ?? "Chưa có"}</strong></span>
             <span>Khách: <strong className="text-[var(--ink-secondary)]">{selected.guestCount ?? "Chưa xác minh"}</strong></span>
           </div>
+          {!isOtaConversation(selected) ? (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hành trình chăm sóc khách</p>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+                {CUSTOMER_JOURNEY_STEPS.map((step, index) => {
+                  const activeIndex = currentJourneyStep(selected);
+                  const done = index < activeIndex;
+                  const active = index === activeIndex;
+                  return (
+                    <div
+                      key={step}
+                      className={`rounded-lg border px-2 py-2 text-center text-[10px] font-semibold ${
+                        active
+                          ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                          : done
+                            ? "border-[var(--status-good)]/30 bg-[var(--status-good)]/5 text-[var(--status-good)]"
+                            : "border-[var(--border-hairline)] text-[var(--ink-muted)]"
+                      }`}
+                    >
+                      {done ? "✓ " : active ? "● " : ""}{step}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           {selected.historyCompleteness === "partial_email_only" ? (
             <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
               <strong>Lịch sử trao đổi chưa đầy đủ — cần kiểm tra trên kênh đặt phòng.</strong> Dữ liệu hiện lấy từ email relay nên có thể thiếu phản hồi đã gửi trực tiếp trong hộp chat của kênh đặt phòng. Không mặc định khách chưa được trả lời chỉ vì email không có phản hồi.
@@ -682,12 +814,15 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         )}
 
         <div className="mt-5 border-t border-[var(--border-hairline)] pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Thông tin đặt chỗ</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{isOtaConversation(selected) ? "Thông tin đặt chỗ" : "Hồ sơ khách & hành trình"}</p>
           <dl className="mt-3 space-y-3 text-xs">
             <div><dt className="text-[var(--ink-muted)]">Khách</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.customerName}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Liên hệ</dt><dd className="mt-1 break-all text-[var(--ink-primary)]">{selected.customerContact}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Cơ sở</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd></div>
-            <div><dt className="text-[var(--ink-muted)]">Kênh đặt phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nguồn tiếp cận</dt><dd className="mt-1 text-[var(--ink-primary)]">{acquisitionSourceLabel(selected.acquisitionSource)}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Kênh hội thoại</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            {selected.utmSource ? <div><dt className="text-[var(--ink-muted)]">Nguồn chiến dịch</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.utmSource}</dd></div> : null}
+            {selected.utmCampaign ? <div><dt className="text-[var(--ink-muted)]">Chiến dịch</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.utmCampaign}</dd></div> : null}
             <div><dt className="text-[var(--ink-muted)]">Mã đặt chỗ</dt><dd className="mt-1 font-mono text-[var(--ink-primary)]">{selected.reservationReference ?? "Chưa có"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nhận / trả phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.checkInText ?? "Chưa xác minh"} → {selected.checkOutText ?? "Chưa xác minh"}</dd></div>
             <div>
@@ -1344,7 +1479,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       <MailboxReadiness mailboxes={mailboxStatuses} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Chỉ khách nhắn trực tiếp" />
+        <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Khách trực tiếp và OTA được tách riêng trong Hộp thư" />
         <Metric label="Cần Quản lý xác nhận" value={dashboard.metrics.pendingManagerReviews} hint="Thiếu căn cứ hoặc ngoại lệ" />
         <Metric label="Đặt phòng AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Không bao gồm kênh đặt phòng" />
         <Metric label="Đề xuất tri thức" value={dashboard.metrics.pendingKnowledgeCandidates} hint="Chưa tự động xuất bản" />

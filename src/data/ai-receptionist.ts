@@ -153,6 +153,9 @@ export type PilotMessageInput = {
   replyMailbox?: string | null;
   providerThreadId?: string | null;
   providerReplyTo?: string | null;
+  providerSubject?: string | null;
+  providerMessageIdHeader?: string | null;
+  providerReferences?: string | null;
   historicalImport?: boolean;
   reservationContext?: {
     checkInText?: string | null;

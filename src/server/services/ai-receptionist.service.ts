@@ -125,13 +125,13 @@ function safeEmailSubject(subject: string): string {
 
 function manualSendEligibility(channel: string, metadata: Record<string, Json>): { ready: boolean; reason: string } {
   if (process.env.TCE_OTA_EMAIL_MANUAL_SEND_ENABLED?.trim().toLowerCase() !== "true") {
-    return { ready: false, reason: "Manual Send chưa được bật ở runtime." };
+    return { ready: false, reason: "Manual Send chưa được bật ở runtime; cần mở cổng Manual Send sau khi QA/approval đạt yêu cầu." };
   }
   const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.toLowerCase() : "";
   const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox : "";
   const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id : "";
   if (!replyMailbox || !replyTo || !threadId) {
-    return { ready: false, reason: "Thiếu relay address/thread đã xác minh." };
+    return { ready: false, reason: "Thiếu relay address/thread đã xác minh; cần đồng bộ lại email OTA của đúng mã đặt chỗ trước khi gửi." };
   }
   const approved =
     (channel === "booking" && replyTo.endsWith("@guest.booking.com"))
@@ -162,6 +162,15 @@ function toMessage(row: {
     : detectedLanguage === "vi"
       ? row.content
       : "";
+  const rawTranslationStatus = typeof metadata.translation_status === "string" ? metadata.translation_status : "";
+  const translationStatus: ReceptionistMessage["translationStatus"] = detectedLanguage === "vi"
+    ? "not_needed"
+    : rawTranslationStatus === "failed"
+      ? "failed"
+      : translatedVi.trim() && translatedVi.trim() !== row.content.trim()
+        ? "translated"
+        : "pending";
+  const translationError = typeof metadata.translation_error === "string" ? metadata.translation_error : null;
   const senderType = row.sender_type as ReceptionistMessage["senderType"];
   const authorship: ReceptionistMessage["authorship"] =
     senderType === "guest" ? "guest" : senderType === "ai" ? "ai" : senderType === "manager" ? "human" : "system";
@@ -185,6 +194,8 @@ function toMessage(row: {
     content: row.content,
     translatedVi,
     detectedLanguage,
+    translationStatus,
+    translationError,
     status: row.status as ReceptionistMessage["status"],
     externalMessageId: row.external_message_id,
     deliveredAt: typeof metadata.delivered_at === "string"
@@ -356,13 +367,42 @@ export class AiReceptionistService {
           && ["pre_service", "in_service", "post_service", "general"].includes(metadata.care_phase)
         ? metadata.care_phase as ReceptionistConversation["carePhase"]
         : "general";
+      const reservationReference = typeof metadata.reservation_reference === "string"
+        ? metadata.reservation_reference
+        : null;
+      const reservationDataSource = typeof reservationContext.source === "string" ? reservationContext.source : null;
+      const authoritativeReservationContext = reservationDataSource === "channel_manager_notification";
+      const reservationMissingReasons: string[] = [];
+      if (!reservationReference && otaConversation) reservationMissingReasons.push("Thiếu mã đặt chỗ để đối chiếu nguồn đặt phòng.");
+      if (reservationReference && !checkInDate) reservationMissingReasons.push(
+        authoritativeReservationContext
+          ? "Nguồn đặt phòng hiện không cung cấp ngày nhận phòng đã xác minh."
+          : "Chưa đồng bộ được ngày nhận phòng đã xác minh từ nguồn đặt phòng."
+      );
+      if (reservationReference && !checkOutDate) reservationMissingReasons.push(
+        authoritativeReservationContext
+          ? "Nguồn đặt phòng hiện không cung cấp ngày trả phòng đã xác minh."
+          : "Chưa đồng bộ được ngày trả phòng đã xác minh từ nguồn đặt phòng."
+      );
+      if (reservationReference && !reservationGuestName && !row.customer_name) reservationMissingReasons.push(
+        authoritativeReservationContext
+          ? "Nguồn đặt phòng hiện không cung cấp tên khách."
+          : "Chưa đồng bộ được tên khách từ nguồn đặt phòng."
+      );
+      if (reservationReference && !reservationGuestPhone && !reservationGuestEmail && !row.customer_contact) reservationMissingReasons.push(
+        authoritativeReservationContext
+          ? "Nguồn đặt phòng hiện không cung cấp thông tin liên hệ khách."
+          : "Chưa đồng bộ được thông tin liên hệ khách từ nguồn đặt phòng."
+      );
+      if (reservationReference && guestCount == null) reservationMissingReasons.push(
+        authoritativeReservationContext
+          ? "Nguồn đặt phòng hiện không cung cấp số lượng khách."
+          : "Chưa đồng bộ được số lượng khách từ nguồn đặt phòng."
+      );
       const manualSend = manualSendEligibility(row.channel, metadata);
       const latestGuestLanguage = [...messages]
         .reverse()
         .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
-      const reservationReference = typeof metadata.reservation_reference === "string"
-        ? metadata.reservation_reference
-        : null;
       return {
         id: row.id,
         channel: row.channel,
@@ -395,8 +435,9 @@ export class AiReceptionistService {
         adults,
         children,
         roomCount,
-        reservationDataSource: typeof reservationContext.source === "string" ? reservationContext.source : null,
+        reservationDataSource,
         reservationStatus,
+        reservationMissingReasons,
         historyCompleteness: row.channel === "booking" || row.channel === "agoda" || row.channel === "airbnb" || row.channel === "expedia"
           ? "partial_email_only"
           : "unknown",
@@ -1257,9 +1298,12 @@ export class AiReceptionistService {
     conversationId: string;
     content: string;
     actorLabel: string;
+    requestId: string;
   }): Promise<{ messageId: string; externalMessageId: string }> {
     const content = input.content.trim();
+    const requestId = input.requestId.trim();
     if (!content) throw new Error("Nội dung trả lời không được để trống.");
+    if (!requestId) throw new Error("Thiếu mã chống gửi trùng cho yêu cầu Manual Send.");
     const conversation = await this.repo.findConversationById(input.conversationId);
     if (!conversation) throw new Error("Không tìm thấy hội thoại.");
     const metadata = AiReceptionistRepository.toObject(conversation.metadata);
@@ -1277,6 +1321,47 @@ export class AiReceptionistService {
     const clients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
     const mailboxClient = clients.find((item) => item.entity === mailbox.entity);
     if (!mailboxClient) throw new Error("Mailbox Gmail của cơ sở chưa được OAuth hợp lệ.");
+
+    const idempotencyExternalId = `manual-request:${requestId}`;
+    const existingRequest = await this.repo.findMessageByExternalId(idempotencyExternalId);
+    if (existingRequest) {
+      const existingMetadata = AiReceptionistRepository.toObject(existingRequest.metadata);
+      const providerId = typeof existingMetadata.provider_message_id === "string" ? existingMetadata.provider_message_id : "";
+      if (existingRequest.status === "sent" && providerId) {
+        return { messageId: existingRequest.id, externalMessageId: providerId };
+      }
+      throw new Error(existingRequest.status === "failed"
+        ? "Yêu cầu gửi trước đó đã thất bại. Hãy thử lại bằng nút Gửi để tạo yêu cầu mới."
+        : "Yêu cầu này đang được xử lý hoặc đã được ghi nhận; hệ thống đã chặn gửi trùng.");
+    }
+
+    const detected = detectGuestLanguage(content).code;
+    const pendingMessage = await this.repo.createMessage({
+      conversation_id: conversation.id,
+      external_message_id: idempotencyExternalId,
+      direction: "outbound",
+      sender_type: "manager",
+      content,
+      status: "draft",
+      evidence: {
+        transport: "ota_email_relay",
+        manual_send: true,
+        outbound_sent: false,
+        channel: conversation.channel,
+        mailbox: mailbox.canonicalEmail,
+      },
+      metadata: {
+        authorship: "human",
+        actor_label: input.actorLabel,
+        edited_by_human: true,
+        detected_language: detected,
+        translated_vi: detected === "vi" ? content : "",
+        translation_status: detected === "vi" ? "not_needed" : "pending_provider",
+        delivery_status: "sending",
+        response_mode: "manual",
+        send_request_id: requestId,
+      },
+    });
 
     const replyTo = String(metadata.provider_reply_to ?? "");
     const reservationReference = typeof metadata.reservation_reference === "string"
@@ -1303,56 +1388,61 @@ export class AiReceptionistService {
     if (references) headers.push(`References: ${references}`);
     headers.push("", content);
 
-    const gmail = google.gmail({ version: "v1", auth: mailboxClient.auth });
-    const { data } = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: {
-        raw: encodeBase64Url(headers.join("\r\n")),
-        threadId,
-      },
-    });
-    if (!data.id) throw new Error("Gmail không trả về message id sau khi gửi.");
+    try {
+      const gmail = google.gmail({ version: "v1", auth: mailboxClient.auth });
+      const { data } = await gmail.users.messages.send({
+        userId: "me",
+        requestBody: {
+          raw: encodeBase64Url(headers.join("\r\n")),
+          threadId,
+        },
+      });
+      if (!data.id) throw new Error("Gmail không trả về message id sau khi gửi.");
 
-    const detected = detectGuestLanguage(content).code;
-    const message = await this.repo.createMessage({
-      conversation_id: conversation.id,
-      external_message_id: `gmail:${mailbox.entity}:${data.id}`,
-      direction: "outbound",
-      sender_type: "manager",
-      content,
-      status: "sent",
-      evidence: {
-        transport: "ota_email_relay",
-        manual_send: true,
-        outbound_sent: true,
-        channel: conversation.channel,
-        mailbox: mailbox.canonicalEmail,
-      },
-      metadata: {
-        authorship: "human",
-        actor_label: input.actorLabel,
-        edited_by_human: true,
-        detected_language: detected,
-        translated_vi: detected === "vi" ? content : "",
-        delivery_status: "sent",
-        delivered_at: new Date().toISOString(),
-        delivery_detail: `Manual Send qua ${conversation.channel} relay / ${mailbox.propertyLabel}`,
-        response_mode: "manual",
-      },
-    });
+      const deliveredAt = new Date().toISOString();
+      await this.repo.updateMessage(pendingMessage.id, {
+        status: "sent",
+        evidence: {
+          transport: "ota_email_relay",
+          manual_send: true,
+          outbound_sent: true,
+          channel: conversation.channel,
+          mailbox: mailbox.canonicalEmail,
+        },
+        metadata: {
+          ...AiReceptionistRepository.toObject(pendingMessage.metadata),
+          provider_message_id: data.id,
+          delivery_status: "sent",
+          delivered_at: deliveredAt,
+          delivery_detail: `Manual Send qua ${conversation.channel} relay / ${mailbox.propertyLabel}`,
+        },
+      });
 
-    await this.repo.updateConversation(conversation.id, {
-      last_message_at: new Date().toISOString(),
-      status: "active",
-    });
-    await this.activityLog.record({
-      agent: input.actorLabel,
-      unit: "Tam Cốc",
-      message: `Manual Send: đã gửi phản hồi ${conversation.channel} từ ${mailbox.propertyLabel}; Auto vẫn khóa.`,
-      type: "action",
-    });
+      await this.repo.updateConversation(conversation.id, {
+        last_message_at: deliveredAt,
+        status: "active",
+      });
+      await this.activityLog.record({
+        agent: input.actorLabel,
+        unit: "Tam Cốc",
+        message: `Manual Send: đã gửi phản hồi ${conversation.channel} từ ${mailbox.propertyLabel}; Auto vẫn khóa.`,
+        type: "action",
+      });
 
-    return { messageId: message.id, externalMessageId: data.id };
+      return { messageId: pendingMessage.id, externalMessageId: data.id };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.slice(0, 300) : "Không xác định được lỗi gửi.";
+      await this.repo.updateMessage(pendingMessage.id, {
+        status: "failed",
+        metadata: {
+          ...AiReceptionistRepository.toObject(pendingMessage.metadata),
+          delivery_status: "failed",
+          delivery_detail: detail,
+          failed_at: new Date().toISOString(),
+        },
+      });
+      throw error;
+    }
   }
 
   async setConversationResponseMode(
@@ -1393,12 +1483,13 @@ export class AiReceptionistService {
     });
   }
 
-  async backfillConversationTranslations(conversationId: string): Promise<{ updated: number; skipped: number }> {
+  async backfillConversationTranslations(conversationId: string): Promise<{ updated: number; skipped: number; failed: number }> {
     const conversation = await this.repo.findConversationById(conversationId);
     if (!conversation) throw new Error("Không tìm thấy hội thoại.");
     const messages = await this.repo.findMessages([conversationId]);
     let updated = 0;
     let skipped = 0;
+    let failed = 0;
 
     for (const message of messages) {
       const metadata = AiReceptionistRepository.toObject(message.metadata);
@@ -1419,10 +1510,11 @@ export class AiReceptionistService {
           metadata: {
             ...metadata,
             detected_language: detected,
-            translation_status: "pending_provider",
+            translation_status: "failed",
+            translation_error: "Nhà cung cấp dịch chưa trả về bản dịch tiếng Việt hợp lệ.",
           },
         });
-        skipped++;
+        failed++;
         continue;
       }
       await this.repo.updateMessage(message.id, {
@@ -1437,7 +1529,7 @@ export class AiReceptionistService {
       updated++;
     }
 
-    return { updated, skipped };
+    return { updated, skipped, failed };
   }
 
   async captureConversationStyleFeedback(input: {

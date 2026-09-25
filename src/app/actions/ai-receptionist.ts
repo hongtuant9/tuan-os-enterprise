@@ -127,6 +127,7 @@ export async function decideManagerReviewAction(input: {
 export async function sendManualConversationReplyAction(
   conversationId: string,
   content: string,
+  requestId: string,
 ): Promise<ActionResult<{ messageId: string }>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
@@ -139,6 +140,7 @@ export async function sendManualConversationReplyAction(
     const result = await getAdminContainer().aiReceptionist.sendManualConversationReply({
       conversationId,
       content: content.trim(),
+      requestId: requestId.trim(),
       actorLabel: session.email ?? "Lễ tân",
     });
     revalidatePath("/ai-le-tan");
@@ -203,7 +205,7 @@ export async function markConversationReadAction(
 
 export async function backfillConversationTranslationsAction(
   conversationId: string
-): Promise<ActionResult<{ updated: number; skipped: number }>> {
+): Promise<ActionResult<{ updated: number; skipped: number; failed: number }>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
   if (!session) return { ok: false, error: "Anh cần đăng nhập để dịch lịch sử hội thoại." };

@@ -36,6 +36,7 @@ export type ReceptionistConversation = {
   customerContact: string;
   propertyId: string | null;
   propertyName: string | null;
+  propertyEntity: "lavender" | "ruby" | "cozy" | "tce" | "unknown";
   language: string;
   intent: string;
   routedAgent: string;

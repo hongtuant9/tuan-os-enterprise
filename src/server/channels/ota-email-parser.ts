@@ -16,6 +16,7 @@ export type ParsedReservationContext = {
   checkOutDate: string | null;
   specialRequest: string | null;
   propertyName: string | null;
+  reservationStatus: "confirmed" | "cancelled" | "unknown";
   source: "ota_guest_relay" | "channel_manager_notification" | "unknown";
 };
 
@@ -243,6 +244,9 @@ export function mergeOtaReservationContext(
     checkOutDate: pick(base.checkOutDate, incoming.checkOutDate),
     specialRequest: pick(base.specialRequest, incoming.specialRequest),
     propertyName: pick(base.propertyName, incoming.propertyName),
+    reservationStatus: incoming.reservationStatus !== "unknown"
+      ? incoming.reservationStatus
+      : base.reservationStatus,
     source: preferIncoming ? incoming.source : (base.source !== "unknown" ? base.source : incoming.source),
   };
 }
@@ -367,6 +371,13 @@ export function parseOtaReservationContext(input: {
       ? "ota_guest_relay"
       : "unknown";
 
+  const reservationStatus: ParsedReservationContext["reservationStatus"] =
+    /booking cancellation|this booking was canceled|this booking was cancelled|status:\s*cancelled/i.test(combined)
+      ? "cancelled"
+      : /CONGRATULATIONS! You(?:’|')ve received a new booking/i.test(combined)
+        ? "confirmed"
+        : "unknown";
+
   return {
     channel,
     reservationReference: ref,
@@ -384,6 +395,7 @@ export function parseOtaReservationContext(input: {
       checkOutDate,
       specialRequest: extractSpecialRequest(body),
       propertyName,
+      reservationStatus,
       source,
     },
   };

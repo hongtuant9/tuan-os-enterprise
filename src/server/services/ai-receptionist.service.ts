@@ -259,6 +259,7 @@ export class AiReceptionistService {
         propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")
           ? pageEntity as "lavender" | "ruby" | "cozy" | "tce"
           : "unknown",
+        replyMode: metadata.reply_mode === "auto" ? "auto" : "manual",
         language: row.language,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
@@ -334,6 +335,7 @@ export class AiReceptionistService {
     qaPass: boolean;
     qaReasons: string[];
     usedGenerativeRenderer: boolean;
+    replyMode: "auto" | "manual";
     duplicate: boolean;
   }> {
     const externalMessageId = input.externalMessageId?.trim() || null;
@@ -349,6 +351,7 @@ export class AiReceptionistService {
           qaPass: false,
           qaReasons: ["duplicate_message"],
           usedGenerativeRenderer: false,
+          replyMode: "manual",
           duplicate: true,
         };
       }
@@ -487,6 +490,7 @@ export class AiReceptionistService {
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
       reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      reply_mode: existingMetadata.reply_mode === "auto" ? "auto" : "manual",
       source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
       reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
       provider_thread_id: input.providerThreadId ?? existingMetadata.provider_thread_id ?? null,
@@ -654,6 +658,7 @@ export class AiReceptionistService {
       qaPass: rendered.qa.pass,
       qaReasons: rendered.qa.reasons,
       usedGenerativeRenderer: rendered.usedGenerativeRenderer,
+      replyMode: mergedMetadata.reply_mode === "auto" ? "auto" : "manual",
       duplicate: false,
     };
   }
@@ -704,6 +709,7 @@ export class AiReceptionistService {
       reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
       reservation_context: input.reservationContext ?? existingMetadata.reservation_context ?? null,
       provider_message_type: input.providerMessageType ?? existingMetadata.provider_message_type ?? null,
+      reply_mode: existingMetadata.reply_mode === "auto" ? "auto" : "manual",
       source_mailbox: input.sourceMailbox ?? existingMetadata.source_mailbox ?? null,
       reply_mailbox: input.replyMailbox ?? existingMetadata.reply_mailbox ?? null,
       provider_thread_id: input.providerThreadId ?? existingMetadata.provider_thread_id ?? null,
@@ -776,6 +782,26 @@ export class AiReceptionistService {
       messageId: message.id,
       duplicate: false,
     };
+  }
+
+  async setConversationReplyMode(conversationId: string, replyMode: "auto" | "manual", actorLabel: string): Promise<void> {
+    const conversation = await this.repo.findConversationById(conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    await this.repo.updateConversation(conversationId, {
+      metadata: {
+        ...metadata,
+        reply_mode: replyMode,
+        reply_mode_updated_at: new Date().toISOString(),
+        reply_mode_updated_by: actorLabel,
+      },
+    });
+    await this.activityLog.record({
+      agent: "AI Lễ tân",
+      unit: "Tam Cốc",
+      message: `Đã chuyển chế độ trả lời hội thoại ${conversationId.slice(0, 8)} sang ${replyMode === "auto" ? "Tự động" : "Manu"}. Cổng gửi toàn hệ thống vẫn kiểm soát độc lập.`,
+      type: "action",
+    });
   }
 
   async markOutboundDelivery(messageId: string, input: { status: "sent" | "failed"; externalMessageId?: string | null; detail?: string | null }): Promise<void> {

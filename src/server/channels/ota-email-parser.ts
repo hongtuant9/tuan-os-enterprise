@@ -2,6 +2,23 @@ import type { CustomerCarePhase } from "@/data/ai-receptionist";
 
 export type OtaEmailChannel = "booking" | "agoda" | "airbnb" | "expedia";
 
+export type ParsedReservationContext = {
+  guestName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  guestCount: number | null;
+  adults: number | null;
+  children: number | null;
+  roomCount: number | null;
+  checkInText: string | null;
+  checkOutText: string | null;
+  checkInDate: string | null;
+  checkOutDate: string | null;
+  specialRequest: string | null;
+  propertyName: string | null;
+  source: "ota_guest_relay" | "channel_manager_notification" | "unknown";
+};
+
 export type ParsedOtaEmail = {
   channel: OtaEmailChannel | null;
   reservationReference: string | null;
@@ -13,6 +30,7 @@ export type ParsedOtaEmail = {
   checkOutText: string | null;
   specialRequest: string | null;
   carePhase: CustomerCarePhase;
+  reservationContext: ParsedReservationContext;
   reason: string;
 };
 
@@ -40,22 +58,26 @@ function firstMatch(text: string, patterns: RegExp[]): string | null {
 function reservationReference(channel: OtaEmailChannel | null, text: string): string | null {
   if (!channel) return null;
   const common = [
-    /(?:confirmation number|confirmation no\.?|mã số đặt phòng|reservation(?: id| number)?|booking(?: id| number)?)[\s:#-]*([A-Z0-9-]{6,24})/i,
+    /(?:confirmation number|confirmation no\.?|mã số đặt phòng|reservation(?: id| number)?|booking(?: id| number)?)[\s:#-]*\[?([A-Z0-9-]{6,24})\]?/i,
+    /\(([0-9]{6,16})\)\s*$/m,
   ];
   const specific: Record<OtaEmailChannel, RegExp[]> = {
     booking: [
-      /(?:mã số đặt phòng|confirmation number)[\s:#-]*(\d{6,12})/i,
+      /(?:mã số đặt phòng|confirmation number|booking number)[\s:#-]*\[?(\d{6,12})\]?/i,
       /[?&]res_id=(\d{6,12})/i,
     ],
     agoda: [
-      /(?:agoda booking id|booking id|mã số đặt phòng)[\s:#-]*(\d{6,16})/i,
+      /(?:agoda booking id|booking id|mã số đặt phòng)[\s:#-]*\[?(\d{6,16})\]?/i,
+      /new booking from agoda[^\n]*\((\d{6,16})\)/i,
     ],
     airbnb: [
       /(?:confirmation code|mã xác nhận)[\s:#-]*([A-Z0-9]{8,16})/i,
       /hosting\/thread\/(\d{6,20})/i,
     ],
     expedia: [
-      /(?:itinerary|reservation|booking)(?: number| id)?[\s:#-]*([A-Z0-9-]{6,24})/i,
+      /(?:itinerary|reservation|booking)(?: number| id)?[\s:#-]*\[?([A-Z0-9-]{6,24})\]?/i,
+      /new booking from expedia[^\n]*\((\d{6,16})\)/i,
+      /[?&]reservationIds=(\d{6,16})/i,
       /[?&]cid=([a-f0-9-]{20,64})/i,
     ],
   };
@@ -127,25 +149,146 @@ function classifyGuestMessage(guestText: string | null): ParsedOtaEmail["eventTy
     : "guest_message";
 }
 
-function labeledValue(text: string, labels: string[]): string | null {
+function strictBlockValue(text: string, labels: string[]): string | null {
   for (const label of labels) {
-    const pattern = new RegExp(`(?:${label})\\s*[:：]?\\s*\\n?\\s*([^\\n]{3,120})`, "i");
+    const pattern = new RegExp(`(?:^|\\n)\\s*(?:${label})\\s*[:：]\\s*(?:\\n\\s*)?([^\\n]{1,180})`, "i");
     const match = text.match(pattern);
     if (match?.[1]) return normalize(match[1]);
   }
   return null;
 }
 
-function bookingDates(text: string): { checkInText: string | null; checkOutText: string | null } {
+function parsePositiveInt(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/\b(\d{1,3})\b/);
+  if (!match?.[1]) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseDateOnly(value: string | null): string | null {
+  if (!value) return null;
+  const cleaned = normalize(value)
+    .replace(/\s+(?:from|until)\s+\d{1,2}:\d{2}.*$/i, "")
+    .replace(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*,?\s+/i, "")
+    .trim();
+
+  const iso = cleaned.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (iso) return `${iso[1]}-${String(Number(iso[2])).padStart(2, "0")}-${String(Number(iso[3])).padStart(2, "0")}`;
+
+  const dmy = cleaned.match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/);
+  if (dmy) return `${dmy[3]}-${String(Number(dmy[2])).padStart(2, "0")}-${String(Number(dmy[1])).padStart(2, "0")}`;
+
+  const timestamp = Date.parse(`${cleaned} UTC`);
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function todayInVietnam(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function deriveCarePhase(checkInDate: string | null, checkOutDate: string | null): CustomerCarePhase {
+  const today = todayInVietnam();
+  if (checkInDate && checkOutDate) {
+    if (today < checkInDate) return "pre_service";
+    if (today >= checkInDate && today < checkOutDate) return "in_service";
+    if (today >= checkOutDate) return "post_service";
+  }
+  if (checkInDate && today < checkInDate) return "pre_service";
+  if (checkOutDate && today >= checkOutDate) return "post_service";
+  return "general";
+}
+
+function extractContactBlock(text: string): { guestEmail: string | null; guestPhone: string | null } {
+  const match = text.match(/(?:^|\n)\s*(?:Guest|Guest name)\s*[:：]\s*(?:\n\s*)?[^\n]+\n([\s\S]{0,500}?)(?=\n\s*(?:Check-in|Nhận phòng)\s*[:：])/i);
+  const block = match?.[1] ?? "";
+  const emails = [...block.matchAll(/([A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)].map((item) => item[1]!.trim());
+  const preferredEmail = emails.find((email) => !/^cs_suppliers@agoda\.com$/i.test(email)) ?? emails[0] ?? null;
+  const phoneLine = block.split("\n")
+    .map((line) => line.trim())
+    .find((line) => /^\+?[0-9][0-9 ()+-]{6,24}$/.test(line) && !line.includes("@"));
   return {
-    checkInText: labeledValue(text, ["check-in", "nhận phòng"]),
-    checkOutText: labeledValue(text, ["check-out", "trả phòng"]),
+    guestEmail: preferredEmail,
+    guestPhone: phoneLine ? normalize(phoneLine) : null,
   };
 }
 
-function specialRequest(text: string): string | null {
-  const match = text.match(/(?:requested|đã yêu cầu)\s*[:：]\s*([^\n]{2,800})/i);
-  return match?.[1] ? normalize(match[1]) : null;
+function extractSpecialRequest(text: string): string | null {
+  const direct = strictBlockValue(text, ["Special requests?", "Yêu cầu đặc biệt", "Requested"]);
+  if (direct && !/^none|n\/a|unspecified$/i.test(direct)) return direct;
+
+  const remarks = text.match(/(?:^|\n)\s*Remarks\s*[:：]\s*\n([\s\S]{1,1200}?)(?=\n\s*[A-Z][A-Z /&-]{3,}\s*(?:\n|:)|$)/i)?.[1] ?? "";
+  const items = remarks.split("\n")
+    .map((line) => line.replace(/^\s*\+\s*/, "").trim())
+    .filter(Boolean)
+    .filter((line) => !/^(UNSPECIFIED|Special offers)$/i.test(line))
+    .filter((line) => !/^Expedia collects payment/i.test(line));
+  return items.length ? items.join("; ").slice(0, 800) : null;
+}
+
+export function parseOtaReservationContext(input: {
+  from: string;
+  replyTo?: string | null;
+  subject: string;
+  body?: string | null;
+  snippet?: string | null;
+}): { channel: OtaEmailChannel | null; reservationReference: string | null; context: ParsedReservationContext } {
+  const body = normalize(input.body || input.snippet || "");
+  const subject = normalize(input.subject || "");
+  const replyTo = normalize(input.replyTo || "");
+  const channel = channelFrom(input.from || "", subject, replyTo);
+  const combined = `${subject}\n${body}`;
+  const ref = reservationReference(channel, combined);
+
+  const rawGuestName = strictBlockValue(body, ["Guest name", "Guest"]);
+  const guestName = rawGuestName
+    ? rawGuestName.replace(/\s+\([^()]{2,60}\)\s*$/, "").trim()
+    : firstMatch(body, [
+        /(?:new message from a guest\s*\n+)([^\n]{2,120})\s+(?:said|wrote)\s*:/i,
+        /(?:thắc mắc mới từ|inquiry by)\s+([^\n]{2,120})/i,
+      ]);
+  const checkInText = strictBlockValue(body, ["Check-in", "Nhận phòng"]);
+  const checkOutText = strictBlockValue(body, ["Check-out", "Trả phòng"]);
+  const totalGuestValue = strictBlockValue(body, ["Number of guests", "Total guests", "Số khách"]);
+  const roomValue = strictBlockValue(body, ["Number of rooms booked", "Total rooms", "Rooms booked"]);
+  const adults = parsePositiveInt(totalGuestValue?.match(/(\d+)\s*adults?/i)?.[0] ?? null);
+  const children = parsePositiveInt(totalGuestValue?.match(/(\d+)\s*(?:children|child)/i)?.[0] ?? null);
+  const guestCount = parsePositiveInt(totalGuestValue);
+  const roomCount = parsePositiveInt(roomValue);
+  const contact = extractContactBlock(body);
+  const propertyName = strictBlockValue(body, ["Property name"]);
+  const source = /CONGRATULATIONS! You(?:’|')ve received a new booking|kvhotel-cm\.com|KiotViet Corporation/i.test(combined)
+    ? "channel_manager_notification"
+    : isVerifiedGuestRelay(channel, { from: input.from || "", replyTo, subject, body })
+      ? "ota_guest_relay"
+      : "unknown";
+
+  return {
+    channel,
+    reservationReference: ref,
+    context: {
+      guestName: guestName || null,
+      guestEmail: contact.guestEmail,
+      guestPhone: contact.guestPhone,
+      guestCount,
+      adults,
+      children,
+      roomCount,
+      checkInText,
+      checkOutText,
+      checkInDate: parseDateOnly(checkInText),
+      checkOutDate: parseDateOnly(checkOutText),
+      specialRequest: extractSpecialRequest(body),
+      propertyName,
+      source,
+    },
+  };
 }
 
 export function parseOtaEmail(input: {
@@ -158,7 +301,8 @@ export function parseOtaEmail(input: {
   const body = normalize(input.body || input.snippet || "");
   const subject = normalize(input.subject || "");
   const replyTo = normalize(input.replyTo || "");
-  const channel = channelFrom(input.from || "", subject, replyTo);
+  const parsedContext = parseOtaReservationContext(input);
+  const channel = parsedContext.channel;
   const combined = `${subject}\n${body}`;
   const relayVerified = isVerifiedGuestRelay(channel, {
     from: input.from || "",
@@ -168,10 +312,9 @@ export function parseOtaEmail(input: {
   });
   const guestText = relayVerified ? extractGuestText(channel, body) : null;
   const eventType = classifyGuestMessage(guestText);
-  const ref = reservationReference(channel, combined);
-  const dates = bookingDates(combined);
-  const request = specialRequest(combined);
+  const ref = parsedContext.reservationReference ?? reservationReference(channel, combined);
   const actionable = Boolean(channel && relayVerified && guestText);
+  const carePhase = deriveCarePhase(parsedContext.context.checkInDate, parsedContext.context.checkOutDate);
 
   return {
     channel,
@@ -180,10 +323,11 @@ export function parseOtaEmail(input: {
     actionable,
     relayVerified,
     guestText,
-    checkInText: dates.checkInText,
-    checkOutText: dates.checkOutText,
-    specialRequest: request,
-    carePhase: "general",
+    checkInText: parsedContext.context.checkInText,
+    checkOutText: parsedContext.context.checkOutText,
+    specialRequest: parsedContext.context.specialRequest,
+    carePhase,
+    reservationContext: parsedContext.context,
     reason: !channel
       ? "unrecognized_ota_sender"
       : !relayVerified

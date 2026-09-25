@@ -129,10 +129,9 @@ function manualSendEligibility(channel: string, metadata: Record<string, Json>):
   }
   const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.toLowerCase() : "";
   const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox : "";
-  const subject = typeof metadata.provider_subject === "string" ? metadata.provider_subject : "";
   const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id : "";
-  if (!replyMailbox || !replyTo || !threadId || !subject) {
-    return { ready: false, reason: "Thiếu relay address/thread/subject đã xác minh." };
+  if (!replyMailbox || !replyTo || !threadId) {
+    return { ready: false, reason: "Thiếu relay address/thread đã xác minh." };
   }
   const approved =
     (channel === "booking" && replyTo.endsWith("@guest.booking.com"))
@@ -1276,7 +1275,12 @@ export class AiReceptionistService {
     if (!mailboxClient) throw new Error("Mailbox Gmail của cơ sở chưa được OAuth hợp lệ.");
 
     const replyTo = String(metadata.provider_reply_to ?? "");
-    const subject = String(metadata.provider_subject ?? "");
+    const reservationReference = typeof metadata.reservation_reference === "string"
+      ? metadata.reservation_reference
+      : "";
+    const subject = typeof metadata.provider_subject === "string" && metadata.provider_subject.trim()
+      ? metadata.provider_subject.trim()
+      : `${conversation.channel.toUpperCase()} guest message${reservationReference ? ` · ${reservationReference}` : ""}`;
     const threadId = String(metadata.provider_thread_id ?? "");
     const inReplyTo = typeof metadata.provider_message_id_header === "string"
       ? metadata.provider_message_id_header

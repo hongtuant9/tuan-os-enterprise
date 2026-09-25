@@ -93,6 +93,12 @@ jobs:
                  f"cmiQueueWorkerEnabled={signals.get('cmiQueueWorkerEnabled')!r}")
           expect(signals.get("omnichannelWorkerEnabled") is True,
                  f"omnichannelWorkerEnabled={signals.get('omnichannelWorkerEnabled')!r}")
+          expect(signals.get("trelloWorkerEnabled") is True,
+                 f"trelloWorkerEnabled={signals.get('trelloWorkerEnabled')!r}")
+          expect(signals.get("executionGovernanceVersion") == "2026-09-26.v2",
+                 f"executionGovernanceVersion={signals.get('executionGovernanceVersion')!r}")
+          expect(signals.get("trelloExecutionMirror") in ("ACTIVE", "HOLD_NO_RUNTIME_CREDENTIALS"),
+                 f"trelloExecutionMirror={signals.get('trelloExecutionMirror')!r}")
           expect(signals.get("kiotVietWriteEnabled") is False,
                  f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}")
           expect(signals.get("directBookingAutoCreateEnabled") is False,

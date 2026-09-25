@@ -187,6 +187,50 @@ function UiIcon({ kind, className = "h-6 w-6" }: { kind: string; className?: str
   return <svg viewBox="0 0 24 24" className={className} aria-hidden="true">{paths}</svg>;
 }
 
+function viDisplay(value: string | number | null | undefined) {
+  const text = String(value ?? "—");
+  const exact: Record<string, string> = {
+    NEED_VERIFY: "CẦN XÁC MINH",
+    "NEED VERIFY": "CẦN XÁC MINH",
+    IN_PROGRESS: "ĐANG THỰC HIỆN",
+    WAITING_APPROVAL: "CHỜ PHÊ DUYỆT",
+    BLOCKED: "ĐANG BỊ CHẶN",
+    HOLD: "TẠM DỪNG",
+    PARTIAL: "CHƯA ĐẦY ĐỦ",
+    VERIFIED: "ĐÃ XÁC MINH",
+    PASS: "ĐẠT",
+    FAIL: "KHÔNG ĐẠT",
+    DONE: "HOÀN THÀNH",
+    READY: "SẴN SÀNG",
+    TODO: "CHƯA THỰC HIỆN",
+    OPEN: "ĐANG MỞ",
+    ONLINE: "HOẠT ĐỘNG",
+    OFFLINE: "NGOẠI TUYẾN",
+    PENDING: "ĐANG CHỜ",
+    APPROVED: "ĐÃ DUYỆT",
+    REJECTED: "ĐÃ TỪ CHỐI",
+    CANCELLED: "ĐÃ HỦY",
+  };
+  const upper = text.toUpperCase();
+  if (exact[upper]) return exact[upper];
+  return text
+    .replace(/NEED[_ ]VERIFY/gi, "CẦN XÁC MINH")
+    .replace(/IN_PROGRESS/gi, "ĐANG THỰC HIỆN")
+    .replace(/WAITING_APPROVAL/gi, "CHỜ PHÊ DUYỆT")
+    .replace(/\bBLOCKED\b/gi, "ĐANG BỊ CHẶN")
+    .replace(/\bPARTIAL\b/gi, "CHƯA ĐẦY ĐỦ")
+    .replace(/\bVERIFIED\b/gi, "ĐÃ XÁC MINH")
+    .replace(/\bActual\b/g, "thực tế")
+    .replace(/\bruntime\b/gi, "hệ thống đang vận hành")
+    .replace(/\bsync\b/gi, "đồng bộ")
+    .replace(/\bprovider\b/gi, "nhà cung cấp")
+    .replace(/\bconnector\b/gi, "kết nối")
+    .replace(/\bevidence\b/gi, "bằng chứng")
+    .replace(/\bworkflow\b/gi, "quy trình")
+    .replace(/\btask\b/gi, "công việc")
+    .replace(/\bagent\b/gi, "trợ lý AI");
+}
+
 function MetricCard({ metric }: { metric: Metric }) {
   const t = tones[metric.tone];
   return (
@@ -195,11 +239,11 @@ function MetricCard({ metric }: { metric: Metric }) {
         <span className={"grid h-[48px] w-[48px] shrink-0 place-items-center rounded-[8px] text-[18px] font-black text-white shadow-sm " + t.icon}><UiIcon kind={metric.label} className="h-[25px] w-[25px]" /></span>
         <div className="min-w-0">
           <p className="min-h-[26px] whitespace-normal text-[10px] font-medium leading-[12px] text-[#476495]">{metric.label}</p>
-          <p className="mt-1 whitespace-nowrap text-[18px] font-extrabold leading-none tracking-[-0.03em] text-[#061850]">{metric.value || "—"}</p>
+          <p className="mt-1 whitespace-nowrap text-[18px] font-extrabold leading-none tracking-[-0.03em] text-[#061850]">{viDisplay(metric.value || "—")}</p>
           <p className={"mt-1 text-[12px] font-bold " + t.delta}>{metric.delta || "↗"}</p>
         </div>
       </div>
-      <p className="mt-2 whitespace-normal text-[8.5px] leading-[10px] text-[#6f86ad]">{metric.note}</p>
+      <p className="mt-2 whitespace-normal text-[8.5px] leading-[10px] text-[#6f86ad]">{viDisplay(metric.note)}</p>
     </div>
   );
 }
@@ -254,7 +298,7 @@ function DataTable({ columns, data }: { columns: string[]; rows?: number; data?:
         <tbody className="divide-y divide-[#e8f0f7] text-[#3e5b84]">
           {liveRows ? liveRows.map((row, r) => (
             <tr key={r} className="h-[31px]">
-              {columns.map((col, i) => <td key={col + i} className="truncate px-1.5 py-1.5" title={row[i] ?? "—"}>{row[i] ?? "—"}</td>)}
+              {columns.map((col, i) => <td key={col + i} className="truncate px-1.5 py-1.5" title={viDisplay(row[i] ?? "—")}>{viDisplay(row[i] ?? "—")}</td>)}
             </tr>
           )) : (
             <tr>

@@ -232,7 +232,12 @@ function providerEvidence(id: CustomerChannelId): {
       };
     }
     case "facebook": {
-      const providerConfig = configStatus(["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]);
+      const hasTokenMap = envConfigured("FACEBOOK_PAGE_ACCESS_TOKENS_JSON");
+      const hasLegacyToken = envConfigured("FACEBOOK_PAGE_ACCESS_TOKEN");
+      const baseConfigured = ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_VERIFY_TOKEN"].every(envConfigured);
+      const providerConfig: ProviderConfigStatus = baseConfigured && (hasTokenMap || hasLegacyToken)
+        ? "CONFIGURED"
+        : (baseConfigured || hasTokenMap || hasLegacyToken ? "PARTIAL" : "NOT_CONFIGURED");
       const pilotVerified = process.env.FACEBOOK_PILOT_VERIFIED?.trim().toLowerCase() === "true";
       return {
         providerConfig,

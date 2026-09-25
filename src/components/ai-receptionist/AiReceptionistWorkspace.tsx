@@ -6,6 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
+  sendManualConversationReplyAction,
   setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
@@ -84,9 +85,9 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 const CARE_PHASE_LABEL: Record<string, string> = {
-  pre_service: "Trước dịch vụ",
-  in_service: "Trong dịch vụ",
-  post_service: "Sau dịch vụ",
+  pre_service: "Trước nhận phòng",
+  in_service: "Đang lưu trú",
+  post_service: "Đã trả phòng",
   general: "Chưa xác định",
 };
 
@@ -149,6 +150,31 @@ function formatDateTime(value: string) {
   }).format(new Date(value)) + " ICT";
 }
 
+function vietnamDateOnly(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function journeyPhaseAt(
+  value: string,
+  checkInDate: string | null,
+  checkOutDate: string | null,
+): "pre_service" | "in_service" | "post_service" | "general" {
+  const date = vietnamDateOnly(value);
+  if (checkInDate && checkOutDate) {
+    if (date < checkInDate) return "pre_service";
+    if (date >= checkInDate && date < checkOutDate) return "in_service";
+    if (date >= checkOutDate) return "post_service";
+  }
+  if (checkInDate && date < checkInDate) return "pre_service";
+  if (checkOutDate && date >= checkOutDate) return "post_service";
+  return "general";
+}
+
 function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
   const router = useRouter();
   const firstConversation = items[0];
@@ -163,6 +189,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   );
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
+  const [sendPending, startSendTransition] = useTransition();
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
@@ -243,6 +270,21 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     });
   }
 
+  function sendManualReply() {
+    if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
+    setFeedbackStatus("");
+    startSendTransition(async () => {
+      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim());
+      if (!result.ok) {
+        setFeedbackStatus(result.error);
+        return;
+      }
+      setFeedbackStatus("Đã gửi phản hồi thủ công qua relay OTA bằng mailbox đúng cơ sở.");
+      setReplyDraft("");
+      router.refresh();
+    });
+  }
+
   function backfillTranslations() {
     if (!selected) return;
     setFeedbackStatus("");
@@ -311,7 +353,12 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     selectedMessage
       && selectedMessage.detectedLanguage
       && selectedMessage.detectedLanguage !== "vi"
-      && selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
+      && (
+        !selectedMessage.translatedVi.trim()
+        || selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
+        || selectedMessage.translatedVi.trim() === "Bản dịch tiếng Việt chưa được tạo."
+        || selectedMessage.translatedVi.trim() === "Chưa có bản dịch."
+      )
   );
 
   return (
@@ -436,46 +483,67 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             <span>Nhận phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkInText ?? "Chưa xác minh"}</strong></span>
             <span>Trả phòng: <strong className="text-[var(--ink-secondary)]">{selected.checkOutText ?? "Chưa xác minh"}</strong></span>
             <span>Mã đặt chỗ: <strong className="font-mono text-[var(--ink-secondary)]">{selected.reservationReference ?? "Chưa có"}</strong></span>
+            <span>Khách: <strong className="text-[var(--ink-secondary)]">{selected.guestCount ?? "Chưa xác minh"}</strong></span>
           </div>
+          {selected.historyCompleteness === "partial_email_only" ? (
+            <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
+              Lịch sử hiện lấy từ email relay nên có thể thiếu các phản hồi đã gửi trực tiếp trong hộp chat OTA. Hệ thống không coi phần thiếu là lịch sử đầy đủ.
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
-          {selected.messages.map((message) => {
+          {selected.messages.map((message, index) => {
             const guest = message.authorship === "guest";
             const internal = message.direction === "internal";
             const active = selectedMessage?.id === message.id;
+            const phase = journeyPhaseAt(message.createdAt, selected.checkInDate, selected.checkOutDate);
+            const previous = index > 0 ? selected.messages[index - 1] : null;
+            const previousPhase = previous
+              ? journeyPhaseAt(previous.createdAt, selected.checkInDate, selected.checkOutDate)
+              : null;
+            const showPhase = index === 0 || phase !== previousPhase;
             return (
-              <div key={message.id} className={`flex ${guest ? "justify-start" : "justify-end"}`}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMessageId(message.id)}
-                  className={`max-w-[88%] rounded-2xl border px-4 py-3 text-left transition ${
-                    active
-                      ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
-                      : "border-transparent"
-                  } ${
-                    internal
-                      ? "bg-[var(--status-warn)]/5"
-                      : guest
-                        ? "bg-[var(--surface-raised)]"
-                        : message.authorship === "human"
-                          ? "bg-[var(--status-good)]/10"
-                          : "bg-[var(--accent)]/12"
-                  }`}
-                >
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Pill label={authorLabel(message)} tone={authorTone(message)} />
-                    {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
-                    {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
-                    {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
+              <div key={message.id}>
+                {showPhase ? (
+                  <div className="my-3 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-[var(--border-hairline)]" />
+                    <Pill label={CARE_PHASE_LABEL[phase] ?? "Chưa xác định"} tone="muted" />
+                    <div className="h-px flex-1 bg-[var(--border-hairline)]" />
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">
-                    <span>{formatDateTime(message.createdAt)}</span>
-                    <span>·</span>
-                    <span>{message.status === "sent" ? "Đã gửi" : message.status === "received" ? "Đã nhận" : message.status === "draft" ? "Bản nháp" : message.status === "simulated" ? "Chưa gửi khách" : "Gửi lỗi"}</span>
-                  </div>
-                </button>
+                ) : null}
+                <div className={`flex ${guest ? "justify-start" : "justify-end"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMessageId(message.id)}
+                    className={`max-w-[88%] rounded-2xl border px-4 py-3 text-left transition ${
+                      active
+                        ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
+                        : "border-transparent"
+                    } ${
+                      internal
+                        ? "bg-[var(--status-warn)]/5"
+                        : guest
+                          ? "bg-[var(--surface-raised)]"
+                          : message.authorship === "human"
+                            ? "bg-[var(--status-good)]/10"
+                            : "bg-[var(--accent)]/12"
+                    }`}
+                  >
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Pill label={authorLabel(message)} tone={authorTone(message)} />
+                      {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
+                      {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
+                      {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">{message.content}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--ink-muted)]">
+                      <span>{formatDateTime(message.createdAt)}</span>
+                      <span>·</span>
+                      <span>{message.status === "sent" ? "Đã gửi" : message.status === "received" ? "Đã nhận" : message.status === "draft" ? "Bản nháp" : message.status === "simulated" ? "Chưa gửi khách" : "Gửi lỗi"}</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -529,18 +597,29 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             />
             <button
               type="button"
-              disabled
-              title="Cổng outbound đang khóa trong giai đoạn nhận dữ liệu và QA"
-              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white opacity-40"
+              onClick={sendManualReply}
+              disabled={
+                !canManage
+                || responseMode !== "manual"
+                || !selected.manualSendReady
+                || !replyDraft.trim()
+                || sendPending
+              }
+              title={responseMode !== "manual" ? "Tự động vẫn đang khóa" : selected.manualSendReason}
+              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Gửi
+              {sendPending ? "Đang gửi..." : "Gửi"}
             </button>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Pill label="Outbound: ĐANG KHÓA" tone="warn" />
+            {responseMode === "manual" && selected.manualSendReady
+              ? <Pill label="Manual Send: SẴN SÀNG" tone="good" />
+              : <Pill label={responseMode === "auto" ? "Auto Send: ĐANG KHÓA" : "Manual Send: CHƯA SẴN SÀNG"} tone="warn" />}
             <span className="text-[10px] text-[var(--ink-muted)]">
-              Chưa gửi qua OTA/email. Chỉ mở sau khi AI trả lời đạt QA và có approval riêng.
+              {responseMode === "auto"
+                ? "AI có thể tạo nháp nhưng chưa được tự gửi. Auto chỉ mở sau QA + approval riêng."
+                : selected.manualSendReason}
             </span>
           </div>
           {feedbackStatus ? <p className="mt-2 text-xs text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
@@ -557,11 +636,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                 <span className="text-[10px] text-[var(--ink-muted)]">{formatDateTime(selectedMessage.createdAt)}</span>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">
-                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt."}
+                {selectedMessage.translatedVi || "Chưa có bản dịch tiếng Việt — provider dịch tự động hiện chưa được cấu hình."}
               </p>
               {translationLooksMissing ? (
                 <p className="mt-3 text-xs leading-5 text-[var(--status-warn)]">
-                  Message này chưa có bản dịch riêng; hệ thống đang hiển thị nội dung gốc.
+                  Chưa có bản dịch riêng. Hệ thống giữ nguyên nội dung gốc và không tự suy diễn bản dịch.
                 </p>
               ) : null}
             </div>
@@ -583,10 +662,23 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         <div className="mt-5 border-t border-[var(--border-hairline)] pt-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Thông tin đặt chỗ</p>
           <dl className="mt-3 space-y-3 text-xs">
+            <div><dt className="text-[var(--ink-muted)]">Khách</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.customerName}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Liên hệ</dt><dd className="mt-1 break-all text-[var(--ink-primary)]">{selected.customerContact}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Cơ sở</dt><dd className="mt-1 font-semibold text-[var(--ink-primary)]">{selected.propertyName ?? "Chưa xác định"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Kênh OTA</dt><dd className="mt-1 text-[var(--ink-primary)]">{CHANNEL_LABEL[selected.channel] ?? selected.channel}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Mã đặt chỗ</dt><dd className="mt-1 font-mono text-[var(--ink-primary)]">{selected.reservationReference ?? "Chưa có"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nhận / trả phòng</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.checkInText ?? "Chưa xác minh"} → {selected.checkOutText ?? "Chưa xác minh"}</dd></div>
+            <div>
+              <dt className="text-[var(--ink-muted)]">Số khách / phòng</dt>
+              <dd className="mt-1 text-[var(--ink-primary)]">
+                {selected.guestCount ?? "Chưa xác minh"} khách
+                {selected.adults != null ? ` · ${selected.adults} người lớn` : ""}
+                {selected.children != null ? ` · ${selected.children} trẻ em` : ""}
+                {selected.roomCount != null ? ` · ${selected.roomCount} phòng` : ""}
+              </dd>
+            </div>
             <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={CARE_PHASE_LABEL[selected.carePhase] ?? selected.carePhase} tone="accent" /></dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa xác minh"}</dd></div>
             {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
           </dl>
         </div>

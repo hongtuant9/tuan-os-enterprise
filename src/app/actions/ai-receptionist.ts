@@ -124,6 +124,34 @@ export async function decideManagerReviewAction(input: {
   }
 }
 
+export async function sendManualConversationReplyAction(
+  conversationId: string,
+  content: string,
+): Promise<ActionResult<{ messageId: string }>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để gửi trả lời." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được gửi trả lời khách." };
+  }
+  if (!content.trim()) return { ok: false, error: "Nội dung trả lời không được để trống." };
+  try {
+    const result = await getAdminContainer().aiReceptionist.sendManualConversationReply({
+      conversationId,
+      content: content.trim(),
+      actorLabel: session.email ?? "Lễ tân",
+    });
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true, data: { messageId: result.messageId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Không thể gửi trả lời.",
+    };
+  }
+}
+
 export async function setConversationResponseModeAction(
   conversationId: string,
   responseMode: "manual" | "auto",

@@ -88,6 +88,7 @@ function runtimeSignals() {
     otaEmailGatewayMode: "VERIFIED_GUEST_MESSAGES_ONLY",
     otaEmailGatewayVersion: "v2",
     otaEmailReplyGateApproved: process.env.TCE_OTA_EMAIL_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true",
+    otaEmailManualSendEnabled: process.env.TCE_OTA_EMAIL_MANUAL_SEND_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyEnabled: process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")
       .split(",").map((value) => value.trim()).filter(Boolean),

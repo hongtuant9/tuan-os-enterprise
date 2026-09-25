@@ -1,5 +1,13 @@
 import { google } from "googleapis";
-import { parseOtaEmail } from "@/server/channels/ota-email-parser";
+import {
+  deriveCarePhase,
+  hasReservationContext,
+  mergeOtaReservationContext,
+  parseOtaEmail,
+  parseOtaReservationContext,
+  type OtaEmailChannel,
+  type ParsedReservationContext,
+} from "@/server/channels/ota-email-parser";
 import type { AiReceptionistService } from "@/server/services/ai-receptionist.service";
 import { getReceptionistMode } from "@/server/ai-receptionist/config";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
@@ -153,6 +161,45 @@ function bodyText(message: GmailMessage): string {
   return message.snippet?.trim() ?? "";
 }
 
+async function enrichContextForReservation(
+  gmail: ReturnType<typeof google.gmail>,
+  reservationReference: string,
+  expectedChannel: OtaEmailChannel,
+  baseContext: ParsedReservationContext,
+): Promise<ParsedReservationContext> {
+  let merged = baseContext;
+  try {
+    const list = await gmail.users.messages.list({
+      userId: "me",
+      q: `"${reservationReference}" -in:spam -in:trash`,
+      maxResults: 20,
+    });
+    for (const item of list.data.messages ?? []) {
+      if (!item.id) continue;
+      const { data } = await gmail.users.messages.get({
+        userId: "me",
+        id: item.id,
+        format: "full",
+      });
+      const message = data as GmailMessage;
+      const headers = headerValues(message);
+      const parsed = parseOtaReservationContext({
+        from: header(message, "From"),
+        replyTo: extractAddress(headers["reply-to"] || headers["from"] || ""),
+        subject: header(message, "Subject"),
+        body: bodyText(message),
+        snippet: message.snippet,
+      });
+      if (parsed.channel !== expectedChannel || parsed.reservationReference !== reservationReference) continue;
+      if (!hasReservationContext(parsed.context)) continue;
+      merged = mergeOtaReservationContext(merged, parsed.context);
+    }
+  } catch {
+    // Enrichment is best-effort. Never block verified guest-message ingress.
+  }
+  return merged;
+}
+
 async function sendReply(input: {
   gmail: ReturnType<typeof google.gmail>;
   threadId?: string | null;
@@ -212,7 +259,7 @@ export async function runOtaEmailWorker(
   result.configured = mailboxClients.length > 0;
   if (!result.configured) return result;
 
-  const providerQuery = "(from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com)) -in:spam -in:trash -in:sent";
+  const providerQuery = "(from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com) OR from:(hotro@kiotviet.com)) -in:spam -in:trash -in:sent";
   const query = options.backfill
     ? providerQuery
     : (process.env.TCE_OTA_GMAIL_QUERY?.trim() || `newer_than:2d ${providerQuery}`);
@@ -260,6 +307,16 @@ export async function runOtaEmailWorker(
         }
 
         if (!parsed.relayVerified) {
+          if (parsed.reservationReference && hasReservationContext(parsed.reservationContext)) {
+            const enriched = await service.enrichReservationContext({
+              channel: parsed.channel,
+              externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference}`,
+              reservationReference: parsed.reservationReference,
+              pageEntity: mailbox.entity,
+              reservationContext: parsed.reservationContext,
+            });
+            if (enriched) result.contextStored += 1;
+          }
           result.filteredNonGuest += 1;
           continue;
         }
@@ -269,27 +326,50 @@ export async function runOtaEmailWorker(
           continue;
         }
 
+        const conversationKey = `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`;
+        await service.enrichConversationTransport({
+          channel: parsed.channel,
+          externalConversationId: conversationKey,
+          providerThreadId: message.threadId ?? null,
+          providerReplyTo: replyTo || null,
+          providerSubject: subject || null,
+          providerMessageIdHeader: headers["message-id"] || null,
+          providerReferences: headers["references"] || null,
+          replyMailbox: mailbox.googleEmail,
+          sourceMailbox: mailbox.googleEmail,
+        });
+
         result.actionable += 1;
+        const enrichedContext = parsed.reservationReference
+          ? await enrichContextForReservation(
+              gmail,
+              parsed.reservationReference,
+              parsed.channel,
+              parsed.reservationContext,
+            )
+          : parsed.reservationContext;
+        const carePhase = deriveCarePhase(enrichedContext.checkInDate, enrichedContext.checkOutDate);
         const ingest = await service.ingestGuestMessage({
           channel: parsed.channel,
-          externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`,
+          externalConversationId: conversationKey,
           externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
+          customerName: enrichedContext.guestName ?? undefined,
+          customerContact: enrichedContext.guestPhone ?? enrichedContext.guestEmail ?? undefined,
           content: parsed.guestText,
           scenarioTag: "OTA_EMAIL_INGRESS",
           acquisitionSource: `${parsed.channel}_email`,
           pageEntity: mailbox.entity,
-          carePhase: parsed.carePhase,
+          carePhase: carePhase !== "general" ? carePhase : parsed.carePhase,
           reservationReference: parsed.reservationReference ?? undefined,
-          reservationContext: {
-            checkInText: parsed.checkInText,
-            checkOutText: parsed.checkOutText,
-            specialRequest: parsed.specialRequest,
-          },
+          reservationContext: enrichedContext,
           providerMessageType: `email_${parsed.eventType}`,
           sourceMailbox: mailbox.googleEmail,
           replyMailbox: mailbox.googleEmail,
           providerThreadId: message.threadId ?? null,
           providerReplyTo: replyTo || null,
+          providerSubject: subject || null,
+          providerMessageIdHeader: headers["message-id"] || null,
+          providerReferences: headers["references"] || null,
           historicalImport: options.backfill === true,
           forceAssistMode: true,
           testerUserId: null,

@@ -34,7 +34,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runOtaEmailWorker(getAdminContainer().aiReceptionist);
+    const body = await req.json().catch(() => ({})) as {
+      mode?: string;
+      pageTokens?: Record<string, string | null>;
+    };
+    const backfill = body.mode === "backfill";
+    const pageTokens = body.pageTokens && typeof body.pageTokens === "object"
+      ? Object.fromEntries(
+          Object.entries(body.pageTokens)
+            .filter(([, value]) => value == null || typeof value === "string")
+            .map(([key, value]) => [key, value]),
+        )
+      : undefined;
+    const result = await runOtaEmailWorker(getAdminContainer().aiReceptionist, {
+      backfill,
+      pageTokens,
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(

@@ -85,6 +85,8 @@ function runtimeSignals() {
     otaEmailMailboxMode: "PER_PROPERTY",
     otaEmailCanonicalMailboxCount: 3,
     otaEmailOperationMode: "RECEIVE_ONLY",
+    otaEmailGatewayMode: "VERIFIED_GUEST_MESSAGES_ONLY",
+    otaEmailGatewayVersion: "v2",
     otaEmailReplyGateApproved: process.env.TCE_OTA_EMAIL_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyEnabled: process.env.TCE_OTA_EMAIL_AUTOREPLY_ENABLED?.trim().toLowerCase() === "true",
     otaEmailAutoReplyChannels: (process.env.TCE_OTA_EMAIL_AUTOREPLY_CHANNELS?.trim() || "")

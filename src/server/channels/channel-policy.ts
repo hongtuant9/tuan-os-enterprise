@@ -222,8 +222,13 @@ function providerEvidence(id: CustomerChannelId): {
   providerVerification: ProviderVerificationStatus;
 } {
   switch (id) {
-    case "website":
-      return { providerConfig: "NOT_REQUIRED", providerVerification: "NOT_REQUIRED" };
+    case "website": {
+      const providerConfig = configStatus(["TCE_WEBSITE_BRIDGE_SECRET"]);
+      return {
+        providerConfig,
+        providerVerification: providerConfig === "CONFIGURED" ? "NEED_VERIFY" : "NEED_VERIFY",
+      };
+    }
     case "facebook": {
       const providerConfig = configStatus(["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_PAGE_ACCESS_TOKEN", "FACEBOOK_VERIFY_TOKEN"]);
       const pilotVerified = process.env.FACEBOOK_PILOT_VERIFIED?.trim().toLowerCase() === "true";

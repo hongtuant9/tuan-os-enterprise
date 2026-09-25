@@ -20,6 +20,7 @@ type GmailMessage = {
 
 export type OtaEmailWorkerResult = {
   checkedAt: string;
+  backfill: boolean;
   configured: boolean;
   scanned: number;
   actionable: number;
@@ -31,6 +32,12 @@ export type OtaEmailWorkerResult = {
   autoSendHeld: number;
   contextStored: number;
   mailboxesConfigured: number;
+  nextPageTokens: Record<string, string | null>;
+};
+
+export type OtaEmailWorkerOptions = {
+  backfill?: boolean;
+  pageTokens?: Record<string, string | null | undefined>;
 };
 
 function headerValues(message: GmailMessage): Record<string, string> {
@@ -174,9 +181,13 @@ async function sendReply(input: {
   return data.id;
 }
 
-export async function runOtaEmailWorker(service: AiReceptionistService): Promise<OtaEmailWorkerResult> {
+export async function runOtaEmailWorker(
+  service: AiReceptionistService,
+  options: OtaEmailWorkerOptions = {},
+): Promise<OtaEmailWorkerResult> {
   const result: OtaEmailWorkerResult = {
     checkedAt: new Date().toISOString(),
+    backfill: options.backfill === true,
     configured: false,
     scanned: 0,
     actionable: 0,
@@ -188,6 +199,7 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
     autoSendHeld: 0,
     contextStored: 0,
     mailboxesConfigured: 0,
+    nextPageTokens: {},
   };
 
   const allMailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
@@ -196,8 +208,11 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
   result.configured = mailboxClients.length > 0;
   if (!result.configured) return result;
 
-  const query = process.env.TCE_OTA_GMAIL_QUERY?.trim()
-    || "newer_than:2d (from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com)) -in:spam -in:trash -in:sent";
+  const providerQuery = "(from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com)) -in:spam -in:trash -in:sent";
+  const query = options.backfill
+    ? providerQuery
+    : (process.env.TCE_OTA_GMAIL_QUERY?.trim() || `newer_than:2d ${providerQuery}`);
+  const maxResults = options.backfill ? 100 : 50;
 
   for (const mailbox of mailboxClients) {
     const gmail = google.gmail({ version: "v1", auth: mailbox.auth });
@@ -207,9 +222,11 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
       const list = await gmail.users.messages.list({
         userId: "me",
         q: query,
-        maxResults: 50,
+        maxResults,
+        pageToken: options.pageTokens?.[mailbox.entity] || undefined,
       });
       messages = list.data.messages ?? [];
+      result.nextPageTokens[mailbox.entity] = list.data.nextPageToken ?? null;
     } catch {
       result.failed += 1;
       continue;
@@ -229,6 +246,8 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         const from = header(message, "From");
         const subject = header(message, "Subject");
         const body = bodyText(message);
+        const headers = headerValues(message);
+        const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
         const parsed = parseOtaEmail({ from, subject, body, snippet: message.snippet });
 
         if (!parsed.channel) {
@@ -260,6 +279,11 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
               specialRequest: parsed.specialRequest,
             },
             providerMessageType: `email_${parsed.eventType}`,
+            sourceMailbox: mailbox.googleEmail,
+            replyMailbox: mailbox.googleEmail,
+            providerThreadId: message.threadId ?? null,
+            providerReplyTo: replyTo || null,
+            historicalImport: options.backfill === true,
           });
           if (context.duplicate) {
             result.duplicates += 1;
@@ -270,7 +294,6 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         }
 
         result.actionable += 1;
-        const headers = headerValues(message);
         const ingest = await service.ingestGuestMessage({
           channel: parsed.channel,
           externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference}`,
@@ -287,6 +310,11 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
             specialRequest: parsed.specialRequest,
           },
           providerMessageType: `email_${parsed.eventType}`,
+          sourceMailbox: mailbox.googleEmail,
+          replyMailbox: mailbox.googleEmail,
+          providerThreadId: message.threadId ?? null,
+          providerReplyTo: replyTo || null,
+          historicalImport: options.backfill === true,
           forceAssistMode: true,
           testerUserId: null,
         });
@@ -297,7 +325,6 @@ export async function runOtaEmailWorker(service: AiReceptionistService): Promise
         }
 
         result.drafted += 1;
-        const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
         const autoSendRequested = automaticReplyGateOpen() && autoReplyChannels().has(parsed.channel);
         const autoSendAllowed = autoSendRequested
           && mailbox.entity !== "cozy"

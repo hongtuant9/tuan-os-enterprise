@@ -46,6 +46,7 @@ export default async function AiReceptionistWorkspacePage() {
   }
 
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
+  const canConnectGoogle = session ? hasMinimumRole(session.role, "admin") : false;
   let mailboxStatus = {
     connected: false,
     googleEmail: null as string | null,
@@ -101,7 +102,7 @@ export default async function AiReceptionistWorkspacePage() {
             </p>
           </div>
         )}
-        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} channels={channels} mailboxStatus={mailboxStatus} />
+        <AiReceptionistWorkspace dashboard={dashboard} canManage={canManage} canConnectGoogle={canConnectGoogle} channels={channels} mailboxStatus={mailboxStatus} />
       </main>
     </div>
   );

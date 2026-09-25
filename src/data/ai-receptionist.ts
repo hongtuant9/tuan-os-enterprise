@@ -1,5 +1,6 @@
 export type ReceptionistMode = "off" | "simulation" | "shadow" | "limited_auto" | "live";
 export type CustomerCarePhase = "pre_service" | "in_service" | "post_service" | "general";
+export type CustomerJourneyStage = "pre_arrival" | "arrival_today" | "in_house" | "departure_today" | "post_stay" | "unknown";
 export type ConversationStatus =
   | "new"
   | "active"
@@ -43,6 +44,7 @@ export type ReceptionistConversation = {
   routedAgent: string;
   journeyEntry: string;
   carePhase: CustomerCarePhase;
+  journeyStage: CustomerJourneyStage;
   reservationReference: string | null;
   checkInText: string | null;
   checkOutText: string | null;

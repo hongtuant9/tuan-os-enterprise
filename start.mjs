@@ -34,6 +34,8 @@ const omnichannelWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OMNI
 const omnichannelWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OMNICHANNEL_WORKER_INTERVAL_MS || 60_000));
 const otaEmailWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OTA_EMAIL_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const otaEmailWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OTA_EMAIL_WORKER_INTERVAL_MS || 60_000));
+const trelloWorkerEnabled = companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const trelloWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_TRELLO_WORKER_INTERVAL_MS || 300_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -59,6 +61,7 @@ const kiotVietFinanceBotWorkerToken = deriveToken("kiotviet-finance-bot-worker-v
 const kiotVietInventoryBotWorkerToken = deriveToken("kiotviet-inventory-bot-worker-v1");
 const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
 const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
+const trelloWorkerToken = deriveToken("tce-trello-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -160,6 +163,49 @@ async function syncWorkerTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`[TCE Sync] ${message}`);
+  }
+}
+
+async function trelloWorkerTick() {
+  if (!trelloWorkerEnabled || !trelloWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/trello/worker",
+      "x-tce-trello-worker-token",
+      trelloWorkerToken,
+      120000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE Trello] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (payload?.skipped) {
+      console.log(`[TCE Trello] ${payload.skipped}`);
+      return;
+    }
+    console.log(
+      `[TCE Trello] scanned=${payload?.scanned ?? 0} created=${payload?.created ?? 0} updated=${payload?.updated ?? 0} moved=${payload?.moved ?? 0} held_verify=${payload?.heldVerify ?? 0} errors=${payload?.errors?.length ?? 0}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE Trello] ${message}`);
+  }
+}
+
+async function trelloWorkerLoop() {
+  if (!trelloWorkerEnabled) {
+    console.log("[TCE Trello] disabled");
+    return;
+  }
+  if (!trelloWorkerToken) {
+    console.error("[TCE Trello] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE Trello] enabled interval_ms=${trelloWorkerIntervalMs}`);
+  await sleep(30000);
+  while (!stopping) {
+    await trelloWorkerTick();
+    await sleep(trelloWorkerIntervalMs);
   }
 }
 
@@ -467,3 +513,4 @@ void kiotVietFinanceBotWorkerLoop();
 void kiotVietInventoryBotWorkerLoop();
 void omnichannelWorkerLoop();
 void otaEmailWorkerLoop();
+void trelloWorkerLoop();

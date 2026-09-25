@@ -141,6 +141,7 @@ function runtimeSignals() {
     businessOperatingPlanDecisionId: TCE_BUSINESS_OPERATING_PLAN.decisionId,
     executionGovernanceVersion: EXECUTION_GOVERNANCE_VERSION,
     trelloExecutionMirror: trelloExecutionMirrorStatus(),
+    trelloWorkerEnabled: companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false",
   };
 }
 

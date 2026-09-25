@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v1";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v2";
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -32,8 +32,7 @@ export const EXECUTION_GOVERNANCE_RULES = [
 export function trelloRuntimeConfigured(): boolean {
   return Boolean(
     process.env.TRELLO_API_KEY?.trim() &&
-    process.env.TRELLO_TOKEN?.trim() &&
-    process.env.TRELLO_BOARD_ID?.trim(),
+    process.env.TRELLO_TOKEN?.trim(),
   );
 }
 

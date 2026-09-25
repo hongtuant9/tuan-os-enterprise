@@ -173,7 +173,7 @@ export default async function AiManagerPage({
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">Điều hành công ty trí tuệ nhân tạo <span className="text-[10px] font-normal italic text-[var(--ink-muted)]">(AI Operations)</span></p>
                 <h1 className="mt-2 text-2xl font-semibold text-white">Bàn điều hành TUAN OS</h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">
-                  TUAN OS — AI CEO Delegate chạy liên tục trên VPS, dùng TASK-001, APPROVAL-001, L3 và runtime để điều phối. Mọi hành động tài chính hoặc tối quan trọng vẫn khóa theo cổng phê duyệt.
+                  TUAN OS hoạt động liên tục trên máy chủ, dùng TASK-001, APPROVAL-001, dữ liệu chuẩn và hệ thống đang vận hành để điều phối. Mọi hành động tài chính hoặc thay đổi tối quan trọng vẫn phải qua bước phê duyệt.
                 </p>
               </div>
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold text-amber-300">Đang khóa các thay đổi vượt quyền</div>
@@ -205,7 +205,7 @@ export default async function AiManagerPage({
               </div>
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-white">{brief.nextItems.length}</b><span className="text-[var(--ink-muted)]">Tiếp theo</span></div>
-                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-rose-300">{brief.blockedItems.length}</b><span className="text-[var(--ink-muted)]">Bị chặn bởi CEO gate</span></div>
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-rose-300">{brief.blockedItems.length}</b><span className="text-[var(--ink-muted)]">Bị chặn vì chờ CEO</span></div>
                 <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-slate-300">{brief.waitingItems.length}</b><span className="text-[var(--ink-muted)]">Chờ điều kiện</span></div>
                 <div className="rounded-xl bg-white/[0.03] px-3 py-2"><b className="block text-lg text-amber-300">{brief.systemIssueItems.length}</b><span className="text-[var(--ink-muted)]">Vấn đề hệ thống</span></div>
               </div>
@@ -214,7 +214,7 @@ export default async function AiManagerPage({
 
           <div id="executive-org" className="mt-5 scroll-mt-6">
             <CollapsibleSection title="Cơ cấu điều hành TCE + TUAN OS" count={`${TCE_EXECUTIVE_ORG.length} vai trò`}>
-              <p className="mb-3 text-xs text-[var(--ink-muted)]">CEO Tuấn → TUAN OS AI CEO Delegate → các AI Trưởng phòng. Mở phần này khi cần xem quyền, nhiệm vụ và quan hệ báo cáo.</p>
+              <p className="mb-3 text-xs text-[var(--ink-muted)]">CEO Tuấn → TUAN OS → các Trưởng phòng AI. Mở phần này khi cần xem quyền, nhiệm vụ và quan hệ báo cáo.</p>
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {TCE_EXECUTIVE_ORG.map((role) => (
                 <div key={role.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5">
@@ -225,9 +225,9 @@ export default async function AiManagerPage({
                     </div>
                     <span className="rounded-full bg-white/[0.04] px-2 py-1 text-[9px] font-semibold text-[var(--ink-muted)]">{permissionLabel(role.permission)}</span>
                   </div>
-                  <p className="mt-2 text-xs text-[var(--ink-muted)]">Báo cáo cho: {role.reportsTo === "CEO_TUAN" ? "CEO Tuấn" : "TUAN OS — AI CEO Delegate"}</p>
+                  <p className="mt-2 text-xs text-[var(--ink-muted)]">Báo cáo cho: {role.reportsTo === "CEO_TUAN" ? "CEO Tuấn" : "TUAN OS"}</p>
                   <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">{role.mission}</p>
-                  <p className="mt-2 text-[10px] text-[var(--ink-muted)]">Tác nhân chuyên môn: {role.mappedAgents.join(", ")}</p>
+                  <p className="mt-2 text-[10px] text-[var(--ink-muted)]">Trợ lý chuyên môn: {role.mappedAgents.join(", ")}</p>
                 </div>
               ))}
               </div>
@@ -235,8 +235,8 @@ export default async function AiManagerPage({
           </div>
 
           <div id="agent-registry" className="mt-5 scroll-mt-6">
-            <CollapsibleSection title="Danh mục tác nhân AI" count={`${TCE_AGENT_REGISTRY.length}`}>
-              <p className="mb-3 text-xs text-[var(--ink-muted)]">Mở khi cần kiểm tra nhiệm vụ, quyền hoặc nguồn dữ liệu của từng tác nhân.</p>
+            <CollapsibleSection title="Danh mục trợ lý AI" count={`${TCE_AGENT_REGISTRY.length}`}>
+              <p className="mb-3 text-xs text-[var(--ink-muted)]">Mở khi cần kiểm tra nhiệm vụ, quyền hoặc nguồn dữ liệu của từng trợ lý AI.</p>
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {TCE_AGENT_REGISTRY.map((agent) => (
                 <div key={agent.id} className="rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5">
@@ -254,13 +254,13 @@ export default async function AiManagerPage({
 
           {requestedTask ? (
             <section className="mt-5 rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Việc được mở từ Action Center</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Việc được mở từ Trung tâm xử lý</p>
               <h2 className="mt-1 text-sm font-semibold text-white">{requestedTask.title}</h2>
               <p className="mt-1 text-xs text-[var(--ink-muted)]">{requestedTask.id} · {requestedTask.priority} · Phụ trách: {requestedTask.resolutionOwner ?? requestedTask.owner ?? requestedTask.agent}</p>
               {requestedTask.nextAction ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">Bước tiếp theo: {requestedTask.nextAction}</p> : null}
             </section>
           ) : requestedTaskId ? (
-            <section className="mt-5 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm text-amber-200">Không tìm thấy task {requestedTaskId} trong runtime hiện tại.</section>
+            <section className="mt-5 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm text-amber-200">Không tìm thấy công việc {requestedTaskId} trong hệ thống hiện tại.</section>
           ) : null}
 
           <div className="mt-5">
@@ -269,14 +269,14 @@ export default async function AiManagerPage({
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <WorkList title="Bị chặn — cần CEO quyết định/phê duyệt" items={brief.blockedItems} empty="Không có công việc nào đang bị chặn bởi cổng phê duyệt CEO." tone="ceo" defaultOpen={brief.blockedItems.length > 0} />
-            <WorkList title="Đang chờ điều kiện / công việc trước" items={brief.waitingItems} empty="Không có công việc nào đang chờ dependency hoặc sequence." tone="waiting" />
+            <WorkList title="Đang chờ điều kiện / công việc trước đó" items={brief.waitingItems} empty="Không có công việc nào đang chờ điều kiện hoặc thứ tự công việc." tone="waiting" />
             <WorkList title="Vấn đề hệ thống / kỹ thuật cần đội phụ trách xử lý" items={brief.systemIssueItems} empty="Không có vấn đề kỹ thuật đang cản trở thực thi." tone="system" />
             <WorkList title="Ưu tiên tiếp theo" items={brief.nextItems} empty="Chưa có công việc đủ điều kiện để đề xuất chạy." defaultOpen />
           </div>
 
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
             <CollapsibleSection title="Giao việc cho quản lý AI của TCE" defaultOpen>
-              <p className="mb-3 text-sm text-[var(--ink-muted)]">Giao việc trực tiếp tại đây. Các thay đổi L2/L3 vẫn đi qua cổng phê duyệt.</p>
+              <p className="mb-3 text-sm text-[var(--ink-muted)]">Giao việc trực tiếp tại đây. Các thay đổi cấp L2/L3 vẫn phải qua bước phê duyệt.</p>
               <TceManagerChat initialMessage={requestedTask ? "Giao việc / xử lý " + requestedTask.id + " — " + requestedTask.title : ""} />
             </CollapsibleSection>
 

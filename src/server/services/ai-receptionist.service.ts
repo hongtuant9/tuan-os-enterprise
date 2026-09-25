@@ -357,31 +357,35 @@ export class AiReceptionistService {
         ? metadata.care_phase as ReceptionistConversation["carePhase"]
         : "general";
       const manualSend = manualSendEligibility(row.channel, metadata);
+      const latestGuestLanguage = [...messages]
+        .reverse()
+        .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
+      const reservationReference = typeof metadata.reservation_reference === "string"
+        ? metadata.reservation_reference
+        : null;
       return {
         id: row.id,
         channel: row.channel,
         externalConversationId: row.external_conversation_id,
         customerName: reservationGuestName
           ?? (row.customer_name && row.customer_name !== "Khách chưa cung cấp tên" ? row.customer_name : null)
-          ?? "Khách chưa cung cấp tên",
+          ?? (reservationReference ? "Tên khách chưa xác minh" : "Khách chưa cung cấp tên"),
         customerContact: reservationGuestPhone
           ?? reservationGuestEmail
           ?? (row.customer_contact && row.customer_contact !== "Chưa có thông tin liên hệ" ? row.customer_contact : null)
-          ?? "Chưa có thông tin liên hệ",
+          ?? (reservationReference ? "Liên hệ chưa xác minh" : "Chưa có thông tin liên hệ"),
         propertyId: row.property_id,
         propertyName: row.property_id ? propertyNames.get(row.property_id) ?? entityPropertyName : entityPropertyName,
         propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")
           ? pageEntity as "lavender" | "ruby" | "cozy" | "tce"
           : "unknown",
-        language: row.language,
+        language: latestGuestLanguage ?? row.language,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
         carePhase: currentCarePhase !== "general" ? currentCarePhase : storedCarePhase,
         journeyStage: journeyStageFromReservationDates(checkInDate, checkOutDate, reservationStatus),
-        reservationReference: typeof metadata.reservation_reference === "string"
-          ? metadata.reservation_reference
-          : null,
+        reservationReference,
         checkInText,
         checkOutText,
         specialRequest,

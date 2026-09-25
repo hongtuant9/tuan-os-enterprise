@@ -13,14 +13,14 @@ type IconName =
 const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/", label: "Tổng quan", icon: "home" },
   { href: "/business", label: "Kinh doanh", icon: "business" },
-  { href: "/marketing", label: "Marketing", icon: "marketing" },
+  { href: "/marketing", label: "Tiếp thị", icon: "marketing" },
   { href: "/operations", label: "Vận hành", icon: "operations" },
   { href: "/ai-le-tan", label: "AI-Lễ Tân", icon: "reception" },
   { href: "/customers", label: "Khách hàng", icon: "customers" },
   { href: "/hr", label: "Nhân sự", icon: "hr" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },
-  { href: "/agents", label: "AI Agent", icon: "agents" },
+  { href: "/agents", label: "Trợ lý AI", icon: "agents" },
   { href: "/settings", label: "Cài đặt", icon: "settings" },
 ];
 
@@ -61,7 +61,7 @@ export function Sidebar() {
           </span>
           <span>
             <span className="block text-[20px] font-extrabold leading-6 tracking-wide">TUAN OS</span>
-            <span className="mt-1 block text-[11px] leading-4 text-slate-200">Work Smarter<br/>Live Better</span>
+            <span className="mt-1 block text-[11px] leading-4 text-slate-200">Làm việc thông minh<br/>Sống tốt hơn</span>
           </span>
         </Link>
 
@@ -82,7 +82,7 @@ export function Sidebar() {
         </nav>
 
         <div className="mt-auto px-2 pb-1">
-          <p className="mb-8 text-[12px] italic leading-5 text-slate-200">“Better Systems<br/>A Brighter Life”</p>
+          <p className="mb-8 text-[12px] italic leading-5 text-slate-200">“Hệ thống tốt hơn<br/>Cuộc sống tốt đẹp hơn”</p>
           <p className="text-[10px] text-slate-300">TUAN OS v1.0</p>
           <form action={signOut} className="mt-3">
             <button type="submit" className="text-[10px] text-slate-400 hover:text-white">Đăng xuất</button>
@@ -171,7 +171,7 @@ export function TcePageHeader({
           <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e8f0fb] text-[11px] font-bold">T</span>
           <span className="hidden leading-4 lg:block">
             <span className="block text-[12px] font-bold">Tuấn</span>
-            <span className="block text-[9px] text-[#7689a8]">Owner</span>
+            <span className="block text-[9px] text-[#7689a8]">Chủ doanh nghiệp</span>
           </span>
           <Icon name="chevron" className="h-4 w-4" />
         </div>

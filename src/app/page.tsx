@@ -109,12 +109,42 @@ function toAction(item: ReturnType<typeof buildManagerItems>[number]): Executive
   return {
     id: item.id,
     priority: item.priority,
-    title: item.title,
+    title: vietnameseTaskTitle(item.title),
     unit: "TCE",
-    owner: item.owner || item.agent || "AI Chief of Staff",
+    owner: item.owner || item.agent || "Trợ lý Chánh văn phòng AI",
     due: item.dueDate,
     status: item.pendingCeoApproval ? "Chờ quyết định" : item.status === "BLOCKED" ? "Bị chặn" : item.status === "IN_PROGRESS" ? "Đang theo dõi" : "Chờ xử lý",
   };
+}
+
+function vietnameseTaskTitle(title: string) {
+  return title
+    .replace(/Foundation/gi, "Nền tảng")
+    .replace(/Channel Consistency/gi, "Đồng bộ kênh")
+    .replace(/Organization schema/gi, "Dữ liệu nhận diện tổ chức")
+    .replace(/website trust cleanup/gi, "chuẩn hóa độ tin cậy website")
+    .replace(/Social profile cleanup/gi, "Chuẩn hóa hồ sơ mạng xã hội")
+    .replace(/Verify Metricool \/ Meta connection/gi, "Xác minh kết nối Metricool / Meta")
+    .replace(/Freeze UTM convention/gi, "Chốt quy ước theo dõi đường dẫn (UTM)")
+    .replace(/VPS Foundation re-acceptance/gi, "Nghiệm thu lại nền tảng máy chủ (VPS)")
+    .replace(/Control Center & logging recheck/gi, "Kiểm tra lại Trung tâm điều hành và nhật ký hệ thống")
+    .replace(/Security mutation approval & hardening/gi, "Tăng cường bảo mật theo phê duyệt")
+    .replace(/AI Receptionist/gi, "AI Lễ tân")
+    .replace(/Omnichannel/gi, "Đa kênh")
+    .replace(/Actual/gi, "Thực tế")
+    .replace(/Growth Reality/gi, "Tình hình tăng trưởng thực tế")
+    .replace(/Revenue Command/gi, "Điều hành doanh thu")
+    .replace(/Operational Reality/gi, "Tình hình vận hành thực tế")
+    .replace(/Customer Voice & Recovery/gi, "Phản hồi khách hàng và xử lý sự cố")
+    .replace(/Market Reality/gi, "Tình hình thị trường thực tế")
+    .replace(/Read-only data access/gi, "Quyền đọc dữ liệu")
+    .replace(/Executive Council/gi, "Hội đồng điều hành")
+    .replace(/Business Plan/gi, "Kế hoạch kinh doanh")
+    .replace(/Sprint/gi, "Đợt triển khai")
+    .replace(/Gate Review/gi, "Rà soát điều kiện chuyển giai đoạn")
+    .replace(/Daily/gi, "Hằng ngày")
+    .replace(/Weekly/gi, "Hằng tuần")
+    .replace(/Monthly/gi, "Hằng tháng");
 }
 
 function taskBucket(text: string) {
@@ -223,8 +253,8 @@ export default async function Home({
   const profitVerified = cashflowReadReady;
   const costState = cashflowReadReady ? "PARTIAL" as const : "NEED_VERIFY" as const;
   const costLabel = cashflowReadReady
-    ? "KIOTVIET ONLY · Cashflow Actual"
-    : "KIOTVIET ONLY · Cashflow API chưa VERIFIED";
+    ? "Chỉ KiotViet · Dòng tiền thực tế"
+    : "Chỉ KiotViet · Dữ liệu dòng tiền chưa được xác minh";
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;
@@ -249,13 +279,13 @@ export default async function Home({
   const sources: ExecutiveSource[] = [
     { name: "KiotViet Hotel", status: hotel.state === "VERIFIED" ? "online" : "hold", note: hotel.notes.join(" ") },
     { name: "KiotViet F&B", status: fnb.state === "VERIFIED" ? "online" : "hold", note: fnb.notes.join(" ") },
-    { name: "TASK-001", status: sourceStatus(taskSync?.last_synced_at, taskSync?.status), note: taskSync?.last_error || "Google Drive canonical task source" },
-    { name: "APPROVAL-001", status: sourceStatus(approvalSync?.last_synced_at, approvalSync?.status), note: approvalSync?.last_error || "Google Drive canonical approval source" },
-    { name: "L3 Master Data", status: sourceStatus(l3Sync?.last_synced_at, l3Sync?.status), note: l3Sync?.last_error || "Customer-facing master data" },
-    { name: "AI-Lễ tân", status: "online", note: "Supabase operational runtime" },
-    { name: "AI Agents", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " agent online" },
-    { name: "Server (VPS)", status: "online", note: "Trang được render trực tiếp từ production runtime" },
-    { name: "Google Ads", status: "partial", note: "Actual spend chưa đủ quyền/connector; dashboard dùng dự toán có nhãn" },
+    { name: "TASK-001", status: sourceStatus(taskSync?.last_synced_at, taskSync?.status), note: taskSync?.last_error || "Nguồn công việc chính thức trên Google Drive" },
+    { name: "APPROVAL-001", status: sourceStatus(approvalSync?.last_synced_at, approvalSync?.status), note: approvalSync?.last_error || "Nguồn phê duyệt chính thức trên Google Drive" },
+    { name: "L3 Master Data", status: sourceStatus(l3Sync?.last_synced_at, l3Sync?.status), note: l3Sync?.last_error || "Dữ liệu chuẩn dùng cho khách hàng" },
+    { name: "AI-Lễ tân", status: "online", note: "Dữ liệu vận hành trên Supabase" },
+    { name: "AI Agents", status: onlineAgents > 0 ? "online" : "partial", note: String(onlineAgents) + " trợ lý AI đang hoạt động" },
+    { name: "Server (VPS)", status: "online", note: "Trang được tạo trực tiếp từ hệ thống đang vận hành" },
+    { name: "Google Ads", status: "partial", note: "Chưa đọc được chi phí quảng cáo thực tế; số dự toán luôn có nhãn rõ ràng" },
   ];
   const verifiedSources = sources.filter((item) => item.status === "online").length;
 

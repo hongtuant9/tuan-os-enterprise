@@ -200,7 +200,7 @@ function ActionTable({ items }: { items: ExecutiveAction[] }) {
           <th className="w-[80px] px-2 py-1.5">Ưu tiên</th>
           <th className="px-2 py-1.5">Việc cần làm</th>
           <th className="w-[100px] px-2 py-1.5">Liên quan</th>
-          <th className="w-[100px] px-2 py-1.5">Owner</th>
+          <th className="w-[100px] px-2 py-1.5">Phụ trách</th>
           <th className="w-[100px] px-2 py-1.5">Hạn xử lý</th>
           <th className="w-[105px] px-2 py-1.5">Trạng thái</th>
           <th className="w-[95px] px-2 py-1.5">Hành động</th>
@@ -210,7 +210,7 @@ function ActionTable({ items }: { items: ExecutiveAction[] }) {
         {items.slice(0,5).map((item, i) => (
           <tr key={item.id} className="h-[28px]">
             <td className="px-2">{i + 1}</td>
-            <td className="px-2"><span className={"rounded-full px-2 py-1 font-bold " + (item.priority === "P0" ? "bg-[#fff0f2] text-[#e83143]" : item.priority === "P1" ? "bg-[#fff4e2] text-[#ce7b00]" : "bg-[#eaf3ff] text-[#1769df]")}>{item.priority === "P0" ? "Critical" : item.priority === "P1" ? "High" : "Medium"}</span></td>
+            <td className="px-2"><span className={"rounded-full px-2 py-1 font-bold " + (item.priority === "P0" ? "bg-[#fff0f2] text-[#e83143]" : item.priority === "P1" ? "bg-[#fff4e2] text-[#ce7b00]" : "bg-[#eaf3ff] text-[#1769df]")}>{item.priority === "P0" ? "Khẩn cấp" : item.priority === "P1" ? "Cao" : "Trung bình"}</span></td>
             <td className="truncate px-2 font-medium">{item.title}</td>
             <td className="truncate px-2">{item.unit}</td>
             <td className="truncate px-2">{item.owner}</td>
@@ -234,7 +234,7 @@ function RevenueChart() {
       <div className="absolute inset-0 grid place-items-center">
         <div className="rounded-[7px] border border-[#dce8f4] bg-white/95 px-4 py-3 text-center shadow-sm">
           <b className="block text-[9px] text-[#29486f]">Chuỗi doanh thu 7 ngày</b>
-          <span className="mt-1 block text-[8px] text-[#7386a3]">Chưa có daily-series đã xác minh. KPI và bảng cơ sở vẫn dùng KiotViet Actual.</span>
+          <span className="mt-1 block text-[8px] text-[#7386a3]">Chưa có daily-series đã xác minh. Chỉ số và bảng cơ sở vẫn dùng số liệu thực tế từ KiotViet.</span>
         </div>
       </div>
       <div className="absolute bottom-1 left-7 right-7 flex justify-around text-[7px] text-[#9aa8bb]">{["-6","-5","-4","-3","-2","-1","Hôm nay"].map(x=><span key={x}>{x}</span>)}</div>
@@ -281,7 +281,7 @@ function SystemCard({ source }: { source: ExecutiveSource }) {
     <div className="rounded-[6px] border border-[#e0e9f3] bg-white px-2 py-2">
       <div className="flex items-center gap-2">
         <span className="grid h-6 w-6 place-items-center rounded bg-[#edf5ff] text-[10px] text-[#1768df]">◉</span>
-        <div className="min-w-0"><b className="block truncate text-[8px] text-[#28476f]">{source.name}</b><span className={"text-[8px] font-bold " + (good ? "text-[#08a054]" : "text-[#d18500]")}>● {good ? "Online" : source.status === "partial" ? "Partial" : source.status === "estimate" ? "Estimate" : "Hold"}</span></div>
+        <div className="min-w-0"><b className="block truncate text-[8px] text-[#28476f]">{source.name}</b><span className={"text-[8px] font-bold " + (good ? "text-[#08a054]" : "text-[#d18500]")}>● {good ? "Hoạt động" : source.status === "partial" ? "Một phần" : source.status === "estimate" ? "Ước tính" : "Tạm dừng"}</span></div>
       </div>
     </div>
   );
@@ -299,14 +299,14 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
       <header className="border-b border-[#dce7f3] bg-white px-4 py-[8px]">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[21px] font-extrabold tracking-[-0.025em] text-[#071b55]">Executive Dashboard – Tổng quan điều hành</h1>
+            <h1 className="text-[21px] font-extrabold tracking-[-0.025em] text-[#071b55]">Tổng quan điều hành</h1>
             <p className="mt-[2px] text-[10px] text-[#6c83a8]">Dữ liệu tổng hợp từ: Lavender Homestay | Ruby Homestay | Cozy Garden | Hệ thống vận hành</p>
           </div>
           <div className="flex items-center gap-4 text-[#18345f]">
             <span className="text-[9px] font-semibold">{t.date}</span><b className="text-[9px]">{t.time}</b>
             <span className="relative">♟<span className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-[#ee3945] text-[7px] text-white">3</span></span>
             <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e5edf7] text-[10px] font-bold">T</span>
-            <span className="text-[9px]"><b className="block">Tuấn</b><small className="text-[#7285a3]">Owner</small></span>
+            <span className="text-[9px]"><b className="block">Tuấn</b><small className="text-[#7285a3]">Chủ doanh nghiệp</small></span>
           </div>
         </div>
         <div className="mt-[4px] flex justify-end gap-0">
@@ -318,29 +318,29 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
 
       <main className="grid grid-cols-12 gap-2 p-[10px]">
         <div className="col-span-12 space-y-2 xl:col-span-7">
-          <Panel number={1} title="ACTION CENTER – Việc cần Tuấn xử lý" subtitle="Ưu tiên quyết định, giao việc và theo dõi escalation" action={<Link href="/ai-manager" className="rounded-[5px] border border-[#acd0fa] px-3 py-1 text-[8px] font-bold text-[#1768df]">Xem tất cả ({props.actionCenter.items.length})</Link>}>
+          <Panel number={1} title="TRUNG TÂM XỬ LÝ – Việc cần Tuấn xử lý" subtitle="Ưu tiên quyết định, giao việc và xử lý việc cần nâng mức" action={<Link href="/ai-manager" className="rounded-[5px] border border-[#acd0fa] px-3 py-1 text-[8px] font-bold text-[#1768df]">Xem tất cả ({props.actionCenter.items.length})</Link>}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
               <Stat label="Cần Tuấn quyết định" value={props.actionCenter.decisions} tone="red" icon="!" />
               <Stat label="Cần giao việc" value={props.actionCenter.unassigned} tone="blue" icon="●" />
               <Stat label="Đã giao / đang theo dõi" value={props.actionCenter.inProgress} tone="green" icon="☷" />
-              <Stat label="Quá hạn / Escalation" value={props.actionCenter.overdue} tone="amber" icon="◷" />
+              <Stat label="Quá hạn / Cần nâng mức" value={props.actionCenter.overdue} tone="amber" icon="◷" />
             </div>
             <ActionTable items={props.actionCenter.items}/>
           </Panel>
 
-          <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Actual từ KiotViet / nguồn đã xác minh · " + props.periodLabel}>
+          <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Số liệu thực tế từ KiotViet / nguồn đã xác minh · " + props.periodLabel}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
-              <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="KiotViet Actual · Live" />
+              <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="Số liệu thực tế từ KiotViet · Cập nhật trực tiếp" />
               <Stat
                 label="Chi phí đã ghi nhận"
-                value={props.finance.costState === "NEED_VERIFY" ? "NEED VERIFY" : money(props.finance.costEstimate)}
+                value={props.finance.costState === "NEED_VERIFY" ? "CẦN XÁC MINH" : money(props.finance.costEstimate)}
                 tone="red"
                 icon="▥"
-                note={(props.finance.costState === "NEED_VERIFY" ? "KIOTVIET ONLY · " : props.finance.costState === "PARTIAL" ? "PARTIAL · " : "") + "Bấm để xem theo nhóm"}
+                note={(props.finance.costState === "NEED_VERIFY" ? "Chỉ KiotViet · " : props.finance.costState === "PARTIAL" ? "MỘT PHẦN · " : "") + "Bấm để xem theo nhóm"}
                 href={"/finance?period=" + props.period + "#cost-analysis"}
               />
-              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "NEED VERIFY"} tone="blue" icon="▣" note="Chưa đủ Actual cost để kết luận" />
-              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "NEED VERIFY"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán" />
+              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "CẦN XÁC MINH"} tone="blue" icon="▣" note="Chưa đủ chi phí thực tế để kết luận" />
+              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "CẦN XÁC MINH"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán" />
             </div>
             <div className="grid grid-cols-[1.75fr_1fr] gap-2 px-3 pb-3">
               <div className="rounded-[7px] border border-[#e0e9f3]">
@@ -361,7 +361,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
                 ["Ruby Homestay",props.operations.rubyOpen,"việc riêng"],
                 ["Cozy Garden",props.operations.cozyOpen,"việc riêng"],
                 ["Nhân sự / Dịch vụ",props.operations.hrOpen,"việc mở"],
-              ].map(([name,value,label])=><div key={String(name)} className="rounded-[7px] border border-[#e1eaf4] p-3"><b className="text-[9px] text-[#234268]">{name}</b><p className="mt-2 text-[10px] font-bold text-[#0a9f57]">● {value} {label}</p><p className="mt-2 text-[7px] text-[#7c8da7]">Theo dõi từ runtime</p></div>)}
+              ].map(([name,value,label])=><div key={String(name)} className="rounded-[7px] border border-[#e1eaf4] p-3"><b className="text-[9px] text-[#234268]">{name}</b><p className="mt-2 text-[10px] font-bold text-[#0a9f57]">● {value} {label}</p><p className="mt-2 text-[7px] text-[#7c8da7]">Theo dõi từ hệ thống đang vận hành</p></div>)}
               <div className="col-span-2 rounded-[7px] border border-[#e1eaf4] p-2 min-[1500px]:col-span-1">
                 <b className="text-[9px] text-[#244368]">Ngoại lệ cần chú ý ({props.operations.exceptions.length})</b>
                 {props.operations.homestaySharedOpen > 0 ? <p className="mt-1 text-[7px] text-[#b26d00]">Có {props.operations.homestaySharedOpen} việc Homestay dùng chung chưa gán riêng Lavender/Ruby.</p> : null}
@@ -372,53 +372,53 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
         </div>
 
         <div className="col-span-12 space-y-2 xl:col-span-5">
-          <Panel number={3} title="AI-LỄ TÂN" subtitle="Kênh tự động trọng yếu cho tư vấn – bán hàng – CSKH" action={<Link href="/ai-le-tan" className="rounded-[5px] bg-[#2477ef] px-4 py-1.5 text-[8px] font-bold text-white">Xem AI-Lễ Tân →</Link>}>
+          <Panel number={3} title="AI-LỄ TÂN" subtitle="Kênh tự động trọng yếu cho tư vấn, bán hàng và chăm sóc khách hàng" action={<Link href="/ai-le-tan" className="rounded-[5px] bg-[#2477ef] px-4 py-1.5 text-[8px] font-bold text-white">Xem AI-Lễ Tân →</Link>}>
             <div className="grid grid-cols-3 gap-2 px-3 pb-2 min-[1650px]:grid-cols-6">
               <Stat label="Hội thoại đang mở" value={props.receptionist.conversations} tone="blue" icon="•••"/>
               <Stat label="AI đang xử lý" value={props.receptionist.active} tone="green" icon="◉"/>
               <Stat label="Cần Lễ tân hỗ trợ" value={props.receptionist.waitingHuman} tone="amber" icon="●●"/>
-              <Stat label="SLA quá hạn" value={props.receptionist.slaRisk} tone="red" icon="◷"/>
-              <Stat label="Complaint mở" value={props.receptionist.complaints} tone="violet" icon="!"/>
-              <Stat label="Human correction hôm nay" value={props.receptionist.waitingHuman} tone="slate" icon="⚙"/>
+              <Stat label="Quá thời hạn phản hồi" value={props.receptionist.slaRisk} tone="red" icon="◷"/>
+              <Stat label="Khiếu nại đang mở" value={props.receptionist.complaints} tone="violet" icon="!"/>
+              <Stat label="Nhân viên chỉnh sửa hôm nay" value={props.receptionist.waitingHuman} tone="slate" icon="⚙"/>
             </div>
             <div className="grid grid-cols-1 gap-2 px-3 pb-3 min-[1650px]:grid-cols-[2fr_1fr]">
               <div className="rounded-[7px] border border-[#e0e9f3] p-2">
-                <b className="text-[9px] text-[#18365f]">Pipeline hội thoại (Hôm nay)</b>
+                <b className="text-[9px] text-[#18365f]">Quy trình xử lý hội thoại (Hôm nay)</b>
                 <div className="mt-3 grid grid-cols-2 gap-2 min-[1650px]:grid-cols-4">
-                  {[["Lead mới",props.receptionist.conversations],["Booking draft","—"],["Booking verified",props.receptionist.verifiedBookings],["Upsell cơ hội",props.receptionist.upsellOpportunities]].map(([l,v],i)=><div key={String(l)} className="flex min-w-0 items-center"><div className="w-full rounded bg-[#eff6fd] p-3 text-center"><p className="text-[8px]">{l}</p><b className="mt-1 block text-[16px] text-[#11275a]">{v}</b></div>{i<3?<span className="hidden text-[#9bcaff] min-[1650px]:inline">›</span>:null}</div>)}
+                  {[["Khách hàng tiềm năng mới",props.receptionist.conversations],["Đặt chỗ nháp","—"],["Đặt chỗ đã xác minh",props.receptionist.verifiedBookings],["Cơ hội bán thêm",props.receptionist.upsellOpportunities]].map(([l,v],i)=><div key={String(l)} className="flex min-w-0 items-center"><div className="w-full rounded bg-[#eff6fd] p-3 text-center"><p className="text-[8px]">{l}</p><b className="mt-1 block text-[16px] text-[#11275a]">{v}</b></div>{i<3?<span className="hidden text-[#9bcaff] min-[1650px]:inline">›</span>:null}</div>)}
                 </div>
-                <div className="mt-3 rounded bg-[#e9fbf2] px-3 py-2 text-[8px] text-[#168b55]">● Wrong price / Wrong availability / Wrong policy = 0</div>
+                <div className="mt-3 rounded bg-[#e9fbf2] px-3 py-2 text-[8px] text-[#168b55]">● Sai giá / Sai tình trạng phòng / Sai chính sách = 0</div>
               </div>
               <div className="rounded-[7px] border border-[#e0e9f3] p-2">
-                <b className="text-[9px] text-[#18365f]">Phối hợp AI Agent</b>
-                <div className="mt-2 space-y-2">{["Receptionist","Concierge","Upsell","Booking Assistant","Human Handoff"].map(x=><div key={x} className="flex items-center gap-2 text-[8px]"><span className="text-[#09a159]">●</span><span>{x}</span></div>)}</div>
+                <b className="text-[9px] text-[#18365f]">Phối hợp trợ lý AI</b>
+                <div className="mt-2 space-y-2">{["Lễ tân AI","Trợ lý khách hàng","Bán thêm","Trợ lý đặt chỗ","Chuyển cho nhân viên"].map(x=><div key={x} className="flex items-center gap-2 text-[8px]"><span className="text-[#09a159]">●</span><span>{x}</span></div>)}</div>
               </div>
             </div>
           </Panel>
 
-          <Panel number={4} title="MARKETING & SALES" subtitle={props.marketing.actualAvailable ? "Hiệu quả theo kênh – Actual đã kết nối" : "Hiệu quả theo kênh – Actual sẽ kết nối dần"} action={!props.marketing.actualAvailable?<span className="rounded-full bg-[#fff5e5] px-2 py-1 text-[8px] font-bold text-[#b87000]">PARTIAL / NEED VERIFY</span>:null}>
+          <Panel number={4} title="TIẾP THỊ & BÁN HÀNG" subtitle={props.marketing.actualAvailable ? "Hiệu quả theo kênh – Đã có số liệu thực tế" : "Hiệu quả theo kênh – Số liệu thực tế đang được bổ sung"} action={!props.marketing.actualAvailable?<span className="rounded-full bg-[#fff5e5] px-2 py-1 text-[8px] font-bold text-[#b87000]">MỘT PHẦN / CẦN XÁC MINH</span>:null}>
             <div className="grid grid-cols-3 gap-2 px-3 pb-2 min-[1650px]:grid-cols-5">
               <Stat label="Tiếp cận" value="—" tone="blue" icon="◉"/>
               <Stat label="Tương tác" value="—" tone="blue" icon="●●"/>
-              <Stat label="Lead / Inquiry" value={props.marketing.leads} tone="green" icon="●"/>
-              <Stat label="Booking / Order" value={props.marketing.bookings} tone="amber" icon="⌑"/>
-              <Stat label="Doanh thu Actual" value={money(props.marketing.revenue)} tone="green" icon="▮▮"/>
+              <Stat label="Khách quan tâm" value={props.marketing.leads} tone="green" icon="●"/>
+              <Stat label="Đặt chỗ / Đơn hàng" value={props.marketing.bookings} tone="amber" icon="⌑"/>
+              <Stat label="Doanh thu thực tế" value={money(props.marketing.revenue)} tone="green" icon="▮▮"/>
             </div>
             <div className="grid grid-cols-1 gap-2 px-3 pb-3 min-[1650px]:grid-cols-[2.4fr_1fr]">
               <div className="rounded-[7px] border border-[#e0e9f3]">
                 <p className="px-3 py-2 text-[9px] font-bold text-[#18365f]">Hiệu quả theo kênh (Hôm nay)</p>
-                <table className="w-full text-[7px]"><thead className="bg-[#f2f7fb] text-[#36527a]"><tr>{["Kênh","Spend","Lead","Booking","Doanh thu","ROAS","Quyết định"].map(x=><th key={x} className="px-2 py-1.5">{x}</th>)}</tr></thead><tbody className="divide-y divide-[#e8eef5]">{["Google Ads","Meta Ads","Instagram","Website","TikTok","Tripadvisor"].map((x,i)=><tr key={x}><td className="px-2 py-1.5 font-medium">{x}</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="px-1"><span className={"block rounded-full px-1 py-1 text-center font-bold " + (i%2?"bg-[#fff4df] text-[#c67900]":"bg-[#e8f9f0] text-[#079852]")}>{i%2?"HOLD":"MONITOR"}</span></td></tr>)}</tbody></table>
+                <table className="w-full text-[7px]"><thead className="bg-[#f2f7fb] text-[#36527a]"><tr>{["Kênh","Chi phí","Khách tiềm năng","Đặt chỗ","Doanh thu","Hiệu quả quảng cáo","Quyết định"].map(x=><th key={x} className="px-2 py-1.5">{x}</th>)}</tr></thead><tbody className="divide-y divide-[#e8eef5]">{["Google Ads","Meta Ads","Instagram","Website","TikTok","Tripadvisor"].map((x,i)=><tr key={x}><td className="px-2 py-1.5 font-medium">{x}</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="px-1"><span className={"block rounded-full px-1 py-1 text-center font-bold " + (i%2?"bg-[#fff4df] text-[#c67900]":"bg-[#e8f9f0] text-[#079852]")}>{i%2?"TẠM DỪNG":"THEO DÕI"}</span></td></tr>)}</tbody></table>
               </div>
               <div className="rounded-[7px] border border-[#e0e9f3] p-3 text-center">
                 <b className="text-[9px] text-[#203b63]">CHI PHÍ QUẢNG CÁO</b>
-                <div className="mt-3 grid h-[105px] place-items-center rounded bg-[#f3f7fb]"><span><b className="block text-[24px] text-[#5a6c85]">♙</b><b className="text-[10px] text-[#334b6f]">ĐANG KHÓA / LOCKED</b></span></div>
-                <p className="mt-2 text-left text-[7px] text-[#7788a2]">Chưa kích hoạt chi tiêu quảng cáo. Chỉ hiển thị dữ liệu organic.</p>
-                <Link href="/ai-manager" className="mt-2 block w-full rounded border border-[#a9cef9] py-1.5 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Liên hệ Admin</Link>
+                <div className="mt-3 grid h-[105px] place-items-center rounded bg-[#f3f7fb]"><span><b className="block text-[24px] text-[#5a6c85]">♙</b><b className="text-[10px] text-[#334b6f]">ĐANG KHÓA</b></span></div>
+                <p className="mt-2 text-left text-[7px] text-[#7788a2]">Chưa kích hoạt chi tiêu quảng cáo. Chỉ hiển thị dữ liệu không trả phí.</p>
+                <Link href="/ai-manager" className="mt-2 block w-full rounded border border-[#a9cef9] py-1.5 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Liên hệ quản trị viên</Link>
               </div>
             </div>
           </Panel>
 
-          <Panel title="SYSTEM / DATA HEALTH" action={<span className="rounded-full bg-[#e7f9ef] px-2 py-1 text-[8px] font-bold text-[#079852]">● {props.system.verified}/{props.system.total} nguồn ổn định</span>}>
+          <Panel title="TÌNH TRẠNG HỆ THỐNG & DỮ LIỆU" action={<span className="rounded-full bg-[#e7f9ef] px-2 py-1 text-[8px] font-bold text-[#079852]">● {props.system.verified}/{props.system.total} nguồn ổn định</span>}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-3">
               {props.system.sources.map(source=><SystemCard key={source.name} source={source}/>)}
             </div>

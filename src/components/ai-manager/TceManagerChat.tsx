@@ -63,7 +63,7 @@ export default function TceManagerChat({ initialMessage = "" }: { initialMessage
     <div>
       <div className="max-h-96 space-y-3 overflow-y-auto rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
         {items.length === 0 ? (
-          <p className="text-sm text-[var(--ink-muted)]">Ví dụ: “Kiểm tra tình hình TCE hôm nay” hoặc “Audit OTA đang có mismatch gì?”</p>
+          <p className="text-sm text-[var(--ink-muted)]">Ví dụ: “Kiểm tra tình hình TCE hôm nay” hoặc “Kiểm tra các kênh đặt phòng đang có điểm nào không khớp?”</p>
         ) : items.map((item) => (
           <div key={item.id} className={item.role === "user"
             ? "ml-10 rounded-lg border border-sky-500/20 bg-sky-500/[0.10] p-3"
@@ -89,7 +89,7 @@ export default function TceManagerChat({ initialMessage = "" }: { initialMessage
         ))}
       </div>
       <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[11px] leading-5 text-[var(--ink-muted)]">
-        Sau khi hoàn tất một thao tác CEO hỗ trợ, báo lại tại đây theo mẫu: <span className="font-semibold text-sky-300">“Đã hoàn tất hỗ trợ TASK-ID — nội dung đã làm”</span>. Không gửi mật khẩu, OTP, private key hoặc token.
+        Sau khi hoàn tất một thao tác CEO hỗ trợ, báo lại tại đây theo mẫu: <span className="font-semibold text-sky-300">“Đã hoàn tất hỗ trợ TASK-ID — nội dung đã làm”</span>. Không gửi mật khẩu, mã xác thực một lần, khóa riêng hoặc mã truy cập bí mật.
       </div>
       <div className="mt-3 flex gap-2">
         <textarea

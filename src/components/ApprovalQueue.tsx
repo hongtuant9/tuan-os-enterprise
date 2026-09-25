@@ -19,6 +19,24 @@ function formatSubmittedAt(iso: string) {
   return new Date(iso).toLocaleString("vi-VN", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function severityLabel(value?: string | null) {
+  const key = (value || "medium").toLowerCase();
+  if (key === "critical") return "Khẩn cấp";
+  if (key === "high") return "Cao";
+  if (key === "low") return "Thấp";
+  return "Trung bình";
+}
+
+function executionStatusLabel(value?: string | null) {
+  const key = (value || "awaiting_approval").toLowerCase();
+  if (key.includes("conflict")) return "Có xung đột";
+  if (key.includes("failed") || key.includes("error")) return "Thực thi lỗi";
+  if (key.includes("critical")) return "Cần xử lý khẩn cấp";
+  if (key.includes("awaiting")) return "Đang chờ phê duyệt";
+  if (key.includes("completed") || key.includes("done")) return "Đã hoàn thành";
+  return value || "Đang chờ phê duyệt";
+}
+
 function severityWeight(approval: Approval) {
   return SEVERITY_WEIGHT[(approval.severity || "medium").toLowerCase()] ?? 20;
 }
@@ -60,7 +78,7 @@ function MasterChangeDetails({ approval }: { approval: Approval }) {
       </div>
       <div>
         <p className="font-semibold text-amber-200">Nguồn phát hiện</p>
-        <p className="mt-1 text-[var(--ink-secondary)]">{approval.sourceChannel || "AI Master Data Steward"}</p>
+        <p className="mt-1 text-[var(--ink-secondary)]">{approval.sourceChannel || "Trợ lý quản trị dữ liệu chuẩn"}</p>
         {approval.evidenceUrl ? <a className="text-sky-300 underline" href={approval.evidenceUrl} target="_blank" rel="noreferrer">Xem bằng chứng</a> : null}
       </div>
       <div className="rounded-lg bg-black/20 p-3">
@@ -68,7 +86,7 @@ function MasterChangeDetails({ approval }: { approval: Approval }) {
         <p className="mt-1 break-words text-sm font-medium text-rose-200">{approval.currentValue === "" ? "(trống)" : approval.currentValue}</p>
       </div>
       <div className="rounded-lg bg-black/20 p-3">
-        <p className="text-[var(--ink-muted)]">AI đề xuất</p>
+        <p className="text-[var(--ink-muted)]">Đề xuất của AI</p>
         <p className="mt-1 break-words text-sm font-medium text-emerald-200">{approval.proposedValue === "" ? "(xóa giá trị)" : approval.proposedValue}</p>
       </div>
       <div className="md:col-span-2">
@@ -76,20 +94,20 @@ function MasterChangeDetails({ approval }: { approval: Approval }) {
         <p className="mt-1 leading-5 text-[var(--ink-secondary)]">{approval.aiRecommendation || approval.summary}</p>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           <div className="rounded-lg bg-white/[0.04] p-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Phân loại & độ tin cậy</p>
-            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.changeClass || "BUSINESS_TRUTH"} · Confidence: {approval.confidence || "chưa chấm"}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Phân loại & mức độ tin cậy</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.changeClass || "BUSINESS_TRUTH"} · Độ tin cậy: {approval.confidence || "chưa chấm"}</p>
           </div>
           <div className="rounded-lg bg-white/[0.04] p-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Tác động</p>
             <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.impactSummary || "Chưa có mô tả tác động chi tiết."}</p>
           </div>
           <div className="rounded-lg bg-white/[0.04] p-2 md:col-span-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kế hoạch rollback</p>
-            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.rollbackPlan || "Khôi phục giá trị trước thay đổi và xác minh read-back."}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kế hoạch khôi phục</p>
+            <p className="mt-1 text-xs text-[var(--ink-secondary)]">{approval.rollbackPlan || "Khôi phục giá trị trước thay đổi và xác minh lại kết quả."}</p>
           </div>
         </div>
         <p className="mt-2 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
-          Change ID: {approval.changeKey || approval.id} · Mức độ: {approval.severity || "medium"} · Thực thi: {approval.executionStatus || "awaiting_approval"}
+          Mã thay đổi: {approval.changeKey || approval.id} · Mức độ: {severityLabel(approval.severity)} · Thực thi: {executionStatusLabel(approval.executionStatus)}
         </p>
         {approval.executionNote ? <p className="mt-2 rounded-lg bg-white/[0.04] p-2 text-[var(--ink-secondary)]">{approval.executionNote}</p> : null}
       </div>
@@ -107,7 +125,7 @@ function ApprovalCard({
   onDecision: (id: string, status: ApprovalStatus) => void;
 }) {
   const badge = STATUS_BADGE[approval.status];
-  const severity = (approval.severity || "medium").toUpperCase();
+  const severity = severityLabel(approval.severity);
   const urgent = isUrgent(approval);
 
   return (
@@ -118,7 +136,7 @@ function ApprovalCard({
             <h3 className="text-sm font-semibold text-[var(--ink-primary)]">{approval.title}</h3>
             <Badge label={badge.label} tone={badge.tone} />
             {urgent ? <span className="rounded-full border border-rose-500/30 bg-rose-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-rose-300">ƯU TIÊN</span> : null}
-            {approval.requestType === "master_data_change" ? <span className="rounded-full border border-sky-500/20 bg-sky-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-sky-300">MASTER DATA</span> : null}
+            {approval.requestType === "master_data_change" ? <span className="rounded-full border border-sky-500/20 bg-sky-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-sky-300">DỮ LIỆU CHUẨN</span> : null}
             {approval.severity ? <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{severity}</span> : null}
           </div>
           <p className="text-sm text-[var(--ink-secondary)]">{approval.summary}</p>
@@ -138,7 +156,7 @@ function ApprovalCard({
       {!compact ? <MasterChangeDetails approval={approval} /> : (
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--ink-muted)]">
           <span>{approval.changeKey || approval.id}</span>
-          <span>Thực thi: {approval.executionStatus || "—"}</span>
+          <span>Thực thi: {executionStatusLabel(approval.executionStatus)}</span>
           {approval.decidedAt ? <span>Quyết định: {formatSubmittedAt(approval.decidedAt)}</span> : null}
         </div>
       )}

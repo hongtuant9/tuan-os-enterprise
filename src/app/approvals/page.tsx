@@ -14,7 +14,7 @@ export default async function ApprovalsPage() {
         <header className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Việc cần duyệt</p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">{pending} quyết định đang chờ anh</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Việc CRITICAL/HIGH, conflict hoặc lỗi thực thi được đưa lên đầu. Việc đã duyệt/từ chối được chuyển xuống khu lịch sử 30 ngày và thu gọn mặc định để màn hình vận hành luôn tập trung vào việc còn phải xử lý.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Việc khẩn cấp, ưu tiên cao, có xung đột hoặc lỗi thực thi được đưa lên đầu. Việc đã duyệt hoặc từ chối được chuyển xuống lịch sử 30 ngày để màn hình luôn tập trung vào việc còn phải xử lý.</p>
         </header>
         <ActivityFeedProvider initialLogs={logs}><ApprovalQueue approvals={approvals} /></ActivityFeedProvider>
       </main>

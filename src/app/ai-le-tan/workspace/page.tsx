@@ -47,7 +47,7 @@ export default async function AiReceptionistWorkspacePage() {
     setupError =
       error instanceof Error
         ? error.message
-        : "Không thể đọc dữ liệu AI Lễ tân. Cần kiểm tra Migration Supabase.";
+        : "Không thể đọc dữ liệu AI Lễ tân. Cần kiểm tra bước cập nhật cơ sở dữ liệu Supabase.";
   }
 
   const canManage = session ? hasMinimumRole(session.role, "manager") : false;
@@ -116,7 +116,7 @@ export default async function AiReceptionistWorkspacePage() {
               Chưa hoàn tất cài đặt cơ sở dữ liệu AI Lễ tân
             </p>
             <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">
-              Hãy chạy Migration <code>supabase/migrations/0012_ai_receptionist.sql</code> trước khi dùng dữ liệu thật.
+              Hãy chạy bản cập nhật cơ sở dữ liệu <code>supabase/migrations/0012_ai_receptionist.sql</code> trước khi dùng dữ liệu thật.
               Chi tiết kỹ thuật: {setupError}
             </p>
           </div>

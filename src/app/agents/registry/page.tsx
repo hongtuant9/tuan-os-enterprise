@@ -13,9 +13,9 @@ export default async function AgentRegistryPage() {
       <Sidebar />
       <main className="flex-1 px-4 py-6 md:px-10 md:py-8">
         <header className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Tác nhân trí tuệ nhân tạo</p>
-          <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">Đội ngũ trí tuệ nhân tạo của Tam Coc Experience</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Anh không cần chọn tác nhân khi giao việc. Chỉ cần giao cho quản lý AI; hệ thống tự định tuyến tới đúng tác nhân. Trang này dùng để xem chức năng, quyền hạn và trạng thái.</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Trợ lý trí tuệ nhân tạo</p>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--ink-primary)]">Đội ngũ trợ lý AI của Tam Coc Experience</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)]">Anh không cần chọn từng trợ lý khi giao việc. Chỉ cần giao cho quản lý AI; hệ thống tự chuyển tới đúng trợ lý. Trang này dùng để xem chức năng, quyền hạn và trạng thái.</p>
         </header>
 
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -31,10 +31,10 @@ export default async function AgentRegistryPage() {
                 <p className="mt-3 text-sm leading-6 text-[var(--ink-secondary)]">{agent.mission}</p>
                 <div className="mt-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Việc đang làm</p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{runtime?.currentTask || "Chưa có task runtime chuyên biệt."}</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">{runtime?.currentTask || "Chưa có công việc chuyên biệt đang chạy."}</p>
                 </div>
                 <div className="mt-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kết quả / kế hoạch / bằng chứng</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Kết quả / Kế hoạch / Bằng chứng</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {agent.outputs.map((output) => (
                       <a key={agent.id + "-" + output.label} href={output.href} target={output.href.startsWith("http") ? "_blank" : undefined} rel={output.href.startsWith("http") ? "noreferrer" : undefined} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-2.5 py-1.5 text-xs font-medium text-[var(--accent)] hover:border-[var(--accent)]/40">

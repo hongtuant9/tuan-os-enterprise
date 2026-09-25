@@ -9,9 +9,13 @@ type Checklist = { id:string; name:string; checkItems:Array<{id:string;name:stri
 export type TrelloMirrorResult = {
   ok:boolean; configured:boolean; scanned:number; created:number; updated:number;
   moved:number; checklists:number; heldVerify:number; errors:string[];
+  batchSize:number; totalTasks:number; nextCursor:number;
 };
 
 const API="https://api.trello.com/1";
+let runtimeCursor = 0;
+const DEFAULT_BATCH_SIZE = 20;
+const MAX_CONCURRENCY = 5;
 function cfg(){
   return {
     key:process.env.TRELLO_API_KEY?.trim()||"",
@@ -108,50 +112,80 @@ async function ensureChecklist(cardId:string, steps:string[], done:boolean){
   }
   return changed;
 }
+async function processTask(
+  id:string,
+  row:{target_id:string|null;data:Json},
+  byTask:Map<string,Card>,
+  base:TrelloMirrorResult,
+){
+  const f=fields(row.data);
+  const blocker=first(f,"BLOCKER","VƯỚNG MẮC");
+  const approval=yes(first(f,"APPROVAL_REQUIRED","CẦN DUYỆT"))&&!first(f,"APPROVAL_ID","MÃ PHÊ DUYỆT");
+  const ev=evidence(f);
+  const state=listFor(first(f,"STATUS","TRẠNG THÁI"),blocker,approval,Boolean(ev));
+  if(state.held) base.heldVerify++;
+  const name=taskName(id,f), desc=description(id,f,state.label,state.held);
+  try{
+    let card=byTask.get(id);
+    if(!card){
+      card=await api<Card>(`/cards`,{method:"POST"},{idList:state.id,name,desc,pos:"bottom"});
+      byTask.set(id,card); base.created++;
+    }else{
+      if(card.name!==name||card.desc!==desc){
+        card=await api<Card>(`/cards/${card.id}`,{method:"PUT"},{name,desc}); base.updated++;
+      }
+      if(card.idList!==state.id){
+        card=await api<Card>(`/cards/${card.id}`,{method:"PUT"},{idList:state.id}); base.moved++;
+      }
+    }
+    base.checklists+=await ensureChecklist(card.id,stepsFor(f),state.label==="DONE");
+  }catch(e){
+    base.errors.push(`${id}: ${e instanceof Error?e.message:"unknown error"}`);
+  }
+}
+
 export async function runTrelloExecutionMirror():Promise<TrelloMirrorResult>{
-  const base:TrelloMirrorResult={ok:false,configured:trelloRuntimeConfigured(),scanned:0,created:0,updated:0,moved:0,checklists:0,heldVerify:0,errors:[]};
+  const batchSize=Math.max(1,Math.min(50,Number(process.env.TCE_TRELLO_BATCH_SIZE||DEFAULT_BATCH_SIZE)));
+  const base:TrelloMirrorResult={
+    ok:false,configured:trelloRuntimeConfigured(),scanned:0,created:0,updated:0,moved:0,
+    checklists:0,heldVerify:0,errors:[],batchSize,totalTasks:0,nextCursor:runtimeCursor,
+  };
   if(!base.configured) return base;
   const container=getAdminContainer();
   const {data:rows,error}=await container.db.from("sync_records")
     .select("target_id,data,synced_at").eq("source_key","task-001").order("synced_at",{ascending:false});
   if(error) throw new Error(error.message);
+
   const latest=new Map<string,{target_id:string|null;data:Json}>();
   for(const row of rows??[]){
     const f=fields(row.data); const id=taskId(f,row.target_id);
     if(id&&!latest.has(id)) latest.set(id,{target_id:row.target_id,data:row.data});
   }
+  const all=[...latest.entries()];
+  base.totalTasks=all.length;
+  if(!all.length){base.ok=true; return base;}
+
+  if(runtimeCursor>=all.length) runtimeCursor=0;
+  const batch:Array<[string,{target_id:string|null;data:Json}]>=[];
+  for(let i=0;i<Math.min(batchSize,all.length);i++) batch.push(all[(runtimeCursor+i)%all.length]);
+  runtimeCursor=(runtimeCursor+batch.length)%all.length;
+  base.nextCursor=runtimeCursor;
+  base.scanned=batch.length;
+
   const c=cfg();
   const cards=await api<Card[]>(`/boards/${c.board}/cards`,{}, {fields:"id,name,desc,idList",filter:"open"});
   const byTask=new Map<string,Card>();
   for(const card of cards){const m=card.desc.match(/\[TASK_ID:([^\]]+)\]/); if(m) byTask.set(m[1],card);}
-  for(const [id,row] of latest){
-    base.scanned++; const f=fields(row.data);
-    const blocker=first(f,"BLOCKER","VƯỚNG MẮC");
-    const approval=yes(first(f,"APPROVAL_REQUIRED","CẦN DUYỆT"))&&!first(f,"APPROVAL_ID","MÃ PHÊ DUYỆT");
-    const ev=evidence(f);
-    const state=listFor(first(f,"STATUS","TRẠNG THÁI"),blocker,approval,Boolean(ev));
-    if(state.held) base.heldVerify++;
-    const name=taskName(id,f), desc=description(id,f,state.label,state.held);
-    try{
-      let card=byTask.get(id);
-      if(!card){
-        card=await api<Card>(`/cards`,{method:"POST"},{idList:state.id,name,desc,pos:"bottom"});
-        byTask.set(id,card); base.created++;
-      }else{
-        if(card.name!==name||card.desc!==desc){
-          card=await api<Card>(`/cards/${card.id}`,{method:"PUT"},{name,desc}); base.updated++;
-        }
-        if(card.idList!==state.id){
-          card=await api<Card>(`/cards/${card.id}`,{method:"PUT"},{idList:state.id}); base.moved++;
-        }
-      }
-      base.checklists+=await ensureChecklist(card.id,stepsFor(f),state.label==="DONE");
-    }catch(e){base.errors.push(`${id}: ${e instanceof Error?e.message:"unknown error"}`);}
+
+  for(let i=0;i<batch.length;i+=MAX_CONCURRENCY){
+    const group=batch.slice(i,i+MAX_CONCURRENCY);
+    await Promise.all(group.map(([id,row])=>processTask(id,row,byTask,base)));
   }
+
   base.ok=base.errors.length===0;
   await container.activityLog.record({
     agent:"Manager Agent",unit:"TCE Trello Mirror",
-    message:`Trello mirror scanned=${base.scanned} created=${base.created} updated=${base.updated} moved=${base.moved} checklist_changes=${base.checklists} held_verify=${base.heldVerify} errors=${base.errors.length}.`,
+    message:`Trello mirror batch=${base.scanned}/${base.totalTasks} next_cursor=${base.nextCursor} created=${base.created} updated=${base.updated} moved=${base.moved} checklist_changes=${base.checklists} held_verify=${base.heldVerify} errors=${base.errors.length}.`,
     type:base.errors.length?"alert":"info",
   });
   return base;

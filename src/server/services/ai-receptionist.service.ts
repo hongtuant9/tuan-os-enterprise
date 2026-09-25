@@ -403,9 +403,6 @@ export class AiReceptionistService {
       const latestGuestLanguage = [...messages]
         .reverse()
         .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
-      const reservationReference = typeof metadata.reservation_reference === "string"
-        ? metadata.reservation_reference
-        : null;
       return {
         id: row.id,
         channel: row.channel,

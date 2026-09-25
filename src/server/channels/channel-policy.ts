@@ -223,7 +223,9 @@ function providerEvidence(id: CustomerChannelId): {
 } {
   switch (id) {
     case "website": {
-      const providerConfig = configStatus(["TCE_WEBSITE_BRIDGE_SECRET"]);
+      const hasPublicKey = envConfigured("TCE_WEBSITE_BRIDGE_PUBLIC_KEY");
+      const hasHmacSecret = envConfigured("TCE_WEBSITE_BRIDGE_SECRET");
+      const providerConfig: ProviderConfigStatus = hasPublicKey || hasHmacSecret ? "CONFIGURED" : "NOT_CONFIGURED";
       return {
         providerConfig,
         providerVerification: providerConfig === "CONFIGURED" ? "NEED_VERIFY" : "NEED_VERIFY",

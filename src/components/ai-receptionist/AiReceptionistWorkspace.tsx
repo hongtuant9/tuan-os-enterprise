@@ -980,6 +980,15 @@ function MailboxReadiness({ mailbox }: { mailbox: MailboxStatus }) {
         </div>
         <Pill label={scopePass ? "Gmail scopes: PASS" : "Gmail scopes: CHƯA PASS"} tone={scopePass ? "good" : "warn"} />
       </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          href="/api/integrations/google/oauth/start"
+          className="inline-flex rounded-lg border border-[var(--accent)]/40 px-3 py-2 text-xs font-semibold text-[var(--accent)]"
+        >
+          {mailbox.connected ? "Cấp lại quyền Gmail" : "Kết nối Gmail OTA"}
+        </a>
+        <Pill label="Admin action · OAuth read/send" tone="warn" />
+      </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox hiện kết nối</p>

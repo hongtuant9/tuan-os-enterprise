@@ -39,6 +39,8 @@ export type ReceptionistConversation = {
   propertyName: string | null;
   propertyEntity: "lavender" | "ruby" | "cozy" | "tce" | "unknown";
   replyMode: "auto" | "manual";
+  replyMailbox: string | null;
+  providerReplyReady: boolean;
   language: string;
   intent: string;
   routedAgent: string;

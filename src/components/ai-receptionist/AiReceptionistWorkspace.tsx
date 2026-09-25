@@ -31,6 +31,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number][0];
 type Tone = "good" | "warn" | "bad" | "accent" | "muted";
+type PropertyFilter = "all" | "lavender" | "ruby" | "cozy";
 
 type ChannelStatus = {
   id: string;
@@ -86,6 +87,13 @@ const CARE_PHASE_LABEL: Record<string, string> = {
   in_service: "Trong dịch vụ",
   post_service: "Sau dịch vụ",
   general: "Chưa xác định",
+};
+
+const PROPERTY_FILTER_LABEL: Record<PropertyFilter, string> = {
+  all: "Tất cả",
+  lavender: "Lavender",
+  ruby: "Ruby",
+  cozy: "Cozy Garden",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -147,6 +155,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
+  const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
@@ -154,13 +163,32 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const [translationPending, startTranslationTransition] = useTransition();
   const [readPending, startReadTransition] = useTransition();
 
-  const selected = items.find((item) => item.id === selectedId) ?? items[0];
+  const propertyCounts = useMemo(() => ({
+    all: items.length,
+    lavender: items.filter((item) => item.propertyEntity === "lavender").length,
+    ruby: items.filter((item) => item.propertyEntity === "ruby").length,
+    cozy: items.filter((item) => item.propertyEntity === "cozy").length,
+  }), [items]);
+  const propertyItems = propertyFilter === "all"
+    ? items
+    : items.filter((item) => item.propertyEntity === propertyFilter);
+  const selected = propertyItems.find((item) => item.id === selectedId) ?? propertyItems[0];
   const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
     ?? selected?.messages[selected.messages.length - 1];
-  const unreadTotal = items.filter((item) => item.unread && !readLocally.has(item.id)).length;
-  const filteredItems = items.filter((item) =>
+  const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
+  const filteredItems = propertyItems.filter((item) =>
     inboxFilter === "all" || (item.unread && !readLocally.has(item.id))
   );
+
+  function changeProperty(next: PropertyFilter) {
+    setPropertyFilter(next);
+    const nextItems = next === "all"
+      ? items
+      : items.filter((item) => item.propertyEntity === next);
+    const first = nextItems[0];
+    setSelectedId(first?.id ?? "");
+    setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+  }
 
   function selectConversation(item: ReceptionistConversation) {
     setSelectedId(item.id);
@@ -259,10 +287,30 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Danh sách tin nhắn</p>
-              <p className="mt-1 text-xs text-[var(--ink-secondary)]">{items.length} hội thoại · {unreadTotal} chưa đọc</p>
+              <p className="mt-1 text-xs text-[var(--ink-secondary)]">{propertyItems.length} hội thoại · {unreadTotal} chưa đọc</p>
             </div>
             {readPending ? <Pill label="Đang đồng bộ" tone="muted" /> : null}
           </div>
+
+          <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Chọn cơ sở</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {(["all", "lavender", "ruby", "cozy"] as PropertyFilter[]).map((property) => (
+              <button
+                key={property}
+                type="button"
+                onClick={() => changeProperty(property)}
+                className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
+                  propertyFilter === property
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                    : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+                }`}
+              >
+                <span>{PROPERTY_FILTER_LABEL[property]}</span>
+                <span className="ml-1 text-[10px] opacity-70">({propertyCounts[property]})</span>
+              </button>
+            ))}
+          </div>
+
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -273,7 +321,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                   : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
               }`}
             >
-              Tất cả ({items.length})
+              Tất cả ({propertyItems.length})
             </button>
             <button
               type="button"

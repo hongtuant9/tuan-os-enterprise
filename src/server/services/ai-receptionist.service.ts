@@ -93,6 +93,23 @@ function carePhaseFromReservationDates(checkInDate: string | null, checkOutDate:
   return "general";
 }
 
+function journeyStageFromReservationDates(
+  checkInDate: string | null,
+  checkOutDate: string | null,
+  reservationStatus?: string | null,
+): ReceptionistConversation["journeyStage"] {
+  if (reservationStatus === "cancelled") return "cancelled";
+  const today = currentVietnamDate();
+  if (!checkInDate && !checkOutDate) return "unknown";
+  if (checkInDate && today < checkInDate) return "pre_arrival";
+  if (checkInDate && today === checkInDate) return "arrival_today";
+  if (checkOutDate && today === checkOutDate) return "departure_today";
+  if (checkOutDate && today > checkOutDate) return "post_stay";
+  if (checkInDate && checkOutDate && today > checkInDate && today < checkOutDate) return "in_house";
+  if (checkInDate && !checkOutDate && today > checkInDate) return "in_house";
+  return "unknown";
+}
+
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, "utf8")
     .toString("base64")
@@ -332,6 +349,9 @@ export class AiReceptionistService {
       const adults = typeof reservationContext.adults === "number" ? reservationContext.adults : null;
       const children = typeof reservationContext.children === "number" ? reservationContext.children : null;
       const roomCount = typeof reservationContext.roomCount === "number" ? reservationContext.roomCount : null;
+      const reservationStatus = typeof reservationContext.reservationStatus === "string"
+        ? reservationContext.reservationStatus
+        : null;
       const currentCarePhase = carePhaseFromReservationDates(checkInDate, checkOutDate);
       const storedCarePhase = typeof metadata.care_phase === "string"
           && ["pre_service", "in_service", "post_service", "general"].includes(metadata.care_phase)
@@ -359,6 +379,7 @@ export class AiReceptionistService {
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
         carePhase: currentCarePhase !== "general" ? currentCarePhase : storedCarePhase,
+        journeyStage: journeyStageFromReservationDates(checkInDate, checkOutDate, reservationStatus),
         reservationReference: typeof metadata.reservation_reference === "string"
           ? metadata.reservation_reference
           : null,
@@ -372,6 +393,7 @@ export class AiReceptionistService {
         children,
         roomCount,
         reservationDataSource: typeof reservationContext.source === "string" ? reservationContext.source : null,
+        reservationStatus,
         historyCompleteness: row.channel === "booking" || row.channel === "agoda" || row.channel === "airbnb" || row.channel === "expedia"
           ? "partial_email_only"
           : "unknown",

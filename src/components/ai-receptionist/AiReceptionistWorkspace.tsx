@@ -284,7 +284,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
     setFeedbackStatus("");
     startSendTransition(async () => {
-      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim());
+      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
       if (!result.ok) {
         setFeedbackStatus(result.error);
         return;
@@ -304,7 +304,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
         setFeedbackStatus(result.error);
         return;
       }
-      setFeedbackStatus(`Đã tạo/cập nhật ${result.data?.updated ?? 0} bản dịch; bỏ qua ${result.data?.skipped ?? 0} message đã có bản dịch.`);
+      setFeedbackStatus(`Bản dịch: ${result.data?.updated ?? 0} thành công · ${result.data?.skipped ?? 0} bỏ qua · ${result.data?.failed ?? 0} lỗi. Tin dịch lỗi có thể thử lại.`);
       router.refresh();
     });
   }
@@ -500,7 +500,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           </div>
           {selected.historyCompleteness === "partial_email_only" ? (
             <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
-              Lịch sử hiện lấy từ email relay nên có thể thiếu các phản hồi đã gửi trực tiếp trong hộp chat OTA. Hệ thống không coi phần thiếu là lịch sử đầy đủ.
+              <strong>Lịch sử trao đổi chưa đầy đủ — cần kiểm tra trên OTA.</strong> Dữ liệu hiện lấy từ email relay nên có thể thiếu phản hồi đã gửi trực tiếp trong hộp chat OTA. Không mặc định khách chưa được trả lời chỉ vì email không có phản hồi.
             </div>
           ) : null}
         </div>
@@ -546,6 +546,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Pill label={authorLabel(message)} tone={authorTone(message)} />
                       {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
+                      <Pill label={`Nguồn: ${CHANNEL_LABEL[selected.channel] ?? selected.channel}`} tone="muted" />
                       {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
                       {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
                     </div>
@@ -645,7 +646,13 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           <>
             <div className="mt-3 rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <Pill label={authorLabel(selectedMessage)} tone={authorTone(selectedMessage)} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Pill label={authorLabel(selectedMessage)} tone={authorTone(selectedMessage)} />
+                  <Pill
+                    label={selectedMessage.translationStatus === "translated" ? "Dịch thành công" : selectedMessage.translationStatus === "failed" ? "Dịch lỗi" : selectedMessage.translationStatus === "pending" ? "Đang chờ dịch" : "Không cần dịch"}
+                    tone={selectedMessage.translationStatus === "translated" || selectedMessage.translationStatus === "not_needed" ? "good" : selectedMessage.translationStatus === "failed" ? "bad" : "warn"}
+                  />
+                </div>
                 <span className="text-[10px] text-[var(--ink-muted)]">{formatDateTime(selectedMessage.createdAt)}</span>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[var(--ink-primary)]">
@@ -653,7 +660,9 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               </p>
               {translationLooksMissing ? (
                 <p className="mt-3 text-xs leading-5 text-[var(--status-warn)]">
-                  Chưa có bản dịch riêng. Hệ thống giữ nguyên nội dung gốc và không tự suy diễn bản dịch.
+                  {selectedMessage.translationStatus === "failed"
+                    ? "Dịch lỗi" + (selectedMessage.translationError ? ": " + selectedMessage.translationError : ".") + " Có thể bấm “Thử lại bản dịch” bên dưới."
+                    : "Chưa có bản dịch riêng. Hệ thống giữ nguyên nội dung gốc và không tự suy diễn bản dịch."}
                 </p>
               ) : null}
             </div>
@@ -691,9 +700,23 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               </dd>
             </div>
             <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage} tone={selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"} /></dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Trạng thái xử lý hội thoại</dt><dd className="mt-1"><Pill label={STATUS_LABEL[selected.status] ?? selected.status} tone={selected.status === "needs_manager" ? "bad" : selected.status === "closed" ? "muted" : "warn"} /></dd></div>
             <div><dt className="text-[var(--ink-muted)]">Trạng thái đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationStatus === "cancelled" ? "Đã hủy" : selected.reservationStatus === "confirmed" ? "Đã xác nhận" : "Chưa xác minh"}</dd></div>
-            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa xác minh"}</dd></div>
+            <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_guest_relay" ? "OTA guest-message relay" : "Chưa đồng bộ được nguồn đặt phòng đã xác minh"}</dd></div>
             {selected.specialRequest ? <div><dt className="text-[var(--ink-muted)]">Yêu cầu đặc biệt</dt><dd className="mt-1 leading-5 text-[var(--ink-primary)]">{selected.specialRequest}</dd></div> : null}
+            {selected.reservationMissingReasons.length > 0 ? (
+              <div>
+                <dt className="text-[var(--status-warn)]">Dữ liệu còn thiếu / chưa đồng bộ</dt>
+                <dd className="mt-1 space-y-1 text-[var(--ink-secondary)]">
+                  {selected.reservationMissingReasons.map((reason) => <p key={reason}>• {reason}</p>)}
+                </dd>
+              </div>
+            ) : null}
+            {selected.journeyStage === "post_stay" && selected.status !== "closed" ? (
+              <div className="rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 p-2 leading-5 text-[var(--ink-secondary)]">
+                Khách đã trả phòng nhưng hội thoại vẫn còn mở. Không tự coi yêu cầu đã hết giá trị chỉ vì kỳ lưu trú đã kết thúc.
+              </div>
+            ) : null}
           </dl>
         </div>
 
@@ -704,7 +727,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             disabled={!canManage || translationPending}
             className="w-full rounded-lg border border-[var(--border-hairline)] px-3 py-2 text-xs font-semibold text-[var(--ink-primary)] disabled:opacity-40"
           >
-            {translationPending ? "Đang dịch lịch sử..." : "Dịch toàn bộ lịch sử sang tiếng Việt"}
+            {translationPending ? "Đang dịch..." : selectedMessage?.translationStatus === "failed" ? "Thử lại bản dịch" : "Dịch toàn bộ lịch sử sang tiếng Việt"}
           </button>
 
           <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Feedback phong cách</p>

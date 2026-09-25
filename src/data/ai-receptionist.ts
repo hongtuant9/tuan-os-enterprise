@@ -20,6 +20,8 @@ export type ReceptionistMessage = {
   content: string;
   translatedVi: string;
   detectedLanguage?: string;
+  translationStatus: "not_needed" | "pending" | "translated" | "failed";
+  translationError: string | null;
   status: "received" | "draft" | "simulated" | "sent" | "failed";
   externalMessageId: string | null;
   deliveredAt: string | null;
@@ -57,6 +59,7 @@ export type ReceptionistConversation = {
   roomCount: number | null;
   reservationDataSource: string | null;
   reservationStatus: string | null;
+  reservationMissingReasons: string[];
   historyCompleteness: "complete" | "partial_email_only" | "unknown";
   manualSendReady: boolean;
   manualSendReason: string;

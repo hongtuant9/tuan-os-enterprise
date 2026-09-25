@@ -326,6 +326,19 @@ export async function runOtaEmailWorker(
           continue;
         }
 
+        const conversationKey = `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`;
+        await service.enrichConversationTransport({
+          channel: parsed.channel,
+          externalConversationId: conversationKey,
+          providerThreadId: message.threadId ?? null,
+          providerReplyTo: replyTo || null,
+          providerSubject: subject || null,
+          providerMessageIdHeader: headers["message-id"] || null,
+          providerReferences: headers["references"] || null,
+          replyMailbox: mailbox.googleEmail,
+          sourceMailbox: mailbox.googleEmail,
+        });
+
         result.actionable += 1;
         const enrichedContext = parsed.reservationReference
           ? await enrichContextForReservation(
@@ -338,7 +351,7 @@ export async function runOtaEmailWorker(
         const carePhase = deriveCarePhase(enrichedContext.checkInDate, enrichedContext.checkOutDate);
         const ingest = await service.ingestGuestMessage({
           channel: parsed.channel,
-          externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`,
+          externalConversationId: conversationKey,
           externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
           customerName: enrichedContext.guestName ?? undefined,
           customerContact: enrichedContext.guestPhone ?? enrichedContext.guestEmail ?? undefined,

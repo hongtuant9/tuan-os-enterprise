@@ -174,6 +174,7 @@ export type PilotMessageInput = {
     children?: number | null;
     roomCount?: number | null;
     propertyName?: string | null;
+    reservationStatus?: "confirmed" | "cancelled" | "unknown" | null;
     source?: string | null;
   };
   forceAssistMode?: boolean;

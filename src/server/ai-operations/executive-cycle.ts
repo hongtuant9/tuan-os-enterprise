@@ -226,6 +226,25 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     });
   }
   try {
+    // Notify Owner for actionable gates even when Executive keeps another safe lane moving.
+    // This prevents a deferred browser/MFA task from waiting silently behind an EXECUTED_INTERNAL task.
+    const ownerGateCandidates = candidateExecutions
+      .filter(({ execution: candidate }) =>
+        candidate.state === "WAITING_EXECUTION_TRANSPORT" ||
+        candidate.state === "WAITING_APPROVAL"
+      )
+      .slice(0, 3);
+
+    for (const candidate of ownerGateCandidates) {
+      await notifyOwnerIfNeeded({
+        execution: candidate.execution,
+        task: candidate.item,
+        pendingApprovals: [],
+        appUrl: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || null,
+      });
+    }
+
+    // Approval queue is an independent Owner interrupt channel.
     await notifyOwnerIfNeeded({
       execution,
       task: selectedNextTask,

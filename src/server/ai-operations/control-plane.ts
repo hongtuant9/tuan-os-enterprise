@@ -21,6 +21,7 @@ export interface ManagerWorkItem {
   dueDate?: string;
   executionGate?: string;
   owner?: string;
+  updatedAt?: string;
   approvalRequired?: boolean;
   approvalId?: string;
   approvalResolved?: boolean;
@@ -56,9 +57,6 @@ const priorityRank: Record<ManagerWorkItem["priority"], number> = {
 };
 
 function isWaitingStatus(status: string) {
-  // TODO không còn bị coi là "đang chờ" mặc định. Nếu không có dependency,
-  // blocker hoặc approval gate, task TODO phải được đưa vào nextItems để
-  // VPS Autopilot có thể tự chuyển sang công việc kế tiếp.
   return ["HOLD", "WAITING", "PENDING"].includes(status);
 }
 

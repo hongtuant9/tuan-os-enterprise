@@ -33,6 +33,8 @@ export type ExecutiveCycleResult = {
   changed: boolean;
   selectedNextTaskId: string | null;
   selectedNextTaskTitle: string | null;
+  selectedNextTaskAgent: string | null;
+  dispatchState: "READY_TO_EXECUTE" | "WAITING_EXECUTION_TRANSPORT" | "NO_TASK" | "HOLD_AUTHORITY_STALE";
   completedSinceLastCycle: Array<{ id: string; title: string; completedAt: string | null }>;
   continuation: {
     autoContinue: boolean;
@@ -101,6 +103,15 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     .map((item) => ({ id: item.id, title: item.title, completedAt: item.updatedAt ?? null }))
     .slice(0, 10);
   const selectedNextTask = brief.staleAuthorities.length === 0 ? (brief.nextItems[0] ?? null) : null;
+  const selectedNextTaskAgent = selectedNextTask?.agent ?? null;
+  const dispatchState: ExecutiveCycleResult["dispatchState"] =
+    brief.staleAuthorities.length > 0
+      ? "HOLD_AUTHORITY_STALE"
+      : !selectedNextTask
+        ? "NO_TASK"
+        : selectedNextTaskAgent === "computer_operator"
+          ? "WAITING_EXECUTION_TRANSPORT"
+          : "READY_TO_EXECUTE";
   const digest = createHash("sha256")
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),
@@ -111,6 +122,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       openP0,
       pendingApprovals,
       selectedNextTaskId: selectedNextTask?.id ?? null,
+      selectedNextTaskAgent,
+      dispatchState,
       completedSinceLastCycle: completedSinceLastCycle.map((item) => item.id),
     }))
     .digest("hex")
@@ -120,7 +133,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     ? " · completed=" + completedSinceLastCycle.map((item) => item.id).join(",")
     : "";
   const nextText = selectedNextTask
-    ? ` · next_task=${selectedNextTask.id} · next_action=${(selectedNextTask.nextAction ?? selectedNextTask.title).slice(0, 180)}`
+    ? ` · next_task=${selectedNextTask.id} · dispatch_agent=${selectedNextTaskAgent ?? "none"} · dispatch_state=${dispatchState} · next_action=${(selectedNextTask.nextAction ?? selectedNextTask.title).slice(0, 180)}`
     : brief.staleAuthorities.length > 0
       ? ` · next_task=HOLD_AUTHORITY_STALE · stale=${brief.staleAuthorities.join(",")}`
       : " · next_task=NONE";
@@ -154,6 +167,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     changed,
     selectedNextTaskId: selectedNextTask?.id ?? null,
     selectedNextTaskTitle: selectedNextTask?.title ?? null,
+    selectedNextTaskAgent,
+    dispatchState,
     completedSinceLastCycle,
     continuation: {
       autoContinue: AUTONOMOUS_CONTINUATION_POLICY.autoSelectNextTask,

@@ -335,29 +335,47 @@ Giới hạn attribution:
 - nếu người thật gửi trực tiếp bên ngoài TCE Control Center và provider/shared mailbox không cung cấp actor identity, hệ thống chỉ được ghi `Human external`; không được đoán đó là Tuấn hay lễ tân.
 - muốn phân biệt Tuấn và từng lễ tân một cách chắc chắn, phản hồi người thật phải đi qua TCE workspace có login riêng hoặc provider phải trả actor identity.
 
-## 17. Mailbox trung tâm cho Hospitality
+## 17. Mailbox Gmail riêng theo từng cơ sở
 
-Không dùng email cá nhân `hongtuant9@gmail.com` làm mailbox vận hành lâu dài cho toàn hệ sinh thái.
+Quyết định Owner ngày 26/09/2026: **không dùng một mailbox chung cho toàn Hospitality**. Giữ mô hình `PER_PROPERTY` với ba Gmail canonical riêng, vì giúp phân tách thương hiệu, OTA account, quyền truy cập, audit và xử lý sự cố.
 
-Tên chuyển tiếp đề xuất khi vẫn dùng Gmail miễn phí:
-- `tamcocexperience.guestcare@gmail.com`
-- Display name: **Tam Coc Experience Guest Care**
+Canonical mailbox:
+- Lavender Homestay: `tamcoclavenderhomestay@gmail.com`
+- Ruby Homestay: `ninhbinhrubyhomestay@gmail.com`
+- Cozy Garden: `tamcoc.cozygarden@gmail.com`
 
-Tên khuyến nghị dài hạn khi dùng domain doanh nghiệp:
-- `guestcare@tamcocexperience.com`
+Production requirement:
+- mỗi mailbox có OAuth riêng;
+- bắt buộc `gmail.readonly` + `gmail.send`;
+- email Google đang kết nối phải khớp canonical mailbox;
+- token lưu trong `google_oauth_connections`, không lưu secret trong Docs/chat/Git;
+- worker OTA chỉ dùng Lavender/Ruby cho OTA guest relay; Cozy dùng direct guest care, không tự động tham gia OTA relay nếu chưa có use case riêng;
+- message/conversation phải giữ `sourceMailbox`, `replyMailbox`, property/entity, OTA channel và reservation reference để audit.
 
-Lý do chọn **Guest Care** thay vì Lavender/Booking/Reservations:
-- dùng chung Lavender, Ruby và Cozy Garden;
-- bao phủ trước/trong/sau dịch vụ, không chỉ booking;
-- không phụ thuộc một OTA hoặc một property;
-- sau này có thể thêm alias `reservations@`, `stay@`, `cozy@` nhưng cùng inbox/CRM.
+Không tạo hoặc chuyển sang `guestcare.tamcocexperience@gmail.com` / `tamcocexperience.guestcare@gmail.com`.
 
-Migration mailbox phải theo từng channel:
-1. tạo mailbox;
-2. cấu hình bảo mật + recovery + 2FA;
-3. kết nối OAuth read-only trước;
-4. chạy shadow ingestion/UAT;
-5. xác minh reply relay từng OTA;
-6. mới đổi email property trên OTA/extranet;
-7. giữ forwarding từ mailbox cũ trong giai đoạn chuyển tiếp;
-8. chỉ bật auto-reply cho từng OTA sau UAT PASS.
+### 17.1 Quy trình thay đổi email trên OTA
+
+Không đổi email OTA hàng loạt. Thực hiện từng cơ sở/từng OTA:
+1. xác nhận mailbox OAuth PASS;
+2. kiểm tra email notification hiện tại;
+3. chạy shadow ingestion;
+4. xác minh parser nhận đúng property + reservation reference;
+5. kiểm thử round-trip reply bằng booking/test thread phù hợp;
+6. chỉ sau UAT PASS mới bật reply gate cho OTA đó;
+7. giữ auto-reply OFF mặc định cho tới approval + UAT channel-specific.
+
+### 17.2 Audit bắt buộc
+
+Mỗi giao tiếp phải truy vết được:
+- ngày giờ ICT;
+- cơ sở Lavender / Ruby / Cozy;
+- kênh Website/Facebook/Booking/Agoda/Airbnb/Expedia/...;
+- booking/reservation reference nếu có;
+- nội dung khách;
+- nội dung AI tạo;
+- trạng thái draft/simulated/sent/failed;
+- tác giả: Guest / AI / Human / System;
+- nếu AI draft được người thật sửa: giữ provenance `AI → Human edited`;
+- nếu người thật gửi ngoài TCE và provider không trả actor identity: ghi `Human external`, không suy đoán là Tuấn hay lễ tân.
+

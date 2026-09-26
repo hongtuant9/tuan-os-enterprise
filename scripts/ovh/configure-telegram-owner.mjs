@@ -47,15 +47,26 @@ if (!ownerChatId) {
     body: JSON.stringify({ drop_pending_updates: false }),
   }).catch(() => null);
 
-  const updatesResponse = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50&timeout=0`);
-  const updatesPayload = await updatesResponse.json().catch(() => ({}));
-  const updates = Array.isArray(updatesPayload?.result) ? updatesPayload.result : [];
-  const startMessages = updates
-    .map((item) => item?.message)
-    .filter((message) => message?.chat?.id != null && /^\/start\b/i.test(String(message?.text || "").trim()));
-  const uniqueChats = [...new Set(startMessages.map((message) => String(message.chat.id)))];
+  let uniqueChats = [];
+  for (let attempt = 0; attempt < 24 && uniqueChats.length !== 1; attempt += 1) {
+    const updatesResponse = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50&timeout=5`);
+    const updatesPayload = await updatesResponse.json().catch(() => ({}));
+    if (updatesResponse.ok && updatesPayload?.ok === true) {
+      const updates = Array.isArray(updatesPayload?.result) ? updatesPayload.result : [];
+      const startMessages = updates
+        .map((item) => item?.message)
+        .filter((message) => message?.chat?.id != null && /^\/start\b/i.test(String(message?.text || "").trim()));
+      uniqueChats = [...new Set(startMessages.map((message) => String(message.chat.id)))];
+    } else if (updatesResponse.status === 401) {
+      console.error("HOLD_TELEGRAM_TOKEN: Bot token rejected by Telegram API.");
+      process.exit(6);
+    }
+    if (uniqueChats.length !== 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
   if (uniqueChats.length !== 1) {
-    console.error("HOLD_OWNER_CHAT: send /start to the new TUAN OS bot from the Owner Telegram account, then run this script again.");
+    console.error("HOLD_OWNER_CHAT: no unique Owner /start received within bootstrap window.");
     process.exit(3);
   }
   ownerChatId = uniqueChats[0];

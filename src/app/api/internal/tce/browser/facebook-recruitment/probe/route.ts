@@ -20,6 +20,11 @@ function authorized(req: NextRequest): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+export async function GET() {
+  const status = await facebookRecruitmentBrowserStatus();
+  return NextResponse.json({ ok: true, status: { state: status.state, authenticated: status.authenticated } });
+}
+
 export async function POST(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ ok:false, error:"unauthorized" }, { status:401 });
   const status = await facebookRecruitmentBrowserStatus();

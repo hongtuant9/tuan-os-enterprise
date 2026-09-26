@@ -22,7 +22,7 @@ const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_client: "Google OAuth chưa được cấu hình đúng. Cần kiểm tra cấu hình quản trị.",
   invalid_grant: "Mã xác thực không hợp lệ hoặc đã được dùng — vui lòng thử lại.",
   redirect_uri_mismatch: "URI chuyển hướng OAuth chưa đúng. Cần kiểm tra cấu hình quản trị.",
-  token_exchange_lỗi: "Không thể kết nối Google để hoàn tất liên kết — vui lòng thử lại.",
+  token_exchange_failed: "Không thể kết nối Google để hoàn tất liên kết — vui lòng thử lại.",
 };
 
 function GoogleConnection() {
@@ -100,6 +100,27 @@ const STATUS_MAP: Record<SyncSourceStatus["status"], "online" | "monitoring" | "
   running: "monitoring",
   error: "offline",
 };
+
+function syncTriggerLabel(trigger: string): string {
+  return {
+    manual: "thủ công",
+    scheduled: "theo lịch",
+    webhook: "tự động từ nguồn",
+  }[trigger] ?? trigger;
+}
+
+function syncText(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .replace(/Task tracker sheet — imports into public\.tasks\./gi, "Bảng theo dõi công việc — đồng bộ vào hệ thống công việc.")
+    .replace(/Approval requests sheet — imports into public\.approvals\./gi, "Bảng yêu cầu phê duyệt — đồng bộ vào hệ thống phê duyệt.")
+    .replace(/Finance line items sheet\./gi, "Bảng dữ liệu tài chính.")
+    .replace(/Business unit \/ asset overview sheet\./gi, "Bảng tổng quan đơn vị kinh doanh và tài sản.")
+    .replace(/Google token endpoint returned 400: invalid_grant/gi, "Kết nối Google đã hết hiệu lực hoặc bị thu hồi (invalid_grant)")
+    .replace(/\bfailed\b/gi, "lỗi")
+    .replace(/\berror\b/gi, "lỗi")
+    .replace(/\bsync\b/gi, "đồng bộ");
+}
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "Chưa từng";
@@ -201,20 +222,20 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-[var(--ink-primary)]">{source.name}</h3>
-                  <p className="text-xs text-[var(--ink-muted)]">{source.description}</p>
+                  <p className="text-xs text-[var(--ink-muted)]">{syncText(source.description)}</p>
                 </div>
                 <StatusPill status={STATUS_MAP[source.status]} pulse={source.status === "running"} />
               </div>
 
               {source.latestRun && (
                 <p className="text-xs text-[var(--ink-secondary)]">
-                  Lần chạy gần nhất ({source.latestRun.trigger}): {source.latestRun.recordsCreated} mới,{" "}
+                  Lần chạy gần nhất ({syncTriggerLabel(source.latestRun.trigger)}): {source.latestRun.recordsCreated} mới,{" "}
                   {source.latestRun.recordsUpdated} cập nhật
                   {source.latestRun.recordsFailed ? `, ${source.latestRun.recordsFailed} lỗi` : ""}
                 </p>
               )}
 
-              {source.lastError && <p className="text-xs text-[var(--status-bad)]">{source.lastError}</p>}
+              {source.lastError && <p className="text-xs text-[var(--status-bad)]">{syncText(source.lastError)}</p>}
 
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--ink-muted)]">

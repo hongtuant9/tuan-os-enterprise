@@ -548,7 +548,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <DataTable
               columns={["Chỉ tiêu","Giá trị"]}
               rows={4}
-              data={data?.tables.financeCostMức bao phủ}
+              data={data?.tables.financeCostCoverage}
             />
           </Section>
           <Section

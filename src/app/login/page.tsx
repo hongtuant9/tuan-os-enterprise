@@ -7,7 +7,7 @@ import { recordLogin } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setMật khẩu] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithMật khẩu({
         email,
         password,
       });
@@ -51,15 +51,15 @@ export default function LoginPage() {
           </div>
           <div>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">TUAN OS</p>
-            <p className="text-xs text-[var(--ink-muted)]">Command Center</p>
+            <p className="text-xs text-[var(--ink-muted)]">Trung tâm điều hành</p>
           </div>
         </div>
 
         <h1 className="text-xl font-semibold tracking-tight text-[var(--ink-primary)]">
-          Sign in
+          Đăng nhập
         </h1>
         <p className="mt-1 mb-6 text-sm text-[var(--ink-muted)]">
-          Enter your credentials to access the command center.
+          Nhập thông tin tài khoản để truy cập trung tâm điều hành.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -82,7 +82,7 @@ export default function LoginPage() {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-3">
               <label htmlFor="password" className="text-xs font-medium text-[var(--ink-secondary)]">
-                Password
+                Mật khẩu
               </label>
               <Link
                 href="/forgot-password"
@@ -97,7 +97,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setMật khẩu(e.target.value)}
               className="rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--ink-primary)] outline-none transition-colors placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]/60"
               placeholder="••••••••"
             />
@@ -114,7 +114,7 @@ export default function LoginPage() {
             disabled={loading}
             className="mt-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
           </button>
         </form>
       </div>

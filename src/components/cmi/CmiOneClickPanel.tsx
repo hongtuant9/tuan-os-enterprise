@@ -24,7 +24,7 @@ const quickLines: Array<{ value: CmiBusinessLine; title: string; subtitle: strin
   {
     value: "homestay",
     title: "Homestay",
-    subtitle: "OTA, phòng, review, breakfast, check-in, transfer, tour và dịch vụ bổ sung.",
+    subtitle: "Kênh đặt phòng trực tuyến, phòng, đánh giá, bữa sáng, nhận phòng, đưa đón, tour và dịch vụ bổ sung.",
   },
   {
     value: "tpt_isteam",
@@ -214,7 +214,7 @@ export default function CmiOneClickPanel({
                       </div>
                       {strategy && (
                         <div className="mt-4 rounded-lg bg-[var(--page)] p-4">
-                          <p className="text-xs font-semibold text-[var(--accent)]">AI Marketing — chiến lược cần test</p>
+                          <p className="text-xs font-semibold text-[var(--accent)]">AI Tiếp thị — chiến lược cần thử nghiệm</p>
                           <p className="mt-2 text-sm text-[var(--ink-secondary)]"><b>Khách hàng:</b> {strategy.targetCustomer}</p>
                           <p className="mt-1 text-sm text-[var(--ink-secondary)]"><b>Định vị:</b> {strategy.positioning}</p>
                           <p className="mt-1 text-sm text-[var(--ink-secondary)]"><b>Giá trị khác biệt:</b> {strategy.valueProposition}</p>

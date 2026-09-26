@@ -5,6 +5,7 @@ import { TCE_BUSINESS_OPERATING_PLAN } from "@/server/ai-operations/tce-business
 import { AUTONOMOUS_CONTINUATION_POLICY, EXECUTION_GOVERNANCE_VERSION, trelloExecutionMirrorStatus } from "@/server/agents/execution-governance";
 import { DEPARTMENT_EXECUTION_ENGINE_VERSION } from "@/server/ai-operations/department-executor";
 import { TASK_EXECUTION_WRITEBACK_VERSION } from "@/server/ai-operations/task-execution-writeback";
+import { telegramOwnerChannelStatus } from "@/server/notifications/telegram-owner";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,8 @@ function runtimeSignals() {
     autonomousOwnerInterruptLevels: [...AUTONOMOUS_CONTINUATION_POLICY.ownerInterruptLevels],
     trelloExecutionMirror: trelloExecutionMirrorStatus(),
     trelloWorkerEnabled: companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    telegramOwnerChannel: telegramOwnerChannelStatus(),
+    authenticatedBrowserOwnerNotifyPolicy: "TELEGRAM_OWNER_GATE",
     knowledgeGovernanceWorkerEnabled: companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     knowledgeGovernanceWorkerIntervalMs: Math.max(21_600_000, Number(process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_INTERVAL_MS || 86_400_000)),
   };

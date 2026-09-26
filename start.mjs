@@ -138,7 +138,7 @@ async function executiveTick() {
     }
     if (!payload?.skipped) {
       console.log(
-        `[TCE Executive] next=${payload?.next ?? 0} blocked=${payload?.blocked ?? 0} waiting_owner=${payload?.waitingOwner ?? 0} open_p0=${payload?.openP0 ?? 0} reality_fnb=${payload?.reality?.fnb?.state ?? "n/a"} reality_hotel=${payload?.reality?.hotel?.state ?? "n/a"} fnb_invoices=${payload?.reality?.fnb?.invoiceCount ?? 0} hotel_bookings=${payload?.reality?.hotel?.bookingCount ?? 0}`,
+        `[TCE Executive] autonomous=${payload?.continuousExecution ?? "n/a"} next_task=${payload?.nextTaskId ?? "none"} next=${payload?.next ?? 0} blocked=${payload?.blocked ?? 0} waiting_owner=${payload?.waitingOwner ?? 0} open_p0=${payload?.openP0 ?? 0} reality_fnb=${payload?.reality?.fnb?.state ?? "n/a"} reality_hotel=${payload?.reality?.hotel?.state ?? "n/a"} fnb_invoices=${payload?.reality?.fnb?.invoiceCount ?? 0} hotel_bookings=${payload?.reality?.hotel?.bookingCount ?? 0}`,
       );
     }
   } catch (error) {

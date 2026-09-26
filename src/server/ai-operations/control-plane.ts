@@ -56,7 +56,10 @@ const priorityRank: Record<ManagerWorkItem["priority"], number> = {
 };
 
 function isWaitingStatus(status: string) {
-  return ["HOLD", "TODO", "WAITING", "PENDING"].includes(status);
+  // TODO không còn bị coi là "đang chờ" mặc định. Nếu không có dependency,
+  // blocker hoặc approval gate, task TODO phải được đưa vào nextItems để
+  // VPS Autopilot có thể tự chuyển sang công việc kế tiếp.
+  return ["HOLD", "WAITING", "PENDING"].includes(status);
 }
 
 export function buildManagerBrief(

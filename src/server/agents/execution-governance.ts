@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v2";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v3";
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -27,7 +27,23 @@ export const EXECUTION_GOVERNANCE_RULES = [
   "Activity log phải đủ để audit AI Agent đã làm gì, tới đâu và bước tiếp theo là gì.",
   "Không tạo micro-task vô nghĩa; chỉ tách bước khi tăng khả năng điều phối, audit hoặc handoff.",
   "Trello phải phản ánh thay đổi trạng thái trong cùng chu kỳ vận hành.",
+  "Không chờ câu lệnh hội thoại như “tiếp tục” hoặc “triển khai tiếp” để chuyển sang công việc hợp lệ kế tiếp; VPS Autopilot phải tự tiếp tục theo TASK-001 sau khi công việc trước có evidence hoàn thành.",
+  "Cửa sổ ChatGPT, trình duyệt, MacBook hoặc Windows chỉ là lớp tương tác/hỗ trợ; không được là dependency cho runtime 24/7 nếu API/worker server-side đã xử lý được.",
+  "Nếu phiên hội thoại kết thúc hoặc xuất hiện lỗi Stream cache expired, runtime không được dừng: checkpoint phải nằm trong TASK-001/runtime/Activity Log và chu kỳ VPS kế tiếp phải tự tái dựng trạng thái từ SSOT.",
+  "Chỉ dùng desktop/window khi bắt buộc bởi MFA/đăng nhập, giao diện không có API/DOM phù hợp hoặc bước cần thao tác người dùng; xong bước đó phải quay lại worker 24/7.",
+  "Sau khi một task có evidence đạt Definition of Done, hệ thống phải ghi kết quả, cập nhật trạng thái/evidence rồi tự chọn task hợp lệ kế tiếp theo priority, dependency và gate.",
+  "Mọi L2/L3, financial/public/customer-facing mutation, thay đổi quyền truy cập, destructive/high-risk production action hoặc dữ liệu authority chưa VERIFIED phải fail closed về WAITING_APPROVAL/HOLD; không được tự vượt gate chỉ vì chế độ tự động đang bật.",
 ] as const;
+
+export const CONTINUOUS_AUTONOMOUS_EXECUTION = {
+  status: "ACTIVE",
+  runtime: "VPS_ALWAYS_ON",
+  chatSessionDependency: false,
+  desktopDependency: false,
+  resumeSource: "TASK-001 + runtime + Activity Log",
+  completionBehavior: "REPORT_THEN_CONTINUE",
+  approvalBehavior: "FAIL_CLOSED",
+} as const;
 
 export function trelloRuntimeConfigured(): boolean {
   return Boolean(
@@ -45,6 +61,7 @@ export function executionGovernanceInstruction(): string {
     `Execution governance ${EXECUTION_GOVERNANCE_VERSION}:`,
     ...EXECUTION_GOVERNANCE_RULES.map((rule, index) => `${index + 1}) ${rule}`),
     `Trello mirror runtime: ${trelloExecutionMirrorStatus()}.`,
+    `Continuous autonomous execution: ${CONTINUOUS_AUTONOMOUS_EXECUTION.status}; runtime=${CONTINUOUS_AUTONOMOUS_EXECUTION.runtime}; chat_session_dependency=${CONTINUOUS_AUTONOMOUS_EXECUTION.chatSessionDependency}; completion=${CONTINUOUS_AUTONOMOUS_EXECUTION.completionBehavior}.`,
     "Nếu Trello runtime đang HOLD thì phải ghi blocker rõ; không được tuyên bố đã cập nhật Trello.",
   ].join("\n");
 }

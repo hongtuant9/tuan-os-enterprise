@@ -38,7 +38,7 @@ export default function TaskCenter({ tasks: initialTasks }: { tasks: Task[] }) {
     setPendingId(id);
 
     const logId = pushLog({
-      agent: "You",
+      agent: "Bạn",
       unit: task?.unit ?? "General",
       message: `Cập nhật trạng thái công việc "${task?.title ?? id}" thành ${STATUS_BADGE[status].label}.`,
       type: "action",

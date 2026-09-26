@@ -132,6 +132,59 @@ function airbnbStayField(text: string, labels: string[], stopLabels: string[]): 
   return null;
 }
 
+function receivedYear(receivedAt?: string | null): number {
+  if (receivedAt) {
+    const parsed = Date.parse(receivedAt);
+    if (Number.isFinite(parsed)) return new Date(parsed).getUTCFullYear();
+  }
+  return Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+  }).format(new Date()));
+}
+
+function airbnbSubjectStayRange(subject: string, receivedAt?: string | null): {
+  checkInText: string | null;
+  checkOutText: string | null;
+} {
+  const year = receivedYear(receivedAt);
+
+  const sameMonth = subject.match(
+    /giai đoạn\s*(\d{1,2})\s*[–-]\s*(\d{1,2})\s*(?:thg|tháng)\s*(\d{1,2})(?:\s*,?\s*(20\d{2}))?/i,
+  );
+  if (sameMonth) {
+    const resolvedYear = Number(sameMonth[4] || year);
+    return {
+      checkInText: `${Number(sameMonth[1])} thg ${Number(sameMonth[3])}, ${resolvedYear}`,
+      checkOutText: `${Number(sameMonth[2])} thg ${Number(sameMonth[3])}, ${resolvedYear}`,
+    };
+  }
+
+  const crossMonth = subject.match(
+    /giai đoạn\s*(\d{1,2})\s*(?:thg|tháng)\s*(\d{1,2})\s*[–-]\s*(\d{1,2})\s*(?:thg|tháng)\s*(\d{1,2})(?:\s*,?\s*(20\d{2}))?/i,
+  );
+  if (crossMonth) {
+    const resolvedYear = Number(crossMonth[5] || year);
+    return {
+      checkInText: `${Number(crossMonth[1])} thg ${Number(crossMonth[2])}, ${resolvedYear}`,
+      checkOutText: `${Number(crossMonth[3])} thg ${Number(crossMonth[4])}, ${resolvedYear}`,
+    };
+  }
+
+  const english = subject.match(
+    /(?:from|for)\s*(\d{1,2})\s+([A-Za-z]{3,9})\s*[–-]\s*(\d{1,2})\s+([A-Za-z]{3,9})(?:\s*,?\s*(20\d{2}))?/i,
+  );
+  if (english) {
+    const resolvedYear = Number(english[5] || year);
+    return {
+      checkInText: `${english[1]} ${english[2]} ${resolvedYear}`,
+      checkOutText: `${english[3]} ${english[4]} ${resolvedYear}`,
+    };
+  }
+
+  return { checkInText: null, checkOutText: null };
+}
+
 function airbnbGuestCounts(text: string): {
   guestCount: number | null;
   adults: number | null;
@@ -392,6 +445,7 @@ export function parseOtaReservationContext(input: {
   subject: string;
   body?: string | null;
   snippet?: string | null;
+  receivedAt?: string | null;
 }): { channel: OtaEmailChannel | null; reservationReference: string | null; providerConversationReference: string | null; context: ParsedReservationContext } {
   const body = normalize(input.body || input.snippet || "");
   const subject = normalize(input.subject || "");
@@ -423,15 +477,18 @@ export function parseOtaReservationContext(input: {
   const airbnbCheckOutText = channel === "airbnb"
     ? airbnbStayField(body, ["Trả phòng", "Check-out"], ["Khách", "Guests?", "Mã xác nhận", "Confirmation code", "Tải ứng dụng"])
     : null;
+  const airbnbSubjectRange = channel === "airbnb"
+    ? airbnbSubjectStayRange(subject, input.receivedAt)
+    : { checkInText: null, checkOutText: null };
   const rawCheckInText = channel === "agoda"
     ? (agodaRange.checkInText ?? genericCheckInText)
     : channel === "airbnb"
-      ? (airbnbCheckInText ?? genericCheckInText)
+      ? (airbnbCheckInText ?? airbnbSubjectRange.checkInText ?? genericCheckInText)
       : genericCheckInText;
   const rawCheckOutText = channel === "agoda"
     ? (agodaRange.checkOutText ?? genericCheckOutText)
     : channel === "airbnb"
-      ? (airbnbCheckOutText ?? genericCheckOutText)
+      ? (airbnbCheckOutText ?? airbnbSubjectRange.checkOutText ?? genericCheckOutText)
       : genericCheckOutText;
   const checkInDate = parseDateOnly(rawCheckInText);
   const checkOutDate = parseDateOnly(rawCheckOutText);
@@ -505,6 +562,7 @@ export function parseOtaEmail(input: {
   subject: string;
   body?: string | null;
   snippet?: string | null;
+  receivedAt?: string | null;
 }): ParsedOtaEmail {
   const body = normalize(input.body || input.snippet || "");
   const subject = normalize(input.subject || "");

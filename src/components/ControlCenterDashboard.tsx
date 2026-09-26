@@ -73,7 +73,7 @@ export default function ControlCenterDashboard(props: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">Cần anh xử lý</p>
-            <p className="mt-1 text-sm text-[var(--ink-secondary)]">{props.pendingApprovals} approval đang chờ. Hệ thống ưu tiên chỉ đẩy ngoại lệ tài chính/chi phí hoặc việc thật sự cần Owner.</p>
+            <p className="mt-1 text-sm text-[var(--ink-secondary)]">{props.pendingApprovals} phê duyệt đang chờ. Hệ thống ưu tiên chỉ đẩy ngoại lệ tài chính/chi phí hoặc việc thật sự cần chủ sở hữu.</p>
           </div>
           <Link href="/ai-manager" className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">Mở AI Manager</Link>
         </div>
@@ -83,7 +83,7 @@ export default function ControlCenterDashboard(props: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">15 trợ lý AI</p>
-            <p className="mt-1 text-sm text-[var(--ink-secondary)]">{props.agentsOnline}/{props.agentsTotal} Agent đang online theo Control Center; trạng thái chi tiết nằm trong AI Manager.</p>
+            <p className="mt-1 text-sm text-[var(--ink-secondary)]">{props.agentsOnline}/{props.agentsTotal} trợ lý AI đang hoạt động theo Trung tâm điều hành; trạng thái chi tiết nằm trong Quản lý AI.</p>
           </div>
           <Link href="/ai-manager#agent-registry" className="text-sm font-semibold text-[var(--accent)]">Xem trạng thái →</Link>
         </div>
@@ -102,7 +102,7 @@ export default function ControlCenterDashboard(props: Props) {
           <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Daily budget</p><p className="mt-1 text-lg font-semibold">{props.aiDailyBudget > 0 ? `$${props.aiDailyBudget.toFixed(2)}` : "Chưa duyệt"}</p></div>
           <div className="rounded-lg bg-[var(--surface-raised)] p-3"><p className="text-xs text-[var(--ink-muted)]">Monthly budget</p><p className="mt-1 text-lg font-semibold">{props.aiMonthlyBudget > 0 ? `$${props.aiMonthlyBudget.toFixed(2)}` : "Chưa duyệt"}</p></div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-[var(--ink-muted)]">Thiết kế kiểm soát: cảnh báo kỹ thuật tại $20 / $30, ngưỡng dừng mềm $40, ngưỡng dừng cứng $50. Vượt ngưỡng dừng cứng phải Owner duyệt trước khi tiếp tục AI trả phí.</p>
+        <p className="mt-3 text-xs leading-5 text-[var(--ink-muted)]">Thiết kế kiểm soát: cảnh báo kỹ thuật tại $20 / $30, ngưỡng dừng mềm $40, ngưỡng dừng cứng $50. Vượt ngưỡng dừng cứng phải chủ sở hữu duyệt trước khi tiếp tục AI trả phí.</p>
       </section>
 
       <section id="system-health">

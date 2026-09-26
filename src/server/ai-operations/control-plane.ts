@@ -21,6 +21,7 @@ export interface ManagerWorkItem {
   dueDate?: string;
   executionGate?: string;
   owner?: string;
+  updatedAt?: string;
   approvalRequired?: boolean;
   approvalId?: string;
   approvalResolved?: boolean;
@@ -56,7 +57,7 @@ const priorityRank: Record<ManagerWorkItem["priority"], number> = {
 };
 
 function isWaitingStatus(status: string) {
-  return ["HOLD", "TODO", "WAITING", "PENDING"].includes(status);
+  return ["HOLD", "WAITING", "PENDING"].includes(status);
 }
 
 export function buildManagerBrief(

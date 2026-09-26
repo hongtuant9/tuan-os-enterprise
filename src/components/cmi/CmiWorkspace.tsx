@@ -47,7 +47,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           </div>
           <div className={card}>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">3. AI biến bằng chứng thành cơ hội</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">Khi AI được bật có kiểm soát, hệ thống nhóm nỗi đau, nhu cầu, điểm yếu đối thủ và khoảng trống thị trường → đề xuất cơ hội sản phẩm → anh duyệt → AI Marketing mới tạo chiến lược cần test.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">Khi AI được bật có kiểm soát, hệ thống nhóm nỗi đau, nhu cầu, điểm yếu đối thủ và khoảng trống thị trường → đề xuất cơ hội sản phẩm → anh duyệt → AI Tiếp thị mới tạo chiến lược cần thử nghiệm.</p>
           </div>
         </div>
         <div className="mt-4 rounded-lg border border-[var(--border-hairline)] p-4 text-sm leading-6 text-[var(--ink-secondary)]">
@@ -222,7 +222,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
 
         <form action={createMarketingStrategyDraft} className={card}>
           <h2 className="font-semibold text-[var(--ink-primary)]">6. AI Marketing — Sau khi đã có cơ hội</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Marketing không quyết định “nên làm sản phẩm gì”. Marketing chỉ thiết kế cách test và cách bán một cơ hội đã được CMI chứng minh đủ mạnh.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Tiếp thị không quyết định “nên làm sản phẩm gì”. Tiếp thị chỉ thiết kế cách thử nghiệm và cách bán một cơ hội đã được CMI chứng minh đủ mạnh.</p>
           <label className="mt-4 block text-sm">Cơ hội
             <select name="opportunityId" required className={input}>
               <option value="">Chọn cơ hội</option>
@@ -232,7 +232,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           <label className="mt-3 block text-sm">Khách hàng mục tiêu<textarea name="targetCustomer" required rows={2} className={input} /></label>
           <label className="mt-3 block text-sm">Định vị (Positioning)<textarea name="positioning" required rows={2} className={input} /></label>
           <label className="mt-3 block text-sm">Giá trị khác biệt (Value Proposition)<textarea name="valueProposition" required rows={2} className={input} /></label>
-          <label className="mt-3 block text-sm">Ý tưởng Marketing — mỗi dòng một ý tưởng<textarea name="marketingIdeas" rows={4} className={input} /></label>
+          <label className="mt-3 block text-sm">Ý tưởng tiếp thị — mỗi dòng một ý tưởng<textarea name="marketingIdeas" rows={4} className={input} /></label>
           <label className="mt-3 block text-sm">Kênh đề xuất — mỗi dòng một kênh<textarea name="channelStrategy" rows={3} className={input} /></label>
           <label className="mt-3 block text-sm">Giả thuyết cần test<textarea name="testHypotheses" rows={3} className={input} /></label>
           <label className="mt-3 block text-sm">Chỉ số kiểm chứng (KPI)<textarea name="kpis" rows={3} className={input} /></label>

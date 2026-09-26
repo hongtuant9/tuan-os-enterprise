@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/channel-policy";
 import { TCE_BUSINESS_OPERATING_PLAN } from "@/server/ai-operations/tce-business-plan";
-import { EXECUTION_GOVERNANCE_VERSION, trelloExecutionMirrorStatus } from "@/server/agents/execution-governance";
+import { AUTONOMOUS_CONTINUATION_POLICY, EXECUTION_GOVERNANCE_VERSION, trelloExecutionMirrorStatus } from "@/server/agents/execution-governance";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +140,11 @@ function runtimeSignals() {
     businessOperatingPlanStatus: TCE_BUSINESS_OPERATING_PLAN.status,
     businessOperatingPlanDecisionId: TCE_BUSINESS_OPERATING_PLAN.decisionId,
     executionGovernanceVersion: EXECUTION_GOVERNANCE_VERSION,
+    autonomousContinuation: AUTONOMOUS_CONTINUATION_POLICY.autoSelectNextTask,
+    autonomousCheckpointAuthority: AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority,
+    autonomousSessionFailurePolicy: AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy,
+    autonomousDesktopPolicy: AUTONOMOUS_CONTINUATION_POLICY.desktopPolicy,
+    autonomousOwnerInterruptLevels: [...AUTONOMOUS_CONTINUATION_POLICY.ownerInterruptLevels],
     trelloExecutionMirror: trelloExecutionMirrorStatus(),
     trelloWorkerEnabled: companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     knowledgeGovernanceWorkerEnabled: companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false",

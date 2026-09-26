@@ -14,6 +14,7 @@ import { runMarketingCommandCenterCycle, type MarketingCommandCenterCycleResult 
 import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-governance";
 import { dispatchDepartmentTask, type DepartmentExecutionResult } from "./department-executor";
 import { writeTaskExecutionCheckpoint } from "./task-execution-writeback";
+import { notifyOwnerIfNeeded } from "@/server/notifications/telegram-owner";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -101,7 +102,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const items = buildManagerItems(tasks ?? [], records);
   const brief = buildManagerBrief(items, authorities, now.toISOString());
   const openP0 = items.filter((item) => item.priority === "P0" && item.status !== "DONE").length;
-  const pendingApprovals = (approvals ?? []).filter((item) => item.status === "pending").length;
+  const pendingApprovalItems = (approvals ?? []).filter((item) => item.status === "pending");
+  const pendingApprovals = pendingApprovalItems.length;
   const previousCycleAt = latestLogs?.[0]?.created_at ? Date.parse(latestLogs[0].created_at) : null;
   const completedSinceLastCycle = items
     .filter((item) => {
@@ -223,6 +225,22 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       type: execution.state === "EXECUTED_INTERNAL" || execution.state === "NO_TASK" ? "info" : "alert",
     });
   }
+  try {
+    await notifyOwnerIfNeeded({
+      execution,
+      task: selectedNextTask,
+      pendingApprovals: pendingApprovalItems,
+      appUrl: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || null,
+    });
+  } catch (error) {
+    await container.activityLog.record({
+      agent: "TUAN OS — Owner Notification",
+      unit: "TUAN OS Telegram Owner",
+      message: `telegram_alert=FAILED_RETRY · task=${execution.taskId ?? "NONE"} · error=${error instanceof Error ? error.name : "unknown"}`,
+      type: "alert",
+    });
+  }
+
   const digest = createHash("sha256")
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),

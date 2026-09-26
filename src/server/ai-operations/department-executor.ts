@@ -2,7 +2,7 @@ import "server-only";
 
 import type { ManagerWorkItem } from "./control-plane";
 
-export const DEPARTMENT_EXECUTION_ENGINE_VERSION = "2026-09-26.v1";
+export const DEPARTMENT_EXECUTION_ENGINE_VERSION = "2026-09-26.v2";
 
 export type DepartmentExecutionState =
   | "EXECUTED_INTERNAL"

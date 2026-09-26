@@ -13,6 +13,7 @@ import { runRealityPulse, type RealityPulseResult } from "./reality-pulse";
 import { runMarketingCommandCenterCycle, type MarketingCommandCenterCycleResult } from "@/server/marketing-command-center/cycle";
 import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-governance";
 import { dispatchDepartmentTask, type DepartmentExecutionResult } from "./department-executor";
+import { writeTaskExecutionCheckpoint } from "./task-execution-writeback";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,6 +21,12 @@ function freshness(updatedAt?: string | null, status?: string | null): Authority
   if (status === "error") return "unavailable";
   if (!updatedAt) return "unavailable";
   return Date.now() - new Date(updatedAt).getTime() <= DAY_MS ? "verified" : "stale";
+}
+
+function taskIdFromRecordData(data: unknown): string {
+  if (!data || Array.isArray(data) || typeof data !== "object") return "";
+  const value = (data as Record<string, unknown>).TASK_ID;
+  return value == null ? "" : String(value);
 }
 
 export type ExecutiveCycleResult = {
@@ -70,8 +77,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }, { data: latestDispatchLogs }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
-    container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
-    container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
+    container.db.from("sync_records").select("source_key,external_id,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
+    container.db.from("sync_sources").select("key,sheet_id,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("activity_logs").select("message,created_at").eq("unit", "TCE Executive").order("created_at", { ascending: false }).limit(1),
     container.db.from("activity_logs").select("message,created_at").eq("unit", "TCE Execution Dispatcher").order("created_at", { ascending: false }).limit(1),
   ]);
@@ -166,13 +173,48 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     .slice(0, 16);
   const previousDispatch = latestDispatchLogs?.[0]?.message ?? "";
   if (!previousDispatch.includes(`fingerprint=${executionFingerprint}`)) {
+    let writeback = "SKIPPED_NO_TASK";
+    let writebackComplete = execution.state === "NO_TASK";
+
+    if (execution.taskId && taskSource?.sheet_id) {
+      const sourceRecord = records.find(
+        (record) => record.source_key === "task-001" && taskIdFromRecordData(record.data) === execution.taskId,
+      );
+      const rowNumber = Number(sourceRecord?.external_id ?? "");
+      if (Number.isInteger(rowNumber) && rowNumber >= 2) {
+        try {
+          const checkpoint = await writeTaskExecutionCheckpoint({
+            spreadsheetId: taskSource.sheet_id,
+            rowNumber,
+            taskId: execution.taskId,
+            result: execution,
+            now,
+          });
+          writeback = checkpoint.written ? `PASS:${checkpoint.cells.join(",")}` : "SKIPPED_NOT_WRITTEN";
+          writebackComplete = checkpoint.written;
+        } catch (error) {
+          writeback = `FAILED_RETRY:${error instanceof Error ? error.name : "unknown"}`;
+          writebackComplete = false;
+          await container.activityLog.record({
+            agent: "TUAN OS — Department Execution Engine",
+            unit: "TCE Task Writeback",
+            message: `task=${execution.taskId} · writeback=${writeback} · retry=NEXT_CYCLE`,
+            type: "alert",
+          });
+        }
+      } else {
+        writeback = "FAILED_RETRY:NO_CANONICAL_ROW";
+        writebackComplete = false;
+      }
+    }
+
     await container.activityLog.record({
       agent: "TUAN OS — Department Execution Engine",
       unit: "TCE Execution Dispatcher",
       message:
-        `fingerprint=${executionFingerprint} · task=${execution.taskId ?? "NONE"} · agent=${execution.agent ?? "NONE"} · ` +
+        `${writebackComplete ? `fingerprint=${executionFingerprint} · ` : ""}task=${execution.taskId ?? "NONE"} · agent=${execution.agent ?? "NONE"} · ` +
         `state=${execution.state} · reason=${execution.reason} · evidence=${execution.evidence} · ` +
-        `deferred_blocked=${deferredBlocked.join(",") || "NONE"} · next=${execution.nextAction}`,
+        `writeback=${writeback} · deferred_blocked=${deferredBlocked.join(",") || "NONE"} · next=${execution.nextAction}`,
       type: execution.state === "EXECUTED_INTERNAL" || execution.state === "NO_TASK" ? "info" : "alert",
     });
   }

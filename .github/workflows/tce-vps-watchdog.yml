@@ -11,6 +11,7 @@ on:
       - "src/app/api/internal/tce/**"
       - "src/app/api/internal/cmi/**"
       - "src/server/agents/tce-orchestrator.ts"
+      - "src/server/agents/execution-governance.ts"
       - "src/server/channels/channel-policy.ts"
       - "scripts/ovh/**"
   schedule:
@@ -79,8 +80,16 @@ jobs:
                  f"companyAutopilotEnabled={signals.get('companyAutopilotEnabled')!r}")
           expect(signals.get("companyRuntimeMode") == "VPS_ALWAYS_ON",
                  f"companyRuntimeMode={signals.get('companyRuntimeMode')!r}")
+          expect(signals.get("runtimeDependencyPolicy") == "VPS_ONLY",
+                 f"runtimeDependencyPolicy={signals.get('runtimeDependencyPolicy')!r}")
+          expect(signals.get("windowDependency") is False,
+                 f"windowDependency={signals.get('windowDependency')!r}")
           expect(signals.get("desktopDependency") is False,
                  f"desktopDependency={signals.get('desktopDependency')!r}")
+          expect(signals.get("desktopRuntimeRole") == "NON_RUNTIME_FALLBACK_ONLY",
+                 f"desktopRuntimeRole={signals.get('desktopRuntimeRole')!r}")
+          expect(signals.get("chatWindowRole") == "STATELESS_CONTROL_SURFACE_ONLY",
+                 f"chatWindowRole={signals.get('chatWindowRole')!r}")
           expect(signals.get("executiveWorkerEnabled") is True,
                  f"executiveWorkerEnabled={signals.get('executiveWorkerEnabled')!r}")
           expect(signals.get("syncWorkerEnabled") is True,
@@ -89,13 +98,17 @@ jobs:
                  f"staffOpsWorkerEnabled={signals.get('staffOpsWorkerEnabled')!r}")
           expect(signals.get("cmiBrowserEnabled") is True,
                  f"cmiBrowserEnabled={signals.get('cmiBrowserEnabled')!r}")
+          expect(signals.get("vpsHeadlessBrowserEnabled") is True,
+                 f"vpsHeadlessBrowserEnabled={signals.get('vpsHeadlessBrowserEnabled')!r}")
+          expect(signals.get("browserRuntimeMode") in ("VPS_HEADLESS_PUBLIC_ONLY", "VPS_HEADLESS_PLUS_AUTHENTICATED"),
+                 f"browserRuntimeMode={signals.get('browserRuntimeMode')!r}")
           expect(signals.get("cmiQueueWorkerEnabled") is True,
                  f"cmiQueueWorkerEnabled={signals.get('cmiQueueWorkerEnabled')!r}")
           expect(signals.get("omnichannelWorkerEnabled") is True,
                  f"omnichannelWorkerEnabled={signals.get('omnichannelWorkerEnabled')!r}")
           expect(signals.get("trelloWorkerEnabled") is True,
                  f"trelloWorkerEnabled={signals.get('trelloWorkerEnabled')!r}")
-          expect(signals.get("executionGovernanceVersion") == "2026-09-26.v4",
+          expect(signals.get("executionGovernanceVersion") == "2026-09-26.v5",
                  f"executionGovernanceVersion={signals.get('executionGovernanceVersion')!r}")
           expect(signals.get("trelloExecutionMirror") in ("ACTIVE", "HOLD_NO_RUNTIME_CREDENTIALS"),
                  f"trelloExecutionMirror={signals.get('trelloExecutionMirror')!r}")

@@ -7,7 +7,7 @@ import { recordLogin } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [password, setMật khẩu] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithMật khẩu({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -97,7 +97,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               required
               value={password}
-              onChange={(e) => setMật khẩu(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               className="rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--ink-primary)] outline-none transition-colors placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]/60"
               placeholder="••••••••"
             />

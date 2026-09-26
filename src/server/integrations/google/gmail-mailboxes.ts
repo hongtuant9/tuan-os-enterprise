@@ -1,6 +1,6 @@
 import "server-only";
 
-export const GMAIL_MAILBOX_ENTITIES = ["lavender", "ruby", "cozy"] as const;
+export const GMAIL_MAILBOX_ENTITIES = ["guestcare", "lavender", "ruby", "cozy"] as const;
 export type GmailMailboxEntity = (typeof GMAIL_MAILBOX_ENTITIES)[number];
 
 export type GmailMailboxConfig = {
@@ -9,15 +9,25 @@ export type GmailMailboxConfig = {
   propertyLabel: string;
   canonicalEmail: string;
   purpose: "ota_guest_care" | "direct_guest_care";
+  role: "primary" | "legacy";
 };
 
 export const GMAIL_MAILBOXES: readonly GmailMailboxConfig[] = [
+  {
+    entity: "guestcare",
+    provider: "google_gmail_guestcare",
+    propertyLabel: "Tam Coc Experience Guest Care",
+    canonicalEmail: "tamcocexperience.guestcare@gmail.com",
+    purpose: "ota_guest_care",
+    role: "primary",
+  },
   {
     entity: "lavender",
     provider: "google_gmail_lavender",
     propertyLabel: "Lavender Homestay",
     canonicalEmail: "tamcoclavenderhomestay@gmail.com",
     purpose: "ota_guest_care",
+    role: "legacy",
   },
   {
     entity: "ruby",
@@ -25,6 +35,7 @@ export const GMAIL_MAILBOXES: readonly GmailMailboxConfig[] = [
     propertyLabel: "Ruby Homestay",
     canonicalEmail: "ninhbinhrubyhomestay@gmail.com",
     purpose: "ota_guest_care",
+    role: "legacy",
   },
   {
     entity: "cozy",
@@ -32,9 +43,12 @@ export const GMAIL_MAILBOXES: readonly GmailMailboxConfig[] = [
     propertyLabel: "Cozy Garden Tam Coc",
     canonicalEmail: "tamcoc.cozygarden@gmail.com",
     purpose: "direct_guest_care",
+    role: "legacy",
   },
 ] as const;
 
+export const PRIMARY_GMAIL_MAILBOX = GMAIL_MAILBOXES.find((item) => item.role === "primary")!;
+export const LEGACY_GMAIL_MAILBOXES = GMAIL_MAILBOXES.filter((item) => item.role === "legacy");
 export const GOOGLE_GMAIL_PROVIDER_KEYS = GMAIL_MAILBOXES.map((item) => item.provider);
 
 export function findGmailMailbox(entity: string | null | undefined): GmailMailboxConfig | null {
@@ -46,7 +60,6 @@ export function findGmailMailboxByProvider(provider: string | null | undefined):
   if (!provider) return null;
   return GMAIL_MAILBOXES.find((item) => item.provider === provider) ?? null;
 }
-
 
 export function normalizeGoogleMailboxEmail(email: string | null | undefined): string {
   const normalized = (email ?? "").trim().toLowerCase();

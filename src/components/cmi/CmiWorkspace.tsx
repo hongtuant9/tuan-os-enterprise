@@ -30,7 +30,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           AI Nghiên cứu Khách hàng & Thị trường (CMI)
         </h1>
         <p className="mt-2 max-w-5xl text-sm leading-6 text-[var(--ink-secondary)]">
-          Mục tiêu của CMI là biến dữ liệu thật từ khách hàng, đối thủ và thị trường thành các cơ hội sản phẩm/dịch vụ có bằng chứng. CMI trả lời “khách hàng đang đau ở đâu, cần gì, thị trường còn thiếu gì và ta có thể làm sản phẩm nào?”. AI Marketing chỉ bắt đầu sau khi cơ hội đã được duyệt và trả lời “làm thế nào để bán?”.
+          Mục tiêu của CMI là biến dữ liệu thật từ khách hàng, đối thủ và thị trường thành các cơ hội sản phẩm/dịch vụ có bằng chứng. CMI trả lời “khách hàng đang đau ở đâu, cần gì, thị trường còn thiếu gì và ta có thể làm sản phẩm nào?”. AI Tiếp thị chỉ bắt đầu sau khi cơ hội đã được duyệt và trả lời “làm thế nào để bán?”.
         </p>
       </header>
 
@@ -221,7 +221,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
         </form>
 
         <form action={createMarketingStrategyDraft} className={card}>
-          <h2 className="font-semibold text-[var(--ink-primary)]">6. AI Marketing — Sau khi đã có cơ hội</h2>
+          <h2 className="font-semibold text-[var(--ink-primary)]">6. AI Tiếp thị — Sau khi đã có cơ hội</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Tiếp thị không quyết định “nên làm sản phẩm gì”. Tiếp thị chỉ thiết kế cách thử nghiệm và cách bán một cơ hội đã được CMI chứng minh đủ mạnh.</p>
           <label className="mt-4 block text-sm">Cơ hội
             <select name="opportunityId" required className={input}>

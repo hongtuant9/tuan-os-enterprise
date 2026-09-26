@@ -11,6 +11,7 @@ import { runSeptemberExecutionPlan, type SeptemberExecutionPlanResult } from "./
 import { runExecutiveCouncilCycle, type ExecutiveCouncilResult } from "./executive-council-cycle";
 import { runRealityPulse, type RealityPulseResult } from "./reality-pulse";
 import { runMarketingCommandCenterCycle, type MarketingCommandCenterCycleResult } from "@/server/marketing-command-center/cycle";
+import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-governance";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -28,10 +29,18 @@ export type ExecutiveCycleResult = {
   waitingOwner: number;
   openP0: number;
   pendingApprovals: number;
-  nextTaskId: string | null;
-  continuousExecution: "ACTIVE";
   staleAuthorities: string[];
   changed: boolean;
+  selectedNextTaskId: string | null;
+  selectedNextTaskTitle: string | null;
+  completedSinceLastCycle: Array<{ id: string; title: string; completedAt: string | null }>;
+  continuation: {
+    autoContinue: boolean;
+    runtimeAuthority: string;
+    checkpointAuthority: string;
+    sessionFailurePolicy: string;
+    desktopPolicy: string;
+  };
   marketing: MarketingCoordinationResult;
   growth: MarketingGrowthCycleResult;
   sales: CcoClosedLoopResult;
@@ -81,6 +90,17 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const brief = buildManagerBrief(items, authorities, now.toISOString());
   const openP0 = items.filter((item) => item.priority === "P0" && item.status !== "DONE").length;
   const pendingApprovals = (approvals ?? []).filter((item) => item.status === "pending").length;
+  const previousCycleAt = latestLogs?.[0]?.created_at ? Date.parse(latestLogs[0].created_at) : null;
+  const completedSinceLastCycle = items
+    .filter((item) => {
+      if (item.status !== "DONE" || !item.updatedAt) return false;
+      if (previousCycleAt == null || !Number.isFinite(previousCycleAt)) return true;
+      const updated = Date.parse(item.updatedAt);
+      return Number.isFinite(updated) && updated > previousCycleAt;
+    })
+    .map((item) => ({ id: item.id, title: item.title, completedAt: item.updatedAt ?? null }))
+    .slice(0, 10);
+  const selectedNextTask = brief.nextItems[0] ?? null;
   const digest = createHash("sha256")
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),
@@ -90,15 +110,24 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       stale: brief.staleAuthorities,
       openP0,
       pendingApprovals,
+      selectedNextTaskId: selectedNextTask?.id ?? null,
+      completedSinceLastCycle: completedSinceLastCycle.map((item) => item.id),
     }))
     .digest("hex")
     .slice(0, 16);
 
-  const nextTaskId = brief.nextItems[0]?.id ?? null;
+  const completionText = completedSinceLastCycle.length > 0
+    ? " · completed=" + completedSinceLastCycle.map((item) => item.id).join(",")
+    : "";
+  const nextText = selectedNextTask
+    ? ` · next_task=${selectedNextTask.id} · next_action=${(selectedNextTask.nextAction ?? selectedNextTask.title).slice(0, 180)}`
+    : " · next_task=NONE";
   const message =
-    `Executive digest=${digest} · autonomous_continuation=ACTIVE · next_task=${nextTaskId ?? "none"} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
+    `Executive digest=${digest} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
     `waiting_dependency=${brief.waitingItems.length} · system_issues=${brief.systemIssueItems.length} · open_p0=${openP0} · pending_approvals=${pendingApprovals} · ` +
-    `authorities=${brief.staleAuthorities.length === 0 ? "VERIFIED" : "STALE:" + brief.staleAuthorities.join(",")}.`;
+    `authorities=${brief.staleAuthorities.length === 0 ? "VERIFIED" : "STALE:" + brief.staleAuthorities.join(",")}` +
+    nextText + completionText +
+    ` · continuation=${AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy}.`;
 
   const previous = latestLogs?.[0]?.message ?? "";
   const changed = !previous.includes(`digest=${digest}`);
@@ -119,10 +148,18 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     waitingOwner: brief.waitingItems.length,
     openP0,
     pendingApprovals,
-    nextTaskId,
-    continuousExecution: "ACTIVE",
     staleAuthorities: brief.staleAuthorities,
     changed,
+    selectedNextTaskId: selectedNextTask?.id ?? null,
+    selectedNextTaskTitle: selectedNextTask?.title ?? null,
+    completedSinceLastCycle,
+    continuation: {
+      autoContinue: AUTONOMOUS_CONTINUATION_POLICY.autoSelectNextTask,
+      runtimeAuthority: AUTONOMOUS_CONTINUATION_POLICY.runtimeAuthority,
+      checkpointAuthority: AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority,
+      sessionFailurePolicy: AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy,
+      desktopPolicy: AUTONOMOUS_CONTINUATION_POLICY.desktopPolicy,
+    },
     marketing,
     growth,
     sales,

@@ -144,7 +144,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
             s.key === key
               ? {
                   ...s,
-                  status: summary.status === "lỗi" ? "error" : "idle",
+                  status: summary.status === "failed" ? "error" : "idle",
                   lastSyncedAt: now,
                   lastError: summary.errorMessage,
                   latestRun: {

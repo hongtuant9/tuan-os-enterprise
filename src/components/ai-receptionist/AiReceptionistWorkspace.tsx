@@ -173,6 +173,40 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "Đã đóng",
 };
 
+const BOOKING_STATUS_LABEL: Record<string, string> = {
+  draft: "Bản nháp",
+  pending: "Đang chờ",
+  pending_approval: "Chờ phê duyệt",
+  approved: "Đã duyệt",
+  verified: "Đã xác minh",
+  booking_created: "Đã tạo đặt phòng",
+  failed: "Lỗi",
+  cancelled: "Đã hủy",
+};
+
+const FIELD_LABEL: Record<string, string> = {
+  guest_name: "Tên khách",
+  guestName: "Tên khách",
+  property: "Cơ sở",
+  property_name: "Tên cơ sở",
+  room_type: "Loại phòng",
+  check_in: "Ngày nhận phòng",
+  check_out: "Ngày trả phòng",
+  guests: "Số khách",
+  price: "Giá",
+  price_source: "Nguồn giá",
+  phone: "Số điện thoại",
+  email: "Email",
+};
+
+function bookingStatusLabel(status: string): string {
+  return BOOKING_STATUS_LABEL[status] ?? `Trạng thái khác (${status})`;
+}
+
+function fieldLabel(field: string): string {
+  return FIELD_LABEL[field] ?? `Trường dữ liệu khác (${field})`;
+}
+
 function Pill({ label, tone = "muted" }: { label: string; tone?: Tone }) {
   const cls = {
     good: "border-[var(--status-good)]/30 bg-[var(--status-good)]/10 text-[var(--status-good)]",
@@ -941,7 +975,7 @@ function ReviewCard({ review, canManage }: { review: ManagerReview; canManage: b
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Đề xuất của AI</p>
         <p className="mt-2 text-sm leading-6 text-[var(--ink-primary)]">{review.recommendation}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {review.missingFields.map((field) => <Pill key={field} label={field} tone="warn" />)}
+          {review.missingFields.map((field) => <Pill key={field} label={fieldLabel(field)} tone="warn" />)}
         </div>
       </div>
 
@@ -1368,7 +1402,7 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-semibold text-[var(--ink-primary)]">{conversation.customerName || "Khách chưa định danh"}</p>
-                  <p className="mt-1 text-[var(--ink-muted)]">{conversation.reservationReference ? `Ref: ${conversation.reservationReference}` : "Chưa có mã đặt chỗ"}</p>
+                  <p className="mt-1 text-[var(--ink-muted)]">{conversation.reservationReference ? `Mã: ${conversation.reservationReference}` : "Chưa có mã đặt chỗ"}</p>
                 </td>
                 <td className="px-4 py-3">
                   <Pill label={actorLabel(message.authorship)} tone={actorTone(message.authorship)} />
@@ -1377,7 +1411,7 @@ function AuditLog({ items }: { items: ReceptionistConversation[] }) {
                 </td>
                 <td className="max-w-[420px] px-4 py-3">
                   <p className="whitespace-pre-wrap leading-5 text-[var(--ink-primary)]">{message.content}</p>
-                  {message.qaPass === false ? <p className="mt-2 font-medium text-[var(--status-bad)]">QA: KHÔNG ĐẠT</p> : message.qaPass === true ? <p className="mt-2 text-[var(--status-good)]">QA: Đạt</p> : null}
+                  {message.qaPass === false ? <p className="mt-2 font-medium text-[var(--status-bad)]">Kiểm tra chất lượng: KHÔNG ĐẠT</p> : message.qaPass === true ? <p className="mt-2 text-[var(--status-good)]">Kiểm tra chất lượng: ĐẠT</p> : null}
                 </td>
                 <td className="px-4 py-3">
                   <Pill label={statusLabel(message.status)} tone={message.status === "sent" ? "good" : message.status === "failed" ? "bad" : message.status === "draft" ? "warn" : "muted"} />
@@ -1416,7 +1450,7 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
           </p>
         </div>
         <Pill
-          label={passCount === mailboxes.length ? "3/3 hộp thư OAuth: ĐẠT" : `${passCount}/${mailboxes.length} hộp thư OAuth: PASS`}
+          label={passCount === mailboxes.length ? "3/3 hộp thư OAuth: ĐẠT" : `${passCount}/${mailboxes.length} hộp thư OAuth: CHƯA ĐẠT`}
           tone={passCount === mailboxes.length ? "good" : "warn"}
         />
       </div>
@@ -1433,7 +1467,7 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
                   <p className="text-sm font-semibold text-[var(--ink-primary)]">{mailbox.propertyLabel}</p>
                   <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">{purposeLabel}</p>
                 </div>
-                <Pill label={ready ? "OAuth PASS" : "CHƯA PASS"} tone={ready ? "good" : "warn"} />
+                <Pill label={ready ? "OAuth: ĐẠT" : "OAuth: CHƯA ĐẠT"} tone={ready ? "good" : "warn"} />
               </div>
 
               <div className="mt-4 space-y-3 text-xs">
@@ -1506,7 +1540,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       {tab === "hop-thu" && <Conversations items={dashboard.conversations} canManage={canManage} />}
       {tab === "nhat-ky" && <AuditLog items={dashboard.conversations} />}
       {tab === "xac-nhan" && (dashboard.managerReviews.length ? <div className="space-y-4">{dashboard.managerReviews.map((review) => <ReviewCard key={review.id} review={review} canManage={canManage} />)}</div> : <EmptyState title="Chưa có yêu cầu cần xác nhận" description="Khi AI gặp dữ liệu thiếu, mâu thuẫn hoặc yêu cầu ngoài chính sách, yêu cầu sẽ xuất hiện tại đây." />)}
-      {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={booking.status} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn (cổng an toàn) mới xuất hiện. Tính năng ghi KiotViet đang khóa trong thử nghiệm riêng (thử nghiệm riêng)." />}</>}
+      {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={bookingStatusLabel(booking.status)} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn mới xuất hiện. Tính năng ghi KiotViet đang khóa trong giai đoạn thử nghiệm riêng." />}</>}
       {tab === "tri-thuc" && (dashboard.knowledgeCandidates.length ? <div className="space-y-4">{dashboard.knowledgeCandidates.map((candidate) => <KnowledgeCard key={candidate.id} candidate={candidate} canManage={canManage} />)}</div> : <EmptyState title="Chưa có đề xuất cập nhật tri thức" description="Sau khi Quản lý xử lý ngoại lệ, AI sẽ tạo đề xuất. Đề xuất không tự động trở thành dữ liệu môi trường thật." />)}
       {tab === "kiem-thu" && <PilotLab backlog={dashboard.missingDataBacklog} mode={dashboard.mode} />}
     </>

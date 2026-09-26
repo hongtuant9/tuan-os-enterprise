@@ -69,7 +69,32 @@ export function buildManagerBrief(
     .filter((source) => source.state !== "verified")
     .map((source) => source.authority);
 
-  const sorted = [...items].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
+  const now = Date.parse(generatedAt);
+  const dueRank = (item: ManagerWorkItem) => {
+    if (!item.dueDate) return Number.POSITIVE_INFINITY;
+    const due = Date.parse(item.dueDate);
+    return Number.isFinite(due) ? due : Number.POSITIVE_INFINITY;
+  };
+  const updatedRank = (item: ManagerWorkItem) => {
+    if (!item.updatedAt) return Number.POSITIVE_INFINITY;
+    const updated = Date.parse(item.updatedAt);
+    return Number.isFinite(updated) ? updated : Number.POSITIVE_INFINITY;
+  };
+
+  // Priority first, then overdue/due-soon tasks, then the oldest untouched item.
+  // This prevents passive/meta P0 tasks from monopolizing next_task while a same-priority
+  // operational task has a concrete deadline.
+  const sorted = [...items].sort((a, b) => {
+    const priorityDelta = priorityRank[a.priority] - priorityRank[b.priority];
+    if (priorityDelta !== 0) return priorityDelta;
+    const aDue = dueRank(a);
+    const bDue = dueRank(b);
+    const aOverdue = Number.isFinite(aDue) && aDue <= now;
+    const bOverdue = Number.isFinite(bDue) && bDue <= now;
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    if (aDue !== bDue) return aDue - bDue;
+    return updatedRank(a) - updatedRank(b);
+  });
 
   // CEO semantics:
   // "Bị chặn" = hệ thống không được phép tiếp tục vì đang chờ một quyết định/phê duyệt chưa được giải quyết.

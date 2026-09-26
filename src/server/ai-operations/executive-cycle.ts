@@ -100,7 +100,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     })
     .map((item) => ({ id: item.id, title: item.title, completedAt: item.updatedAt ?? null }))
     .slice(0, 10);
-  const selectedNextTask = brief.nextItems[0] ?? null;
+  const selectedNextTask = brief.staleAuthorities.length === 0 ? (brief.nextItems[0] ?? null) : null;
   const digest = createHash("sha256")
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),
@@ -121,7 +121,9 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     : "";
   const nextText = selectedNextTask
     ? ` · next_task=${selectedNextTask.id} · next_action=${(selectedNextTask.nextAction ?? selectedNextTask.title).slice(0, 180)}`
-    : " · next_task=NONE";
+    : brief.staleAuthorities.length > 0
+      ? ` · next_task=HOLD_AUTHORITY_STALE · stale=${brief.staleAuthorities.join(",")}`
+      : " · next_task=NONE";
   const message =
     `Executive digest=${digest} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
     `waiting_dependency=${brief.waitingItems.length} · system_issues=${brief.systemIssueItems.length} · open_p0=${openP0} · pending_approvals=${pendingApprovals} · ` +

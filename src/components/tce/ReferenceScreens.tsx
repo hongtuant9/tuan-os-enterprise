@@ -426,7 +426,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 lg:col-span-5 h-[260px]" icon="●">
             <div className="grid h-full grid-cols-2 gap-2 p-3">
               {["Dự báo doanh thu tháng","Ngưỡng hòa vốn","Top dịch vụ / mặt hàng","Công nợ cần theo dõi"].map((x)=><div key={x} className="rounded-[7px] border border-[#e6eef6] bg-[#fbfdff] p-3"><b className="text-[9px] text-[#3c5578]">{x}</b><p className="mt-2 text-[18px] font-extrabold text-[#0e2858]">—</p><p className="mt-1 text-[8px] text-[#7c8ea8]">Chưa đủ dữ liệu để kết luận.</p></div>)}
-              <div className="col-span-2 rounded-[7px] border border-[#fde4b5] bg-[#fffaf0] p-2 text-[9px] text-[#9a6b14]">Cảnh báo kinh doanh sẽ hiển thị ở đây khi có evidence.</div>
+              <div className="col-span-2 rounded-[7px] border border-[#fde4b5] bg-[#fffaf0] p-2 text-[9px] text-[#9a6b14]">Cảnh báo kinh doanh sẽ hiển thị ở đây khi có bằng chứng.</div>
             </div>
           </Section>
         </div>
@@ -483,7 +483,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Tình trạng theo cơ sở" subtitle="Tổng quan vận hành tại các cơ sở trong hôm nay" className="col-span-12 lg:col-span-6 h-[260px]" icon="▥"><DataTable columns={["#","Cơ sở","Nguồn","Trạng thái","Hoạt động hôm nay","Việc mở","Cập nhật"]} rows={5} data={data?.tables.operationsProperties}/></Section>
           <Section title="Kho & nguyên vật liệu" subtitle="Theo dõi tồn kho, định mức và cảnh báo thiếu hàng" className="col-span-12 lg:col-span-5 h-[250px]" icon="▤"><DataTable columns={["#","Nguyên vật liệu","Tồn hiện tại","Định mức","Cảnh báo","Nhà cung cấp","Hành động"]} rows={7}/></Section>
           <Section title="Ca trực & chấm công" subtitle="Tình hình nhân sự theo ca trong ngày" className="col-span-12 lg:col-span-4 h-[250px]" icon="●●"><DataTable columns={["Bộ phận","Tổng","Ca sáng","Ca chiều","Có mặt","Tỷ lệ"]} rows={5}/></Section>
-          <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions : ["Chưa có ngoại lệ live"]}/></Section>
+          <Section title="Ngoại lệ & sự cố" subtitle="Các vấn đề phát sinh cần xử lý ngay" className="col-span-12 lg:col-span-3 h-[250px]" icon="◷"><ListRows items={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions : ["Chưa có ngoại lệ đang hoạt động"]}/></Section>
           <Section title="Quy trình chuẩn / chất lượng dịch vụ" subtitle="Tỷ lệ hoàn thành danh sách kiểm tra theo bộ phận trong ngày" className="col-span-12 h-[110px]" icon="◈"><ProgressRows items={["Buồng phòng","Lễ tân","Bếp","Bar","Vệ sinh khu vực chung"]}/></Section>
         </div>
       );
@@ -534,21 +534,21 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             icon="◫"
           >
             <DataTable
-              columns={["#","Đơn vị","Nhóm chi phí","Chi phí đã ghi nhận","Số khoản","Evidence state","Coverage"]}
+              columns={["#","Đơn vị","Nhóm chi phí","Chi phí đã ghi nhận","Số khoản","Trạng thái bằng chứng","Mức bao phủ"]}
               rows={7}
               data={data?.tables.financePeriodCostGroups}
             />
           </Section>
           <Section
             title="Phạm vi dữ liệu chi phí"
-            subtitle="Doanh thu API đã LIVE; chi phí chỉ hiện khi đọc được trực tiếp từ KiotViet"
+            subtitle="Doanh thu qua API đang hoạt động; chi phí chỉ hiện khi đọc được trực tiếp từ KiotViet"
             className="col-span-12 lg:col-span-4 h-[300px]"
             icon="!"
           >
             <DataTable
               columns={["Chỉ tiêu","Giá trị"]}
               rows={4}
-              data={data?.tables.financeCostCoverage}
+              data={data?.tables.financeCostMức bao phủ}
             />
           </Section>
           <Section
@@ -675,7 +675,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <ListRows items={[
               "Chi phí thực tế chưa đồng bộ đầy đủ: chưa được kết luận nhóm nào vượt chuẩn chỉ từ mô hình.",
               "Lợi nhuận theo cơ sở hiện là [Ước tính/Mô hình] vì chi phí thực tế chưa đủ.",
-              "Profit ranking theo món/hạng phòng chỉ bật khi invoice detail + cost mapping PASS.",
+              "Xếp hạng lợi nhuận theo món/hạng phòng chỉ bật khi chi tiết hóa đơn và ánh xạ giá vốn đạt yêu cầu.",
             ]}/>
           </Section>
           <Section title="Quỹ an toàn / dự phòng" subtitle="" className="col-span-12 lg:col-span-5 h-[150px]" icon="▣"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Dùng ngay","Thanh khoản nhanh","Kỳ hạn"].map(x=><div key={x} className="rounded bg-[#f5f9fe] p-2"><p className="text-[8px] text-[#667fa3]">{x}</p><b className="mt-1 block text-[13px] text-[#132d60]">—</b><small className="mt-1 block text-[7px] text-[#7d8da6]">CẦN XÁC MINH</small></div>)}</div></Section>
@@ -698,11 +698,11 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
         <div className="grid grid-cols-12 gap-2">
           <Section title="Quy trình xử lý công việc" subtitle="Tổng quan luồng xử lý yêu cầu của các trợ lý AI" className="col-span-12 lg:col-span-6 h-[240px]" icon="↑"><Pipeline items={["Nhận yêu cầu","Phân loại","Trợ lý AI xử lý","Kiểm tra","Hoàn tất / Chuyển cho người"]}/></Section>
           <Section title="Danh sách trợ lý AI" subtitle="Trạng thái hoạt động và hiệu suất" className="col-span-12 lg:col-span-4 h-[240px]" icon="◉"><DataTable columns={["#","Trợ lý AI","Trạng thái","Task hiện tại","Hoạt động gần nhất"]} rows={9} data={data?.tables.agentList}/></Section>
-          <Section title="Tổng quan hiệu suất" subtitle="" className="col-span-12 lg:col-span-2 h-[240px]" icon="⚙"><Donut center="—" sub="Tỷ lệ thành công" items={["Thành công","Fallback","Chuyển cho nhân viên","Lỗi"]}/></Section>
+          <Section title="Tổng quan hiệu suất" subtitle="" className="col-span-12 lg:col-span-2 h-[240px]" icon="⚙"><Donut center="—" sub="Tỷ lệ thành công" items={["Thành công","Phương án dự phòng","Chuyển cho nhân viên","Lỗi"]}/></Section>
           <Section title="Hàng chờ công việc cần chú ý" subtitle="Các công việc cần theo dõi, sắp quá hạn hoặc gặp vấn đề" className="col-span-12 lg:col-span-7 h-[245px]" icon="▤"><DataTable columns={["#","Quy trình","Nguồn vào","Trợ lý AI phụ trách","Thời hạn ưu tiên","Thời gian phản hồi","Trạng thái","Hành động"]} rows={8} data={data?.tables.agentQueue}/></Section>
           <Section title="Các lần tự động hóa gần đây" subtitle="Các lần chạy quy trình tự động mới nhất" className="col-span-12 lg:col-span-5 h-[245px]" icon="▣"><DataTable columns={["Thời gian","Quy trình","Trợ lý AI","Trạng thái","Kết quả"]} rows={8} data={data?.tables.agentRuns}/></Section>
           <Section title="Hiệu suất theo trợ lý AI" subtitle="Số công việc xử lý và tỷ lệ thành công" className="col-span-12 lg:col-span-7 h-[180px]" icon="▦"><BarLineChart labels={["Lễ tân AI","Trợ lý khách hàng","Đặt chỗ","Tiếp thị","Tài chính","Vận hành AI","Bán hàng","Nội dung","Nâng mức xử lý"]}/></Section>
-          <Section title="Gợi ý tối ưu AI" subtitle="Đề xuất từ hệ thống dựa trên dữ liệu thực tế" className="col-span-12 lg:col-span-5 h-[180px]" icon="◎"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Nâng cấp kho kiến thức","Giảm việc phải chuyển cho nhân viên","Tăng cơ chế thử lại khi lỗi"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#345173]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#778aa8]">Chỉ đề xuất sau khi có evidence.</p><Link href="/agents/registry" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Xem chi tiết</Link></div>)}</div></Section>
+          <Section title="Gợi ý tối ưu AI" subtitle="Đề xuất từ hệ thống dựa trên dữ liệu thực tế" className="col-span-12 lg:col-span-5 h-[180px]" icon="◎"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Nâng cấp kho kiến thức","Giảm việc phải chuyển cho nhân viên","Tăng cơ chế thử lại khi lỗi"].map(x=><div key={x} className="rounded border border-[#e3ecf5] p-3"><b className="text-[9px] text-[#345173]">{x}</b><p className="mt-2 text-[8px] leading-4 text-[#778aa8]">Chỉ đề xuất sau khi có bằng chứng.</p><Link href="/agents/registry" className="mt-2 block w-full rounded border border-[#bdd6f8] py-1 text-center text-[8px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Xem chi tiết</Link></div>)}</div></Section>
         </div>
       );
     case "settings":

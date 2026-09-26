@@ -105,16 +105,6 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     })
     .map((item) => ({ id: item.id, title: item.title, completedAt: item.updatedAt ?? null }))
     .slice(0, 10);
-  const selectedNextTask = brief.staleAuthorities.length === 0 ? (brief.nextItems[0] ?? null) : null;
-  const selectedNextTaskAgent = selectedNextTask?.agent ?? null;
-  const dispatchState: ExecutiveCycleResult["dispatchState"] =
-    brief.staleAuthorities.length > 0
-      ? "HOLD_AUTHORITY_STALE"
-      : !selectedNextTask
-        ? "NO_TASK"
-        : selectedNextTaskAgent === "computer_operator"
-          ? "WAITING_EXECUTION_TRANSPORT"
-          : "READY_TO_EXECUTE";
   const dailyAiBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0");
   const monthlyAiBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0");
   const paidAiEnabled =
@@ -125,11 +115,43 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const authenticatedBrowserTransportAvailable =
     process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true";
 
-  const execution = dispatchDepartmentTask(selectedNextTask, {
+  const candidateExecutions = brief.staleAuthorities.length === 0
+    ? brief.nextItems.map((item) => ({
+        item,
+        execution: dispatchDepartmentTask(item, {
+          authoritiesVerified: true,
+          paidAiEnabled,
+          authenticatedBrowserTransportAvailable,
+        }),
+      }))
+    : [];
+
+  // Do not let one blocked public/browser task freeze the whole company.
+  // Prefer a safe internally executable lane; otherwise surface the highest-priority blocker.
+  const selectedBundle =
+    candidateExecutions.find(({ execution }) => execution.state === "EXECUTED_INTERNAL") ??
+    candidateExecutions[0] ??
+    null;
+  const selectedNextTask = selectedBundle?.item ?? null;
+  const execution = selectedBundle?.execution ?? dispatchDepartmentTask(null, {
     authoritiesVerified: brief.staleAuthorities.length === 0,
     paidAiEnabled,
     authenticatedBrowserTransportAvailable,
   });
+  const selectedNextTaskAgent = selectedNextTask?.agent ?? null;
+  const dispatchState: ExecutiveCycleResult["dispatchState"] =
+    brief.staleAuthorities.length > 0
+      ? "HOLD_AUTHORITY_STALE"
+      : !selectedNextTask
+        ? "NO_TASK"
+        : execution.state === "WAITING_EXECUTION_TRANSPORT"
+          ? "WAITING_EXECUTION_TRANSPORT"
+          : "READY_TO_EXECUTE";
+
+  const deferredBlocked = candidateExecutions
+    .filter(({ item, execution: candidate }) => item.id !== selectedNextTask?.id && candidate.state !== "EXECUTED_INTERNAL")
+    .slice(0, 3)
+    .map(({ item, execution: candidate }) => `${item.id}:${candidate.state}`);
 
   const executionFingerprint = createHash("sha256")
     .update(JSON.stringify({
@@ -138,6 +160,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       state: execution.state,
       reason: execution.reason,
       nextAction: execution.nextAction,
+      deferredBlocked,
     }))
     .digest("hex")
     .slice(0, 16);
@@ -148,7 +171,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       unit: "TCE Execution Dispatcher",
       message:
         `fingerprint=${executionFingerprint} · task=${execution.taskId ?? "NONE"} · agent=${execution.agent ?? "NONE"} · ` +
-        `state=${execution.state} · reason=${execution.reason} · evidence=${execution.evidence} · next=${execution.nextAction}`,
+        `state=${execution.state} · reason=${execution.reason} · evidence=${execution.evidence} · ` +
+        `deferred_blocked=${deferredBlocked.join(",") || "NONE"} · next=${execution.nextAction}`,
       type: execution.state === "EXECUTED_INTERNAL" || execution.state === "NO_TASK" ? "info" : "alert",
     });
   }

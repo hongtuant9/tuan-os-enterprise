@@ -70,11 +70,19 @@ export function buildManagerBrief(
     .map((source) => source.authority);
 
   const now = Date.parse(generatedAt);
-  const dueRank = (item: ManagerWorkItem) => {
-    if (!item.dueDate) return Number.POSITIVE_INFINITY;
-    const due = Date.parse(item.dueDate);
-    return Number.isFinite(due) ? due : Number.POSITIVE_INFINITY;
+  const parseDue = (value?: string) => {
+    if (!value) return Number.POSITIVE_INFINITY;
+    const trimmed = value.trim();
+    const vi = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (vi) {
+      const iso = `${vi[3]}-${String(Number(vi[2])).padStart(2,"0")}-${String(Number(vi[1])).padStart(2,"0")}T23:59:59+07:00`;
+      const parsed = Date.parse(iso);
+      return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    }
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
   };
+  const dueRank = (item: ManagerWorkItem) => parseDue(item.dueDate);
   const updatedRank = (item: ManagerWorkItem) => {
     if (!item.updatedAt) return Number.POSITIVE_INFINITY;
     const updated = Date.parse(item.updatedAt);
@@ -135,7 +143,7 @@ export function buildManagerBrief(
         !waitingItems.some((waiting) => waiting.id === item.id) &&
         !systemIssueItems.some((issue) => issue.id === item.id),
     )
-    .slice(0, 5);
+    .slice(0, 25);
 
   const status: OperationStatus = staleAuthorities.length > 0 ? "blocked" : "succeeded";
   const summary = staleAuthorities.length > 0

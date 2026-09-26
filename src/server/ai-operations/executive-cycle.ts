@@ -180,6 +180,10 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       const sourceRecord = records.find(
         (record) => record.source_key === "task-001" && taskIdFromRecordData(record.data) === execution.taskId,
       );
+      const sourceFields =
+        sourceRecord?.data && !Array.isArray(sourceRecord.data) && typeof sourceRecord.data === "object"
+          ? (sourceRecord.data as Record<string, unknown>)
+          : {};
       const rowNumber = Number(sourceRecord?.external_id ?? "");
       if (Number.isInteger(rowNumber) && rowNumber >= 2) {
         try {
@@ -189,6 +193,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
             taskId: execution.taskId,
             result: execution,
             now,
+            currentBlocker: sourceFields.BLOCKER == null ? "" : String(sourceFields.BLOCKER),
           });
           writeback = checkpoint.written ? `PASS:${checkpoint.cells.join(",")}` : "SKIPPED_NOT_WRITTEN";
           writebackComplete = checkpoint.written;

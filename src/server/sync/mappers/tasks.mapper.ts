@@ -12,9 +12,12 @@ function first(fields: Record<string, string>, ...keys: string[]) {
 
 function normalizeStatus(raw: string): TaskStatus {
   const value = raw.trim().toUpperCase().replaceAll("-", "_");
-  if (value.startsWith("DONE")) return "done";
+  if (
+    value.startsWith("DONE") ||
+    ["CLOSED", "PASS", "VERIFIED", "INACTIVE", "SUPERSEDED", "CANCELLED", "CANCELED"].includes(value)
+  ) return "done";
   if (value === "IN_PROGRESS" || value === "IN PROGRESS") return "in-progress";
-  if (value === "BLOCKED" || value === "HOLD") return "blocked";
+  if (value === "BLOCKED" || value === "HOLD" || value.startsWith("HOLD_")) return "blocked";
   return "todo";
 }
 

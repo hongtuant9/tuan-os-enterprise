@@ -8,7 +8,29 @@ type Update = Database["public"]["Tables"]["tasks"]["Update"];
 export class TasksRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
+  private async canonicalTask001TargetIds(): Promise<string[]> {
+    const { data, error } = await this.db
+      .from("sync_records")
+      .select("target_id")
+      .eq("source_key", "task-001")
+      .eq("target_table", "tasks")
+      .not("target_id", "is", null);
+    if (error) throw error;
+    return [...new Set((data ?? []).map((row) => row.target_id).filter((id): id is string => Boolean(id)))];
+  }
+
   async findAll(): Promise<Row[]> {
+    const canonicalIds = await this.canonicalTask001TargetIds();
+    if (canonicalIds.length > 0) {
+      const { data, error } = await this.db
+        .from("tasks")
+        .select("*")
+        .in("id", canonicalIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    }
+
     const { data, error } = await this.db
       .from("tasks")
       .select("*")
@@ -18,11 +40,13 @@ export class TasksRepository {
   }
 
   async findByBusinessUnit(businessUnitId: string): Promise<Row[]> {
-    const { data, error } = await this.db
+    const canonicalIds = await this.canonicalTask001TargetIds();
+    let query = this.db
       .from("tasks")
       .select("*")
-      .eq("business_unit_id", businessUnitId)
-      .order("created_at", { ascending: false });
+      .eq("business_unit_id", businessUnitId);
+    if (canonicalIds.length > 0) query = query.in("id", canonicalIds);
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
   }

@@ -40,6 +40,7 @@ export async function writeTaskExecutionCheckpoint(input: {
   taskId: string;
   result: DepartmentExecutionResult;
   now: Date;
+  currentBlocker?: string;
 }): Promise<{ written: boolean; cells: string[] }> {
   if (!input.spreadsheetId || !Number.isInteger(input.rowNumber) || input.rowNumber < 2) {
     return { written: false, cells: [] };
@@ -55,6 +56,9 @@ export async function writeTaskExecutionCheckpoint(input: {
   const blocker = blockerValue(input.result);
   if (blocker) {
     await setSheetValue(input.spreadsheetId, `TASK_MASTER!K${input.rowNumber}`, blocker, auth);
+    cells.push(`K${input.rowNumber}`);
+  } else if ((input.currentBlocker ?? "").startsWith("AUTO_EXECUTION:")) {
+    await setSheetValue(input.spreadsheetId, `TASK_MASTER!K${input.rowNumber}`, "", auth);
     cells.push(`K${input.rowNumber}`);
   }
 

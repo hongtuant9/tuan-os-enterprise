@@ -106,6 +106,7 @@ docker run -d --name "$APP_CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
   -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" \
+  -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" \
   "${NETWORK_ARGS[@]}" \
   -p "127.0.0.1:${APP_PORT}:3000" \
   "$IMAGE" >/dev/null

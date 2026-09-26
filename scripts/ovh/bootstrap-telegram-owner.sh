@@ -43,7 +43,21 @@ echo "Now open Telegram, open the new TUAN OS bot and send /start."
 read -r -p "After sending /start, press Enter to continue..."
 
 cd "$APP_ROOT"
-TCE_ENV_FILE="$ENV_FILE" node scripts/ovh/configure-telegram-owner.mjs
+if command -v node >/dev/null 2>&1; then
+  TCE_ENV_FILE="$ENV_FILE" node scripts/ovh/configure-telegram-owner.mjs
+else
+  APP_IMAGE="$(docker inspect -f '{{.Config.Image}}' tce-control-center 2>/dev/null || true)"
+  if [ -z "$APP_IMAGE" ]; then
+    echo "HOLD_RUNTIME: host has no node and tce-control-center image cannot be resolved"
+    exit 4
+  fi
+  docker run --rm --user 0:0 --network host \
+    -v "$APP_ROOT:/app" \
+    -v "$(dirname "$ENV_FILE"):$(dirname "$ENV_FILE")" \
+    -w /app \
+    "$APP_IMAGE" \
+    node scripts/ovh/configure-telegram-owner.mjs
+fi
 
 echo "Reloading production with the updated secret file..."
 bash scripts/deploy-tce-15-agents-vps.sh

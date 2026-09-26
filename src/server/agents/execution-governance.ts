@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v3";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v4";
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -38,6 +38,14 @@ export const AUTONOMOUS_CONTINUATION_POLICY = {
   sessionFailurePolicy: "RESUME_FROM_CHECKPOINT",
   completionSummary: true,
   autoSelectNextTask: true,
+  observability: {
+    requiredEachCycle: true,
+    requiredBeforeMutation: true,
+    requiredAfterMutation: true,
+    layers: ["RUNTIME_HEALTH", "SOURCE_FRESHNESS", "DATA_QUALITY", "APP_READBACK", "UI_READBACK_WHEN_MATERIAL"] as const,
+    uiPolicy: "API_DOM_FIRST_BROWSER_FALLBACK",
+    mismatchPolicy: "OPEN_BLOCKER_OR_AUTO_FIX_L0_L1",
+  },
 } as const;
 
 export const EXECUTION_GOVERNANCE_RULES = [
@@ -57,6 +65,11 @@ export const EXECUTION_GOVERNANCE_RULES = [
   "L0/L1 tự chạy. L2 chỉ tự chạy khi có approval/Decision ID hợp lệ đúng scope. L3 và các thao tác credential/2FA/budget/financial/security/destructive phải dừng để Owner xác nhận.",
   "Windows/MacBook chỉ dùng khi API/connector không đủ hoặc cần owner login/MFA/2FA/GUI bắt buộc; xong việc phải trả runtime về VPS.",
   "Sau mỗi task hoàn thành phải ghi completion summary ngắn gồm kết quả, evidence, impact, rollback và next task vào Activity Log/TASK-001/Trello mirror.",
+  "Mỗi chu kỳ AI Agent phải kiểm tra trạng thái app liên quan trước khi xử lý: runtime health, freshness của Source of Truth, data quality và dữ liệu mà app đang hiển thị; không được chỉ dựa vào task text hoặc chat history.",
+  "Trước mọi mutation phải có pre-check; sau mutation phải có read-back từ backend/runtime và app surface liên quan. Nếu backend PASS nhưng app hiển thị sai/thiếu/stale thì task chưa DONE.",
+  "Ưu tiên kiểm tra app theo API/read model/DOM; chỉ dùng browser/Computer Operator khi cần xác minh giao diện hoặc luồng không thể chứng minh bằng API. Không biến desktop thành dependency 24/7.",
+  "Mismatch giữa SSOT/runtime/database/app phải được phân loại severity, owner, evidence-to-close và next action trong cùng chu kỳ. L0/L1 được tự sửa nếu rollback rõ; L2/L3 phải fail closed theo approval gate.",
+  "P0/P1 data-display regression, stale authority, missing verified customer/financial fields hoặc trạng thái app gây quyết định sai phải được đưa lên đầu hàng đợi xử lý; không tiếp tục như hệ thống đang bình thường.",
 ] as const;
 
 export function trelloRuntimeConfigured(): boolean {
@@ -74,6 +87,7 @@ export function executionGovernanceInstruction(): string {
   return [
     `Execution governance ${EXECUTION_GOVERNANCE_VERSION}:`,
     `Autonomous continuation: runtime=${AUTONOMOUS_CONTINUATION_POLICY.runtimeAuthority}; checkpoint=${AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority}; session_failure=${AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy}.`,
+    `Observability: each_cycle=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredEachCycle}; pre_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredBeforeMutation}; post_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredAfterMutation}; ui_policy=${AUTONOMOUS_CONTINUATION_POLICY.observability.uiPolicy}.`,
     ...EXECUTION_GOVERNANCE_RULES.map((rule, index) => `${index + 1}) ${rule}`),
     `Trello mirror runtime: ${trelloExecutionMirrorStatus()}.`,
     "Nếu Trello runtime đang HOLD thì phải ghi blocker rõ; không được tuyên bố đã cập nhật Trello.",

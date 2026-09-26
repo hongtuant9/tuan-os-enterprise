@@ -22,6 +22,7 @@ type GmailPart = {
 type GmailMessage = {
   id?: string | null;
   threadId?: string | null;
+  internalDate?: string | null;
   snippet?: string | null;
   payload?: GmailPart | null;
 };
@@ -161,6 +162,15 @@ function bodyText(message: GmailMessage): string {
   return message.snippet?.trim() ?? "";
 }
 
+function receivedAt(message: GmailMessage): string | null {
+  const raw = message.internalDate?.trim();
+  if (!raw) return null;
+  const millis = Number(raw);
+  if (!Number.isFinite(millis)) return null;
+  return new Date(millis).toISOString();
+}
+
+
 async function enrichContextForReservation(
   gmail: ReturnType<typeof google.gmail>,
   input: {
@@ -211,6 +221,7 @@ async function enrichContextForReservation(
         subject: header(message, "Subject"),
         body: bodyText(message),
         snippet: message.snippet,
+        receivedAt: receivedAt(message),
       });
       if (parsed.channel !== input.expectedChannel || !hasReservationContext(parsed.context)) continue;
 
@@ -352,7 +363,14 @@ export async function runOtaEmailWorker(
         const body = bodyText(message);
         const headers = headerValues(message);
         const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
-        const parsed = parseOtaEmail({ from, replyTo, subject, body, snippet: message.snippet });
+        const parsed = parseOtaEmail({
+          from,
+          replyTo,
+          subject,
+          body,
+          snippet: message.snippet,
+          receivedAt: receivedAt(message),
+        });
 
         if (!parsed.channel) {
           result.contextOnly += 1;

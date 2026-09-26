@@ -39,7 +39,15 @@ if (!token || !appUrl) {
 
 let ownerChatId = String(env.TELEGRAM_OWNER_CHAT_ID || "").trim();
 if (!ownerChatId) {
-  const updatesResponse = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=20&timeout=0`);
+  // Telegram Bot API does not allow getUpdates while a webhook is active.
+  // Clear any old webhook first but keep pending updates so Owner /start can be discovered safely.
+  await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ drop_pending_updates: false }),
+  }).catch(() => null);
+
+  const updatesResponse = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=50&timeout=0`);
   const updatesPayload = await updatesResponse.json().catch(() => ({}));
   const updates = Array.isArray(updatesPayload?.result) ? updatesPayload.result : [];
   const startMessages = updates

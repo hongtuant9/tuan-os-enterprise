@@ -163,22 +163,44 @@ function bodyText(message: GmailMessage): string {
 
 async function enrichContextForReservation(
   gmail: ReturnType<typeof google.gmail>,
-  reservationReference: string,
-  expectedChannel: OtaEmailChannel,
-  baseContext: ParsedReservationContext,
-): Promise<ParsedReservationContext> {
-  let merged = baseContext;
+  input: {
+    expectedChannel: OtaEmailChannel;
+    reservationReference: string | null;
+    providerConversationReference: string | null;
+    baseContext: ParsedReservationContext;
+  },
+): Promise<{ context: ParsedReservationContext; reservationReference: string | null }> {
+  let merged = input.baseContext;
+  let canonicalReference = input.reservationReference;
+  const queries: string[] = [];
+
+  if (input.reservationReference) queries.push(`"${input.reservationReference}" -in:spam -in:trash`);
+  if (input.providerConversationReference) queries.push(`"${input.providerConversationReference}" -in:spam -in:trash`);
+
+  if (input.expectedChannel === "airbnb" && input.baseContext.guestName) {
+    const safeName = input.baseContext.guestName.replace(/"/g, "").trim();
+    if (safeName) {
+      queries.push(`from:(airbnb.com) "${safeName}" -in:spam -in:trash`);
+    }
+  }
+
   try {
-    const list = await gmail.users.messages.list({
-      userId: "me",
-      q: `"${reservationReference}" -in:spam -in:trash`,
-      maxResults: 20,
-    });
-    for (const item of list.data.messages ?? []) {
-      if (!item.id) continue;
+    const ids = new Set<string>();
+    for (const query of queries) {
+      const list = await gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults: 30,
+      });
+      for (const item of list.data.messages ?? []) {
+        if (item.id) ids.add(item.id);
+      }
+    }
+
+    for (const id of ids) {
       const { data } = await gmail.users.messages.get({
         userId: "me",
-        id: item.id,
+        id,
         format: "full",
       });
       const message = data as GmailMessage;
@@ -190,14 +212,35 @@ async function enrichContextForReservation(
         body: bodyText(message),
         snippet: message.snippet,
       });
-      if (parsed.channel !== expectedChannel || parsed.reservationReference !== reservationReference) continue;
-      if (!hasReservationContext(parsed.context)) continue;
+      if (parsed.channel !== input.expectedChannel || !hasReservationContext(parsed.context)) continue;
+
+      const sameReservation = Boolean(
+        canonicalReference
+        && parsed.reservationReference
+        && parsed.reservationReference === canonicalReference,
+      );
+      const sameConversation = Boolean(
+        input.providerConversationReference
+        && parsed.providerConversationReference
+        && parsed.providerConversationReference === input.providerConversationReference,
+      );
+      const sameAirbnbGuestStay = input.expectedChannel === "airbnb"
+        && Boolean(input.baseContext.guestName)
+        && Boolean(parsed.context.guestName)
+        && input.baseContext.guestName!.trim().toLowerCase() === parsed.context.guestName!.trim().toLowerCase()
+        && Boolean(input.baseContext.checkInDate)
+        && parsed.context.checkInDate === input.baseContext.checkInDate;
+
+      if (!sameReservation && !sameConversation && !sameAirbnbGuestStay) continue;
+
       merged = mergeOtaReservationContext(merged, parsed.context);
+      canonicalReference = parsed.reservationReference ?? canonicalReference;
     }
   } catch {
-    // Enrichment is best-effort. Never block verified guest-message ingress.
+    // Best-effort enrichment. Never block verified guest-message ingress.
   }
-  return merged;
+
+  return { context: merged, reservationReference: canonicalReference };
 }
 
 async function sendReply(input: {
@@ -317,10 +360,11 @@ export async function runOtaEmailWorker(
         }
 
         if (!parsed.relayVerified) {
-          if (parsed.reservationReference && hasReservationContext(parsed.reservationContext)) {
+          const conversationReference = parsed.providerConversationReference ?? parsed.reservationReference;
+          if (conversationReference && parsed.reservationReference && hasReservationContext(parsed.reservationContext)) {
             const enriched = await service.enrichReservationContext({
               channel: parsed.channel,
-              externalConversationId: `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference}`,
+              externalConversationId: `${parsed.channel}:${mailbox.entity}:${conversationReference}`,
               reservationReference: parsed.reservationReference,
               pageEntity: mailbox.entity,
               reservationContext: parsed.reservationContext,
@@ -336,7 +380,11 @@ export async function runOtaEmailWorker(
           continue;
         }
 
-        const conversationKey = `${parsed.channel}:${mailbox.entity}:${parsed.reservationReference ?? message.threadId ?? item.id}`;
+        const providerConversationReference = parsed.providerConversationReference
+          ?? parsed.reservationReference
+          ?? message.threadId
+          ?? item.id;
+        const conversationKey = `${parsed.channel}:${mailbox.entity}:${providerConversationReference}`;
         await service.enrichConversationTransport({
           channel: parsed.channel,
           externalConversationId: conversationKey,
@@ -350,20 +398,21 @@ export async function runOtaEmailWorker(
         });
 
         result.actionable += 1;
-        const enrichedContext = parsed.reservationReference
-          ? await enrichContextForReservation(
-              gmail,
-              parsed.reservationReference,
-              parsed.channel,
-              parsed.reservationContext,
-            )
-          : parsed.reservationContext;
+        const enrichment = await enrichContextForReservation(gmail, {
+          expectedChannel: parsed.channel,
+          reservationReference: parsed.reservationReference,
+          providerConversationReference: parsed.providerConversationReference,
+          baseContext: parsed.reservationContext,
+        });
+        const enrichedContext = enrichment.context;
+        const canonicalReservationReference = enrichment.reservationReference;
         const carePhase = deriveCarePhase(enrichedContext.checkInDate, enrichedContext.checkOutDate);
-        if (parsed.reservationReference && hasReservationContext(enrichedContext)) {
+
+        if (canonicalReservationReference && hasReservationContext(enrichedContext)) {
           const enriched = await service.enrichReservationContext({
             channel: parsed.channel,
             externalConversationId: conversationKey,
-            reservationReference: parsed.reservationReference,
+            reservationReference: canonicalReservationReference,
             pageEntity: mailbox.entity,
             reservationContext: enrichedContext,
           });
@@ -381,7 +430,7 @@ export async function runOtaEmailWorker(
           acquisitionSource: `${parsed.channel}_email`,
           pageEntity: mailbox.entity,
           carePhase: carePhase !== "general" ? carePhase : parsed.carePhase,
-          reservationReference: parsed.reservationReference ?? undefined,
+          reservationReference: canonicalReservationReference ?? undefined,
           reservationContext: enrichedContext,
           providerMessageType: `email_${parsed.eventType}`,
           sourceMailbox: mailbox.googleEmail,

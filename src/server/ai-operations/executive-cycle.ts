@@ -12,6 +12,7 @@ import { runExecutiveCouncilCycle, type ExecutiveCouncilResult } from "./executi
 import { runRealityPulse, type RealityPulseResult } from "./reality-pulse";
 import { runMarketingCommandCenterCycle, type MarketingCommandCenterCycleResult } from "@/server/marketing-command-center/cycle";
 import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-governance";
+import { dispatchDepartmentTask, type DepartmentExecutionResult } from "./department-executor";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,6 +36,7 @@ export type ExecutiveCycleResult = {
   selectedNextTaskTitle: string | null;
   selectedNextTaskAgent: string | null;
   dispatchState: "READY_TO_EXECUTE" | "WAITING_EXECUTION_TRANSPORT" | "NO_TASK" | "HOLD_AUTHORITY_STALE";
+  execution: DepartmentExecutionResult;
   completedSinceLastCycle: Array<{ id: string; title: string; completedAt: string | null }>;
   continuation: {
     autoContinue: boolean;
@@ -65,12 +67,13 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const marketingCommandCenter = await runMarketingCommandCenterCycle(now);
   const cmo = await runCmoExecutiveCycle(growth, sales, now);
   const council = await runExecutiveCouncilCycle(cmo, sales, septemberPlan, now);
-  const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }] = await Promise.all([
+  const [{ data: tasks }, { data: approvals }, { data: syncRows }, { data: syncSources }, { data: latestLogs }, { data: latestDispatchLogs }] = await Promise.all([
     container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
     container.db.from("approvals").select("id,title,status,updated_at").order("updated_at", { ascending: false }),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("activity_logs").select("message,created_at").eq("unit", "TCE Executive").order("created_at", { ascending: false }).limit(1),
+    container.db.from("activity_logs").select("message,created_at").eq("unit", "TCE Execution Dispatcher").order("created_at", { ascending: false }).limit(1),
   ]);
 
   const records = syncRows ?? [];
@@ -112,6 +115,43 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
         : selectedNextTaskAgent === "computer_operator"
           ? "WAITING_EXECUTION_TRANSPORT"
           : "READY_TO_EXECUTE";
+  const dailyAiBudget = Number(process.env.TCE_AI_DAILY_BUDGET_USD ?? "0");
+  const monthlyAiBudget = Number(process.env.TCE_AI_MONTHLY_BUDGET_USD ?? "0");
+  const paidAiEnabled =
+    process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() !== "false" &&
+    Number.isFinite(dailyAiBudget) && dailyAiBudget > 0 &&
+    Number.isFinite(monthlyAiBudget) && monthlyAiBudget > 0 &&
+    Boolean(process.env.OPENAI_API_KEY?.trim());
+  const authenticatedBrowserTransportAvailable =
+    process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true";
+
+  const execution = dispatchDepartmentTask(selectedNextTask, {
+    authoritiesVerified: brief.staleAuthorities.length === 0,
+    paidAiEnabled,
+    authenticatedBrowserTransportAvailable,
+  });
+
+  const executionFingerprint = createHash("sha256")
+    .update(JSON.stringify({
+      taskId: execution.taskId,
+      agent: execution.agent,
+      state: execution.state,
+      reason: execution.reason,
+      nextAction: execution.nextAction,
+    }))
+    .digest("hex")
+    .slice(0, 16);
+  const previousDispatch = latestDispatchLogs?.[0]?.message ?? "";
+  if (!previousDispatch.includes(`fingerprint=${executionFingerprint}`)) {
+    await container.activityLog.record({
+      agent: "TUAN OS — Department Execution Engine",
+      unit: "TCE Execution Dispatcher",
+      message:
+        `fingerprint=${executionFingerprint} · task=${execution.taskId ?? "NONE"} · agent=${execution.agent ?? "NONE"} · ` +
+        `state=${execution.state} · reason=${execution.reason} · evidence=${execution.evidence} · next=${execution.nextAction}`,
+      type: execution.state === "EXECUTED_INTERNAL" || execution.state === "NO_TASK" ? "info" : "alert",
+    });
+  }
   const digest = createHash("sha256")
     .update(JSON.stringify({
       next: brief.nextItems.map((item) => item.id),
@@ -124,6 +164,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       selectedNextTaskId: selectedNextTask?.id ?? null,
       selectedNextTaskAgent,
       dispatchState,
+      executionState: execution.state,
       completedSinceLastCycle: completedSinceLastCycle.map((item) => item.id),
     }))
     .digest("hex")
@@ -169,6 +210,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     selectedNextTaskTitle: selectedNextTask?.title ?? null,
     selectedNextTaskAgent,
     dispatchState,
+    execution,
     completedSinceLastCycle,
     continuation: {
       autoContinue: AUTONOMOUS_CONTINUATION_POLICY.autoSelectNextTask,

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { getAdminContainer } from "@/server/container";
-import { buildManagerBrief, type AuthoritySnapshot } from "./control-plane";
+import { buildManagerBrief, type AuthoritySnapshot, type ManagerWorkItem } from "./control-plane";
 import { buildManagerItems } from "./manager-data";
 import { runMarketingCoordinationCycle, type MarketingCoordinationResult } from "@/server/marketing-manager/coordination-cycle";
 import { runMarketingGrowthCycle, type MarketingGrowthCycleResult } from "@/server/marketing-manager/growth-control-loop";

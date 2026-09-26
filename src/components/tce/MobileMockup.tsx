@@ -491,7 +491,7 @@ function MobileReception({ data }: { data?: TceTabLiveData }) {
         </div>
       </MobileSection>
       <MobileSection title="Hội thoại cần chú ý" subtitle="Cần hỗ trợ hoặc có rủi ro"><RowTable rows={data?.tables.receptionConversations?.length ? data.tables.receptionConversations.map((r) => [(r[1] ?? "—") + " · " + (r[2] ?? "—"), r[3] ?? "—", r[5] ?? "—"]) : [["Chưa có hội thoại mở","—","—"]]} /></MobileSection>
-      <MobileSection title="Tổng quan hiệu suất" subtitle="AI xử lý & fallback">
+      <MobileSection title="Tổng quan hiệu suất" subtitle="AI xử lý & phương án dự phòng">
         <div className="flex items-center gap-[20px]">
           <div className="grid h-[78px] w-[78px] place-items-center rounded-full bg-[conic-gradient(#2f7cf4_0_78%,#ff4d5d_78%_84%,#e4edf7_84%_100%)]"><div className="grid h-[55px] w-[55px] place-items-center rounded-full bg-white text-center"><span><b className="block text-[15px]">—</b><small className="text-[5px] text-[#7486a4]">xử lý thành công</small></span></div></div>
           <div className="grid flex-1 grid-cols-2 gap-[6px]">{[["F","Fallback","violet"],["P","Phản hồi TB","blue"]].map(([l,n,t])=><div key={n} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="violet"?"bg-[#8238ee]":"bg-[#2f7cf4]")}>{l}</span><small className="ml-2 text-[6px] text-[#7084a7]">{n}</small><b className="mt-1 block text-[9px]">—</b></div>)}</div>
@@ -572,7 +572,7 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
         <RowTable rows={revenueTaxonomyRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="Trạng thái API KiotViet" subtitle="Read-only; không dùng endpoint không được hỗ trợ">
+      <MobileSection title="Trạng thái API KiotViet" subtitle="Chỉ đọc; không dùng điểm kết nối API không được hỗ trợ">
         <RowTable rows={apiRows} cols={3}/>
       </MobileSection>
 
@@ -581,11 +581,11 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
         <p className="mt-[5px] text-[6px] text-[#6f83a5]">Lợi nhuận chỉ tính khi chi phí đọc được trực tiếp từ KiotViet.</p>
       </MobileSection>
 
-      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Chỉ dùng invoice detail + cost từ KiotViet">
+      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Chỉ dùng chi tiết hóa đơn và giá vốn từ KiotViet">
         <RowTable rows={productRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="3 hành động ưu tiên" subtitle="Chuẩn hóa nhập liệu trước khi automation">
+      <MobileSection title="3 hành động ưu tiên" subtitle="Chuẩn hóa nhập liệu trước khi tự động hóa">
         <div className="space-y-[5px]">
           {(data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]).slice(0,3).map((item, index) => (
             <div key={item} className="flex gap-[7px] rounded-[7px] border border-[#dce7f2] bg-white p-[7px]">

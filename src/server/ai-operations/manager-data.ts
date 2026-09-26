@@ -31,11 +31,15 @@ function first(fields: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-function agentFor(title: string, unit: string): AiOpsAgent {
-  const text = `${title} ${unit}`.toLowerCase();
+function agentFor(title: string, unit: string, nextAction = ""): AiOpsAgent {
+  const text = `${title} ${unit} ${nextAction}`.toLowerCase();
   if (/google ads|utm|tracking|campaign/.test(text)) return "google_ads_agent";
   if (/website|seo|wordpress|web /.test(text)) return "website_agent";
   if (/ota|booking|agoda|expedia|airbnb|channel/.test(text)) return "channel_auditor";
+  // Recruitment/CHRO tasks frequently require public posting or browser execution.
+  // Until a dedicated CHRO executor exists, route execution transport through Computer Operator
+  // instead of silently falling back to Manager Agent.
+  if (/chro|tuyển dụng|tuyển |recruit|ứng viên|nhân sự/.test(text)) return "computer_operator";
   if (/vps|browser|computer|openclaw|remote/.test(text)) return "computer_operator";
   return "manager_agent";
 }
@@ -196,8 +200,8 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       ceoSupportTiming: ceoSupportTiming || undefined,
       resolutionOwner: pendingCeoApproval
         ? "CEO Tuấn: quyết định; tác nhân phụ trách: thực thi sau phê duyệt"
-        : owner || agentFor(title, unit),
-      agent: agentFor(title, unit),
+        : owner || agentFor(title, unit, nextAction),
+      agent: agentFor(title, unit, nextAction),
     };
   });
 }

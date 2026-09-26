@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Executive Dashboard – Tổng quan điều hành | TUAN OS",
-  description: "TUAN OS — trung tâm điều hành doanh nghiệp và AI Agent",
+  title: "Tổng quan điều hành | TUAN OS",
+  description: "TUAN OS — trung tâm điều hành doanh nghiệp và hệ thống trợ lý AI",
 };
 
 export default function RootLayout({

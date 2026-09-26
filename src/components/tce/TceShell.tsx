@@ -7,7 +7,7 @@ import { signOut } from "@/app/actions/auth";
 
 type IconName =
   | "home" | "business" | "marketing" | "operations" | "reception"
-  | "customers" | "hr" | "finance" | "reports" | "agents" | "settings"
+  | "customers" | "hr" | "finance" | "reports" | "agents" | "chat" | "settings"
   | "bell" | "chevron";
 
 const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
@@ -21,6 +21,7 @@ const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },
   { href: "/agents", label: "Trợ lý AI", icon: "agents" },
+  { href: "/owner-chat", label: "TUAN OS Chat", icon: "chat" },
   { href: "/settings", label: "Cài đặt", icon: "settings" },
 ];
 
@@ -37,6 +38,7 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
     finance: <><rect x="4" y="5" width="16" height="16" rx="2" {...common}/><path d="M8 9h8M12 8v10M9.5 12.5h5M9.5 16h5" {...common}/></>,
     reports: <><path d="M5 3h10l4 4v14H5V3Z" {...common}/><path d="M15 3v5h5M8 17l3-3 2 2 3-4" {...common}/></>,
     agents: <><circle cx="12" cy="12" r="9" {...common}/><path d="M12 8v8M8 12h8" {...common}/></>,
+    chat: <><path d="M4 5h16v11H8l-4 4V5Z" {...common}/><path d="M8 9h8M8 12h5" {...common}/></>,
     settings: <><circle cx="12" cy="12" r="3" {...common}/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" {...common}/></>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" {...common}/></>,
     chevron: <path d="m9 10 3 3 3-3" {...common}/>,

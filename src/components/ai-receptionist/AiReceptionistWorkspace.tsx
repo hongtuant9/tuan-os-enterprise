@@ -1409,7 +1409,7 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
     <div className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox chăm sóc khách hàng theo cơ sở</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hộp thư chăm sóc khách hàng theo cơ sở</p>
           <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Mức sẵn sàng Gmail cho AI Lễ tân 24/7</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">
             Mỗi hộp thư phải đúng tài khoản chuẩn và đủ quyền gmail.readonly + gmail.send. Tự động trả lời vẫn khóa cho tới khi kiểm thử chấp nhận người dùng từng kênh đạt yêu cầu.
@@ -1438,19 +1438,19 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
 
               <div className="mt-4 space-y-3 text-xs">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox canonical</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Hộp thư chuẩn</p>
                   <p className="mt-1 break-all font-semibold text-[var(--ink-primary)]">{mailbox.canonicalEmail}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Google đang kết nối</p>
                   <p className="mt-1 break-all text-[var(--ink-secondary)]">{mailbox.googleEmail ?? "Chưa kết nối"}</p>
                   {mailbox.connected && !mailbox.emailMatchesCanonical ? (
-                    <p className="mt-1 font-semibold text-[var(--status-bad)]">Sai tài khoản Google — cần OAuth lại đúng mailbox.</p>
+                    <p className="mt-1 font-semibold text-[var(--status-bad)]">Sai tài khoản Google — cần kết nối OAuth lại đúng hộp thư.</p>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Pill label={mailbox.gmailReadScope ? "gmail.readonly: PASS" : "gmail.readonly: thiếu"} tone={mailbox.gmailReadScope ? "good" : "warn"} />
-                  <Pill label={mailbox.gmailSendScope ? "gmail.send: PASS" : "gmail.send: thiếu"} tone={mailbox.gmailSendScope ? "good" : "warn"} />
+                  <Pill label={mailbox.gmailReadScope ? "gmail.readonly: ĐẠT" : "gmail.readonly: thiếu"} tone={mailbox.gmailReadScope ? "good" : "warn"} />
+                  <Pill label={mailbox.gmailSendScope ? "gmail.send: ĐẠT" : "gmail.send: thiếu"} tone={mailbox.gmailSendScope ? "good" : "warn"} />
                 </div>
                 {mailbox.connectedAt ? <p className="text-[var(--ink-muted)]">Kết nối: {formatDateTime(mailbox.connectedAt)}</p> : null}
                 {mailbox.lastError ? <p className="leading-5 text-[var(--status-bad)]">OAuth: {mailbox.lastError}</p> : null}
@@ -1506,7 +1506,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       {tab === "hop-thu" && <Conversations items={dashboard.conversations} canManage={canManage} />}
       {tab === "nhat-ky" && <AuditLog items={dashboard.conversations} />}
       {tab === "xac-nhan" && (dashboard.managerReviews.length ? <div className="space-y-4">{dashboard.managerReviews.map((review) => <ReviewCard key={review.id} review={review} canManage={canManage} />)}</div> : <EmptyState title="Chưa có yêu cầu cần xác nhận" description="Khi AI gặp dữ liệu thiếu, mâu thuẫn hoặc yêu cầu ngoài chính sách, yêu cầu sẽ xuất hiện tại đây." />)}
-      {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={booking.status} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn (Safety Gate) mới xuất hiện. Tính năng ghi KiotViet đang khóa trong thử nghiệm riêng (Private Pilot)." />}</>}
+      {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={booking.status} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn (cổng an toàn) mới xuất hiện. Tính năng ghi KiotViet đang khóa trong thử nghiệm riêng (thử nghiệm riêng)." />}</>}
       {tab === "tri-thuc" && (dashboard.knowledgeCandidates.length ? <div className="space-y-4">{dashboard.knowledgeCandidates.map((candidate) => <KnowledgeCard key={candidate.id} candidate={candidate} canManage={canManage} />)}</div> : <EmptyState title="Chưa có đề xuất cập nhật tri thức" description="Sau khi Quản lý xử lý ngoại lệ, AI sẽ tạo đề xuất. Đề xuất không tự động trở thành dữ liệu môi trường thật." />)}
       {tab === "kiem-thu" && <PilotLab backlog={dashboard.missingDataBacklog} mode={dashboard.mode} />}
     </>

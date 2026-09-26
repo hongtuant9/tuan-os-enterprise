@@ -15,6 +15,7 @@ import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-govern
 import { dispatchDepartmentTask, type DepartmentExecutionResult } from "./department-executor";
 import { writeTaskExecutionCheckpoint } from "./task-execution-writeback";
 import { notifyOwnerIfNeeded } from "@/server/notifications/telegram-owner";
+import { facebookRecruitmentBrowserStatus } from "@/server/browser/facebook-recruitment-browser";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -121,18 +122,47 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     Number.isFinite(dailyAiBudget) && dailyAiBudget > 0 &&
     Number.isFinite(monthlyAiBudget) && monthlyAiBudget > 0 &&
     Boolean(process.env.OPENAI_API_KEY?.trim());
-  const authenticatedBrowserTransportAvailable =
+  const genericAuthenticatedBrowserTransportAvailable =
     process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true";
+  const facebookRecruitmentBrowserEnabled =
+    process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() === "true";
+  const facebookRecruitmentStatus = facebookRecruitmentBrowserEnabled
+    ? await facebookRecruitmentBrowserStatus().catch(() => ({ state: "ERROR" as const, authenticated: false }))
+    : { state: "DISABLED" as const, authenticated: false };
+
+  const browserAvailableForTask = (item: ManagerWorkItem) =>
+    genericAuthenticatedBrowserTransportAvailable ||
+    (item.id === "TASK-TCE-CHRO-RECRUIT-002" &&
+      facebookRecruitmentStatus.state === "READY" &&
+      facebookRecruitmentStatus.authenticated);
 
   const candidateExecutions = brief.staleAuthorities.length === 0
-    ? brief.nextItems.map((item) => ({
-        item,
-        execution: dispatchDepartmentTask(item, {
+    ? brief.nextItems.map((item) => {
+        let execution = dispatchDepartmentTask(item, {
           authoritiesVerified: true,
           paidAiEnabled,
-          authenticatedBrowserTransportAvailable,
-        }),
-      }))
+          authenticatedBrowserTransportAvailable: browserAvailableForTask(item),
+        });
+        if (
+          item.id === "TASK-TCE-CHRO-RECRUIT-002" &&
+          execution.state === "WAITING_EXECUTION_TRANSPORT" &&
+          facebookRecruitmentBrowserEnabled
+        ) {
+          const authState = facebookRecruitmentStatus.state;
+          execution = {
+            ...execution,
+            reason: `Facebook recruitment browser state=${authState}; scoped transport chưa READY.`,
+            evidence: `facebook_recruitment_browser=${authState}; authenticated=${facebookRecruitmentStatus.authenticated}`,
+            nextAction:
+              authState === "HOLD_MFA"
+                ? "Owner hoàn tất MFA/2FA trực tiếp; VPS tự probe lại và resume."
+                : authState === "HOLD_LOGIN"
+                  ? "Owner thực hiện one-time Facebook login cho persistent VPS profile; không gửi password/token qua chat."
+                  : "Khôi phục scoped Facebook recruitment browser rồi probe lại.",
+          };
+        }
+        return { item, execution };
+      })
     : [];
 
   // Do not let one blocked public/browser task freeze the whole company.
@@ -145,7 +175,7 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
   const execution = selectedBundle?.execution ?? dispatchDepartmentTask(null, {
     authoritiesVerified: brief.staleAuthorities.length === 0,
     paidAiEnabled,
-    authenticatedBrowserTransportAvailable,
+    authenticatedBrowserTransportAvailable: genericAuthenticatedBrowserTransportAvailable,
   });
   const selectedNextTaskAgent = selectedNextTask?.agent ?? null;
   const dispatchState: ExecutiveCycleResult["dispatchState"] =

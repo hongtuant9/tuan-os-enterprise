@@ -86,7 +86,7 @@ export function buildManagerBrief(
       !blockedItems.some((blocked) => blocked.id === item.id) &&
       (
         item.status === "BLOCKED" ||
-        /AUTH|QUOTA|ERROR|FAILED|DENIED|UNAVAILABLE|BLOCKED/i.test(item.blocker ?? "")
+        /AUTH|QUOTA|ERROR|FAILED|DENIED|UNAVAILABLE|BLOCKED|DEGRADED|STALE|NEED[_ ]?VERIFY|INVALID[_-]?GRANT/i.test(item.blocker ?? "")
       ),
   );
 

@@ -184,6 +184,7 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       dueDate: dueDate || undefined,
       executionGate: executionGate || undefined,
       owner: owner || undefined,
+      updatedAt: task.updated_at,
       approvalRequired,
       approvalId: first(pendingApproval ?? {}, "APPROVAL_ID") || taskApprovalId || undefined,
       approvalResolved,

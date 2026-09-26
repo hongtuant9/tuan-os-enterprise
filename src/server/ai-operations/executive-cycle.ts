@@ -244,6 +244,30 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
       });
     }
 
+    const ownerAuthBacklog = [...brief.systemIssueItems, ...brief.waitingItems]
+      .filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index)
+      .filter((item) => /touch id|mfa|otp|2fa|owner[_ ]auth|owner local|password manager|xác thực|mã xác thực|đăng nhập owner|reauth/i.test(
+        [item.blocker ?? "", item.nextAction ?? "", item.executionGate ?? "", item.title].join(" ").toLowerCase(),
+      ))
+      .slice(0, 5);
+
+    for (const item of ownerAuthBacklog) {
+      await notifyOwnerIfNeeded({
+        execution: {
+          taskId: item.id,
+          agent: item.agent,
+          state: "NEED_VERIFY",
+          reason: "Task đang chờ Owner authentication/local security challenge theo TASK-001.",
+          evidence: item.blocker || item.executionGate || "Owner-auth signal detected in canonical task state.",
+          nextAction: item.nextAction || "Owner hoàn tất xác thực trực tiếp; VPS tự re-check ở chu kỳ kế tiếp.",
+          safeToContinue: false,
+        },
+        task: item,
+        pendingApprovals: [],
+        appUrl: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || null,
+      });
+    }
+
     // Approval queue is an independent Owner interrupt channel.
     await notifyOwnerIfNeeded({
       execution,

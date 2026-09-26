@@ -76,10 +76,11 @@ function nextInstruction(kind: TelegramOwnerAlertKind, input: NotifyInput): stri
   if (kind === "AUTHENTICATED_BROWSER_GATE") {
     return [
       "Việc Tuấn cần làm:",
-      "1) Không bật quyền rộng theo cảm tính.",
-      "2) Xem task/evidence và xác nhận phạm vi browser cần đăng nhập.",
+      "1) TUAN OS đang cần authenticated browser cho đúng task này; production hiện chưa có transport VERIFIED.",
+      "2) Xem task/evidence và xác nhận phạm vi trước khi bật TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED.",
       appUrl ? `3) Mở Control Center: ${appUrl}` : "3) Mở TUAN OS Control Center.",
-      "4) Chỉ bootstrap login/MFA một lần; runtime sau đó phải quay về VPS.",
+      "4) Chỉ bật sau khi executor trên VPS đã bootstrap/verify và có rollback; không bật chỉ vì desktop đang online.",
+      "5) Nếu login yêu cầu MFA/Touch ID, thực hiện trực tiếp; không gửi OTP/password/token cho bot.",
     ].join("\n");
   }
   if (kind === "APPROVAL_GATE") {

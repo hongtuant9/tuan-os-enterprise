@@ -4,6 +4,7 @@ import { channelPolicySnapshot, customerChannelStage } from "@/server/channels/c
 import { TCE_BUSINESS_OPERATING_PLAN } from "@/server/ai-operations/tce-business-plan";
 import { AUTONOMOUS_CONTINUATION_POLICY, EXECUTION_GOVERNANCE_VERSION, trelloExecutionMirrorStatus } from "@/server/agents/execution-governance";
 import { DEPARTMENT_EXECUTION_ENGINE_VERSION } from "@/server/ai-operations/department-executor";
+import { TASK_EXECUTION_WRITEBACK_VERSION } from "@/server/ai-operations/task-execution-writeback";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,7 @@ function runtimeSignals() {
     tceAgentAiEnabled: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() !== "false" && tceAiBudgetApproved && Boolean(process.env.OPENAI_API_KEY?.trim()),
     tceAiBudgetApproved,
     departmentExecutionEngineVersion: DEPARTMENT_EXECUTION_ENGINE_VERSION,
+    taskExecutionWritebackVersion: TASK_EXECUTION_WRITEBACK_VERSION,
     departmentExecutionEngineEnabled: companyAutopilotEnabled && process.env.TCE_DEPARTMENT_EXECUTION_ENGINE_ENABLED?.trim().toLowerCase() !== "false",
     authenticatedBrowserExecutorEnabled: process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true",
     departmentalPaidAiReasoning: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() !== "false" && tceAiBudgetApproved && Boolean(process.env.OPENAI_API_KEY?.trim()) ? "ENABLED" : "DISABLED_APPROVAL_OR_CONFIG",

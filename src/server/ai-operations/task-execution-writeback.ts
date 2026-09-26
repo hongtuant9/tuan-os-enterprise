@@ -4,7 +4,7 @@ import { setSheetValue } from "@/server/integrations/google/drive-client";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 import type { DepartmentExecutionResult } from "./department-executor";
 
-export const TASK_EXECUTION_WRITEBACK_VERSION = "2026-09-26.v1";
+export const TASK_EXECUTION_WRITEBACK_VERSION = "2026-09-26.v2";
 
 function safeCellText(value: string, max = 900): string {
   return value.replace(/[\r\n]+/g, " ").trim().slice(0, max);

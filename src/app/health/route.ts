@@ -73,8 +73,17 @@ function runtimeSignals() {
   return {
     companyAutopilotEnabled,
     companyRuntimeMode: companyAutopilotEnabled ? "VPS_ALWAYS_ON" : "PAUSED",
+    runtimeDependencyPolicy: "VPS_ONLY",
+    windowDependency: false,
     desktopDependency: false,
+    desktopRuntimeRole: "NON_RUNTIME_FALLBACK_ONLY",
+    chatWindowRole: "STATELESS_CONTROL_SURFACE_ONLY",
     cmiBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
+    vpsHeadlessBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
+    browserRuntimeMode:
+      process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true"
+        ? "VPS_HEADLESS_PLUS_AUTHENTICATED"
+        : "VPS_HEADLESS_PUBLIC_ONLY",
     cmiQueueWorkerEnabled: companyAutopilotEnabled && process.env.CMI_QUEUE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     staffOpsWorkerEnabled: companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     executiveWorkerEnabled: companyAutopilotEnabled && process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
@@ -151,6 +160,8 @@ function runtimeSignals() {
     autonomousCheckpointAuthority: AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority,
     autonomousSessionFailurePolicy: AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy,
     autonomousDesktopPolicy: AUTONOMOUS_CONTINUATION_POLICY.desktopPolicy,
+    autonomousWindowPolicy: AUTONOMOUS_CONTINUATION_POLICY.windowPolicy,
+    autonomousRuntimeDependencyPolicy: AUTONOMOUS_CONTINUATION_POLICY.runtimeDependencyPolicy,
     autonomousOwnerInterruptLevels: [...AUTONOMOUS_CONTINUATION_POLICY.ownerInterruptLevels],
     trelloExecutionMirror: trelloExecutionMirrorStatus(),
     trelloWorkerEnabled: companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false",

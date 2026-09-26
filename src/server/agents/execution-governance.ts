@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v4";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v5";
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -34,10 +34,18 @@ export const AUTONOMOUS_CONTINUATION_POLICY = {
     "credential_or_2fa_required",
     "north_star_or_strategy_change",
   ] as const,
-  desktopPolicy: "FALLBACK_ONLY",
+  desktopPolicy: "NON_RUNTIME_FALLBACK_ONLY",
+  windowPolicy: "STATELESS_CONTROL_SURFACE_ONLY",
+  runtimeDependencyPolicy: "VPS_ONLY",
   sessionFailurePolicy: "RESUME_FROM_CHECKPOINT",
   completionSummary: true,
   autoSelectNextTask: true,
+  browserRuntime: {
+    publicHeadless: "VPS_PRIMARY",
+    authenticatedSession: "VPS_PERSISTENT_PROFILE_WHEN_SUPPORTED",
+    ownerAuthChallenge: "ONE_TIME_OWNER_GATE",
+    desktopMayKeepRuntimeAlive: false,
+  },
   observability: {
     requiredEachCycle: true,
     requiredBeforeMutation: true,
@@ -63,7 +71,10 @@ export const EXECUTION_GOVERNANCE_RULES = [
   "Không chờ lệnh 'tiếp tục': sau khi task có evidence DONE, Executive Worker phải tự tính lane kế tiếp theo priority → dependency → deadline và ghi checkpoint/next action.",
   "Khi session/chat/stream cache bị ngắt, không cố duy trì trạng thái trong phiên; resume từ TASK-001 + runtime DB + Activity Log ở chu kỳ VPS kế tiếp.",
   "L0/L1 tự chạy. L2 chỉ tự chạy khi có approval/Decision ID hợp lệ đúng scope. L3 và các thao tác credential/2FA/budget/financial/security/destructive phải dừng để Owner xác nhận.",
-  "Windows/MacBook chỉ dùng khi API/connector không đủ hoặc cần owner login/MFA/2FA/GUI bắt buộc; xong việc phải trả runtime về VPS.",
+  "Windows/MacBook không được là dependency giữ runtime sống. Chỉ dùng cho one-time owner auth/MFA hoặc UI đặc biệt; nếu thiết bị offline thì task đó WAITING_OWNER_AUTH nhưng toàn bộ lane khác trên VPS tiếp tục chạy.",
+  "Chat/window là control surface stateless: đóng tab, hết session, Stream cache expired hoặc tắt MacBook không được làm mất checkpoint, scheduler, dispatcher hay worker state.",
+  "Browser công khai/read-only phải ưu tiên headless Chromium trên VPS. Authenticated browser chỉ dùng persistent server profile khi đã bootstrap hợp lệ; không sao chép password/token/cookie qua chat.",
+  "Mọi runtime state phải có durable authority trong TASK-001 + runtime DB + Activity Log; không lưu trạng thái điều phối duy nhất trong browser/window.",
   "Sau mỗi task hoàn thành phải ghi completion summary ngắn gồm kết quả, evidence, impact, rollback và next task vào Activity Log/TASK-001/Trello mirror.",
   "Mỗi chu kỳ AI Agent phải kiểm tra trạng thái app liên quan trước khi xử lý: runtime health, freshness của Source of Truth, data quality và dữ liệu mà app đang hiển thị; không được chỉ dựa vào task text hoặc chat history.",
   "Trước mọi mutation phải có pre-check; sau mutation phải có read-back từ backend/runtime và app surface liên quan. Nếu backend PASS nhưng app hiển thị sai/thiếu/stale thì task chưa DONE.",

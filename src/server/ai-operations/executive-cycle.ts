@@ -28,6 +28,8 @@ export type ExecutiveCycleResult = {
   waitingOwner: number;
   openP0: number;
   pendingApprovals: number;
+  nextTaskId: string | null;
+  continuousExecution: "ACTIVE";
   staleAuthorities: string[];
   changed: boolean;
   marketing: MarketingCoordinationResult;
@@ -92,8 +94,9 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     .digest("hex")
     .slice(0, 16);
 
+  const nextTaskId = brief.nextItems[0]?.id ?? null;
   const message =
-    `Executive digest=${digest} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
+    `Executive digest=${digest} · autonomous_continuation=ACTIVE · next_task=${nextTaskId ?? "none"} · next=${brief.nextItems.length} · blocked=${brief.blockedItems.length} · ` +
     `waiting_dependency=${brief.waitingItems.length} · system_issues=${brief.systemIssueItems.length} · open_p0=${openP0} · pending_approvals=${pendingApprovals} · ` +
     `authorities=${brief.staleAuthorities.length === 0 ? "VERIFIED" : "STALE:" + brief.staleAuthorities.join(",")}.`;
 
@@ -116,6 +119,8 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     waitingOwner: brief.waitingItems.length,
     openP0,
     pendingApprovals,
+    nextTaskId,
+    continuousExecution: "ACTIVE",
     staleAuthorities: brief.staleAuthorities,
     changed,
     marketing,

@@ -36,6 +36,8 @@ const otaEmailWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OTA_EMA
 const otaEmailWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OTA_EMAIL_WORKER_INTERVAL_MS || 60_000));
 const trelloWorkerEnabled = companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const trelloWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_TRELLO_WORKER_INTERVAL_MS || 300_000));
+const knowledgeGovernanceWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const knowledgeGovernanceWorkerIntervalMs = Math.max(21_600_000, Number(process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_INTERVAL_MS || 86_400_000));
 
 const server = spawn(process.execPath, ["server.js"], {
   stdio: "inherit",
@@ -62,6 +64,7 @@ const kiotVietInventoryBotWorkerToken = deriveToken("kiotviet-inventory-bot-work
 const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
 const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
 const trelloWorkerToken = deriveToken("tce-trello-worker-v1");
+const knowledgeGovernanceWorkerToken = deriveToken("tce-knowledge-governance-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -163,6 +166,47 @@ async function syncWorkerTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`[TCE Sync] ${message}`);
+  }
+}
+
+async function knowledgeGovernanceWorkerTick() {
+  if (!knowledgeGovernanceWorkerEnabled || !knowledgeGovernanceWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/knowledge-governance/worker",
+      "x-tce-knowledge-governance-worker-token",
+      knowledgeGovernanceWorkerToken,
+      300000,
+    );
+    if (!response.ok) {
+      console.error(`[Knowledge Governance] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    if (!payload?.skipped) {
+      console.log(
+        `[Knowledge Governance] state=${payload?.state ?? "n/a"} inspected=${payload?.inspected ?? 0} changed=${payload?.changedSinceVerified ?? 0} metadata_errors=${payload?.metadataErrors ?? 0} sync_problems=${payload?.syncProblems?.length ?? 0} pending_approvals=${payload?.pendingApprovals ?? 0}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[Knowledge Governance] ${message}`);
+  }
+}
+
+async function knowledgeGovernanceWorkerLoop() {
+  if (!knowledgeGovernanceWorkerEnabled) {
+    console.log("[Knowledge Governance] disabled");
+    return;
+  }
+  if (!knowledgeGovernanceWorkerToken) {
+    console.error("[Knowledge Governance] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[Knowledge Governance] enabled interval_ms=${knowledgeGovernanceWorkerIntervalMs} runtime=VPS_ALWAYS_ON`);
+  await sleep(60000);
+  while (!stopping) {
+    await knowledgeGovernanceWorkerTick();
+    await sleep(knowledgeGovernanceWorkerIntervalMs);
   }
 }
 
@@ -514,3 +558,4 @@ void kiotVietInventoryBotWorkerLoop();
 void omnichannelWorkerLoop();
 void otaEmailWorkerLoop();
 void trelloWorkerLoop();
+void knowledgeGovernanceWorkerLoop();

@@ -60,6 +60,13 @@ function isWaitingStatus(status: string) {
   return ["HOLD", "WAITING", "PENDING"].includes(status);
 }
 
+function isRetriableEngineGate(item: ManagerWorkItem) {
+  const blocker = item.blocker ?? "";
+  const gate = item.executionGate ?? "";
+  return /^AUTO_EXECUTION:(WAITING_EXECUTION_TRANSPORT|NEED_VERIFY)\b/i.test(blocker) ||
+    /^AUTO_(WAITING_EXECUTION_TRANSPORT|NEED_VERIFY)\b/i.test(gate);
+}
+
 export function buildManagerBrief(
   items: ManagerWorkItem[],
   authorities: AuthoritySnapshot[],
@@ -117,6 +124,7 @@ export function buildManagerBrief(
     (item) =>
       item.status !== "DONE" &&
       !blockedItems.some((blocked) => blocked.id === item.id) &&
+      !isRetriableEngineGate(item) &&
       (
         item.status === "BLOCKED" ||
         /AUTH|QUOTA|ERROR|FAILED|DENIED|UNAVAILABLE|BLOCKED|DEGRADED|STALE|NEED[_ ]?VERIFY|INVALID[_-]?GRANT/i.test(item.blocker ?? "")
@@ -128,6 +136,7 @@ export function buildManagerBrief(
       item.status !== "DONE" &&
       !blockedItems.some((blocked) => blocked.id === item.id) &&
       !systemIssueItems.some((issue) => issue.id === item.id) &&
+      !isRetriableEngineGate(item) &&
       (
         isWaitingStatus(item.status) ||
         /SEQUENCE|HOLD_SEQUENCE|WAIT|DEPENDENCY/i.test(item.executionGate ?? "") ||

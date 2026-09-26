@@ -58,7 +58,7 @@ export default function CmiOneClickPanel({
           <div>
             <h2 className="text-lg font-semibold text-[var(--ink-primary)]">Nghiên cứu sản phẩm — thao tác bằng nút</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--ink-secondary)]">
-              Chọn mảng → AI tìm/xếp hạng đối thủ → anh chọn Top 20 → Browser thu thập → AI phân tích bằng chứng → cơ hội sản phẩm → anh duyệt → AI Marketing tạo phương án bán cần test.
+              Chọn mảng → AI tìm và xếp hạng đối thủ → anh chọn 20 đối thủ ưu tiên → trình duyệt tự động thu thập → AI phân tích bằng chứng → cơ hội sản phẩm → anh duyệt → AI Tiếp thị tạo phương án bán cần thử nghiệm.
             </p>
           </div>
           <div className="text-xs text-[var(--ink-muted)]">
@@ -207,7 +207,7 @@ export default function CmiOneClickPanel({
                           <form action={approveCmiOpportunityForMarketing}>
                             <input type="hidden" name="opportunityId" value={opportunity.id} />
                             <button className={button} disabled={!canManage || !status.aiAnalysisConnected}>
-                              Duyệt → AI Marketing
+                              Duyệt → AI Tiếp thị
                             </button>
                           </form>
                         )}

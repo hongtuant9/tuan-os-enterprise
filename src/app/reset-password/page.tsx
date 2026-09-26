@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
           </div>
           <div>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">TUAN OS</p>
-            <p className="text-xs text-[var(--ink-muted)]">Command Center</p>
+            <p className="text-xs text-[var(--ink-muted)]">Trung tâm điều hành</p>
           </div>
         </div>
 

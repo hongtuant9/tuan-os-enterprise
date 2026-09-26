@@ -47,7 +47,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           </div>
           <div className={card}>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">3. AI biến bằng chứng thành cơ hội</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">Khi AI được bật có kiểm soát, hệ thống nhóm nỗi đau, nhu cầu, điểm yếu đối thủ và khoảng trống thị trường → đề xuất cơ hội sản phẩm → anh duyệt → AI Marketing mới tạo chiến lược cần test.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">Khi AI được bật có kiểm soát, hệ thống nhóm nỗi đau, nhu cầu, điểm yếu đối thủ và khoảng trống thị trường → đề xuất cơ hội sản phẩm → anh duyệt → AI Tiếp thị mới tạo chiến lược cần thử nghiệm.</p>
           </div>
         </div>
         <div className="mt-4 rounded-lg border border-[var(--border-hairline)] p-4 text-sm leading-6 text-[var(--ink-secondary)]">
@@ -81,7 +81,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           ["Nghiên cứu", dashboard.metrics.researchJobs],
           ["Bằng chứng", dashboard.metrics.evidence],
           ["Đã xác minh", dashboard.metrics.verifiedEvidence],
-          ["Insight", dashboard.metrics.insights],
+          ["Nhận định", dashboard.metrics.insights],
           ["Cơ hội", dashboard.metrics.opportunities],
           ["Chiến lược", dashboard.metrics.marketingStrategies],
         ].map(([label, value]) => (
@@ -105,7 +105,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
             <input name="title" required className={input} placeholder="Ví dụ: Nỗi đau khách du lịch khi chọn quán ăn tại Tam Cốc" />
           </label>
           <label className="mt-3 block text-sm">Mục tiêu / câu hỏi cần trả lời
-            <textarea name="objective" required rows={5} className={input} placeholder="Ví dụ: Tìm 3 nhu cầu lặp lại nhiều nhất trong review đối thủ và đề xuất sản phẩm/dịch vụ Cozy Garden có thể triển khai trong 30 ngày." />
+            <textarea name="objective" required rows={5} className={input} placeholder="Ví dụ: Tìm 3 nhu cầu lặp lại nhiều nhất trong đánh giá đối thủ và đề xuất sản phẩm/dịch vụ Cozy Garden có thể triển khai trong 30 ngày." />
           </label>
           <label className="mt-3 block text-sm">Loại nghiên cứu
             <select name="researchType" className={input}>
@@ -121,7 +121,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
 
         <form action={createCmiSource} className={card}>
           <h2 className="font-semibold text-[var(--ink-primary)]">2. Thêm nguồn đối thủ / thị trường</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Mỗi nguồn phải phục vụ đúng câu hỏi nghiên cứu. Ưu tiên review, bình luận, trang sản phẩm và dữ liệu có tín hiệu nhu cầu thực.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Mỗi nguồn phải phục vụ đúng câu hỏi nghiên cứu. Ưu tiên đánh giá, bình luận, trang sản phẩm và dữ liệu có tín hiệu nhu cầu thực.</p>
           <label className="mt-4 block text-sm">Nghiên cứu
             <select name="researchJobId" required className={input}>
               <option value="">Chọn nghiên cứu</option>
@@ -143,7 +143,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
 
         <form action={createCmiEvidence} className={card}>
           <h2 className="font-semibold text-[var(--ink-primary)]">3. Lưu bằng chứng thủ công khi cần</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Dùng khi Browser không lấy được review/bình luận hoặc anh cần bổ sung dữ liệu từ ảnh, file hay quan sát thực tế.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Dùng khi trình duyệt tự động không lấy được đánh giá/bình luận hoặc anh cần bổ sung dữ liệu từ ảnh, file hay quan sát thực tế.</p>
           <label className="mt-4 block text-sm">Nguồn
             <select name="sourceId" required className={input}>
               <option value="">Chọn nguồn</option>
@@ -222,7 +222,7 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
 
         <form action={createMarketingStrategyDraft} className={card}>
           <h2 className="font-semibold text-[var(--ink-primary)]">6. AI Marketing — Sau khi đã có cơ hội</h2>
-          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Marketing không quyết định “nên làm sản phẩm gì”. Marketing chỉ thiết kế cách test và cách bán một cơ hội đã được CMI chứng minh đủ mạnh.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Tiếp thị không quyết định “nên làm sản phẩm gì”. Tiếp thị chỉ thiết kế cách thử nghiệm và cách bán một cơ hội đã được CMI chứng minh đủ mạnh.</p>
           <label className="mt-4 block text-sm">Cơ hội
             <select name="opportunityId" required className={input}>
               <option value="">Chọn cơ hội</option>
@@ -232,12 +232,12 @@ export default function CmiWorkspace({ dashboard }: { dashboard: CmiDashboard })
           <label className="mt-3 block text-sm">Khách hàng mục tiêu<textarea name="targetCustomer" required rows={2} className={input} /></label>
           <label className="mt-3 block text-sm">Định vị (Positioning)<textarea name="positioning" required rows={2} className={input} /></label>
           <label className="mt-3 block text-sm">Giá trị khác biệt (Value Proposition)<textarea name="valueProposition" required rows={2} className={input} /></label>
-          <label className="mt-3 block text-sm">Ý tưởng Marketing — mỗi dòng một ý tưởng<textarea name="marketingIdeas" rows={4} className={input} /></label>
+          <label className="mt-3 block text-sm">Ý tưởng tiếp thị — mỗi dòng một ý tưởng<textarea name="marketingIdeas" rows={4} className={input} /></label>
           <label className="mt-3 block text-sm">Kênh đề xuất — mỗi dòng một kênh<textarea name="channelStrategy" rows={3} className={input} /></label>
-          <label className="mt-3 block text-sm">Giả thuyết cần test<textarea name="testHypotheses" rows={3} className={input} /></label>
+          <label className="mt-3 block text-sm">Giả thuyết cần thử nghiệm<textarea name="testHypotheses" rows={3} className={input} /></label>
           <label className="mt-3 block text-sm">Chỉ số kiểm chứng (KPI)<textarea name="kpis" rows={3} className={input} /></label>
           <label className="mt-3 block text-sm">Giả định chưa kiểm chứng<textarea name="assumptions" rows={3} className={input} /></label>
-          <button className={button}>Lưu chiến lược cần test</button>
+          <button className={button}>Lưu chiến lược cần thử nghiệm</button>
         </form>
       </section>
 

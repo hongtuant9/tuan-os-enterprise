@@ -209,7 +209,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
               </span>
               <span className="text-[10px] text-[var(--ink-muted)]">Cập nhật {formatTime(props.capNhatLuc)}</span>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white md:text-3xl">TCE AI Command Center</h1>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white md:text-3xl">Trung tâm điều hành TCE</h1>
             <p className="mt-1 text-xs text-[var(--ink-muted)]">Bàn điều hành dành cho Tổng giám đốc</p>
 
             <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -223,7 +223,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
             <Ring value={sourceRate} label="Dữ liệu" color={sourceRate === 100 ? "#34d399" : "#fbbf24"} />
             <div className="col-span-3 grid grid-cols-4 gap-2 border-t border-white/[0.06] pt-3 text-center">
               <div><p className="text-lg font-semibold text-white">{props.dangLam}</p><p className="text-[9px] text-[var(--ink-muted)]">Đang làm</p></div>
-              <div><p className="text-lg font-semibold text-amber-300">{props.biChan}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ CEO</p></div>
+              <div><p className="text-lg font-semibold text-amber-300">{props.biChan}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ Tổng giám đốc</p></div>
               <div><p className="text-lg font-semibold text-rose-300">{props.quaHan}</p><p className="text-[9px] text-[var(--ink-muted)]">Quá hạn</p></div>
               <div><p className="text-lg font-semibold text-sky-300">{props.choDuyet}</p><p className="text-[9px] text-[var(--ink-muted)]">Chờ duyệt</p></div>
             </div>
@@ -276,7 +276,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="truncate text-[10px] text-[var(--ink-muted)]">{item.phuTrachXuLy ?? item.chuTri}</p>
                   <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${item.canCeoHoTro ? "border-rose-500/20 bg-rose-500/[0.07] text-rose-300" : "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300"}`}>
-                    CEO: {item.canCeoHoTro ? "CÓ" : "KHÔNG"}
+                    Tổng giám đốc: {item.canCeoHoTro ? "CÓ" : "KHÔNG"}
                   </span>
                 </div>
               </div>
@@ -287,7 +287,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
         <Link href="/approvals" className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 ${props.choDuyet > 0 ? "border-amber-500/20 bg-amber-500/[0.06]" : "border-emerald-500/15 bg-emerald-500/[0.05]"}`}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-medium text-[var(--ink-muted)]">CEO phê duyệt</p>
+              <p className="text-[11px] font-medium text-[var(--ink-muted)]">Tổng giám đốc phê duyệt</p>
               <p className="mt-2 text-4xl font-semibold tracking-tight text-white">{props.choDuyet}</p>
             </div>
             <div className={`grid h-10 w-10 place-items-center rounded-full text-lg ${props.choDuyet > 0 ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>✓</div>
@@ -329,7 +329,7 @@ export default function ExecutiveCommandCenterV2(props: Props) {
               {[
                 ["Hoàn thành", props.hoanThanh, props.tongCongViec ? props.hoanThanh / props.tongCongViec * 100 : 0, "bg-emerald-400"],
                 ["Đang làm", props.dangLam, props.tongCongViec ? props.dangLam / props.tongCongViec * 100 : 0, "bg-sky-400"],
-                ["Chờ CEO", props.biChan, props.tongCongViec ? props.biChan / props.tongCongViec * 100 : 0, "bg-rose-400"],
+                ["Chờ Tổng giám đốc", props.biChan, props.tongCongViec ? props.biChan / props.tongCongViec * 100 : 0, "bg-rose-400"],
                 ["Quá hạn", props.quaHan, props.tongCongViec ? props.quaHan / props.tongCongViec * 100 : 0, "bg-rose-400"],
               ].map(([label, value, percent, color]) => (
                 <div key={String(label)}>

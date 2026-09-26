@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
           </div>
           <div>
             <p className="text-sm font-semibold text-[var(--ink-primary)]">TUAN OS</p>
-            <p className="text-xs text-[var(--ink-muted)]">Command Center</p>
+            <p className="text-xs text-[var(--ink-muted)]">Trung tâm điều hành</p>
           </div>
         </div>
 
@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
         {sent ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-[var(--status-good)]/30 bg-[var(--status-good)]/10 px-3 py-3 text-sm text-[var(--ink-primary)]">
-              Nếu email này thuộc tài khoản TUAN OS, hướng dẫn đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra cả thư mục Spam/Junk.
+              Nếu email này thuộc tài khoản TUAN OS, hướng dẫn đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra cả thư mục Thư rác.
             </div>
             <Link
               href="/login"

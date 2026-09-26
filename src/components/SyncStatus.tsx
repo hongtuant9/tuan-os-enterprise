@@ -22,7 +22,7 @@ const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_client: "Google OAuth chưa được cấu hình đúng. Cần kiểm tra cấu hình quản trị.",
   invalid_grant: "Mã xác thực không hợp lệ hoặc đã được dùng — vui lòng thử lại.",
   redirect_uri_mismatch: "URI chuyển hướng OAuth chưa đúng. Cần kiểm tra cấu hình quản trị.",
-  token_exchange_failed: "Không thể kết nối Google để hoàn tất liên kết — vui lòng thử lại.",
+  token_exchange_lỗi: "Không thể kết nối Google để hoàn tất liên kết — vui lòng thử lại.",
 };
 
 function GoogleConnection() {
@@ -72,13 +72,13 @@ function GoogleConnection() {
               {status?.googleEmail && <span className="text-[var(--ink-muted)]"> · {status.googleEmail}</span>}
             </>
           ) : (
-            "No Tài khoản Google đã kết nối"
+            "Chưa có tài khoản Google được kết nối"
           )}
         </span>
       </div>
 
       <div className="flex flex-col items-start gap-1 sm:items-end">
-        {status?.connected && status.analyticsReadScope === false ? <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-3 text-xs text-amber-200">CMO Growth đã được duyệt quyền GA4 read-only nhưng kết nối Google hiện chưa có <code>analytics.readonly</code>. Bấm Kết nối lại Google một lần; sau đó VPS sẽ tự đọc GA4 Actual.</div> : null}
+        {status?.connected && status.analyticsReadScope === false ? <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] p-3 text-xs text-amber-200">Bộ phận tăng trưởng đã được duyệt quyền GA4 chỉ đọc nhưng kết nối Google hiện chưa có <code>analytics.readonly</code>. Bấm Kết nối lại Google một lần; sau đó VPS sẽ tự đọc số liệu thực tế từ GA4.</div> : null}
         <a
           href="/api/integrations/google/oauth/start"
           className="text-xs font-medium text-[var(--accent)] hover:underline"
@@ -131,7 +131,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
       if (result.ok) {
         const { summary } = result;
         pushLog({
-          agent: "Sync Engine",
+          agent: "Bộ máy đồng bộ",
           unit: label,
           message: `Đã đồng bộ ${label}: ${summary.recordsCreated} bản ghi mới, ${summary.recordsUpdated} bản ghi cập nhật${
             summary.recordsFailed ? `, ${summary.recordsFailed} lỗi` : ""
@@ -164,7 +164,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
         );
       } else {
         pushLog({
-          agent: "Sync Engine",
+          agent: "Bộ máy đồng bộ",
           unit: label,
           message: `Đồng bộ thất bại với ${label}: ${result.error}`,
           type: "alert",
@@ -185,7 +185,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
           Trạng thái đồng bộ
         </h2>
-        <span className="text-xs text-[var(--ink-muted)]">Google Sheets → Supabase</span>
+        <span className="text-xs text-[var(--ink-muted)]">Google Sheets → Supabase (đồng bộ dữ liệu)</span>
       </div>
 
       <GoogleConnection />
@@ -210,7 +210,7 @@ export default function SyncStatus({ sources: initialSources }: { sources: SyncS
                 <p className="text-xs text-[var(--ink-secondary)]">
                   Lần chạy gần nhất ({source.latestRun.trigger}): {source.latestRun.recordsCreated} mới,{" "}
                   {source.latestRun.recordsUpdated} cập nhật
-                  {source.latestRun.recordsFailed ? `, ${source.latestRun.recordsFailed} failed` : ""}
+                  {source.latestRun.recordsFailed ? `, ${source.latestRun.recordsFailed} lỗi` : ""}
                 </p>
               )}
 

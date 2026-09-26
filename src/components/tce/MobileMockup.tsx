@@ -177,7 +177,7 @@ function BrandMark() {
       </span>
       <div className="leading-none">
         <div className="text-[14px] font-extrabold tracking-[0.02em] text-[#071b45]">TUAN OS</div>
-        <div className="mt-0.5 text-[7px] text-[#7284a5]">Work Smarter · Live Better</div>
+        <div className="mt-0.5 text-[7px] text-[#7284a5]">Làm việc thông minh · Sống tốt hơn</div>
       </div>
     </div>
   );
@@ -425,7 +425,7 @@ function MobileBusiness({ data }: { data?: TceTabLiveData }) {
       <MobileSection title="Doanh thu - Chi phí - Lợi nhuận" subtitle="7 ngày gần nhất"><TinyChart withDonut/><p className="-mt-[4px] text-[6px] text-[#6c82a5]">Lavender · Ruby · Cozy Garden</p></MobileSection>
       <MobileSection title="Tình hình theo cơ sở" subtitle="Hôm nay">
         <div className="space-y-[5px]">
-          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Ruby Homestay","—","—","KiotViet Hotel"],["3","Cozy Garden","—","—","KiotViet F&B"]]).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn live"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
+          {(data?.tables.businessBranches?.length ? data.tables.businessBranches : [["1","Lavender Homestay","—","—","KiotViet Hotel"],["2","Ruby Homestay","—","—","KiotViet Hotel"],["3","Cozy Garden","—","—","KiotViet F&B"]]).map((row,i)=><div key={(row[1] ?? "branch")+i} className="flex items-center gap-[7px] rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-extrabold text-white " + (i%2===0?"bg-[#8238ee]":"bg-[#16ba6d]")}>{(row[1] ?? "C").slice(0,1)}</span><div className="min-w-0"><b className="block truncate text-[8px] text-[#102a56]">{row[1] ?? "Cơ sở"}</b><p className="mt-[2px] text-[6px] text-[#6d82a5]">Hóa đơn {row[2] ?? "—"} · {row[4] ?? "Nguồn đang hoạt động"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">Doanh thu {row[3] ?? "—"}</p></div></div>)}
         </div>
       </MobileSection>
       <MobileSection title="Dự báo & cảnh báo" subtitle="Các tín hiệu quan trọng">
@@ -475,9 +475,9 @@ function MobileOperations({ data }: { data?: TceTabLiveData }) {
     <div className="space-y-[7px] px-[10px] pt-[7px]">
       <MobileSection title="Danh sách kiểm tra & công việc vận hành" subtitle="Theo quy trình chuẩn hôm nay"><RowTable rows={data?.tables.operationsTasks?.length ? data.tables.operationsTasks.map((r) => [r[2] ?? "—", r[1] ?? "—", r[6] ?? "—"]) : [["Chưa có công việc đang hoạt động","—","—"]]} /></MobileSection>
       <MobileSection title="Tình trạng theo cơ sở" subtitle="Vận hành hôm nay">
-        <div className="space-y-[5px]">{(data?.tables.operationsProperties?.length ? data.tables.operationsProperties : [["1","Lavender Homestay","KiotViet Hotel","CẦN XÁC MINH","—","—","—"],["2","Ruby Homestay","KiotViet Hotel","CẦN XÁC MINH","—","—","—"],["3","Cozy Garden","Supabase runtime","CẦN XÁC MINH","—","—","—"]]).map((row,i)=><div key={(row[1] ?? "facility")+i} className="rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><div className="flex items-center justify-between gap-2"><b className="text-[8px]">{row[1] ?? "Cơ sở"}</b><span className="rounded-full bg-[#e9f8f0] px-2 py-0.5 text-[6px] font-bold text-[#0b9956]">{row[3] ?? "—"}</span></div><p className="mt-[2px] text-[6px] text-[#6f83a5]">{row[2] ?? "Nguồn"} · {row[4] ?? "—"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">{row[5] ?? "—"} · {row[6] ?? "—"}</p></div>)}</div>
+        <div className="space-y-[5px]">{(data?.tables.operationsProperties?.length ? data.tables.operationsProperties : [["1","Lavender Homestay","KiotViet Hotel","CẦN XÁC MINH","—","—","—"],["2","Ruby Homestay","KiotViet Hotel","CẦN XÁC MINH","—","—","—"],["3","Cozy Garden","Hệ thống Supabase đang vận hành","CẦN XÁC MINH","—","—","—"]]).map((row,i)=><div key={(row[1] ?? "facility")+i} className="rounded-[7px] border border-[#e0e9f3] bg-[#f8fbfe] p-[7px]"><div className="flex items-center justify-between gap-2"><b className="text-[8px]">{row[1] ?? "Cơ sở"}</b><span className="rounded-full bg-[#e9f8f0] px-2 py-0.5 text-[6px] font-bold text-[#0b9956]">{row[3] ?? "—"}</span></div><p className="mt-[2px] text-[6px] text-[#6f83a5]">{row[2] ?? "Nguồn"} · {row[4] ?? "—"}</p><p className="mt-[2px] text-[7px] font-bold text-[#17315b]">{row[5] ?? "—"} · {row[6] ?? "—"}</p></div>)}</div>
       </MobileSection>
-      <MobileSection title="Kho & ngoại lệ" subtitle="Các cảnh báo ưu tiên"><RowTable rows={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions.map((x)=>[x,"Runtime","Cần xử lý"]) : [["Tồn kho","CẦN XÁC MINH","Chưa nối KiotViet inventory"],["Ngoại lệ","—","Không có evidence mới"]]} /></MobileSection>
+      <MobileSection title="Kho & ngoại lệ" subtitle="Các cảnh báo ưu tiên"><RowTable rows={data?.lists.operationsExceptions?.length ? data.lists.operationsExceptions.map((x)=>[x,"Hệ thống đang vận hành","Cần xử lý"]) : [["Tồn kho","CẦN XÁC MINH","Chưa nối KiotViet inventory"],["Ngoại lệ","—","Không có bằng chứng mới"]]} /></MobileSection>
     </div>
   );
 }
@@ -491,10 +491,10 @@ function MobileReception({ data }: { data?: TceTabLiveData }) {
         </div>
       </MobileSection>
       <MobileSection title="Hội thoại cần chú ý" subtitle="Cần hỗ trợ hoặc có rủi ro"><RowTable rows={data?.tables.receptionConversations?.length ? data.tables.receptionConversations.map((r) => [(r[1] ?? "—") + " · " + (r[2] ?? "—"), r[3] ?? "—", r[5] ?? "—"]) : [["Chưa có hội thoại mở","—","—"]]} /></MobileSection>
-      <MobileSection title="Tổng quan hiệu suất" subtitle="AI xử lý & fallback">
+      <MobileSection title="Tổng quan hiệu suất" subtitle="AI xử lý & phương án dự phòng">
         <div className="flex items-center gap-[20px]">
           <div className="grid h-[78px] w-[78px] place-items-center rounded-full bg-[conic-gradient(#2f7cf4_0_78%,#ff4d5d_78%_84%,#e4edf7_84%_100%)]"><div className="grid h-[55px] w-[55px] place-items-center rounded-full bg-white text-center"><span><b className="block text-[15px]">—</b><small className="text-[5px] text-[#7486a4]">xử lý thành công</small></span></div></div>
-          <div className="grid flex-1 grid-cols-2 gap-[6px]">{[["F","Fallback","violet"],["P","Phản hồi TB","blue"]].map(([l,n,t])=><div key={n} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="violet"?"bg-[#8238ee]":"bg-[#2f7cf4]")}>{l}</span><small className="ml-2 text-[6px] text-[#7084a7]">{n}</small><b className="mt-1 block text-[9px]">—</b></div>)}</div>
+          <div className="grid flex-1 grid-cols-2 gap-[6px]">{[["D","Dự phòng","violet"],["P","Phản hồi TB","blue"]].map(([l,n,t])=><div key={n} className="rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[6px]"><span className={"grid h-[24px] w-[24px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="violet"?"bg-[#8238ee]":"bg-[#2f7cf4]")}>{l}</span><small className="ml-2 text-[6px] text-[#7084a7]">{n}</small><b className="mt-1 block text-[9px]">—</b></div>)}</div>
         </div>
       </MobileSection>
     </div>
@@ -572,7 +572,7 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
         <RowTable rows={revenueTaxonomyRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="Trạng thái API KiotViet" subtitle="Read-only; không dùng endpoint không được hỗ trợ">
+      <MobileSection title="Trạng thái API KiotViet" subtitle="Chỉ đọc; không dùng điểm kết nối API không được hỗ trợ">
         <RowTable rows={apiRows} cols={3}/>
       </MobileSection>
 
@@ -581,11 +581,11 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
         <p className="mt-[5px] text-[6px] text-[#6f83a5]">Lợi nhuận chỉ tính khi chi phí đọc được trực tiếp từ KiotViet.</p>
       </MobileSection>
 
-      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Chỉ dùng invoice detail + cost từ KiotViet">
+      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Chỉ dùng chi tiết hóa đơn và giá vốn từ KiotViet">
         <RowTable rows={productRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="3 hành động ưu tiên" subtitle="Chuẩn hóa nhập liệu trước khi automation">
+      <MobileSection title="3 hành động ưu tiên" subtitle="Chuẩn hóa nhập liệu trước khi tự động hóa">
         <div className="space-y-[5px]">
           {(data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]).slice(0,3).map((item, index) => (
             <div key={item} className="flex gap-[7px] rounded-[7px] border border-[#dce7f2] bg-white p-[7px]">
@@ -635,7 +635,7 @@ function MobileSettings({ data }: { data?: TceTabLiveData }) {
       <MobileSection title="Thiết lập chung" subtitle="Cấu hình nền tảng">
         <div className="grid grid-cols-2 gap-[5px]">{[["1","Thông tin doanh nghiệp","blue"],["2","Cơ sở / chi nhánh","green"],["3","Branding","violet"],["4","Domain & email","red"],["5","Mẫu thông báo","amber"],["6","Sao lưu dữ liệu","blue"]].map(([n,l,t])=><div key={n} className="flex items-center gap-[6px] rounded-[7px] border border-[#dce7f2] bg-[#f8fbfe] p-[5px]"><span className={"grid h-[23px] w-[23px] place-items-center rounded-[7px] text-[10px] font-bold text-white " + (t==="green"?"bg-[#16ba6d]":t==="violet"?"bg-[#8238ee]":t==="red"?"bg-[#ff4d5d]":t==="amber"?"bg-[#ffa20e]":"bg-[#2f7cf4]")}>{n}</span><b className="text-[7px]">{l}</b></div>)}</div>
       </MobileSection>
-      <MobileSection title="Tích hợp hệ thống" subtitle="Kết nối & trạng thái"><RowTable rows={data?.tables.settingsIntegrations?.length ? data.tables.settingsIntegrations.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—"]) : [["Chưa có integration runtime","—","—"]]} /></MobileSection>
+      <MobileSection title="Tích hợp hệ thống" subtitle="Kết nối & trạng thái"><RowTable rows={data?.tables.settingsIntegrations?.length ? data.tables.settingsIntegrations.map((r) => [r[1] ?? "—", r[2] ?? "—", r[3] ?? "—"]) : [["Chưa có tích hợp đang hoạt động","—","—"]]} /></MobileSection>
       <MobileSection title="Thông báo & bảo mật" subtitle="Automation & cảnh báo"><RowTable rows={[["Gửi email thông báo hệ thống","Bật"],["Thông báo qua Slack / Telegram","Bật"],["Cảnh báo tồn kho thấp","Bật"],["Nhắc nhở thanh toán","Bật"]]} cols={2}/><p className="mt-[5px] text-[7px] font-bold text-[#ff4354]">Cần xử lý: cấu hình bảo mật / tích hợp đang chờ xác minh</p></MobileSection>
     </div>
   );

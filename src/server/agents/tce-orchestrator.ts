@@ -171,6 +171,73 @@ function isExecutiveOverview(message: string) {
   return /tình hình.*tce|tce.*hôm nay|kiểm tra.*tình hình|tổng quan.*tce|báo cáo.*tce|tình trạng.*tce/i.test(message);
 }
 
+function isFocusedStatusQuery(message: string) {
+  return /đến đâu|tới đâu|tiến độ|trạng thái|đã xong|xong chưa|triển khai.*đâu|công việc.*đâu|cần.*hỗ trợ|tôi cần làm gì|ceo cần làm gì/i.test(message);
+}
+
+function focusedTerms(message: string): string[] {
+  const normalized = message
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s_-]/g, " ");
+  const stop = new Set([
+    "cong","viec","trien","khai","tien","do","trang","thai","den","dau","toi","dau","da","xong","chua",
+    "cho","toi","ho","tro","can","gi","hien","tai","the","nao","cua","ve","va","la","nhung","nay"
+  ]);
+  return [...new Set(normalized.split(/\s+/).filter((term) => term.length >= 3 && !stop.has(term)))].slice(0, 8);
+}
+
+function focusedWorkItems(message: string, items: ManagerWorkItem[]): ManagerWorkItem[] {
+  const query = message.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const terms = focusedTerms(message);
+  const scored = items.map((item) => {
+    const haystack = [
+      item.id, item.title, item.unit, item.owner ?? "", item.resolutionOwner ?? "",
+      item.blocker ?? "", item.nextAction ?? "",
+    ].join(" ").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 2 : 0), 0);
+    if (/tuyen|recruit|ung vien|nhan su|chro/.test(query) && /tuyen|recruit|ung vien|nhan su|chro/.test(haystack)) score += 5;
+    if (/cozy/.test(query) && /cozy/.test(haystack)) score += 5;
+    if (/lavender/.test(query) && /lavender/.test(haystack)) score += 5;
+    if (/ruby/.test(query) && /ruby/.test(haystack)) score += 5;
+    return { item, score };
+  }).filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const topScore = scored[0]?.score ?? 0;
+  return scored.filter((entry) => entry.score >= Math.max(3, topScore - 2)).slice(0, 4).map((entry) => entry.item);
+}
+
+function conciseStatusReply(context: RuntimeContext, message: string): string | null {
+  if (!isFocusedStatusQuery(message)) return null;
+  const matches = focusedWorkItems(message, context.workItems);
+  if (matches.length === 0) return null;
+
+  const active = matches.filter((item) => item.status !== "DONE");
+  const primary = active[0] ?? matches[0];
+  const completedCount = matches.filter((item) => item.status === "DONE").length;
+  const supportItems = matches.filter((item) => item.needsCeoSupport || item.pendingCeoApproval);
+  const blockers = matches.map((item) => item.blocker).filter((value): value is string => Boolean(value)).slice(0, 2);
+  const nextActions = matches.map((item) => item.nextAction).filter((value): value is string => Boolean(value)).slice(0, 2);
+
+  const status =
+    matches.every((item) => item.status === "DONE") ? "ĐÃ HOÀN THÀNH" :
+    matches.some((item) => item.status === "BLOCKED") ? "ĐANG BỊ CHẶN" :
+    matches.some((item) => item.status === "IN_PROGRESS") ? "ĐANG TRIỂN KHAI" :
+    "ĐANG CHỜ XỬ LÝ";
+
+  const supportText = supportItems.length > 0
+    ? supportItems.map((item) => item.ceoSupportAction ?? item.ceoSupportReason ?? `Xử lý ${item.id}`).join(" | ")
+    : "Tuấn chưa cần làm gì lúc này. TUAN OS/Agent phụ trách phải tiếp tục xử lý.";
+
+  return [
+    `TRẠNG THÁI: ${status}`,
+    `TIẾN ĐỘ: ${completedCount}/${matches.length} hạng mục liên quan đã hoàn thành. Hạng mục đang xử lý chính: ${primary.id} — ${primary.title}.`,
+    `CHƯA XONG / BLOCKER: ${blockers.length ? blockers.join(" | ") : "Không có blocker đã xác minh; còn bước thực thi/read-back theo kế hoạch."}`,
+    `BƯỚC TIẾP THEO: ${nextActions.length ? nextActions.join(" | ") : "Agent phụ trách tiếp tục theo TASK-001 và chỉ đóng khi có evidence."}`,
+    `TUẤN CẦN LÀM GÌ: ${supportText}`,
+  ].join("\n\n");
+}
+
 function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, message: string): string {
   const total = context.workItems.length;
   const done = context.workItems.filter((item) => item.status === "DONE").length;
@@ -180,6 +247,9 @@ function fallbackReply(agent: TceAgentDefinition, context: RuntimeContext, messa
   const finance = financialIntent(message)
     ? "Yêu cầu có yếu tố tài chính/chi phí: mọi mutation tài chính vẫn phải qua CEO approval."
     : "";
+
+  const focused = conciseStatusReply(context, message);
+  if (focused) return finance ? focused + "\n\n" + finance : focused;
 
   if (isExecutiveOverview(message)) {
     const health = staleAuthorities.length > 0 || context.blockedItems.length > 0 ? "CẦN THEO DÕI" : "ỔN ĐỊNH";
@@ -252,6 +322,7 @@ export async function runTceAgent(message: string): Promise<TceAgentReply> {
     "Không bao giờ hiển thị password, private key, API key, access token, refresh token hoặc service-role secret.",
     executionGovernanceInstruction(),
     "Trả lời tiếng Việt có dấu, trực tiếp, nêu status/evidence/blocker rõ ràng.",
+    "Nếu Owner hỏi tiến độ/trạng thái của MỘT công việc cụ thể, không liệt kê toàn công ty. Bắt buộc trả tối đa 5 mục theo thứ tự: TRẠNG THÁI; TIẾN ĐỘ; CHƯA XONG/BLOCKER; BƯỚC TIẾP THEO; TUẤN CẦN LÀM GÌ. Nếu Owner không cần hành động, phải ghi rõ: 'Tuấn chưa cần làm gì lúc này.'",
     DOCUMENT_GOVERNANCE_PROMPT,
   ].join("\n");
 

@@ -6,7 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
-  sendThủ côngConversationReplyAction,
+  sendManualConversationReplyAction,
   setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
@@ -360,11 +360,11 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     });
   }
 
-  function sendThủ côngReply() {
+  function sendManualReply() {
     if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
     setFeedbackStatus("");
     startSendTransition(async () => {
-      const result = await sendThủ côngConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
+      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
       if (!result.ok) {
         setFeedbackStatus(result.error);
         return;
@@ -749,7 +749,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             />
             <button
               type="button"
-              onClick={sendThủ côngReply}
+              onClick={sendManualReply}
               disabled={
                 !canManage
                 || responseMode !== "manual"

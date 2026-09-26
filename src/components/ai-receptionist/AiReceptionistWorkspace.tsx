@@ -6,7 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
-  sendManualConversationReplyAction,
+  sendThủ côngConversationReplyAction,
   setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
@@ -353,18 +353,18 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
       }
       setFeedbackStatus(
         next === "auto"
-          ? "Đã chọn Tự động, nhưng cổng gửi ra khách vẫn đang khóa cho tới khi QA PASS và CEO duyệt."
-          : "Đã chọn Manual. AI chỉ tạo nháp; người thật kiểm tra trước khi gửi."
+          ? "Đã chọn Tự động, nhưng cổng gửi ra khách vẫn đang khóa cho tới khi kiểm tra chất lượng đạt yêu cầu và Tổng giám đốc duyệt."
+          : "Đã chọn Thủ công. AI chỉ tạo nháp; người thật kiểm tra trước khi gửi."
       );
       router.refresh();
     });
   }
 
-  function sendManualReply() {
+  function sendThủ côngReply() {
     if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
     setFeedbackStatus("");
     startSendTransition(async () => {
-      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
+      const result = await sendThủ côngConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
       if (!result.ok) {
         setFeedbackStatus(result.error);
         return;
@@ -744,12 +744,12 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               value={replyDraft}
               onChange={(event) => setReplyDraft(event.target.value)}
               disabled={!canManage}
-              placeholder="AI sẽ tạo nội dung gợi ý tại đây. Ở Manual, Tuấn/lễ tân có thể sửa trước khi gửi."
+              placeholder="AI sẽ tạo nội dung gợi ý tại đây. Ở Thủ công, Tuấn/lễ tân có thể sửa trước khi gửi."
               className="min-h-24 flex-1 resize-y rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
             />
             <button
               type="button"
-              onClick={sendManualReply}
+              onClick={sendThủ côngReply}
               disabled={
                 !canManage
                 || responseMode !== "manual"
@@ -885,7 +885,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
             disabled={!canManage || feedbackPending || !styleFeedback.trim()}
             className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
           >
-            {feedbackPending ? "Đang lưu..." : "Lưu feedback"}
+            {feedbackPending ? "Đang lưu..." : "Lưu phản hồi"}
           </button>
           {feedbackStatus ? <p className="mt-2 text-xs leading-5 text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
         </div>
@@ -1100,7 +1100,7 @@ function BookingDraftLab({ conversations, canManage }: { conversations: Receptio
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-[var(--ink-primary)]">Phòng thử nghiệm bản nháp đặt phòng</h3>
-          <p className="mt-1 text-sm text-[var(--ink-muted)]">Lavender + Ruby · KiotViet Hotel chỉ đọc · bản nháp CRM nội bộ · chưa gửi xác nhận cho khách.</p>
+          <p className="mt-1 text-sm text-[var(--ink-muted)]">Lavender + Ruby · KiotViet Hotel chỉ đọc · bản nháp quản lý khách hàng nội bộ · chưa gửi xác nhận cho khách.</p>
         </div>
         <Pill label="GHI DỮ LIỆU: KHÓA" tone="warn" />
       </div>
@@ -1124,7 +1124,7 @@ function BookingDraftLab({ conversations, canManage }: { conversations: Receptio
         <input type="number" min="1" value={adults} onChange={(e)=>setAdults(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
         <input type="number" min="0" value={children} onChange={(e)=>setChildren(Number(e.target.value))} className="w-24 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2"><input value={quotedPrice} onChange={(e)=>setQuotedPrice(e.target.value)} placeholder="Giá đã xác minh (VERIFIED) (để trống nếu chưa có)" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input value={priceSource} onChange={(e)=>setPriceSource(e.target.value)} placeholder="Nguồn giá đã xác minh (VERIFIED), ví dụ Master Sheet 03_GIA..." className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/></div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2"><input value={quotedPrice} onChange={(e)=>setQuotedPrice(e.target.value)} placeholder="Giá đã xác minh (VERIFIED) (để trống nếu chưa có)" className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/><input value={priceSource} onChange={(e)=>setPriceSource(e.target.value)} placeholder="Nguồn giá đã xác minh, ví dụ Bảng dữ liệu chuẩn 03_GIA..." className="rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm"/></div>
       <button type="button" disabled={!canManage||pending||!conversationId||!guestName||!selectedRoom} onClick={createDraft} className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{pending?"Đang xử lý...":"Tạo bản nháp đặt phòng nội bộ"}</button>
       {lastBookingId&&<button type="button" disabled={!canManage||pending} onClick={requestApproval} className="ml-2 mt-4 rounded-lg border border-[var(--accent)]/40 px-4 py-2.5 text-sm font-semibold text-[var(--accent)] disabled:opacity-40">Gửi phê duyệt A2 thử nghiệm</button>}
       {feedback&&<p className="mt-3 text-sm text-[var(--ink-secondary)]">{feedback}</p>}
@@ -1410,13 +1410,13 @@ function MailboxReadiness({ mailboxes }: { mailboxes: MailboxStatus[] }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Mailbox chăm sóc khách hàng theo cơ sở</p>
-          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Readiness Gmail cho AI Lễ tân 24/7</h2>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink-primary)]">Mức sẵn sàng Gmail cho AI Lễ tân 24/7</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">
-            Mỗi mailbox phải đúng tài khoản canonical + gmail.readonly + gmail.send. Auto-reply vẫn khóa cho tới khi UAT từng kênh PASS.
+            Mỗi hộp thư phải đúng tài khoản chuẩn và đủ quyền gmail.readonly + gmail.send. Tự động trả lời vẫn khóa cho tới khi kiểm thử chấp nhận người dùng từng kênh đạt yêu cầu.
           </p>
         </div>
         <Pill
-          label={passCount === mailboxes.length ? "3/3 mailbox OAuth: PASS" : `${passCount}/${mailboxes.length} mailbox OAuth: PASS`}
+          label={passCount === mailboxes.length ? "3/3 hộp thư OAuth: ĐẠT" : `${passCount}/${mailboxes.length} hộp thư OAuth: PASS`}
           tone={passCount === mailboxes.length ? "good" : "warn"}
         />
       </div>

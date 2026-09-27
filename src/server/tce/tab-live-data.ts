@@ -711,6 +711,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const revenueValue = mcc.totals.revenue;
     const interactionValue = mcc.totals.engagements;
     const attributionCoverage = mcc.totals.attributionCoverage === null ? "NEED VERIFY" : pct(mcc.totals.attributionCoverage * 100);
+    const eventSourceCoverage = mcc.totals.eventSourceCoverage === null ? "NEED VERIFY" : pct(mcc.totals.eventSourceCoverage * 100);
 
     const marketingChannels = mcc.channels.map((row, i) => [
       String(i + 1),
@@ -808,7 +809,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       {
         "Tiếp cận": mcc.totals.reachVerified ? String(mcc.totals.reach) : "NEED VERIFY",
         "Tương tác": String(interactionValue),
-        "Lead / Inquiry": String(leadValue),
+        "Lead đã xác minh": String(leadValue),
         "Booking / Order": String(bookingValue),
         "Doanh thu quy đổi": mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY",
         "Chi phí quảng cáo": mcc.totals.spendVerified ? money(mcc.totals.spend) : "NEED VERIFY",
@@ -817,7 +818,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       {
         "Tiếp cận": mcc.totals.reachVerified ? "Provider Actual · " + period.label : "Reach/impressions provider chưa có Actual authority",
         "Tương tác": "Chuẩn hóa từ GA4/CRM/provider đã kết nối · " + period.label,
-        "Lead / Inquiry": "Hospitality CRM / attribution runtime · " + period.label,
+        "Lead đã xác minh": "Chỉ hospitality_leads VERIFIED; conversation/inquiry không tự động được tính là lead · " + period.label,
         "Booking / Order": "Verified AI/CRM booking · " + period.label,
         "Doanh thu quy đổi": mcc.totals.revenueVerified ? "KiotViet/finance authority + attribution linkage VERIFIED" : "KiotViet revenue linkage chưa VERIFIED; booked upsell không được dùng thay revenue",
         "Chi phí quảng cáo": mcc.totals.spendVerified ? "Google/Meta Ads Actual" : "Google/Meta Ads spend chưa VERIFIED",
@@ -838,13 +839,15 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         marketingFunnel: [
           ["Tiếp cận", mcc.totals.reachVerified ? String(mcc.totals.reach) : "NEED VERIFY"],
           ["Click", mcc.totals.clicks ? String(mcc.totals.clicks) : "NEED VERIFY"],
-          ["Lead / Inquiry", String(leadValue)],
+          ["Conversation / Inquiry", String(interactionValue)],
+          ["Lead đã xác minh", String(leadValue)],
           ["Booking", String(bookingValue)],
           ["Doanh thu", mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY"],
         ],
         marketingConversion: [
-          ["Attribution coverage", attributionCoverage],
-          ["Lead / Click", mcc.totals.clicks > 0 ? pct((leadValue / mcc.totals.clicks) * 100) : "NEED VERIFY"],
+          ["Revenue attribution coverage", attributionCoverage],
+          ["Event source coverage", eventSourceCoverage],
+          ["Lead / Click", mcc.totals.clicks > 0 && leadValue > 0 ? pct((leadValue / mcc.totals.clicks) * 100) : "NEED VERIFY"],
           ["Booking / Lead", leadValue > 0 ? pct((bookingValue / leadValue) * 100) : "NEED VERIFY"],
           ["CPA", mcc.totals.cpa !== null ? money(mcc.totals.cpa) : "NEED VERIFY"],
           ["ROAS", mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY"],
@@ -854,7 +857,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         marketingSignals: [
           "Workbook sync: " + workbookFreshness.state + (workbookFreshness.changed ? " · đã reconcile bản sửa mới" : " · current"),
           "Data Health: " + mcc.connectors.filter((row) => ["LIVE","READY"].includes(textField(row, "status"))).length + "/" + mcc.connectors.length + " nguồn LIVE/READY",
-          "Attribution coverage: " + attributionCoverage,
+          "Revenue attribution coverage: " + attributionCoverage,
+          "Event source coverage: " + eventSourceCoverage,
           "AI Lễ Tân mở trong kỳ: " + periodConversations.filter((conversation) => conversation.status !== "closed").length,
           "Review quản lý trong kỳ: " + receptionist.managerReviews.filter((review) => inPeriod(review.createdAt)).length,
           "Upsell booked trong kỳ: " + bookedUpsells.length,

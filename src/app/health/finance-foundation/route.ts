@@ -50,9 +50,9 @@ export async function GET() {
     readiness.expense.missingRows === 0 &&
     readiness.expense.partialRows === 0;
   const cogsReady =
-    readiness.cogs.menuItems > 0 &&
-    readiness.cogs.productionReadyItems === readiness.cogs.menuItems &&
-    readiness.cogs.verifiedIngredients === readiness.cogs.ingredientCount;
+    readiness.cogs.soldSkuCount > 0 &&
+    readiness.cogs.matchedSoldSkuCount === readiness.cogs.soldSkuCount &&
+    readiness.cogs.verifiedSoldSkuCount === readiness.cogs.soldSkuCount;
   const apReady = readiness.ap.structuredOutstandingReady;
   const debtCurrentVerified = debt.state === "VERIFIED";
 

@@ -4,6 +4,7 @@ import { google } from "googleapis";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 import { readInventoryBotSummary } from "@/server/integrations/kiotviet/inventory-browser-bot";
 import { readAccountsPayableCandidate } from "@/server/finance/ap-candidate";
+import { KiotVietFnbClient } from "@/server/integrations/kiotviet/fnb-client";
 
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const COST_ID = "17J1_9FzcmirYxPVlacz3wnS6iBNSWbMrJbjVC4XdSbw";
@@ -23,11 +24,26 @@ export type FinanceFoundationReadiness = {
     ingredientCount: number;
     verifiedIngredients: number;
     ingredientCoveragePct: number;
+    soldSkuCount: number;
+    matchedSoldSkuCount: number;
+    verifiedSoldSkuCount: number;
+    soldSkuCoveragePct: number;
+    soldSkuBomReadyPct: number;
   };
   ap: {
     purchaseOrdersReadable: boolean;
     suppliersReadable: boolean;
     structuredOutstandingReady: boolean;
+    systems: Array<{
+      system: "FNB" | "HOTEL";
+      state: "VERIFIED" | "NEED_VERIFY";
+      purchaseOrderRows: number;
+      supplierRows: number;
+      purchaseOrderOutstanding: number | null;
+      supplierOutstanding: number | null;
+      variance: number | null;
+      reason: string;
+    }>;
   };
   checkedAt: string;
   notes: string[];
@@ -48,12 +64,65 @@ function isProductionReadyBom(status: string) {
   );
 }
 
+
+function normalizeName(value: unknown) {
+  return text(value).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function invoiceRows(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const direct = Array.isArray(root.data) ? root.data : null;
+  const nested = root.result && typeof root.result === "object" && Array.isArray((root.result as Record<string, unknown>).data)
+    ? (root.result as Record<string, unknown>).data as unknown[] : null;
+  return (direct ?? nested ?? []).filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
+}
+
+function payloadTotal(payload: unknown, fallback: number) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const root = payload as Record<string, unknown>;
+  const direct = Number(root.total);
+  if (Number.isFinite(direct)) return direct;
+  const nested = root.result && typeof root.result === "object" ? Number((root.result as Record<string, unknown>).total) : NaN;
+  return Number.isFinite(nested) ? nested : fallback;
+}
+
+async function readSoldFnbSkus(from: string, to: string) {
+  const client = new KiotVietFnbClient();
+  const sold = new Map<string, { code: string; name: string }>();
+  if (!client.isConfigured()) return sold;
+  let currentItem = 0;
+  for (let page = 0; page < 1000; page += 1) {
+    const query = new URLSearchParams({ fromPurchaseDate: from, toPurchaseDate: to, pageSize: "100", currentItem: String(currentItem), orderBy: "Id", orderDirection: "Asc" });
+    const res = await client.listInvoices(query.toString());
+    if (!res.ok) return new Map<string, { code: string; name: string }>();
+    const batch = invoiceRows(res.data);
+    for (const invoice of batch) {
+      const label = text(invoice.statusValue).toLowerCase();
+      if (/hủy|huỷ|cancel|void/.test(label)) continue;
+      const details = Array.isArray(invoice.invoiceDetails) ? invoice.invoiceDetails : [];
+      for (const raw of details) {
+        if (!raw || typeof raw !== "object") continue;
+        const detail = raw as Record<string, unknown>;
+        const code = text(detail.productCode);
+        const name = text(detail.productName);
+        const key = code || normalizeName(name);
+        if (key) sold.set(key, { code, name });
+      }
+    }
+    currentItem += batch.length;
+    if (batch.length === 0 || currentItem >= payloadTotal(res.data, currentItem) || batch.length < 100) break;
+  }
+  return sold;
+}
 export async function readFinanceFoundationReadiness(): Promise<FinanceFoundationReadiness> {
   const checkedAt = new Date().toISOString();
   try {
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
     const sheets = google.sheets({ version: "v4", auth });
-    const [fin, cost, fnbInventory, hotelInventory, apCandidate] = await Promise.all([
+    const businessDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const periodFrom = businessDate.slice(0, 7) + "-01";
+    const [fin, cost, fnbInventory, hotelInventory, apCandidate, soldFnbSkus] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: FIN_ID,
         ranges: ["'ACTUAL LIVE — 2026-09'!A1:L120"],
@@ -67,6 +136,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       readInventoryBotSummary("FNB"),
       readInventoryBotSummary("HOTEL"),
       readAccountsPayableCandidate(),
+      readSoldFnbSkus(periodFrom, businessDate),
     ]);
 
     const finRows = (fin.data.valueRanges?.[0]?.values ?? []) as unknown[][];
@@ -95,6 +165,19 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       .slice(1)
       .filter((row) => Boolean(text(row[1])));
     const productionReadyItems = menuRows.filter((row) => isProductionReadyBom(text(row[11]))).length;
+    const menuByCode = new Map(menuRows.map((row) => [text(row[1]), row]));
+    const menuByName = new Map(menuRows.map((row) => [normalizeName(row[3]), row]));
+    let matchedSoldSkuCount = 0;
+    let verifiedSoldSkuCount = 0;
+    for (const sold of soldFnbSkus.values()) {
+      const row = (sold.code && menuByCode.get(sold.code)) || menuByName.get(normalizeName(sold.name));
+      if (!row) continue;
+      matchedSoldSkuCount += 1;
+      if (isProductionReadyBom(text(row[11]))) verifiedSoldSkuCount += 1;
+    }
+    const soldSkuCount = soldFnbSkus.size;
+    const soldSkuCoveragePct = soldSkuCount ? (matchedSoldSkuCount / soldSkuCount) * 100 : 0;
+    const soldSkuBomReadyPct = soldSkuCount ? (verifiedSoldSkuCount / soldSkuCount) * 100 : 0;
 
     const ingredientRows = ((cost.data.valueRanges?.[1]?.values ?? []) as unknown[][])
       .slice(1)
@@ -115,9 +198,9 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
     const state =
       missingRows === 0 &&
       partialRows === 0 &&
-      menuRows.length > 0 &&
-      productionReadyItems === menuRows.length &&
-      verifiedIngredients === ingredientRows.length
+      soldSkuCount > 0 &&
+      matchedSoldSkuCount === soldSkuCount &&
+      verifiedSoldSkuCount === soldSkuCount
         ? "VERIFIED"
         : "NEED_VERIFY";
 
@@ -136,16 +219,22 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         ingredientCount: ingredientRows.length,
         verifiedIngredients,
         ingredientCoveragePct,
+        soldSkuCount,
+        matchedSoldSkuCount,
+        verifiedSoldSkuCount,
+        soldSkuCoveragePct,
+        soldSkuBomReadyPct,
       },
       ap: {
         purchaseOrdersReadable,
         suppliersReadable,
         structuredOutstandingReady: apCandidate.state === "VERIFIED",
+        systems: apCandidate.systems,
       },
       checkedAt,
       notes: [
         "Expense coverage excludes Budget/Forecast and counts only required Actual rows.",
-        "COGS production-ready requires explicit VERIFIED/GO/production status; test/pending BOM is not accepted.",
+        "COGS Gate uses actual sold-SKU coverage for the current period × COST-001 BOM status; unsold catalog items remain governance backlog but do not block period COGS. Test/pending BOM is never accepted as VERIFIED.",
         apCandidate.state === "VERIFIED"
           ? "AP candidate reconciled: Purchase Orders Cần trả NCC = Supplier Nợ cần trả hiện tại for all readable systems."
           : "Readable Purchase Orders/Suppliers proves source access; AP remains NEED_VERIFY until visible structured rows reconcile. " +
@@ -163,11 +252,13 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         ingredientCount: 0,
         verifiedIngredients: 0,
         ingredientCoveragePct: 0,
+        soldSkuCount: 0, matchedSoldSkuCount: 0, verifiedSoldSkuCount: 0, soldSkuCoveragePct: 0, soldSkuBomReadyPct: 0,
       },
       ap: {
         purchaseOrdersReadable: false,
         suppliersReadable: false,
         structuredOutstandingReady: false,
+        systems: [],
       },
       checkedAt,
       notes: ["Finance foundation readiness sources unavailable."],

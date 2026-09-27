@@ -16,6 +16,8 @@ export type FinanceFoundationReadiness = {
     missingRows: number;
     partialRows: number;
     coveragePct: number;
+    sourceMappedRows: number;
+    sourceMapCoveragePct: number;
   };
   cogs: {
     menuItems: number;
@@ -154,6 +156,8 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       }
     }
     const requiredExpenseRows = expenseRows.filter((row) => text(row[9]).toUpperCase() === "CÓ");
+    const sourceMappedRows = requiredExpenseRows.filter((row) => Boolean(text(row[3]))).length;
+    const sourceMapCoveragePct = requiredExpenseRows.length ? (sourceMappedRows / requiredExpenseRows.length) * 100 : 0;
     const missingRows = requiredExpenseRows.filter((row) => /CẦN BỔ SUNG/i.test(text(row[5]))).length;
     const partialRows = requiredExpenseRows.filter((row) => /PARTIAL|TEMP/i.test(text(row[5]))).length;
     const resolvedRows = Math.max(0, requiredExpenseRows.length - missingRows - partialRows);
@@ -211,6 +215,8 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         missingRows,
         partialRows,
         coveragePct: expenseCoveragePct,
+        sourceMappedRows,
+        sourceMapCoveragePct,
       },
       cogs: {
         menuItems: menuRows.length,
@@ -244,7 +250,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
   } catch {
     return {
       state: "NEED_VERIFY",
-      expense: { requiredRows: 0, missingRows: 0, partialRows: 0, coveragePct: 0 },
+      expense: { requiredRows: 0, missingRows: 0, partialRows: 0, coveragePct: 0, sourceMappedRows: 0, sourceMapCoveragePct: 0 },
       cogs: {
         menuItems: 0,
         productionReadyItems: 0,

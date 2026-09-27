@@ -148,7 +148,7 @@ test("finance data quality catches duplicate, unmapped BU, future date and stale
       businessUnit: "Cozy Garden",
       amount: 100,
       occurredAt: "2026-09-27T10:00:00+07:00",
-      syncedAt: "2026-09-27T10:05:00+07:00",
+      syncedAt: "2026-09-27T11:30:00+07:00",
     },
     {
       sourceSystem: "KIOTVIET",

@@ -1,0 +1,13 @@
+[Unit]
+Description=TCE KiotViet Finance read-only refresh
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tuan-ai/tce-control-center/scripts/ovh/tce-read-worker-call.sh finance
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6

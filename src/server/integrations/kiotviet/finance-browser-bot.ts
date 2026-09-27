@@ -580,34 +580,63 @@ async function cashbookSnapshot(page: Page) {
     if (!pager.clicked) {
       terminalPagerObserved = pager.terminal;
       if (reportedTotalRows !== null && seen.size < reportedTotalRows) {
-        for (let scrollAttempt = 0; scrollAttempt < 20; scrollAttempt += 1) {
-          const scrollState = await page.evaluate(() => {
-            const visible = (el: Element) => {
-              const node = el as HTMLElement;
-              const style = getComputedStyle(node);
-              const rect = node.getBoundingClientRect();
-              return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
-            };
-            const candidates = Array.from(document.querySelectorAll(
-              ".k-grid-content,.k-grid-content-wrap,.kv-table-body,[role='grid']"
-            )).filter(visible) as HTMLElement[];
-            const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
-            if (!scroller) return { moved: false, atEnd: false };
-            const before = scroller.scrollTop;
-            const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-            scroller.scrollTop = Math.min(max, before + Math.max(120, Math.floor(scroller.clientHeight * 0.8)));
-            scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
-            return {
-              moved: scroller.scrollTop > before,
-              atEnd: scroller.scrollTop >= max - 2,
-            };
-          }).catch(() => ({ moved: false, atEnd: false }));
+        const resetState = await page.evaluate(() => {
+          const visible = (el: Element) => {
+            const node = el as HTMLElement;
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+          };
+          const candidates = Array.from(document.querySelectorAll(
+            ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,.kv-table-body,[role='grid']"
+          )).filter(visible) as HTMLElement[];
+          const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
+          if (!scroller) return { found: false, max: 0, step: 0 };
+          const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          scroller.scrollTop = 0;
+          scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+          return {
+            found: true,
+            max,
+            step: Math.max(60, Math.floor(scroller.clientHeight * 0.45)),
+          };
+        }).catch(() => ({ found: false, max: 0, step: 0 }));
 
-          if (!scrollState.moved) break;
-          await new Promise((resolve) => setTimeout(resolve, 450));
-          const virtualRows = await cashbookRows(page);
-          for (const row of virtualRows) seen.set(row, row);
-          if (seen.size >= reportedTotalRows || scrollState.atEnd) break;
+        if (resetState.found) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const topRows = await cashbookRows(page);
+          for (const row of topRows) seen.set(row, row);
+
+          for (let scrollAttempt = 1; scrollAttempt <= 20 && seen.size < reportedTotalRows; scrollAttempt += 1) {
+            const target = Math.min(resetState.max, scrollAttempt * resetState.step);
+            const scrollState = await page.evaluate((targetTop) => {
+              const visible = (el: Element) => {
+                const node = el as HTMLElement;
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+              };
+              const candidates = Array.from(document.querySelectorAll(
+                ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,.kv-table-body,[role='grid']"
+              )).filter(visible) as HTMLElement[];
+              const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
+              if (!scroller) return { moved: false, atEnd: false };
+              const before = scroller.scrollTop;
+              const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+              scroller.scrollTop = Math.min(max, targetTop);
+              scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+              return {
+                moved: Math.abs(scroller.scrollTop - before) > 1,
+                atEnd: scroller.scrollTop >= max - 2,
+              };
+            }, target).catch(() => ({ moved: false, atEnd: false }));
+
+            if (!scrollState.moved && target < resetState.max) continue;
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            const virtualRows = await cashbookRows(page);
+            for (const row of virtualRows) seen.set(row, row);
+            if (scrollState.atEnd) break;
+          }
         }
       }
       break;

@@ -40,14 +40,14 @@ test("AP: mismatched supplier debt fails reconciliation", () => {
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Cần trả NCC"],
-      cells: [["2.000.000"]],
+      headers: ["Mã nhập hàng", "Cần trả NCC"],
+      cells: [["PN1", "2.000.000"]],
     },
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Nợ cần trả hiện tại"],
-      cells: [["1.500.000"]],
+      headers: ["Mã NCC", "Nợ cần trả hiện tại"],
+      cells: [["NCC1", "1.500.000"]],
     },
   );
   assert.equal(result.state, "NEED_VERIFY");
@@ -60,14 +60,14 @@ test("AP: incomplete structured cells fail closed", () => {
     {
       state: "READ_VERIFIED",
       rowCount: 2,
-      headers: ["Cần trả NCC"],
-      cells: [["2.000.000"]],
+      headers: ["Mã nhập hàng", "Cần trả NCC"],
+      cells: [["PN1", ""]],
     },
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Nợ cần trả hiện tại"],
-      cells: [["2.000.000"]],
+      headers: ["Mã NCC", "Nợ cần trả hiện tại"],
+      cells: [["NCC1", "2.000.000"]],
     },
   );
   assert.equal(result.state, "NEED_VERIFY");

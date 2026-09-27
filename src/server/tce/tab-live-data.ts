@@ -21,6 +21,7 @@ import { isTaskOverdue } from "@/server/tasks/overdue";
 import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
+import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 
 export type TceTabScreen =
   | "business"
@@ -322,7 +323,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, foundationReadiness] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
@@ -333,6 +334,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       readFinanceBotSummary("HOTEL"),
       readFinanceBotSummary("FNB"),
       readHospitalityDebtSnapshot(),
+      readFinanceFoundationReadiness(),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -400,8 +402,14 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": "NEED VERIFY: Expense Actual chưa có calculation source đủ authority; Cash Out không được dùng thay Expense.",
-          "Lợi nhuận gộp": "NEED VERIFY: cần Net Revenue + COGS VERIFIED; không suy từ cashflow.",
+          "Chi phí": "NEED VERIFY: Expense Actual coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
+            "%; missing=" + foundationReadiness.expense.missingRows +
+            "; partial=" + foundationReadiness.expense.partialRows +
+            ". Cash Out không được dùng thay Expense.",
+          "Lợi nhuận gộp": "NEED VERIFY: COGS production-ready " +
+            foundationReadiness.cogs.productionReadyItems + "/" + foundationReadiness.cogs.menuItems +
+            "; nguyên liệu đã đối chiếu " + foundationReadiness.cogs.verifiedIngredients + "/" +
+            foundationReadiness.cogs.ingredientCount + ". Không suy từ cashflow.",
           "Biên lợi nhuận": "NEED VERIFY: chỉ tính khi Gross Profit và COGS coverage đủ.",
           "Công suất phòng": "Property runtime",
         },
@@ -607,7 +615,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
-        "Chi phí vận hành": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
+        "Chi phí vận hành": "NEED VERIFY: Expense coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
+          "%; required=" + foundationReadiness.expense.requiredRows +
+          "; missing=" + foundationReadiness.expense.missingRows +
+          "; partial=" + foundationReadiness.expense.partialRows +
+          ". Không dùng Cash Out thay Expense.",
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
@@ -616,7 +628,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) +
             ", nhưng chưa map fund/account để phân biệt Cash on hand và Bank/account balance.",
         "Công nợ phải thu": "NEED VERIFY: chưa có canonical AR source/mapping.",
-        "Công nợ phải trả": "NEED VERIFY: chờ KiotViet Nhập hàng/Nhà cung cấp hoặc source authenticated tương đương.",
+        "Công nợ phải trả": foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
+          ? "NEED VERIFY: KiotViet Nhập hàng + Nhà cung cấp đã READ_VERIFIED; còn thiếu parser outstanding/payment để tính AP canonical."
+          : "NEED VERIFY: source Nhập hàng/Nhà cung cấp chưa READ_VERIFIED đầy đủ.",
         "Nợ vay": debtSnapshot.state === "VERIFIED"
           ? "VERIFIED · FIN-HOSPITALITY-001 · đáo hạn " + (debtSnapshot.maturityDate ?? "NEED VERIFY") +
             " · source updated " + (debtSnapshot.lastSourceUpdate ?? "NEED VERIFY")
@@ -625,7 +639,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
               " · xác nhận " + (debtSnapshot.confirmationDate ?? "không rõ ngày") +
               " · thiếu canonical Last Updated/current statement read-back."
             : "NEED VERIFY: Authority = FIN-HOSPITALITY-001; runtime read hoặc confirmation chưa PASS.",
-        "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; COGS production chưa đủ authority/coverage.",
+        "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; production-ready COGS=" +
+          foundationReadiness.cogs.productionReadyItems + "/" + foundationReadiness.cogs.menuItems +
+          ", ingredient verification=" + foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount + ".",
         "Biên lợi nhuận gộp": "NEED VERIFY: chỉ tính khi Gross Profit VERIFIED và COGS coverage đủ.",
       },
       {
@@ -640,8 +656,14 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             : unknownDirectionCount > 0
               ? "NEED VERIFY — " + unknownDirectionCount + " giao dịch chưa xác định Thu/Chi"
               : "VERIFIED — dùng cho Cash In/Out, không dùng thay Expense"],
-          ["Expense Actual", "NEED VERIFY — chưa có canonical Expense source đủ authority"],
-          ["COGS / Gross Profit", "NEED VERIFY — COST-001 còn TEST/coverage chưa đủ production"],
+          ["Expense Actual", "NEED VERIFY — coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
+            "% · missing=" + foundationReadiness.expense.missingRows + " · partial=" + foundationReadiness.expense.partialRows],
+          ["COGS / Gross Profit", "NEED VERIFY — production-ready " + foundationReadiness.cogs.productionReadyItems +
+            "/" + foundationReadiness.cogs.menuItems + " · ingredients verified " +
+            foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount],
+          ["AP source", foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
+            ? "READ_VERIFIED — Purchase Orders + Suppliers; structured outstanding parser còn thiếu"
+            : "NEED VERIFY — Purchase Orders/Suppliers source chưa đủ"],
           ["Fallback ngoài source authority", "DISABLED"],
         ],
         financeBranches: [
@@ -665,7 +687,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         ]),
         financeProfitSources: profitSourceRows,
         financeProductProfitReadiness: [
-          ["Cozy Garden — theo món/đồ uống", "Net Revenue − COGS", "KiotViet F&B invoice detail + COST-001 BOM/COGS VERIFIED", "NEED VERIFY", "COST-001 hiện toàn bộ sản phẩm còn TEST/GO=0; chưa đủ production authority"],
+          ["Cozy Garden — theo món/đồ uống", "Net Revenue − COGS", "KiotViet F&B invoice detail + COST-001 BOM/COGS VERIFIED", "NEED VERIFY",
+            "Production-ready " + foundationReadiness.cogs.productionReadyItems + "/" + foundationReadiness.cogs.menuItems +
+            "; ingredients verified " + foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount],
           ["Lavender/Ruby — theo hạng phòng", "Net room revenue − direct cost theo FIN-HOSPITALITY-001", "KiotViet Hotel + định nghĩa Gross Profit Homestay được chốt", "NEED VERIFY", "Chưa chốt đủ direct-cost/COGS definition + cost feed"],
           ["Dịch vụ bổ sung Hotel", "Revenue service − direct cost", "KiotViet Hotel invoice/service + direct-cost source", "NEED VERIFY", "Chờ direct-cost authority"],
         ],

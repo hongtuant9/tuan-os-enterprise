@@ -212,6 +212,15 @@ function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: strin
     collected: 0,
     branchBreakdown: [],
     statusBreakdown: {},
+    receivable: {
+      state: "NEED_VERIFY",
+      scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY",
+      invoiceCount: 0,
+      coveredInvoiceCount: 0,
+      coveragePct: 0,
+      outstanding: 0,
+      anomalyCount: 0,
+    },
     notes: ["Không thể đọc nguồn live ở lần tải này."],
   };
 }
@@ -345,6 +354,17 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const monthRevenue = monthHotel + monthFnb;
     const bothPeriodVerified = hotelPeriod.state === "VERIFIED" && fnbPeriod.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
+    const arCandidateReady =
+      hotelMonth.receivable.state === "VERIFIED" &&
+      fnbMonth.receivable.state === "VERIFIED";
+    const arCandidateOutstanding = arCandidateReady
+      ? hotelMonth.receivable.outstanding + fnbMonth.receivable.outstanding
+      : null;
+    const arCandidateCoverage =
+      hotelMonth.invoiceCount + fnbMonth.invoiceCount > 0
+        ? ((hotelMonth.receivable.coveredInvoiceCount + fnbMonth.receivable.coveredInvoiceCount) /
+            (hotelMonth.invoiceCount + fnbMonth.invoiceCount)) * 100
+        : 0;
 
     const hotelToday = hotelPeriod;
     const fnbToday = fnbPeriod;
@@ -627,7 +647,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ? "NEED VERIFY: chưa có Tồn quỹ authenticated + header reconciliation đủ cho cả Hotel và F&B."
           : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) +
             ", nhưng chưa map fund/account để phân biệt Cash on hand và Bank/account balance.",
-        "Công nợ phải thu": "NEED VERIFY: chưa có canonical AR source/mapping.",
+        "Công nợ phải thu": arCandidateOutstanding === null
+          ? "NEED VERIFY: invoice AR candidate chưa đủ coverage/anomaly guard."
+          : "NEED VERIFY: KiotViet invoice-outstanding candidate MTD = " + money(arCandidateOutstanding) +
+            " · coverage " + arCandidateCoverage.toFixed(1) +
+            "%. Chưa gồm/đối soát đầy đủ OTA settlement và receivable ngoài invoice.",
         "Công nợ phải trả": foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
           ? "NEED VERIFY: KiotViet Nhập hàng + Nhà cung cấp đã READ_VERIFIED; còn thiếu parser outstanding/payment để tính AP canonical."
           : "NEED VERIFY: source Nhập hàng/Nhà cung cấp chưa READ_VERIFIED đầy đủ.",
@@ -661,6 +685,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ["COGS / Gross Profit", "NEED VERIFY — production-ready " + foundationReadiness.cogs.productionReadyItems +
             "/" + foundationReadiness.cogs.menuItems + " · ingredients verified " +
             foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount],
+          ["AR candidate", arCandidateOutstanding === null
+            ? "NEED VERIFY — invoice outstanding coverage/anomaly guard chưa PASS"
+            : "MTD invoice outstanding " + money(arCandidateOutstanding) +
+              " · coverage " + arCandidateCoverage.toFixed(1) +
+              "% · full AR vẫn NEED VERIFY"],
           ["AP source", foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
             ? "READ_VERIFIED — Purchase Orders + Suppliers; structured outstanding parser còn thiếu"
             : "NEED VERIFY — Purchase Orders/Suppliers source chưa đủ"],

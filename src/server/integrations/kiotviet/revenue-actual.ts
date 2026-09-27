@@ -17,6 +17,15 @@ export type RevenueSnapshot = {
   collected: number;
   branchBreakdown: Array<{ branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>;
   statusBreakdown: Record<string, { count: number; revenue: number; collected: number }>;
+  receivable: {
+    state: "VERIFIED" | "NEED_VERIFY";
+    scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY";
+    invoiceCount: number;
+    coveredInvoiceCount: number;
+    coveragePct: number;
+    outstanding: number;
+    anomalyCount: number;
+  };
   notes: string[];
   httpStatus?: number;
 };
@@ -75,6 +84,10 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
   const valid = unique.filter((x) => !isExplicitlyCancelled(x));
   const branch = new Map<string, { branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>();
   const statusBreakdown: RevenueSnapshot["statusBreakdown"] = {};
+  let receivableInvoiceCount = 0;
+  let receivableCoveredInvoiceCount = 0;
+  let receivableOutstanding = 0;
+  let receivableAnomalyCount = 0;
 
   for (const invoice of valid) {
     const revenue = num(invoice.total);
@@ -87,6 +100,27 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
     b.revenue += revenue;
     b.collected += collected;
     branch.set(key, b);
+
+    const totalRaw = invoice.total;
+    const paymentRaw = invoice.totalPayment;
+    const totalKnown = totalRaw !== null && totalRaw !== undefined && Number.isFinite(Number(totalRaw));
+    const paymentKnown = paymentRaw !== null && paymentRaw !== undefined && Number.isFinite(Number(paymentRaw));
+    if (totalKnown && paymentKnown) {
+      receivableCoveredInvoiceCount += 1;
+      const invoiceTotal = Number(totalRaw);
+      const invoicePaid = Number(paymentRaw);
+      if (invoiceTotal < 0 || invoicePaid < 0 || invoicePaid > invoiceTotal + 1) {
+        receivableAnomalyCount += 1;
+      } else {
+        const outstanding = Math.max(0, invoiceTotal - invoicePaid);
+        if (outstanding > 0) {
+          receivableInvoiceCount += 1;
+          receivableOutstanding += outstanding;
+        }
+      }
+    } else {
+      receivableAnomalyCount += 1;
+    }
 
     const statusKey = String(invoice.statusValue ?? invoice.status ?? "UNKNOWN");
     const s = statusBreakdown[statusKey] ?? { count: 0, revenue: 0, collected: 0 };
@@ -109,12 +143,28 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
     collected: valid.reduce((sum, x) => sum + num(x.totalPayment), 0),
     branchBreakdown: [...branch.values()].sort((a, b) => b.revenue - a.revenue),
     statusBreakdown,
+    receivable: {
+      state:
+        missingSourceIdCount === 0 &&
+        duplicateCount === 0 &&
+        receivableAnomalyCount === 0 &&
+        receivableCoveredInvoiceCount === valid.length
+          ? "VERIFIED"
+          : "NEED_VERIFY",
+      scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY",
+      invoiceCount: receivableInvoiceCount,
+      coveredInvoiceCount: receivableCoveredInvoiceCount,
+      coveragePct: valid.length ? (receivableCoveredInvoiceCount / valid.length) * 100 : 0,
+      outstanding: receivableOutstanding,
+      anomalyCount: receivableAnomalyCount,
+    },
     notes: [
       "Doanh thu = tổng trường total của hóa đơn không có statusValue thể hiện hủy/void.",
       "Tiền đã thu = tổng totalPayment; không dùng thay cho doanh thu.",
       "Khử trùng theo source invoice id/code trước khi cộng; thiếu source ID hoặc có duplicate giữa các page => NEED_VERIFY.",
       "duplicateCount=" + duplicateCount + "; missingSourceIdCount=" + missingSourceIdCount + ".",
       "Nếu xuất hiện status chưa map hoặc nghiệp vụ hoàn/điều chỉnh đặc biệt, CFO phải reconcile trước READY_TO_POST.",
+      "AR candidate = max(total - totalPayment, 0) trên invoice có đủ field; chỉ đại diện KiotViet invoice outstanding, không thay thế OTA/đối tác receivable chưa map.",
     ],
   };
 }
@@ -122,7 +172,7 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
 export async function fetchFnbRevenueActual(from: string, to: string): Promise<RevenueSnapshot> {
   const client = new KiotVietFnbClient();
   if (!client.isConfigured()) {
-    return { source: "KIOTVIET_FNB", state: "UNAVAILABLE", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, notes: ["KiotViet F&B env chưa cấu hình đầy đủ."] };
+    return { source: "KIOTVIET_FNB", state: "UNAVAILABLE", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, receivable: { state: "NEED_VERIFY", scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY", invoiceCount: 0, coveredInvoiceCount: 0, coveragePct: 0, outstanding: 0, anomalyCount: 0 }, notes: ["KiotViet F&B env chưa cấu hình đầy đủ."] };
   }
 
   const all: Invoice[] = [];
@@ -140,7 +190,7 @@ export async function fetchFnbRevenueActual(from: string, to: string): Promise<R
     });
     const res = await client.listInvoices(query.toString());
     httpStatus = res.status;
-    if (!res.ok) return { source: "KIOTVIET_FNB", state: "ERROR", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, notes: ["KiotViet F&B invoices HTTP " + res.status], httpStatus: res.status };
+    if (!res.ok) return { source: "KIOTVIET_FNB", state: "ERROR", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, receivable: { state: "NEED_VERIFY", scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY", invoiceCount: 0, coveredInvoiceCount: 0, coveragePct: 0, outstanding: 0, anomalyCount: 0 }, notes: ["KiotViet F&B invoices HTTP " + res.status], httpStatus: res.status };
     const batch = rows(res.data);
     all.push(...batch);
     const total = totalOf(res.data, all.length);
@@ -155,7 +205,7 @@ export async function fetchFnbRevenueActual(from: string, to: string): Promise<R
 export async function fetchHotelRevenueActual(from: string, to: string): Promise<RevenueSnapshot> {
   const client = new KiotVietHotelClient();
   if (!client.isConfigured()) {
-    return { source: "KIOTVIET_HOTEL", state: "UNAVAILABLE", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, notes: ["KiotViet Hotel PublicApiKey chưa cấu hình."] };
+    return { source: "KIOTVIET_HOTEL", state: "UNAVAILABLE", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, receivable: { state: "NEED_VERIFY", scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY", invoiceCount: 0, coveredInvoiceCount: 0, coveragePct: 0, outstanding: 0, anomalyCount: 0 }, notes: ["KiotViet Hotel PublicApiKey chưa cấu hình."] };
   }
 
   const all: Invoice[] = [];
@@ -171,7 +221,7 @@ export async function fetchHotelRevenueActual(from: string, to: string): Promise
     });
     const res = await client.listInvoices(query.toString());
     httpStatus = res.status;
-    if (!res.ok) return { source: "KIOTVIET_HOTEL", state: "ERROR", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, notes: ["KiotViet Hotel invoices HTTP " + res.status], httpStatus: res.status };
+    if (!res.ok) return { source: "KIOTVIET_HOTEL", state: "ERROR", from, to, invoiceCount: 0, excludedCount: 0, duplicateCount: 0, missingSourceIdCount: 0, revenue: 0, collected: 0, branchBreakdown: [], statusBreakdown: {}, receivable: { state: "NEED_VERIFY", scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY", invoiceCount: 0, coveredInvoiceCount: 0, coveragePct: 0, outstanding: 0, anomalyCount: 0 }, notes: ["KiotViet Hotel invoices HTTP " + res.status], httpStatus: res.status };
     const batch = rows(res.data);
     all.push(...batch);
     const total = totalOf(res.data, all.length);

@@ -199,6 +199,10 @@ async function browserCashflowFallback(
 }
 
 export async function fetchFnbCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
+  // Browser-first for KiotViet F&B cashbook; fail closed unless fresh and reconciled.
+  const browser = await browserCashflowFallback("FNB", "KIOTVIET_FNB", from, to);
+  if (browser) return browser;
+
   const retail = new KiotVietRetailFinanceClient("fnb");
 
   if (retail.isConfigured()) {
@@ -285,6 +289,10 @@ export async function fetchFnbCashflowActual(from: string, to: string): Promise<
 }
 
 export async function fetchHotelCashflowActual(from: string, to: string): Promise<KiotVietCashflowSnapshot> {
+  // Browser-first for KiotViet Hotel cashbook; fail closed unless fresh and reconciled.
+  const browser = await browserCashflowFallback("HOTEL", "KIOTVIET_HOTEL", from, to);
+  if (browser) return browser;
+
   const retail = new KiotVietRetailFinanceClient("hotel");
 
   if (retail.isConfigured()) {

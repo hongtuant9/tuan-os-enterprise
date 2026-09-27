@@ -451,16 +451,17 @@ async function goCashbook(page: Page, system: FinanceBotSystem): Promise<boolean
       const rows = Array.from(
         document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row")
       );
-      const hasVisibleRow = rows.some((row) => {
+      const visibleRows = rows.filter((row) => {
         const node = row as HTMLElement;
         const style = getComputedStyle(node);
         const rect = node.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
       });
-      return hasVisibleRow || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
+      return /quỹ đầu kỳ|tổng thu|tồn quỹ/i.test(body) || visibleRows.length > 1 || /không có dữ liệu|chưa có dữ liệu|không tìm thấy dữ liệu/i.test(body);
     },
     { timeout: 15_000 }
   ).catch(() => null);
+  await new Promise((resolve) => setTimeout(resolve, 2500));
 
   return page.evaluate(() => {
     const body = document.body?.innerText || "";
@@ -517,12 +518,26 @@ async function cashbookSnapshot(page: Page) {
   const totalMatch = body.match(/trên tổng số\s+(\d+)\s+phiếu/i);
   const reportedTotalRows = totalMatch ? Number(totalMatch[1]) : null;
   const seen = new Map<string, string>();
+  let terminalPagerObserved = false;
+
+  const firstPageClicked = await page.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll("button,a,[role='button']"));
+    const first = candidates.find((el) => {
+      const text = `${(el as HTMLElement).innerText || el.textContent || ""} ${el.getAttribute("title") || ""} ${String((el as HTMLElement).className || "")}`.toLowerCase();
+      const disabled = el.getAttribute("aria-disabled") === "true" || el.hasAttribute("disabled") || /disabled/.test(String((el as HTMLElement).className));
+      return !disabled && /trang đầu|first page|pager-first/.test(text);
+    });
+    if (!first) return false;
+    (first as HTMLElement).click();
+    return true;
+  });
+  if (firstPageClicked) await new Promise((resolve) => setTimeout(resolve, 700));
 
   for (let pageIndex = 0; pageIndex < 100; pageIndex += 1) {
     const current = await cashbookRows(page);
     for (const row of current) seen.set(row, row);
     if (reportedTotalRows !== null && seen.size >= reportedTotalRows) break;
-    const clicked = await page.evaluate(() => {
+    const pager = await page.evaluate(() => {
       const visible = (el: Element) => {
         const node = el as HTMLElement;
         const style = getComputedStyle(node);
@@ -530,17 +545,24 @@ async function cashbookSnapshot(page: Page) {
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
       };
       const candidates = Array.from(document.querySelectorAll("button,a,[role='button']")).filter(visible);
-      const next = candidates.find((el) => {
+      const nextCandidates = candidates.filter((el) => {
         const node = el as HTMLElement;
         const text = `${node.innerText || node.textContent || ""} ${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""} ${String(el.className || "")}`.toLowerCase();
-        const disabled = el.getAttribute("aria-disabled") === "true" || el.hasAttribute("disabled") || /disabled/.test(String(el.className));
-        return !disabled && /trang tiếp|tiếp theo|next page|pager-next|k-i-arrow-e|caret-alt-right/.test(text);
+        return /trang sau|trang tiếp|tiếp theo|next page|pager-next|k-i-arrow-e|caret-alt-right/.test(text);
       });
-      if (!next) return false;
-      (next as HTMLElement).click();
-      return true;
+      if (!nextCandidates.length) return { clicked: false, terminal: false };
+      const enabled = nextCandidates.find((el) => {
+        const disabled = el.getAttribute("aria-disabled") === "true" || el.hasAttribute("disabled") || /disabled/.test(String((el as HTMLElement).className));
+        return !disabled;
+      });
+      if (!enabled) return { clicked: false, terminal: true };
+      (enabled as HTMLElement).click();
+      return { clicked: true, terminal: false };
     });
-    if (!clicked) break;
+    if (!pager.clicked) {
+      terminalPagerObserved = pager.terminal;
+      break;
+    }
     await new Promise((resolve) => setTimeout(resolve, 700));
   }
 
@@ -553,7 +575,7 @@ async function cashbookSnapshot(page: Page) {
     totalPayments: metric("Tổng chi"),
     closingBalance: metric("Tồn quỹ"),
     reportedTotalRows,
-    paginationComplete: reportedTotalRows === null ? rawRows.length > 0 : rawRows.length >= reportedTotalRows,
+    paginationComplete: reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows,
     rows: parsedRows,
     rawRows,
   };

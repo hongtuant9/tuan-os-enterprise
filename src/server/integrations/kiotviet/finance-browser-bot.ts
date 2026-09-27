@@ -527,7 +527,9 @@ async function cashbookSnapshot(page: Page) {
     return parseMoneyText(match?.[1]);
   };
   const periodMatch = body.match(/Thời gian\s+(Hôm nay|Tháng này|Tuần này)(?=\s+(?:Lựa chọn khác|Phòng|Kênh bán|Người tạo|Nhân viên|Người nộp\/nhận))/i);
-  const totalMatch = body.match(/trên tổng số\s+(\d+)\s+phiếu/i);
+  const totalMatch =
+    body.match(/trên tổng số\s+(\d+)\s+phiếu/i) ||
+    body.match(/\b\d+\s*-\s*\d+\s+of\s+(\d+)\b/i);
   const reportedTotalRows = totalMatch ? Number(totalMatch[1]) : null;
   const seen = new Map<string, string>();
   let terminalPagerObserved = false;
@@ -578,7 +580,27 @@ async function cashbookSnapshot(page: Page) {
       terminalPagerObserved = pager.terminal;
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    const previousFirstRow = current[0] ?? "";
+    await page.waitForFunction(
+      (previous) => {
+        const visible = (el: Element) => {
+          const node = el as HTMLElement;
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+        };
+        const nextFirst = Array.from(
+          document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row")
+        )
+          .filter(visible)
+          .map((row) => (row.textContent || "").replace(/\s+/g, " ").trim())
+          .find(Boolean) || "";
+        return Boolean(nextFirst && nextFirst !== previous);
+      },
+      { timeout: 5_000 },
+      previousFirstRow,
+    ).catch(() => null);
+    await new Promise((resolve) => setTimeout(resolve, 350));
   }
 
   const rawRows = [...seen.values()];

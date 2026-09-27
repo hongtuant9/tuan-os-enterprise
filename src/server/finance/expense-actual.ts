@@ -24,6 +24,7 @@ export async function readCashbookExpenseActual() {
         checkedAt: snapshot?.checkedAt ?? null,
         groups: [],
         unknownExpenseRows: 0,
+        unknownGroupLabels: [],
         excludedNonPnlRows: 0,
         directMappedAmount: 0,
         ambiguousAmount: 0,

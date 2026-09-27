@@ -36,21 +36,58 @@ const AMBIGUOUS_CODES = new Set(["C01", "C05", "C08"]);
 const NON_PNL_CODES = new Set(["N01", "N02", "N03", "N04", "N05"]);
 const RECEIPT_CODES = new Set(["R01", "RN01", "RN02"]);
 
+const LEGACY_NAME_TO_CODE: Array<[string, string]> = [
+  ["chi phi khac co giai trinh", "C11"],
+  ["chi phi thue kho bai, mat bang kinh doanh", "C05"],
+  ["chi phi hoi nghi, su kien, cong tac phi", "C08"],
+  ["bao hiem / chi phi nhan su bat buoc neu phat sinh", "C01"],
+  ["chi phi le/tet/trang tri lon", "C06"],
+  ["chi phi vien thong", "C04"],
+  ["chi phi nhan cong", "C01"],
+  ["chi phi dien", "C02"],
+  ["chi phi nuoc", "C03"],
+  ["nop thue", "C09"],
+  ["chi phi khac", "C11"],
+  ["dong phuc", "C01"],
+  ["gui tien vao ngan hang", "N04"],
+];
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function extractTceCode(groupLabel: string) {
   const match = groupLabel.match(/\[TCE-([A-Z0-9]+)\]/i);
   return match?.[1]?.toUpperCase() ?? null;
+}
+
+export function resolveExpenseCode(groupLabel: string) {
+  const explicit = extractTceCode(groupLabel);
+  if (explicit) return explicit;
+  const normalized = normalizeLabel(groupLabel);
+  for (const [legacyName, code] of LEGACY_NAME_TO_CODE) {
+    if (normalized.includes(legacyName)) return code;
+  }
+  return null;
 }
 
 export function summarizeExpenseActualRows(rows: CashbookExpenseRow[]) {
   const grouped = new Map<string, { amount: number; count: number; labels: Set<string> }>();
   let unknownExpenseRows = 0;
   let excludedNonPnlRows = 0;
+  const unknownGroupLabels = new Set<string>();
 
   for (const row of rows) {
     if (row.isReceipt !== false) continue;
-    const code = extractTceCode(row.groupLabel);
+    const code = resolveExpenseCode(row.groupLabel);
     if (!code) {
       unknownExpenseRows += 1;
+      unknownGroupLabels.add(row.groupLabel);
       continue;
     }
     if (NON_PNL_CODES.has(code) || RECEIPT_CODES.has(code)) {
@@ -99,6 +136,7 @@ export function summarizeExpenseActualRows(rows: CashbookExpenseRow[]) {
   return {
     groups,
     unknownExpenseRows,
+    unknownGroupLabels: [...unknownGroupLabels].sort(),
     excludedNonPnlRows,
     directMappedAmount: groups
       .filter((group) => group.verificationStatus === "VERIFIED")

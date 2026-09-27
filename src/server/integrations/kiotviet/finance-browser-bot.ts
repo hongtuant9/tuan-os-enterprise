@@ -76,6 +76,13 @@ export type FinanceBotSnapshot = {
         overflowY: string;
         rowDescendants: number;
       }>;
+      kendoDataSources?: Array<{
+        selector: string;
+        total: number | null;
+        dataLength: number | null;
+        itemKeys: string[];
+        sampleShapes: string[];
+      }>;
     };
   };
   detail?: string;
@@ -722,6 +729,67 @@ async function cashbookSnapshot(page: Page) {
     overflowY: string;
     rowDescendants: number;
   }>);
+  const kendoDataSources = await page.evaluate(() => {
+    const jq = (window as unknown as { jQuery?: (el: Element) => { data?: (key: string) => unknown }; $?: (el: Element) => { data?: (key: string) => unknown } }).jQuery
+      || (window as unknown as { $?: (el: Element) => { data?: (key: string) => unknown } }).$;
+    if (!jq) return [];
+    const candidates = Array.from(document.querySelectorAll(
+      "[data-role='grid'],.k-grid,.k-grid-content.k-virtual-content"
+    ));
+    const seen = new Set<unknown>();
+    const out: Array<{
+      selector: string;
+      total: number | null;
+      dataLength: number | null;
+      itemKeys: string[];
+      sampleShapes: string[];
+    }> = [];
+    const sanitize = (value: unknown) =>
+      String(value ?? "")
+        .replace(/\p{L}+/gu, "X")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120);
+    for (const el of candidates) {
+      const roots = [el, el.closest(".k-grid")].filter(Boolean) as Element[];
+      for (const root of roots) {
+        const wrapped = jq(root);
+        const grid = wrapped?.data?.("kendoGrid") as {
+          dataSource?: {
+            total?: () => number;
+            data?: () => Array<Record<string, unknown>>;
+            view?: () => Array<Record<string, unknown>>;
+          };
+        } | undefined;
+        const ds = grid?.dataSource;
+        if (!ds || seen.has(ds)) continue;
+        seen.add(ds);
+        const data = typeof ds.data === "function" ? ds.data() : [];
+        const view = typeof ds.view === "function" ? ds.view() : [];
+        const sample = (data?.length ? data : view)?.slice?.(0, 3) ?? [];
+        out.push({
+          selector: String((root as HTMLElement).className || root.tagName).slice(0, 160),
+          total: typeof ds.total === "function" ? Number(ds.total()) : null,
+          dataLength: Array.isArray(data) ? data.length : null,
+          itemKeys: sample[0] && typeof sample[0] === "object" ? Object.keys(sample[0]).slice(0, 30) : [],
+          sampleShapes: sample.map((item) =>
+            Object.entries(item)
+              .slice(0, 20)
+              .map(([key, value]) => key + "=" + sanitize(value))
+              .join("|")
+              .slice(0, 500)
+          ),
+        });
+      }
+    }
+    return out.slice(0, 10);
+  }).catch(() => [] as Array<{
+    selector: string;
+    total: number | null;
+    dataLength: number | null;
+    itemKeys: string[];
+    sampleShapes: string[];
+  }>);
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");
@@ -750,6 +818,7 @@ async function cashbookSnapshot(page: Page) {
       parsedRowCount: parsedRows.length,
       unparsedRowShapes,
       scrollContainers,
+      kendoDataSources,
     },
     rawRows,
   };

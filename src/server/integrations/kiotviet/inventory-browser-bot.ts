@@ -473,7 +473,25 @@ export async function runInventoryBotRead(
       return snapshot;
     }
 
-    const browser = await launch(system);
+    let browser: Browser;
+    try {
+      browser = await launch(system);
+    } catch (error) {
+      const snapshot: InventoryBotSnapshot = {
+        system,
+        state: "ERROR",
+        checkedAt,
+        authenticated: false,
+        moduleCount: definitions.length,
+        verifiedModules: 0,
+        modules: [],
+        writeEnabled: false,
+        detail: error instanceof Error ? error.message : "Browser launch failed.",
+      };
+      await saveSummary(system, snapshot);
+      return snapshot;
+    }
+
     try {
       const page = await browser.newPage();
       const auth = await login(page, system);

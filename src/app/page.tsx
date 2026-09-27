@@ -82,6 +82,15 @@ function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: strin
     collected: 0,
     branchBreakdown: [],
     statusBreakdown: {},
+    receivable: {
+      state: "NEED_VERIFY",
+      scope: "KIOTVIET_INVOICE_OUTSTANDING_ONLY",
+      invoiceCount: 0,
+      coveredInvoiceCount: 0,
+      coveragePct: 0,
+      outstanding: 0,
+      anomalyCount: 0,
+    },
     notes: ["Không thể đọc nguồn live ở lần tải này."],
   };
 }

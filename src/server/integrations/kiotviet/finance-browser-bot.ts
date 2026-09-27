@@ -63,6 +63,21 @@ export type FinanceBotSnapshot = {
       groupLabel: string;
       status: string;
     }>;
+    accountingRows?: Array<{
+      id: string;
+      code: string;
+      amount: number;
+      transDate: string;
+      branchId: string | null;
+      method: string | null;
+      cashFlowGroupId: string | null;
+      cashGroup: string | null;
+      origin: string | null;
+      usedForFinancialReporting: boolean | null;
+      type: string | null;
+      cashBookType: string | null;
+      account: string | null;
+    }>;
     diagnostics?: {
       rawRowCount: number;
       parsedRowCount: number;
@@ -864,6 +879,66 @@ async function cashbookSnapshot(page: Page) {
     itemKeys: string[];
     sampleShapes: string[];
   }>);
+  const accountingRows = await page.evaluate(() => {
+    const jq = (window as unknown as { jQuery?: (el: Element) => { data?: (key: string) => unknown }; $?: (el: Element) => { data?: (key: string) => unknown } }).jQuery
+      || (window as unknown as { $?: (el: Element) => { data?: (key: string) => unknown } }).$;
+    if (!jq) return [];
+    const roots = Array.from(document.querySelectorAll("[data-role='grid'],.k-grid"));
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const root of roots) {
+      const wrapped = jq(root);
+      const grid = wrapped?.data?.("kendoGrid") as {
+        dataSource?: {
+          data?: () => unknown;
+          view?: () => unknown;
+        };
+      } | undefined;
+      const ds = grid?.dataSource;
+      if (!ds) continue;
+      const rawData = typeof ds.data === "function" ? ds.data() : null;
+      const rawView = typeof ds.view === "function" ? ds.view() : null;
+      const candidates = rawData && typeof (rawData as { toJSON?: () => unknown }).toJSON === "function"
+        ? (rawData as { toJSON: () => unknown }).toJSON()
+        : rawData ?? rawView;
+      const rows = Array.isArray(candidates) ? candidates : Array.from((candidates as Iterable<unknown>) ?? []);
+      for (const value of rows) {
+        if (!value || typeof value !== "object") continue;
+        const row = value as Record<string, unknown>;
+        const id = String(row.Id ?? row.id ?? row.Code ?? row.code ?? "").trim();
+        if (!id || byId.has(id)) continue;
+        byId.set(id, row);
+      }
+    }
+    const asText = (value: unknown) => {
+      const text = String(value ?? "").trim();
+      return text || null;
+    };
+    const asBool = (value: unknown) => {
+      if (value === true || value === 1 || value === "1") return true;
+      if (value === false || value === 0 || value === "0") return false;
+      return null;
+    };
+    return [...byId.entries()].map(([id, row]) => ({
+      id,
+      code: String(row.Code ?? row.code ?? id),
+      amount: Math.abs(Number(row.Amount ?? row.amount ?? 0)) || 0,
+      transDate: String(row.TransDate ?? row.transDate ?? ""),
+      branchId: asText(row.BranchId ?? row.branchId),
+      method: asText(row.Method ?? row.method),
+      cashFlowGroupId: asText(row.CashFlowGroupId ?? row.cashFlowGroupId),
+      cashGroup: asText(row.CashGroup ?? row.cashGroup),
+      origin: asText(row.Origin ?? row.origin),
+      usedForFinancialReporting: asBool(row.UsedForFinancialReporting ?? row.usedForFinancialReporting),
+      type: asText(row.Type ?? row.type),
+      cashBookType: asText(row.CashBookType ?? row.cashBookType),
+      account: asText(row.Account ?? row.account),
+    })).filter((row) => row.amount > 0);
+  }).catch(() => [] as Array<{
+    id: string; code: string; amount: number; transDate: string; branchId: string | null;
+    method: string | null; cashFlowGroupId: string | null; cashGroup: string | null;
+    origin: string | null; usedForFinancialReporting: boolean | null; type: string | null;
+    cashBookType: string | null; account: string | null;
+  }>);
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");
@@ -887,6 +962,7 @@ async function cashbookSnapshot(page: Page) {
     paginationComplete: paginationEvidence && reconciliation.verified,
     reconciliation,
     rows: parsedRows,
+    accountingRows,
     diagnostics: {
       rawRowCount: rawRows.length,
       parsedRowCount: parsedRows.length,

@@ -42,6 +42,12 @@ cd "$APP_ROOT"
 git fetch origin "$MAIN_BRANCH" --prune
 git checkout "$MAIN_BRANCH"
 git reset --hard "origin/$MAIN_BRANCH"
+
+SSH_BOOTSTRAP="$APP_ROOT/scripts/ovh/install-tce-automation-key-once.sh"
+if [ -x "$SSH_BOOTSTRAP" ]; then
+  "$SSH_BOOTSTRAP"
+fi
+
 SHA="$(git rev-parse --short=12 HEAD)"
 IMAGE="tce-control-center:$SHA"
 

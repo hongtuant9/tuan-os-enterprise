@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  auditFinancialDataQuality,
   businessRangeEpoch,
   dedupeBySourceTransactionId,
   freshnessState,
@@ -9,6 +10,7 @@ import {
   summarizeCashflow,
   summarizeGrossProfit,
   summarizeRevenue,
+  summarizeOutstanding,
 } from "./foundation.ts";
 import { parseCashbookRowText } from "./cashbook-row-parser.ts";
 
@@ -135,4 +137,58 @@ test("cashbook parser keeps existing amount-at-end format", () => {
   assert.ok(row);
   assert.equal(row.amount, 550_000);
   assert.equal(row.isReceipt, true);
+});
+
+
+test("finance data quality catches duplicate, unmapped BU, future date and stale source", () => {
+  const result = auditFinancialDataQuality([
+    {
+      sourceSystem: "KIOTVIET",
+      sourceId: "TX-1",
+      businessUnit: "Cozy Garden",
+      amount: 100,
+      occurredAt: "2026-09-27T10:00:00+07:00",
+      syncedAt: "2026-09-27T10:05:00+07:00",
+    },
+    {
+      sourceSystem: "KIOTVIET",
+      sourceId: "TX-1",
+      businessUnit: "UNKNOWN",
+      amount: -10,
+      occurredAt: "2026-09-28T10:00:00+07:00",
+      syncedAt: "2026-09-26T10:05:00+07:00",
+    },
+  ], {
+    knownBusinessUnits: ["Cozy Garden", "Lavender Homestay", "Ruby Homestay"],
+    staleAfterMs: 60 * 60 * 1000,
+    now: new Date("2026-09-27T12:00:00+07:00"),
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.duplicateCount, 1);
+  assert.equal(result.missingBusinessUnitCount, 1);
+  assert.equal(result.futureDateCount, 1);
+  assert.equal(result.staleCount, 1);
+  assert.equal(result.negativeAmountCount, 1);
+});
+
+test("outstanding summary excludes paid items and reports overdue amount", () => {
+  const result = summarizeOutstanding([
+    {
+      amount: 20_000_000,
+      paidAmount: 5_000_000,
+      dueDate: "2026-09-20T00:00:00+07:00",
+      status: "OPEN",
+      verificationStatus: "VERIFIED",
+    },
+    {
+      amount: 10_000_000,
+      paidAmount: 10_000_000,
+      dueDate: "2026-09-20T00:00:00+07:00",
+      status: "PAID",
+      verificationStatus: "VERIFIED",
+    },
+  ], new Date("2026-09-27T12:00:00+07:00"));
+  assert.equal(result.state, "VERIFIED");
+  assert.equal(result.outstanding, 15_000_000);
+  assert.equal(result.overdue, 15_000_000);
 });

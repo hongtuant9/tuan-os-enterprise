@@ -31,7 +31,7 @@ export type MarketingCommandCenterCycleResult = {
     optimization: "READY" | "PARTIAL";
   };
   plan: { campaigns: number; content: number };
-  runtime: { conversations: number; bookings: number; upsells: number; metricRows: number; attributionRows: number };
+  runtime: { conversations: number; leads: number; bookings: number; upsells: number; metricRows: number; attributionRows: number };
   connectors: { total: number; liveOrReady: number; notConnected: number; errors: number };
   recommendations: number;
   reportSnapshots: number;
@@ -263,12 +263,17 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
   const nowIso = now.toISOString();
   const fallbackDate = nowIso.slice(0, 10);
   const since = new Date(now.getTime() - 62 * 86_400_000).toISOString();
-  const [conversationResult, bookingResult, upsellResult] = await Promise.all([
-    db.from("ai_conversations").select("id,customer_id,channel,intent,metadata,created_at,last_message_at").gte("created_at", since).limit(3000),
-    db.from("ai_booking_records").select("id,conversation_id,customer_id,verification_status,quoted_price,currency,created_at").gte("created_at", since).limit(3000),
+  const [conversationResult, leadResult, bookingResult, upsellResult] = await Promise.all([
+    db.from("ai_conversations").select("id,customer_id,channel,intent,source,primary_intent,lead_status,self_reported_source,journey_entry,metadata,created_at,last_message_at").gte("created_at", since).limit(3000),
+    db.from("hospitality_leads").select("id,customer_id,conversation_id,booking_record_id,channel,source,primary_intent,lead_status,verification_status,evidence,created_at").gte("created_at", since).limit(3000),
+    db.from("ai_booking_records").select("id,conversation_id,customer_id,lead_id,verification_status,quoted_price,currency,created_at").gte("created_at", since).limit(3000),
     db.from("ai_upsell_events").select("id,conversation_id,customer_id,event_type,amount,currency,acquisition_source,created_at").gte("created_at", since).limit(3000),
   ]);
   const conversations = rowList(conversationResult).filter((row) => str(row.channel) !== "pilot");
+  const leads = rowList(leadResult).filter((row) =>
+    str(row.verification_status) === "VERIFIED" &&
+    ["LEAD","QUALIFIED_LEAD","BOOKING_INTENT","BOOKED"].includes(str(row.lead_status))
+  );
   const bookings = rowList(bookingResult);
   const upsells = rowList(upsellResult).filter((row) => str(row.event_type) === "booked");
   const conversationById = new Map(conversations.map((row) => [str(row.id), row]));
@@ -287,32 +292,101 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
     const date = dateKey(conversation.created_at, fallbackDate);
     const current = agg(date, channel);
     current.conversations += 1;
-    current.leads.add(str(conversation.customer_id) || str(conversation.id));
     const utmSource = str(metadata.utm_source);
     const utmCampaign = str(metadata.utm_campaign);
-    const acquisition = str(metadata.acquisition_source) || str(conversation.channel);
+    const acquisition = str(conversation.source) || str(metadata.acquisition_source) || str(conversation.channel);
+    const selfReportedSource = str(conversation.self_reported_source) || str(metadata.self_reported_source);
+    const hasTrackedSource = Boolean(
+      utmSource || utmCampaign || str(metadata.gclid) || str(metadata.gbraid) || str(metadata.wbraid)
+    );
     events.push({
       external_event_key: "conversation:" + str(conversation.id),
       occurred_at: str(conversation.created_at) || nowIso,
       customer_id: str(conversation.customer_id) || null,
       conversation_id: str(conversation.id) || null,
       booking_record_id: null,
+      lead_id: null,
       upsell_event_id: null,
       channel_id: channel,
       campaign_id: null,
       event_type: "inquiry",
-      touch_type: utmSource || utmCampaign ? "FIRST" : "DIRECT",
+      touch_type: hasTrackedSource ? "FIRST" : "DIRECT",
       source: acquisition,
       medium: str(metadata.utm_medium) || null,
       utm_source: utmSource || null,
       utm_medium: str(metadata.utm_medium) || null,
       utm_campaign: utmCampaign || null,
       utm_content: str(metadata.utm_content) || null,
+      utm_term: str(metadata.utm_term) || null,
+      journey_entry: str(conversation.journey_entry) || str(metadata.journey_entry) || null,
+      landing_page: str(metadata.landing_page) || null,
+      gclid: str(metadata.gclid) || null,
+      gbraid: str(metadata.gbraid) || null,
+      wbraid: str(metadata.wbraid) || null,
+      ad_group: str(metadata.ad_group) || null,
+      ad: str(metadata.ad) || null,
+      self_reported_source: selfReportedSource || null,
+      attribution_status: hasTrackedSource
+        ? "DIRECT_VERIFIED"
+        : selfReportedSource
+          ? "SELF_REPORTED"
+          : acquisition
+            ? "DIRECT_VERIFIED"
+            : "UNATTRIBUTED",
       revenue_amount: 0,
       currency: "VND",
       verification_status: str(conversation.customer_id) ? "VERIFIED" : "PARTIAL",
       evidence_source: "ai_conversations + Hospitality CRM",
-      metadata: { intent: str(conversation.intent), runtime_actual: true },
+      metadata: {
+        intent: str(conversation.primary_intent) || str(conversation.intent),
+        lead_status: str(conversation.lead_status) || "INQUIRY",
+        runtime_actual: true,
+      },
+    });
+  }
+
+  for (const lead of leads) {
+    const conversation = conversationById.get(str(lead.conversation_id));
+    const metadata = obj(conversation?.metadata);
+    const channel = channelFor(str(lead.channel) || str(conversation?.channel));
+    const date = dateKey(lead.created_at, fallbackDate);
+    const current = agg(date, channel);
+    current.leads.add(str(lead.id));
+    const selfReportedSource = str(metadata.self_reported_source);
+    const source = str(lead.source) || str(conversation?.source) || str(metadata.acquisition_source) || str(conversation?.channel);
+    events.push({
+      external_event_key: "lead:" + str(lead.id),
+      occurred_at: str(lead.created_at) || nowIso,
+      customer_id: str(lead.customer_id) || str(conversation?.customer_id) || null,
+      conversation_id: str(lead.conversation_id) || null,
+      booking_record_id: str(lead.booking_record_id) || null,
+      lead_id: str(lead.id) || null,
+      upsell_event_id: null,
+      channel_id: channel,
+      campaign_id: null,
+      event_type: "lead",
+      touch_type: "DIRECT",
+      source: source || null,
+      medium: str(metadata.utm_medium) || null,
+      utm_source: str(metadata.utm_source) || null,
+      utm_medium: str(metadata.utm_medium) || null,
+      utm_campaign: str(metadata.utm_campaign) || null,
+      utm_content: str(metadata.utm_content) || null,
+      utm_term: str(metadata.utm_term) || null,
+      journey_entry: str(conversation?.journey_entry) || str(metadata.journey_entry) || null,
+      landing_page: str(metadata.landing_page) || null,
+      gclid: str(metadata.gclid) || null,
+      gbraid: str(metadata.gbraid) || null,
+      wbraid: str(metadata.wbraid) || null,
+      ad_group: str(metadata.ad_group) || null,
+      ad: str(metadata.ad) || null,
+      self_reported_source: selfReportedSource || null,
+      attribution_status: selfReportedSource ? "SELF_REPORTED" : source ? "DIRECT_VERIFIED" : "UNATTRIBUTED",
+      revenue_amount: 0,
+      currency: "VND",
+      verification_status: "VERIFIED",
+      evidence_source: "hospitality_leads verification_status=VERIFIED",
+      metadata: { lead_status: str(lead.lead_status), primary_intent: str(lead.primary_intent) },
     });
   }
 
@@ -329,6 +403,7 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
       customer_id: str(booking.customer_id) || str(conversation?.customer_id) || null,
       conversation_id: str(booking.conversation_id) || null,
       booking_record_id: str(booking.id) || null,
+      lead_id: str(booking.lead_id) || null,
       upsell_event_id: null,
       channel_id: channel,
       campaign_id: null,
@@ -340,6 +415,16 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
       utm_medium: str(metadata.utm_medium) || null,
       utm_campaign: str(metadata.utm_campaign) || null,
       utm_content: str(metadata.utm_content) || null,
+      utm_term: str(metadata.utm_term) || null,
+      journey_entry: str(conversation?.journey_entry) || str(metadata.journey_entry) || null,
+      landing_page: str(metadata.landing_page) || null,
+      gclid: str(metadata.gclid) || null,
+      gbraid: str(metadata.gbraid) || null,
+      wbraid: str(metadata.wbraid) || null,
+      ad_group: str(metadata.ad_group) || null,
+      ad: str(metadata.ad) || null,
+      self_reported_source: str(metadata.self_reported_source) || null,
+      attribution_status: "DIRECT_VERIFIED",
       revenue_amount: 0,
       currency: str(booking.currency) || "VND",
       verification_status: "VERIFIED",
@@ -362,6 +447,7 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
       customer_id: str(upsell.customer_id) || str(conversation?.customer_id) || null,
       conversation_id: str(upsell.conversation_id) || null,
       booking_record_id: null,
+      lead_id: null,
       upsell_event_id: str(upsell.id) || null,
       channel_id: channel,
       campaign_id: null,
@@ -373,6 +459,16 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
       utm_medium: str(metadata.utm_medium) || null,
       utm_campaign: str(metadata.utm_campaign) || null,
       utm_content: str(metadata.utm_content) || null,
+      utm_term: str(metadata.utm_term) || null,
+      journey_entry: str(conversation?.journey_entry) || str(metadata.journey_entry) || null,
+      landing_page: str(metadata.landing_page) || null,
+      gclid: str(metadata.gclid) || null,
+      gbraid: str(metadata.gbraid) || null,
+      wbraid: str(metadata.wbraid) || null,
+      ad_group: str(metadata.ad_group) || null,
+      ad: str(metadata.ad) || null,
+      self_reported_source: str(metadata.self_reported_source) || null,
+      attribution_status: "NEED_VERIFY",
       revenue_amount: num(upsell.amount),
       currency: str(upsell.currency) || "VND",
       verification_status: "PARTIAL",
@@ -396,7 +492,7 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
     clicks: 0,
     engagements: row.conversations,
     sessions: 0,
-    leads_platform: row.conversations,
+    leads_platform: 0,
     leads_verified: row.leads.size,
     bookings_verified: row.bookings,
     conversions: row.bookings,
@@ -406,7 +502,11 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
     verification_status: row.partialRevenue ? "PARTIAL" : "VERIFIED",
     source_updated_at: nowIso,
     synced_at: nowIso,
-    metadata: { source: "Hospitality CRM + AI Receptionist", revenue_semantics: "booked upsell value only" },
+    metadata: {
+      source: "Hospitality CRM + AI Receptionist",
+      lead_semantics: "canonical hospitality_leads only; conversations are inquiries",
+      revenue_semantics: "booked upsell value only; not verified business revenue",
+    },
   }));
   if (metrics.length) {
     await db.from("marketing_daily_metrics").upsert(metrics, { onConflict: "metric_key" });
@@ -415,7 +515,14 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
     db.from("marketing_connectors").update({ status: "LIVE", auth_state: "NOT_REQUIRED", last_sync_at: nowIso, last_success_at: nowIso, last_record_count: conversations.length, last_error: null }).eq("id", "hospitality_crm"),
     db.from("marketing_connectors").update({ status: "LIVE", auth_state: "NOT_REQUIRED", last_sync_at: nowIso, last_success_at: nowIso, last_record_count: conversations.length + bookings.length, last_error: null }).eq("id", "ai_receptionist"),
   ]);
-  return { conversations: conversations.length, bookings: bookings.filter((row) => str(row.verification_status) === "verified").length, upsells: upsells.length, metricRows: metrics.length, attributionRows: events.length };
+  return {
+    conversations: conversations.length,
+    leads: leads.length,
+    bookings: bookings.filter((row) => str(row.verification_status).toLowerCase() === "verified").length,
+    upsells: upsells.length,
+    metricRows: metrics.length,
+    attributionRows: events.length,
+  };
 }
 
 async function syncPlanConnectorHealth(db: UntypedDb, nowIso: string) {
@@ -560,7 +667,7 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
   });
 
   let plan = { campaigns: 0, content: 0 };
-  let runtime = { conversations: 0, bookings: 0, upsells: 0, metricRows: 0, attributionRows: 0 };
+  let runtime = { conversations: 0, leads: 0, bookings: 0, upsells: 0, metricRows: 0, attributionRows: 0 };
   let runtimeError = "";
   try {
     await syncPlanConnectorHealth(db, nowIso);
@@ -569,7 +676,7 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
     await db.from("marketing_sync_runs").update({
       status: "success",
       completed_at: new Date().toISOString(),
-      records_read: runtime.conversations + runtime.bookings + runtime.upsells,
+      records_read: runtime.conversations + runtime.leads + runtime.bookings + runtime.upsells,
       records_written: runtime.metricRows + runtime.attributionRows,
       metadata: { plan_campaigns: plan.campaigns, plan_content: plan.content },
     }).eq("id", runtimeRunId);

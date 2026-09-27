@@ -29,6 +29,9 @@ jobs:
       - name: Kiểm tra attribution foundation
         run: npm run test:attribution-foundation
 
+      - name: Kiểm tra finance foundation
+        run: npm run test:finance-foundation
+
       - name: Kiểm tra build
         run: npm run build
         env:

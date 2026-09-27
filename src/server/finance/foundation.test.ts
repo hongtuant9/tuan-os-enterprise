@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  businessRangeEpoch,
   dedupeBySourceTransactionId,
   freshnessState,
+  reconcileCashbookTotals,
   outstandingAmount,
   summarizeCashflow,
   summarizeGrossProfit,
@@ -74,4 +76,43 @@ test("H: stale source is not VERIFIED live", () => {
   const now = new Date("2026-09-27T06:00:00Z");
   assert.equal(freshnessState("2026-09-27T05:30:00Z", 3_600_000, now), "VERIFIED");
   assert.equal(freshnessState("2026-09-27T03:00:00Z", 3_600_000, now), "NEED_VERIFY");
+});
+
+test("cashbook row totals must reconcile with header totals before VERIFIED", () => {
+  const result = reconcileCashbookTotals({
+    openingBalance: 1_000,
+    totalReceipts: 500,
+    totalPayments: -200,
+    closingBalance: 1_300,
+    rows: [
+      { amount: 300, isReceipt: true },
+      { amount: 100, isReceipt: false },
+    ],
+  });
+  assert.equal(result.headerBalanceReconciled, true);
+  assert.equal(result.rowsMatchHeader, false);
+  assert.equal(result.verified, false);
+});
+
+test("cashbook reconciliation accepts negative payment header when rows fully match", () => {
+  const result = reconcileCashbookTotals({
+    openingBalance: 1_000,
+    totalReceipts: 500,
+    totalPayments: -200,
+    closingBalance: 1_300,
+    rows: [
+      { amount: 500, isReceipt: true },
+      { amount: 200, isReceipt: false },
+    ],
+  });
+  assert.equal(result.rowPayments, 200);
+  assert.equal(result.verified, true);
+});
+
+test("date-only business range includes the entire UTC+7 end date", () => {
+  const start = businessRangeEpoch("2026-09-27", "start");
+  const end = businessRangeEpoch("2026-09-27", "end");
+  assert.ok(Date.parse("2026-09-26T17:00:00Z") >= start);
+  assert.ok(Date.parse("2026-09-27T16:59:59Z") <= end);
+  assert.ok(Date.parse("2026-09-27T17:00:00Z") > end);
 });

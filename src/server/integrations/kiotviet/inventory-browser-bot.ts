@@ -42,6 +42,7 @@ export type InventoryModuleSnapshot = {
   url: string;
   detail: string;
   headers?: string[];
+  cells?: string[][];
   rawRows?: string[];
 };
 
@@ -368,14 +369,22 @@ async function readModule(
         .filter(Boolean)
         .slice(0, 80);
 
-      const candidates = Array.from(
+      const rowElements = Array.from(
         document.querySelectorAll(
           "table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row,.bk-table tbody tr"
         )
-      )
-        .filter(visible)
+      ).filter(visible);
+      const candidates = rowElements
         .map((row) => normalize(row.textContent || ""))
         .filter(Boolean);
+      const cellRows = rowElements
+        .map((row) =>
+          Array.from(row.querySelectorAll("td,[role='gridcell'],.k-table-td"))
+            .filter(visible)
+            .map((cell) => normalize(cell.textContent || ""))
+        )
+        .filter((cells) => cells.length > 0)
+        .slice(0, 500);
 
       const rows = Array.from(new Set(candidates)).slice(0, 500);
       const body = normalize(document.body?.innerText || "");
@@ -384,6 +393,7 @@ async function readModule(
         title: document.title,
         body,
         headers,
+        cells: cellRows,
         rows,
       };
     });
@@ -402,6 +412,7 @@ async function readModule(
         url: data.href,
         detail: "Module page did not render readable content.",
         headers: [],
+        cells: [],
         rawRows: [],
       };
     }
@@ -424,6 +435,7 @@ async function readModule(
           ? `Readable; visible_rows=${data.rows.length}.`
           : "Readable; no visible data rows in current view.",
       headers: data.headers,
+      cells: data.cells,
       rawRows: data.rows,
     };
   } catch (error) {

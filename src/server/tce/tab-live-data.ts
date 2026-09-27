@@ -652,9 +652,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           : "NEED VERIFY: KiotViet invoice-outstanding candidate MTD = " + money(arCandidateOutstanding) +
             " · coverage " + arCandidateCoverage.toFixed(1) +
             "%. Chưa gồm/đối soát đầy đủ OTA settlement và receivable ngoài invoice.",
-        "Công nợ phải trả": foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
-          ? "NEED VERIFY: KiotViet Nhập hàng + Nhà cung cấp đã READ_VERIFIED; còn thiếu parser outstanding/payment để tính AP canonical."
-          : "NEED VERIFY: source Nhập hàng/Nhà cung cấp chưa READ_VERIFIED đầy đủ.",
+        "Công nợ phải trả": foundationReadiness.ap.structuredOutstandingReady
+          ? "VERIFIED: Purchase Orders Cần trả NCC đã reconcile với Supplier Nợ cần trả hiện tại."
+          : foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
+            ? "NEED VERIFY: KiotViet Nhập hàng + Nhà cung cấp READ_VERIFIED; structured outstanding chưa reconcile."
+            : "NEED VERIFY: source Nhập hàng/Nhà cung cấp chưa READ_VERIFIED đầy đủ.",
         "Nợ vay": debtSnapshot.state === "VERIFIED"
           ? "VERIFIED · FIN-HOSPITALITY-001 · đáo hạn " + (debtSnapshot.maturityDate ?? "NEED VERIFY") +
             " · source updated " + (debtSnapshot.lastSourceUpdate ?? "NEED VERIFY")
@@ -690,9 +692,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             : "MTD invoice outstanding " + money(arCandidateOutstanding) +
               " · coverage " + arCandidateCoverage.toFixed(1) +
               "% · full AR vẫn NEED VERIFY"],
-          ["AP source", foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
-            ? "READ_VERIFIED — Purchase Orders + Suppliers; structured outstanding parser còn thiếu"
-            : "NEED VERIFY — Purchase Orders/Suppliers source chưa đủ"],
+          ["AP source", foundationReadiness.ap.structuredOutstandingReady
+            ? "VERIFIED — Purchase Orders outstanding reconcile với Supplier debt"
+            : foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
+              ? "READ_VERIFIED — source đủ; structured outstanding reconciliation chưa PASS"
+              : "NEED VERIFY — Purchase Orders/Suppliers source chưa đủ"],
           ["Fallback ngoài source authority", "DISABLED"],
         ],
         financeBranches: [

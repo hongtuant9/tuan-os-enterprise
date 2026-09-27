@@ -634,6 +634,18 @@ async function cashbookSnapshot(page: Page) {
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
 
+  if (reportedTotalRows !== null && seen.size < reportedTotalRows) {
+    const allDomRows = await page.evaluate(() =>
+      Array.from(document.querySelectorAll(
+        "table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row"
+      ))
+        .map((row) => (row.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 1000)
+    ).catch(() => [] as string[]);
+    for (const row of allDomRows) seen.set(row, row);
+  }
+
   const rawRows = [...seen.values()];
   const parsedRows = rawRows.map(parseCashbookRow).filter((row): row is NonNullable<typeof row> => Boolean(row));
   const openingBalance = metric("Quỹ đầu kỳ");

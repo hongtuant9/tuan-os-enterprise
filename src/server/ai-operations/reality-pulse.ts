@@ -7,7 +7,7 @@ import { fetchFnbRevenueActual, fetchHotelRevenueActual } from "@/server/integra
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const LIVE_SHEET = "ACTUAL LIVE — 2026-09";
 
-type SourceState = "VERIFIED" | "UNAVAILABLE" | "ERROR";
+type SourceState = "VERIFIED" | "NEED_VERIFY" | "UNAVAILABLE" | "ERROR";
 
 export type RealityPulseResult = {
   ok: boolean;

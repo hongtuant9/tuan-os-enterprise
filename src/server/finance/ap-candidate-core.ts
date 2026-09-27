@@ -49,15 +49,15 @@ export function summarizeApSystem(
   if (poDueIndex < 0 || supplierDebtIndex < 0) {
     return {
       system, state: "NEED_VERIFY",
-      purchaseOrderRows: purchaseOrders.rowCount, supplierRows: suppliers.rowCount,
+      purchaseOrderRows: poCells.length, supplierRows: supplierCells.length,
       purchaseOrderOutstanding: null, supplierOutstanding: null, variance: null,
       reason: "Không map được field Cần trả NCC / Nợ cần trả hiện tại.",
     };
   }
 
-  const poCells = purchaseOrders.cells ?? [];
-  const supplierCells = suppliers.cells ?? [];
-  if (purchaseOrders.rowCount === 0 && suppliers.rowCount === 0) {
+  const poCells = (purchaseOrders.cells ?? []).filter((row) => /^PN\d+/i.test(String(row[0] ?? "").trim()));
+  const supplierCells = (suppliers.cells ?? []).filter((row) => /^NCC\d+/i.test(String(row[0] ?? "").trim()));
+  if (poCells.length === 0 && supplierCells.length === 0) {
     return {
       system, state: "NEED_VERIFY", purchaseOrderRows: 0, supplierRows: 0,
       purchaseOrderOutstanding: null, supplierOutstanding: null, variance: null,
@@ -67,7 +67,7 @@ export function summarizeApSystem(
 
   const poValues = poCells.map((row) => money(row[poDueIndex] ?? "")).filter((value): value is number => value !== null);
   const supplierValues = supplierCells.map((row) => money(row[supplierDebtIndex] ?? "")).filter((value): value is number => value !== null);
-  if (poValues.length !== purchaseOrders.rowCount || supplierValues.length !== suppliers.rowCount) {
+  if (poValues.length !== poCells.length || supplierValues.length !== supplierCells.length) {
     return {
       system, state: "NEED_VERIFY",
       purchaseOrderRows: purchaseOrders.rowCount, supplierRows: suppliers.rowCount,
@@ -84,8 +84,8 @@ export function summarizeApSystem(
   return {
     system,
     state: variance === 0 ? "VERIFIED" : "NEED_VERIFY",
-    purchaseOrderRows: purchaseOrders.rowCount,
-    supplierRows: suppliers.rowCount,
+    purchaseOrderRows: poCells.length,
+    supplierRows: supplierCells.length,
     purchaseOrderOutstanding,
     supplierOutstanding,
     variance,

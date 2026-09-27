@@ -64,7 +64,15 @@ function normalizeLabel(value: string) {
 
 export function extractTceCode(groupLabel: string) {
   const match = groupLabel.match(/\[TCE-([A-Z0-9]+)\]/i);
-  return match?.[1]?.toUpperCase() ?? null;
+  if (match?.[1]) return match[1].toUpperCase();
+  const normalized = groupLabel
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized === "phieu chi tien tra ncc" || normalized === "thanh toan ncc hang ton kho") return "N01";
+  return null;
 }
 
 export function resolveExpenseCode(groupLabel: string) {

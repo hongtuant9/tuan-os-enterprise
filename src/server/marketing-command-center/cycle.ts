@@ -571,15 +571,15 @@ async function writeRecommendations(db: UntypedDb, snapshot: Awaited<ReturnType<
       expires_at: new Date(now.getTime() + 7 * 86_400_000).toISOString(),
     });
   }
-  if (snapshot.totals.attributionCoverage !== null && snapshot.totals.attributionCoverage < 0.8) {
+  if (snapshot.totals.eventSourceCoverage !== null && snapshot.totals.eventSourceCoverage < 1) {
     recs.push({
-      recommendation_key: "MCC:ATTRIBUTION_COVERAGE",
+      recommendation_key: "MCC:EVENT_SOURCE_GAPS",
       category: "ATTRIBUTION",
-      severity: "ACTION",
-      title: "Tăng độ phủ Attribution",
-      summary: "Độ phủ source/UTM hiện dưới guardrail 80%; chưa đủ cơ sở so sánh hiệu quả giữa các kênh.",
-      evidence: { coverage: snapshot.totals.attributionCoverage },
-      recommended_action: "Chuẩn hóa UTM/source capture tại mọi CTA và mapping conversation → booking trước khi đánh giá channel winner.",
+      severity: "WATCH",
+      title: "Có event chưa có source evidence",
+      summary: "Event source coverage chưa đầy đủ. Đây là data-quality signal, không phải revenue attribution coverage.",
+      evidence: { event_source_coverage: snapshot.totals.eventSourceCoverage },
+      recommended_action: "Bổ sung source/UTM/self-reported evidence tại điểm thu thập; không đặt target attribution coverage khi chưa có baseline revenue linkage.",
       action_class: "SAFE_INTERNAL",
       approval_required: false,
       status: "OPEN",

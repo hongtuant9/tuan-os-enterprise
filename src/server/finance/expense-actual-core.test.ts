@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractTceCode, summarizeExpenseActualRows } from "./expense-actual-core.ts";
+import { extractTceCode, resolveExpenseCode, summarizeExpenseActualRows } from "./expense-actual-core.ts";
 
 test("expense mapper excludes non-P&L cash out", () => {
   const result = summarizeExpenseActualRows([
@@ -31,11 +31,25 @@ test("expense mapper keeps broad groups NEED_VERIFY", () => {
 
 test("expense mapper flags payment rows without canonical taxonomy code", () => {
   const result = summarizeExpenseActualRows([
-    { id:"1", transDate:"01/09/2026", amount:300_000, isReceipt:false, groupLabel:"Chi phí khác legacy", status:"Đã thanh toán" },
+    { id:"1", transDate:"01/09/2026", amount:300_000, isReceipt:false, groupLabel:"Legacy custom group", status:"Đã thanh toán" },
   ]);
   assert.equal(result.unknownExpenseRows, 1);
 });
 
 test("extractTceCode is case-insensitive", () => {
   assert.equal(extractTceCode("[tce-h01] Hoa hồng OTA"), "H01");
+});
+
+
+test("legacy KiotViet group names map to canonical TCE codes", () => {
+  assert.equal(resolveExpenseCode("Chi phí điện"), "C02");
+  assert.equal(resolveExpenseCode("Chi phí khác có giải trình"), "C11");
+  assert.equal(resolveExpenseCode("Gửi tiền vào ngân hàng"), "N04");
+});
+
+test("unknown legacy labels remain visible for reconciliation", () => {
+  const result = summarizeExpenseActualRows([
+    { id:"1", transDate:"01/09/2026", amount:100_000, isReceipt:false, groupLabel:"Legacy custom group", status:"Đã thanh toán" },
+  ]);
+  assert.deepEqual(result.unknownGroupLabels, ["Legacy custom group"]);
 });

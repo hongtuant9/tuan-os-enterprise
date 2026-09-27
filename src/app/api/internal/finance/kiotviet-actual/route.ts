@@ -42,7 +42,9 @@ export async function GET(request: Request) {
     cashflow: {
       hotel: hotelCashflow,
       fnb: fnbCashflow,
-      expenseReadReady: hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED",
+      cashflowReadReady: hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED",
+      expenseReadReady: false,
+      accountingRule: "Expense != Cash Out; Revenue != Cash In; Cashflow must not be used as P&L.",
       fallbackOutsideKiotViet: false,
     },
   }, {

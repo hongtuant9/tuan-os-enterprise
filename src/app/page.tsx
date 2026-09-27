@@ -14,6 +14,7 @@ import {
   fetchFnbCashflowActual,
   fetchHotelCashflowActual,
 } from "@/server/integrations/kiotviet/cashflow-actual";
+import { summarizeCashflow } from "@/server/finance/foundation";
 import {
   BUSINESS_TIME_ZONE,
   businessDateKey,
@@ -247,21 +248,17 @@ export default async function Home({
     (hotel.state === "VERIFIED" ? hotel.collected : 0) +
     (fnb.state === "VERIFIED" ? fnb.collected : 0);
 
-  // Financial runtime authority: KiotViet Hotel + KiotViet F&B only.
-  // Expense/profit become Actual only when BOTH cashflow feeds are VERIFIED.
-  const cashflowReadReady = hotelCashflow.state === "VERIFIED" && fnbCashflow.state === "VERIFIED";
-  const costRecorded = cashflowReadReady
-    ? [...hotelCashflow.rows, ...fnbCashflow.rows]
-        .filter((row) => row.isReceipt === false && row.usedForFinancialReporting !== false && !/hủy|cancel/i.test(row.status))
-        .reduce((sum, row) => sum + row.amount, 0)
-    : 0;
-  const profitEstimate = cashflowReadReady ? totalRevenue - costRecorded : 0;
-  const marginEstimate = cashflowReadReady && totalRevenue ? (profitEstimate / totalRevenue) * 100 : 0;
-  const profitVerified = cashflowReadReady;
-  const costState = cashflowReadReady ? "PARTIAL" as const : "NEED_VERIFY" as const;
-  const costLabel = cashflowReadReady
-    ? "Chỉ KiotViet · Dòng tiền thực tế"
-    : "Chỉ KiotViet · Dữ liệu dòng tiền chưa được xác minh";
+  // Cashflow is not P&L: Expense ≠ Cash Out and Revenue ≠ Cash In.
+  // Until an authoritative Expense/COGS layer is VERIFIED, profit and margin must fail closed.
+  const cashflowSummary = summarizeCashflow([hotelCashflow, fnbCashflow]);
+  const costRecorded = 0;
+  const profitEstimate = 0;
+  const marginEstimate = 0;
+  const profitVerified = false;
+  const costState = "NEED_VERIFY" as const;
+  const costLabel = cashflowSummary.state === "VERIFIED"
+    ? "Cashflow VERIFIED nhưng không được dùng thay Expense Actual"
+    : "Expense Actual chưa VERIFIED; Cashflow đang HOLD/NEED VERIFY";
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;

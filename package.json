@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:overdue": "node --experimental-strip-types --test src/server/tasks/overdue.test.ts",
+    "test:finance-foundation": "node --experimental-strip-types --test src/server/finance/foundation.test.ts",
     "seed:users": "node scripts/seed-users.mjs"
   },
   "dependencies": {

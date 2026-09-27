@@ -147,3 +147,119 @@ export function freshnessState(
   if (!Number.isFinite(timestamp)) return "NEED_VERIFY";
   return now.getTime() - timestamp <= staleAfterMs ? "VERIFIED" : "NEED_VERIFY";
 }
+
+
+export type FinancialDataQualityRow = {
+  sourceSystem: string;
+  sourceId: string | null | undefined;
+  businessUnit: string | null | undefined;
+  amount: number | null | undefined;
+  occurredAt: string | null | undefined;
+  syncedAt: string | null | undefined;
+};
+
+export function auditFinancialDataQuality(
+  rows: FinancialDataQualityRow[],
+  options: {
+    knownBusinessUnits: string[];
+    staleAfterMs: number;
+    now?: Date;
+  },
+) {
+  const now = options.now ?? new Date();
+  const knownUnits = new Set(options.knownBusinessUnits.map((x) => x.trim().toLowerCase()));
+  const seen = new Set<string>();
+  let duplicateCount = 0;
+  let missingSourceIdCount = 0;
+  let missingBusinessUnitCount = 0;
+  let invalidAmountCount = 0;
+  let futureDateCount = 0;
+  let staleCount = 0;
+  let negativeAmountCount = 0;
+
+  for (const row of rows) {
+    const sourceId = String(row.sourceId ?? "").trim();
+    if (!sourceId) {
+      missingSourceIdCount += 1;
+    } else {
+      const key = row.sourceSystem.trim().toLowerCase() + "|" + sourceId;
+      if (seen.has(key)) duplicateCount += 1;
+      seen.add(key);
+    }
+
+    const unit = String(row.businessUnit ?? "").trim().toLowerCase();
+    if (!unit || !knownUnits.has(unit)) missingBusinessUnitCount += 1;
+
+    if (typeof row.amount !== "number" || !Number.isFinite(row.amount)) {
+      invalidAmountCount += 1;
+    } else if (row.amount < 0) {
+      negativeAmountCount += 1;
+    }
+
+    const occurred = Date.parse(String(row.occurredAt ?? ""));
+    if (Number.isFinite(occurred) && occurred > now.getTime()) futureDateCount += 1;
+
+    if (freshnessState(row.syncedAt, options.staleAfterMs, now) !== "VERIFIED") {
+      staleCount += 1;
+    }
+  }
+
+  const hardFailures =
+    duplicateCount +
+    missingSourceIdCount +
+    invalidAmountCount +
+    futureDateCount;
+  const warnings =
+    missingBusinessUnitCount +
+    staleCount +
+    negativeAmountCount;
+
+  return {
+    totalRows: rows.length,
+    duplicateCount,
+    missingSourceIdCount,
+    missingBusinessUnitCount,
+    invalidAmountCount,
+    futureDateCount,
+    staleCount,
+    negativeAmountCount,
+    status: hardFailures > 0 ? "FAIL" as const : warnings > 0 ? "NEED_VERIFY" as const : "PASS" as const,
+  };
+}
+
+export type OutstandingItem = {
+  amount: number;
+  paidAmount: number;
+  dueDate?: string | null;
+  status?: string | null;
+  verificationStatus: VerificationState;
+};
+
+export function summarizeOutstanding(items: OutstandingItem[], now = new Date()) {
+  if (!items.length || items.some((item) => item.verificationStatus !== "VERIFIED")) {
+    return {
+      state: "NEED_VERIFY" as const,
+      outstanding: null,
+      overdue: null,
+      itemCount: items.length,
+    };
+  }
+
+  let outstanding = 0;
+  let overdue = 0;
+  for (const item of items) {
+    const status = String(item.status ?? "").trim().toUpperCase();
+    if (["PAID","CLOSED","CANCELLED","CANCELED","VOID"].includes(status)) continue;
+    const value = outstandingAmount(item.amount, item.paidAmount);
+    outstanding += value;
+    const due = item.dueDate ? Date.parse(item.dueDate) : NaN;
+    if (value > 0 && Number.isFinite(due) && due < now.getTime()) overdue += value;
+  }
+
+  return {
+    state: "VERIFIED" as const,
+    outstanding,
+    overdue,
+    itemCount: items.length,
+  };
+}

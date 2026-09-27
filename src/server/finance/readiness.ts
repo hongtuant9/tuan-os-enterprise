@@ -3,6 +3,7 @@ import "server-only";
 import { google } from "googleapis";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 import { readInventoryBotSummary } from "@/server/integrations/kiotviet/inventory-browser-bot";
+import { readAccountsPayableCandidate } from "@/server/finance/ap-candidate";
 
 const FIN_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const COST_ID = "17J1_9FzcmirYxPVlacz3wnS6iBNSWbMrJbjVC4XdSbw";
@@ -52,7 +53,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
   try {
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClient();
     const sheets = google.sheets({ version: "v4", auth });
-    const [fin, cost, fnbInventory, hotelInventory] = await Promise.all([
+    const [fin, cost, fnbInventory, hotelInventory, apCandidate] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: FIN_ID,
         ranges: ["'ACTUAL LIVE — 2026-09'!A1:L120"],
@@ -65,6 +66,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       }),
       readInventoryBotSummary("FNB"),
       readInventoryBotSummary("HOTEL"),
+      readAccountsPayableCandidate(),
     ]);
 
     const finRows = (fin.data.valueRanges?.[0]?.values ?? []) as unknown[][];
@@ -138,13 +140,16 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       ap: {
         purchaseOrdersReadable,
         suppliersReadable,
-        structuredOutstandingReady: false,
+        structuredOutstandingReady: apCandidate.state === "VERIFIED",
       },
       checkedAt,
       notes: [
         "Expense coverage excludes Budget/Forecast and counts only required Actual rows.",
         "COGS production-ready requires explicit VERIFIED/GO/production status; test/pending BOM is not accepted.",
-        "Readable Purchase Orders/Suppliers proves source access only; AP remains NEED_VERIFY until outstanding/payment semantics are parsed and reconciled.",
+        apCandidate.state === "VERIFIED"
+          ? "AP candidate reconciled: Purchase Orders Cần trả NCC = Supplier Nợ cần trả hiện tại for all readable systems."
+          : "Readable Purchase Orders/Suppliers proves source access; AP remains NEED_VERIFY until visible structured rows reconcile. " +
+            apCandidate.systems.map((item) => item.system + ": " + item.reason).join(" | "),
       ],
     };
   } catch {

@@ -41,6 +41,7 @@ export type InventoryModuleSnapshot = {
   contentHash: string | null;
   url: string;
   detail: string;
+  rawRows?: string[];
 };
 
 export type InventoryBotSnapshot = {
@@ -388,6 +389,7 @@ async function readModule(
         contentHash: null,
         url: data.href,
         detail: "Module page did not render readable content.",
+        rawRows: [],
       };
     }
 
@@ -408,6 +410,7 @@ async function readModule(
         data.rows.length > 0
           ? `Readable; visible_rows=${data.rows.length}.`
           : "Readable; no visible data rows in current view.",
+      rawRows: data.rows,
     };
   } catch (error) {
     return {
@@ -419,6 +422,7 @@ async function readModule(
       contentHash: null,
       url: target,
       detail: error instanceof Error ? error.message : "Unknown browser error",
+      rawRows: [],
     };
   }
 }

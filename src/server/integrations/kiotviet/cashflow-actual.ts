@@ -162,24 +162,33 @@ async function browserCashflowFallback(
   const toMs = businessRangeEpoch(to, "end");
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
 
+  const accountingByKey = new Map<string, NonNullable<typeof snapshot.cashbook>["accountingRows"][number]>();
+  for (const meta of snapshot.cashbook.accountingRows ?? []) {
+    accountingByKey.set(meta.id, meta);
+    accountingByKey.set(meta.code, meta);
+  }
+
   const normalized = snapshot.cashbook.rows
     .map((row) => ({ row, ts: browserDateToEpoch(row.transDate) }))
     .filter(({ ts }) => Number.isFinite(ts) && ts >= fromMs && ts <= toMs)
-    .map(({ row }) => ({
-      id: row.id,
-      code: row.id,
-      branchId: "",
-      transDate: row.transDate,
-      amount: row.amount,
-      isReceipt: row.isReceipt,
-      usedForFinancialReporting: null,
-      cashFlowGroupId: "",
-      cashFlowGroupName: row.groupLabel,
-      method: "",
-      partnerName: "",
-      description: "",
-      status: row.status,
-    }));
+    .map(({ row }) => {
+      const meta = accountingByKey.get(row.id);
+      return {
+        id: meta?.id || row.id,
+        code: meta?.code || row.id,
+        branchId: meta?.branchId || "",
+        transDate: row.transDate,
+        amount: row.amount,
+        isReceipt: row.isReceipt,
+        usedForFinancialReporting: meta?.usedForFinancialReporting ?? null,
+        cashFlowGroupId: meta?.cashFlowGroupId || "",
+        cashFlowGroupName: meta?.cashGroup || row.groupLabel,
+        method: meta?.method || "",
+        partnerName: "",
+        description: meta?.origin || "",
+        status: row.status,
+      };
+    });
 
   return {
     source,

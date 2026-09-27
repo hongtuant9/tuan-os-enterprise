@@ -712,6 +712,51 @@ async function cashbookSnapshot(page: Page) {
     for (const row of allDomRows) seen.set(row, row);
   }
 
+  // Kendo Hotel uses a virtual grid that may ignore programmatic scrollTop updates.
+  // Fall back to real wheel input over the scroll container and collect every rendered window.
+  if (reportedTotalRows !== null && seen.size < reportedTotalRows) {
+    const virtualBox = await page.evaluate(() => {
+      const candidates = Array.from(document.querySelectorAll(
+        ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap"
+      )) as HTMLElement[];
+      const scroller = candidates.find((el) => {
+        const style = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 20 &&
+          rect.height > 20 &&
+          el.scrollHeight > el.clientHeight + 2
+        );
+      });
+      if (!scroller) return null;
+      const rect = scroller.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + Math.min(rect.height / 2, 120),
+        max: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        clientHeight: scroller.clientHeight,
+      };
+    }).catch(() => null);
+
+    if (virtualBox) {
+      await page.mouse.move(virtualBox.x, virtualBox.y);
+      await page.mouse.wheel({ deltaY: -10_000 });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      for (const row of await cashbookRows(page)) seen.set(row, row);
+
+      const step = Math.max(50, Math.floor(virtualBox.clientHeight * 0.35));
+      const attempts = Math.min(40, Math.ceil(virtualBox.max / step) + 4);
+      for (let attempt = 0; attempt < attempts && seen.size < reportedTotalRows; attempt += 1) {
+        await page.mouse.wheel({ deltaY: step });
+        await new Promise((resolve) => setTimeout(resolve, 220));
+        const wheelRows = await cashbookRows(page);
+        for (const row of wheelRows) seen.set(row, row);
+      }
+    }
+  }
+
   const rawRows = [...seen.values()];
   const parsedRows = rawRows.map(parseCashbookRowText).filter((row): row is NonNullable<typeof row> => Boolean(row));
   const unparsedRowShapes = rawRows

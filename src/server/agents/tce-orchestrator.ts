@@ -73,7 +73,7 @@ function financialIntent(message: string): boolean {
 async function loadRuntimeContext(agent: TceAgentDefinition): Promise<RuntimeContext> {
   const container = getAdminContainer();
   const [taskRows, syncRecords, syncSources, agents, receptionist] = await Promise.all([
-    container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
+    container.db.from("tasks").select("id,title,unit,status,priority,due_date,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
     container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.agents.list(),

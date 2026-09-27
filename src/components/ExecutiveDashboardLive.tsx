@@ -10,6 +10,12 @@ export type ExecutiveAction = {
   owner: string;
   due?: string | null;
   status: string;
+  blocker?: string;
+  nextAction?: string;
+  evidenceToClose?: string;
+  overdue: boolean;
+  overdueDays: number;
+  governanceGap?: string;
 };
 
 export type ExecutiveSource = {
@@ -365,7 +371,22 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
               <div className="col-span-2 rounded-[7px] border border-[#e1eaf4] p-2 min-[1500px]:col-span-1">
                 <b className="text-[9px] text-[#244368]">Ngoại lệ cần chú ý ({props.operations.exceptions.length})</b>
                 {props.operations.homestaySharedOpen > 0 ? <p className="mt-1 text-[7px] text-[#b26d00]">Có {props.operations.homestaySharedOpen} việc Homestay dùng chung chưa gán riêng Lavender/Ruby.</p> : null}
-                <div className="mt-1 divide-y divide-[#edf2f7]">{props.operations.exceptions.slice(0,4).map(x=><div key={x.id} className="flex h-[24px] items-center gap-2 text-[7px]"><span className="h-2 w-2 rounded-full bg-[#f13a48]"/><span className="min-w-0 flex-1 truncate">{x.title}</span><span className="text-[#7e8da3]">{x.unit}</span></div>)}</div>
+                <div className="mt-1 max-h-[250px] divide-y divide-[#edf2f7] overflow-y-auto">
+                  {props.operations.exceptions.map((x) => (
+                    <div key={x.id} className="py-2 text-[7px] text-[#425c80]">
+                      <div className="flex items-center gap-2">
+                        <span className={"h-2 w-2 rounded-full " + (x.overdue ? "bg-[#f13a48]" : "bg-[#e3a008]")}/>
+                        <b className="min-w-0 flex-1 truncate">{x.id} · {x.title}</b>
+                        {x.overdue ? <span className="font-bold text-[#d52f3f]">Quá hạn {x.overdueDays} ngày</span> : null}
+                      </div>
+                      <p className="mt-1">Owner: {x.owner} · Hạn: {x.due || "—"} · Trạng thái: {x.status}</p>
+                      {x.blocker ? <p className="mt-1 truncate">Blocker: {x.blocker}</p> : null}
+                      <p className="mt-1 truncate">Next Action: {x.nextAction || "NEED VERIFY"}</p>
+                      <p className="mt-1 truncate">Evidence-to-close: {x.evidenceToClose || "NEED VERIFY"}</p>
+                      {x.governanceGap ? <p className="mt-1 font-bold text-[#b36d00]">Governance gap: {x.governanceGap}</p> : null}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </Panel>

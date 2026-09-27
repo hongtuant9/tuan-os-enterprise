@@ -133,7 +133,7 @@ export default async function AiManagerPage({
   const requestedTaskId = params.taskId?.trim() || null;
   const container = await getRequestContainer();
   const [{ data: taskRows }, { data: activityRows }, { data: syncRows }, { data: syncSources }] = await Promise.all([
-    container.db.from("tasks").select("id,title,unit,status,priority,updated_at").order("updated_at", { ascending: false }),
+    container.db.from("tasks").select("id,title,unit,status,priority,due_date,updated_at").order("updated_at", { ascending: false }),
     container.db.from("activity_logs").select("id,agent,message,type,created_at").order("created_at", { ascending: false }).limit(8),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("sync_sources").select("key,status,last_synced_at,last_error").in("key", ["task-001", "approval-001", "l3-channel-tracking"]),

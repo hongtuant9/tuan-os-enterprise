@@ -14,6 +14,13 @@ import {
   fetchFnbCashflowActual,
   fetchHotelCashflowActual,
 } from "@/server/integrations/kiotviet/cashflow-actual";
+import {
+  BUSINESS_TIME_ZONE,
+  businessDateKey,
+  isTaskOverdue,
+  isTerminalTaskStatus,
+  overdueDays,
+} from "@/server/tasks/overdue";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,14 +28,7 @@ export const revalidate = 0;
 type PeriodKey = "today" | "7d" | "month" | "year";
 
 function localDateKey(now: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return get("year") + "-" + get("month") + "-" + get("day");
+  return businessDateKey(now);
 }
 
 function addDays(dateKey: string, delta: number) {
@@ -54,7 +54,7 @@ function periodBounds(period: PeriodKey, now: Date) {
     Math.round((new Date(today + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86400000),
   );
   const timeParts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
+    timeZone: BUSINESS_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -99,21 +99,27 @@ async function safeFnb(from: string, to: string) {
   }
 }
 
-function isOverdue(dueDate: string | null | undefined, today: string) {
-  if (!dueDate) return false;
-  const normalized = dueDate.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) && normalized < today;
-}
-
-function toAction(item: ReturnType<typeof buildManagerItems>[number]): ExecutiveAction {
+function toAction(item: ReturnType<typeof buildManagerItems>[number], today: string): ExecutiveAction {
+  const overdue = isTaskOverdue(item.dueDate, item.status, today);
+  const governanceGaps = [
+    !item.owner ? "OWNER" : "",
+    !item.nextAction ? "NEXT_ACTION" : "",
+    !item.evidenceToClose ? "EVIDENCE_TO_CLOSE" : "",
+  ].filter(Boolean);
   return {
     id: item.id,
     priority: item.priority,
     title: vietnameseTaskTitle(item.title),
     unit: "TCE",
-    owner: item.owner || item.agent || "Trợ lý Chánh văn phòng AI",
+    owner: item.owner || "NEED VERIFY",
     due: item.dueDate,
-    status: item.pendingCeoApproval ? "Chờ quyết định" : item.status === "BLOCKED" ? "Bị chặn" : item.status === "IN_PROGRESS" ? "Đang theo dõi" : "Chờ xử lý",
+    status: item.pendingCeoApproval ? "Chờ quyết định" : item.status === "BLOCKED" ? "Bị chặn" : item.status === "IN_PROGRESS" ? "Đang theo dõi" : item.status,
+    blocker: item.blocker,
+    nextAction: item.nextAction,
+    evidenceToClose: item.evidenceToClose,
+    overdue,
+    overdueDays: overdue ? overdueDays(item.dueDate, today) : 0,
+    governanceGap: governanceGaps.length ? governanceGaps.join(", ") : undefined,
   };
 }
 
@@ -203,15 +209,14 @@ export default async function Home({
       .from("sync_sources")
       .select("key,status,last_synced_at,last_error,schedule_interval_minutes")
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
-    container.db.from("tasks").select("id,title,unit,status,priority,updated_at"),
+    container.db.from("tasks").select("id,title,unit,status,priority,due_date,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
     fetchHotelCashflowActual(bounds.from, bounds.to),
     fetchFnbCashflowActual(bounds.from, bounds.to),
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
-  const closedStatuses = new Set(["DONE", "SUPERSEDED", "INACTIVE", "CANCELLED", "CANCELED"]);
-  const openItems = managerItems.filter((item) => !closedStatuses.has(item.status));
+  const openItems = managerItems.filter((item) => !isTerminalTaskStatus(item.status));
   const pendingApprovals = approvals.filter((item) => item.status === "pending");
   const decisionIds = new Set(
     openItems.filter((item) => item.pendingCeoApproval).map((item) => item.id),
@@ -219,12 +224,14 @@ export default async function Home({
   const decisions = pendingApprovals.length + decisionIds.size;
   const unassigned = openItems.filter((item) => !item.owner && !item.agent).length;
   const inProgress = openItems.filter((item) => item.status === "IN_PROGRESS").length;
-  const overdue = openItems.filter((item) => isOverdue(item.dueDate, today)).length;
+  const overdueItems = openItems.filter((item) => isTaskOverdue(item.dueDate, item.status, today));
+  const overdue = overdueItems.length;
   const priorityRank: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
-  const actionItems = [...openItems]
+  const allActionItems = [...openItems]
     .sort((a, b) => (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9))
-    .slice(0, 12)
-    .map(toAction);
+    .map((item) => toAction(item, today));
+  const actionItems = allActionItems.slice(0, 12);
+  const exceptionItems = allActionItems.filter((item) => item.overdue || item.priority === "P0" || item.priority === "P1");
 
   const homestayRevenue = hotel.state === "VERIFIED" ? hotel.revenue : 0;
   const hotelBranches = hotel.state === "VERIFIED" ? hotel.branchBreakdown : [];
@@ -359,7 +366,7 @@ export default async function Home({
             homestaySharedOpen: buckets.homestayShared,
             cozyOpen: buckets.cozy,
             hrOpen: buckets.hr,
-            exceptions: actionItems.filter((item) => item.priority === "P0" || item.priority === "P1"),
+            exceptions: exceptionItems,
           }}
           system={{
             verified: verifiedSources,

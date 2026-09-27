@@ -1,4 +1,5 @@
 import type { AiOpsAgent, OperationStatus } from "./types";
+import { businessDateKey, isTaskOverdue } from "@/server/tasks/overdue";
 
 export type AuthorityState = "verified" | "stale" | "unavailable";
 
@@ -19,6 +20,7 @@ export interface ManagerWorkItem {
   dependency?: string;
   nextAction?: string;
   dueDate?: string;
+  evidenceToClose?: string;
   executionGate?: string;
   owner?: string;
   updatedAt?: string;
@@ -76,7 +78,7 @@ export function buildManagerBrief(
     .filter((source) => source.state !== "verified")
     .map((source) => source.authority);
 
-  const now = Date.parse(generatedAt);
+  const currentBusinessDate = businessDateKey(new Date(generatedAt));
   const parseDue = (value?: string) => {
     if (!value) return Number.POSITIVE_INFINITY;
     const trimmed = value.trim();
@@ -104,8 +106,8 @@ export function buildManagerBrief(
     if (priorityDelta !== 0) return priorityDelta;
     const aDue = dueRank(a);
     const bDue = dueRank(b);
-    const aOverdue = Number.isFinite(aDue) && aDue <= now;
-    const bOverdue = Number.isFinite(bDue) && bDue <= now;
+    const aOverdue = isTaskOverdue(a.dueDate, a.status, currentBusinessDate);
+    const bOverdue = isTaskOverdue(b.dueDate, b.status, currentBusinessDate);
     if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
     if (aDue !== bDue) return aDue - bDue;
     return updatedRank(a) - updatedRank(b);

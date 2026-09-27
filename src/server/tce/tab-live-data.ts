@@ -21,6 +21,7 @@ import { isTaskOverdue } from "@/server/tasks/overdue";
 import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
+import { readHospitalityExpenseSnapshot } from "@/server/finance/hospitality-expense-ssot";
 
 export type TceTabScreen =
   | "business"
@@ -322,7 +323,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, expenseSnapshot] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
@@ -333,6 +334,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       readFinanceBotSummary("HOTEL"),
       readFinanceBotSummary("FNB"),
       readHospitalityDebtSnapshot(),
+      readHospitalityExpenseSnapshot(),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -382,8 +384,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     // until fund/account semantics are mapped and reconciled.
     const cashBalanceActual: number | null = null;
     // Accounting guardrail: Cash Out is not Expense/COGS. Do not derive P&L from cashflow.
-    const costClassificationReady = false;
-    const periodCostActual = 0;
+    const costClassificationReady = expenseSnapshot.state === "VERIFIED";
+    const periodCostActual = expenseSnapshot.knownActualVnd;
     const periodProfitActual: number | null = null;
     const periodMarginActual: number | null = null;
 
@@ -392,7 +394,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
-          "Chi phí": costClassificationReady ? money(periodCostActual) : "NEED VERIFY",
+          "Chi phí": costClassificationReady
+            ? money(periodCostActual)
+            : expenseSnapshot.knownActualVnd > 0
+              ? "NEED VERIFY · known " + money(expenseSnapshot.knownActualVnd)
+              : "NEED VERIFY",
           "Lợi nhuận gộp": periodProfitActual === null ? "NEED VERIFY" : money(periodProfitActual),
           "Biên lợi nhuận": periodMarginActual === null ? "NEED VERIFY" : pct(periodMarginActual),
           "Công suất phòng": pct(stats.averageOccupancy),
@@ -400,7 +406,12 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": "NEED VERIFY: Expense Actual chưa có calculation source đủ authority; Cash Out không được dùng thay Expense.",
+          "Chi phí": expenseSnapshot.state === "VERIFIED"
+            ? "VERIFIED · FIN-HOSPITALITY-001 · " + expenseSnapshot.dataPeriod
+            : "NEED VERIFY: FIN-HOSPITALITY-001 known Actual=" + money(expenseSnapshot.knownActualVnd) +
+              "; temporary=" + money(expenseSnapshot.tempActualVnd) +
+              "; missing required=" + expenseSnapshot.missingRequiredCount +
+              ". Cash Out không được dùng thay Expense.",
           "Lợi nhuận gộp": "NEED VERIFY: cần Net Revenue + COGS VERIFIED; không suy từ cashflow.",
           "Biên lợi nhuận": "NEED VERIFY: chỉ tính khi Gross Profit và COGS coverage đủ.",
           "Công suất phòng": "Property runtime",
@@ -592,7 +603,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-        "Chi phí vận hành": "NEED VERIFY",
+        "Chi phí vận hành": expenseSnapshot.state === "VERIFIED"
+          ? money(expenseSnapshot.knownActualVnd)
+          : expenseSnapshot.knownActualVnd > 0
+            ? "NEED VERIFY · known " + money(expenseSnapshot.knownActualVnd)
+            : "NEED VERIFY",
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
         "Cash Out": cashflowSummary.cashOut === null ? "NEED VERIFY" : money(cashflowSummary.cashOut),
         "Dòng tiền ròng": cashflowSummary.netCashFlow === null ? "NEED VERIFY" : money(cashflowSummary.netCashFlow),
@@ -607,7 +622,14 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
-        "Chi phí vận hành": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
+        "Chi phí vận hành": expenseSnapshot.state === "VERIFIED"
+          ? "VERIFIED · FIN-HOSPITALITY-001 · period=" + expenseSnapshot.dataPeriod
+          : "NEED VERIFY: known Actual=" + money(expenseSnapshot.knownActualVnd) +
+            "; temporary=" + money(expenseSnapshot.tempActualVnd) +
+            "; evidence rows=" + expenseSnapshot.evidenceRowCount +
+            "; missing required=" + expenseSnapshot.missingRequiredCount +
+            "; source updated=" + (expenseSnapshot.lastSourceUpdate ?? "NEED VERIFY") +
+            ". Không dùng Cash Out thay Expense.",
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
@@ -640,7 +662,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             : unknownDirectionCount > 0
               ? "NEED VERIFY — " + unknownDirectionCount + " giao dịch chưa xác định Thu/Chi"
               : "VERIFIED — dùng cho Cash In/Out, không dùng thay Expense"],
-          ["Expense Actual", "NEED VERIFY — chưa có canonical Expense source đủ authority"],
+          ["Expense Actual", expenseSnapshot.state === "VERIFIED"
+            ? "VERIFIED — " + money(expenseSnapshot.knownActualVnd)
+            : "NEED VERIFY — known " + money(expenseSnapshot.knownActualVnd) +
+              "; temp " + money(expenseSnapshot.tempActualVnd) +
+              "; missing required " + expenseSnapshot.missingRequiredCount],
           ["COGS / Gross Profit", "NEED VERIFY — COST-001 còn TEST/coverage chưa đủ production"],
           ["Fallback ngoài source authority", "DISABLED"],
         ],

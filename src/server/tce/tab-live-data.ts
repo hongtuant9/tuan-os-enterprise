@@ -17,6 +17,7 @@ import {
 } from "@/server/integrations/kiotviet/cashflow-taxonomy";
 import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-center/service";
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
+import { isTaskOverdue } from "@/server/tasks/overdue";
 
 export type TceTabScreen =
   | "business"
@@ -273,12 +274,6 @@ function priorityRank(priority: string) {
   if (priority === "high" || priority === "P0") return 0;
   if (priority === "medium" || priority === "P1") return 1;
   return 2;
-}
-
-function isOverdue(dueDate: string | null | undefined, today: string) {
-  if (!dueDate) return false;
-  const normalized = dueDate.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) && normalized < today;
 }
 
 function result(
@@ -863,7 +858,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     ]);
     const open = tasks.filter((t) => t.status !== "done");
     const done = tasks.filter((t) => t.status === "done");
-    const overdue = open.filter((t) => isOverdue(t.dueDate, today));
+    const overdue = open.filter((t) => isTaskOverdue(t.dueDate, t.status, today));
     const blocked = open.filter((t) => t.status === "blocked");
     const rows = [...open]
       .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))

@@ -15,6 +15,7 @@ export type TaskMirrorLite = {
   unit: string;
   status: string;
   priority: string;
+  due_date: string | null;
   updated_at: string;
 };
 
@@ -144,7 +145,8 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
     const blocker = first(fields, "BLOCKER");
     const dependency = first(fields, "DEPENDENCY");
     const nextAction = first(fields, "NEXT_ACTION");
-    const dueDate = first(fields, "DUE_DATE");
+    const dueDate = task.due_date || first(fields, "DUE_DATE");
+    const evidenceToClose = first(fields, "RESULT_LINK");
     const executionGate = first(fields, "EXECUTION_GATE");
     const owner = first(fields, "OWNER");
     const taskApprovalId = first(fields, "APPROVAL_ID");
@@ -186,6 +188,7 @@ export function buildManagerItems(tasks: TaskMirrorLite[], records: SyncRecordLi
       dependency: dependency || undefined,
       nextAction: nextAction || undefined,
       dueDate: dueDate || undefined,
+      evidenceToClose: evidenceToClose || undefined,
       executionGate: executionGate || undefined,
       owner: owner || undefined,
       updatedAt: task.updated_at,

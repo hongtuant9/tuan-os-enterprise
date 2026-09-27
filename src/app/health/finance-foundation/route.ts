@@ -10,6 +10,7 @@ import {
   fetchFnbCashflowActual,
   fetchHotelCashflowActual,
 } from "@/server/integrations/kiotviet/cashflow-actual";
+import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export async function GET() {
   const now = new Date();
   const today = businessDate(now);
   const from = today.slice(0, 7) + "-01";
-  const [hotelRevenue, fnbRevenue, hotelCashflow, fnbCashflow, readiness, debt] =
+  const [hotelRevenue, fnbRevenue, hotelCashflow, fnbCashflow, readiness, debt, hotelBrowser, fnbBrowser] =
     await Promise.all([
       fetchHotelRevenueActual(from, today),
       fetchFnbRevenueActual(from, today),
@@ -37,6 +38,8 @@ export async function GET() {
       fetchFnbCashflowActual(from, today),
       readFinanceFoundationReadiness(),
       readHospitalityDebtSnapshot(),
+      readFinanceBotSummary("HOTEL"),
+      readFinanceBotSummary("FNB"),
     ]);
 
   const cashflow = summarizeCashflow([hotelCashflow, fnbCashflow]);
@@ -88,6 +91,34 @@ export async function GET() {
         hotelTransactionCount: hotelCashflow.transactionCount,
         fnbTransactionCount: fnbCashflow.transactionCount,
         unknownDirectionCount: cashflow.unknownDirectionCount,
+        browserDiagnostics: {
+          HOTEL: hotelBrowser ? {
+            state: hotelBrowser.state,
+            checkedAt: hotelBrowser.checkedAt,
+            authenticated: hotelBrowser.authenticated,
+            cashbookVisible: hotelBrowser.cashbookVisible,
+            reportedTotalRows: hotelBrowser.cashbook?.reportedTotalRows ?? null,
+            rawRowCount: hotelBrowser.cashbook?.diagnostics?.rawRowCount ?? null,
+            parsedRowCount: hotelBrowser.cashbook?.diagnostics?.parsedRowCount ?? null,
+            paginationComplete: hotelBrowser.cashbook?.paginationComplete ?? false,
+            receiptVariance: hotelBrowser.cashbook?.reconciliation.receiptVariance ?? null,
+            paymentVariance: hotelBrowser.cashbook?.reconciliation.paymentVariance ?? null,
+            reconciliationVerified: hotelBrowser.cashbook?.reconciliation.verified ?? false,
+          } : null,
+          FNB: fnbBrowser ? {
+            state: fnbBrowser.state,
+            checkedAt: fnbBrowser.checkedAt,
+            authenticated: fnbBrowser.authenticated,
+            cashbookVisible: fnbBrowser.cashbookVisible,
+            reportedTotalRows: fnbBrowser.cashbook?.reportedTotalRows ?? null,
+            rawRowCount: fnbBrowser.cashbook?.diagnostics?.rawRowCount ?? null,
+            parsedRowCount: fnbBrowser.cashbook?.diagnostics?.parsedRowCount ?? null,
+            paginationComplete: fnbBrowser.cashbook?.paginationComplete ?? false,
+            receiptVariance: fnbBrowser.cashbook?.reconciliation.receiptVariance ?? null,
+            paymentVariance: fnbBrowser.cashbook?.reconciliation.paymentVariance ?? null,
+            reconciliationVerified: fnbBrowser.cashbook?.reconciliation.verified ?? false,
+          } : null,
+        },
       },
       expense: readiness.expense,
       cogs: readiness.cogs,

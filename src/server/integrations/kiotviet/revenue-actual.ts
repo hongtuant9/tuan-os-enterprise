@@ -98,7 +98,7 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
 
   return {
     source,
-    state: missingSourceIdCount === 0 ? "VERIFIED" : "NEED_VERIFY",
+    state: missingSourceIdCount === 0 && duplicateCount === 0 ? "VERIFIED" : "NEED_VERIFY",
     from,
     to,
     invoiceCount: valid.length,
@@ -112,7 +112,7 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
     notes: [
       "Doanh thu = tổng trường total của hóa đơn không có statusValue thể hiện hủy/void.",
       "Tiền đã thu = tổng totalPayment; không dùng thay cho doanh thu.",
-      "Khử trùng theo source invoice id/code trước khi cộng; thiếu source ID => NEED_VERIFY.",
+      "Khử trùng theo source invoice id/code trước khi cộng; thiếu source ID hoặc có duplicate giữa các page => NEED_VERIFY.",
       "duplicateCount=" + duplicateCount + "; missingSourceIdCount=" + missingSourceIdCount + ".",
       "Nếu xuất hiện status chưa map hoặc nghiệp vụ hoàn/điều chỉnh đặc biệt, CFO phải reconcile trước READY_TO_POST.",
     ],
@@ -135,6 +135,8 @@ export async function fetchFnbRevenueActual(from: string, to: string): Promise<R
       pageSize: "100",
       currentItem: String(currentItem),
       includePayment: "true",
+      orderBy: "Id",
+      orderDirection: "Asc",
     });
     const res = await client.listInvoices(query.toString());
     httpStatus = res.status;

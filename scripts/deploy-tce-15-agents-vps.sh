@@ -11,6 +11,7 @@ APP_PORT="${APP_PORT:-3000}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-3300}"
 STATE_DIR="${STATE_DIR:-/opt/tuan-ai/deploy-state}"
 FINANCE_BOT_STATE_DIR="${FINANCE_BOT_STATE_DIR:-/opt/tuan-ai/kiotviet-finance-bot}"
+INVENTORY_BOT_STATE_DIR="${INVENTORY_BOT_STATE_DIR:-/opt/tuan-ai/kiotviet-inventory-bot}"
 AUTH_BROWSER_STATE_DIR="${AUTH_BROWSER_STATE_DIR:-/opt/tuan-ai/auth-browser}"
 APP_DOCKER_NETWORK="${APP_DOCKER_NETWORK:-}"
 EXPECTED_RUNTIME="tce-executive-org-v1"
@@ -24,8 +25,8 @@ command -v docker >/dev/null 2>&1 || fail "docker missing"
 command -v curl >/dev/null 2>&1 || fail "curl missing"
 [ -f "$ENV_FILE" ] || fail "env file missing: $ENV_FILE"
 
-mkdir -p "$APP_ROOT" "$STATE_DIR" "$FINANCE_BOT_STATE_DIR" "$AUTH_BROWSER_STATE_DIR"
-chown 1001:1001 "$FINANCE_BOT_STATE_DIR" "$AUTH_BROWSER_STATE_DIR"
+mkdir -p "$APP_ROOT" "$STATE_DIR" "$FINANCE_BOT_STATE_DIR" "$INVENTORY_BOT_STATE_DIR" "$AUTH_BROWSER_STATE_DIR"
+chown 1001:1001 "$FINANCE_BOT_STATE_DIR" "$INVENTORY_BOT_STATE_DIR" "$AUTH_BROWSER_STATE_DIR"
 
 NETWORK_ARGS=()
 if [ -n "$APP_DOCKER_NETWORK" ]; then
@@ -79,7 +80,9 @@ docker run -d --name "$CANDIDATE_CONTAINER" \
   --restart no \
   --env-file "$ENV_FILE" \
   -e TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED=false \
+  -e TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED=false \
   -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" \
+  -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" \
   -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" \
   "${NETWORK_ARGS[@]}" \
   -p "127.0.0.1:${CANDIDATE_PORT}:3000" \
@@ -112,6 +115,7 @@ docker run -d --name "$APP_CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
   -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" \
+  -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" \
   -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" \
   "${NETWORK_ARGS[@]}" \
   -p "127.0.0.1:${APP_PORT}:3000" \
@@ -131,7 +135,7 @@ if [ "$primary_ok" != true ]; then
   log "Primary health failed; attempting rollback"
   docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
   if [ -n "$PREVIOUS_IMAGE" ]; then
-    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" "${NETWORK_ARGS[@]}" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
+    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" "${NETWORK_ARGS[@]}" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
   fi
   docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
   fail "primary verification failed; rollback attempted"
@@ -151,6 +155,17 @@ if [ -f "$CADDY_SOURCE" ]; then
     log "WARN: tce-caddy container not running; Caddyfile synced only"
   fi
 fi
+
+for unit in tce-finance-read.service tce-finance-read.timer tce-inventory-read.service tce-inventory-read.timer; do
+  source_unit="$APP_ROOT/scripts/ovh/$unit"
+  if [ -f "$source_unit" ]; then
+    install -m 0644 "$source_unit" "/etc/systemd/system/$unit"
+  fi
+done
+install -m 0755 "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh" "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh"
+systemctl daemon-reload
+systemctl enable --now tce-finance-read.timer tce-inventory-read.timer >/dev/null 2>&1 || log "WARN: read-only KiotViet timers could not be enabled"
+systemctl start --no-block tce-finance-read.service tce-inventory-read.service >/dev/null 2>&1 || log "WARN: initial KiotViet read refresh could not be queued"
 
 printf '%s\n' "$SHA" > "$STATE_DIR/current-sha"
 log "PASS sha=$SHA runtime=$EXPECTED_RUNTIME autopilot=$EXPECTED_AUTOPILOT desktop_dependency=false"

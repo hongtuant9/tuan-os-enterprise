@@ -83,6 +83,10 @@ export type FinanceBotSnapshot = {
         itemKeys: string[];
         sampleShapes: string[];
       }>;
+      resourcePaths?: Array<{
+        path: string;
+        initiatorType: string;
+      }>;
     };
   };
   detail?: string;
@@ -864,6 +868,23 @@ async function cashbookSnapshot(page: Page) {
     itemKeys: string[];
     sampleShapes: string[];
   }>);
+  const resourcePaths = await page.evaluate(() => {
+    const rows = performance.getEntriesByType("resource")
+      .map((entry) => {
+        const item = entry as PerformanceResourceTiming;
+        try {
+          const url = new URL(item.name, location.href);
+          return { path: url.pathname, initiatorType: item.initiatorType || "unknown" };
+        } catch {
+          return null;
+        }
+      })
+      .filter((item): item is { path: string; initiatorType: string } => Boolean(item))
+      .filter((item) => /cash|fund|book|flow|transaction|payment|receipt|grid|query/i.test(item.path))
+      .slice(-40);
+    return Array.from(new Map(rows.map((item) => [item.path + "|" + item.initiatorType, item])).values());
+  }).catch(() => [] as Array<{ path: string; initiatorType: string }>);
+
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");
@@ -893,6 +914,7 @@ async function cashbookSnapshot(page: Page) {
       unparsedRowShapes,
       scrollContainers,
       kendoDataSources,
+      resourcePaths,
     },
     rawRows,
   };

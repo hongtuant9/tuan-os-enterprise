@@ -578,6 +578,37 @@ async function cashbookSnapshot(page: Page) {
     });
     if (!pager.clicked) {
       terminalPagerObserved = pager.terminal;
+      if (reportedTotalRows !== null && seen.size < reportedTotalRows) {
+        for (let scrollAttempt = 0; scrollAttempt < 20; scrollAttempt += 1) {
+          const scrollState = await page.evaluate(() => {
+            const visible = (el: Element) => {
+              const node = el as HTMLElement;
+              const style = getComputedStyle(node);
+              const rect = node.getBoundingClientRect();
+              return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+            };
+            const candidates = Array.from(document.querySelectorAll(
+              ".k-grid-content,.k-grid-content-wrap,.kv-table-body,[role='grid']"
+            )).filter(visible) as HTMLElement[];
+            const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
+            if (!scroller) return { moved: false, atEnd: false };
+            const before = scroller.scrollTop;
+            const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+            scroller.scrollTop = Math.min(max, before + Math.max(120, Math.floor(scroller.clientHeight * 0.8)));
+            scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+            return {
+              moved: scroller.scrollTop > before,
+              atEnd: scroller.scrollTop >= max - 2,
+            };
+          }).catch(() => ({ moved: false, atEnd: false }));
+
+          if (!scrollState.moved) break;
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          const virtualRows = await cashbookRows(page);
+          for (const row of virtualRows) seen.set(row, row);
+          if (seen.size >= reportedTotalRows || scrollState.atEnd) break;
+        }
+      }
       break;
     }
     const previousFirstRow = current[0] ?? "";

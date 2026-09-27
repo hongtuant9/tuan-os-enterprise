@@ -90,6 +90,14 @@ export class KiotVietFnbClient {
     return this.request("/products" + (query ? "?" + query : ""));
   }
 
+  probePurchaseOrders(query = "pageSize=5&currentItem=0") {
+    return this.request("/purchaseorders" + (query ? "?" + query : ""));
+  }
+
+  probeSuppliers(query = "pageSize=5&currentItem=0") {
+    return this.request("/suppliers" + (query ? "?" + query : ""));
+  }
+
   /**
    * Read-only capability probe for F&B cashflow.
    * Official F&B Public API does not currently document cashflow; production currently returns 404.

@@ -179,7 +179,7 @@ create or replace function public.apply_customer_attribution_touch()
 returns trigger
 language plpgsql
 set search_path = public
-as $
+as $touch$
 declare
   effective_source text;
 begin
@@ -218,7 +218,7 @@ begin
 
   return new;
 end;
-$;
+$touch$;
 
 drop trigger if exists marketing_attribution_customer_touch on public.marketing_attribution_events;
 create trigger marketing_attribution_customer_touch

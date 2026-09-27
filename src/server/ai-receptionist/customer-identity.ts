@@ -51,3 +51,14 @@ export function buildIdentityCandidates(input: {
   candidates.push({ type: identityType, value: channelValue, hash: hashIdentity(identityType, channelValue), sourceChannel: input.channel, verified: false });
   return candidates;
 }
+
+
+export function canResolveCanonicalCustomer(
+  candidate: Pick<CustomerIdentityCandidate, "type" | "verified">,
+  existingVerifiedAt: string | null | undefined,
+) {
+  if (candidate.type === "phone" || candidate.type === "email") {
+    return candidate.verified || Boolean(existingVerifiedAt);
+  }
+  return true;
+}

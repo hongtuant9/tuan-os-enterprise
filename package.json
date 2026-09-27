@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:overdue": "node --experimental-strip-types --test src/server/tasks/overdue.test.ts",
-    "test:finance-foundation": "node --experimental-strip-types --test src/server/finance/foundation.test.ts",
+    "test:finance-foundation": "node --experimental-strip-types --test src/server/finance/foundation.test.ts src/server/finance/ap-candidate.test.ts",
     "test:attribution-foundation": "node --experimental-strip-types --test src/server/marketing-command-center/attribution-foundation.test.ts src/server/ai-receptionist/customer-identity.test.ts",
     "seed:users": "node scripts/seed-users.mjs"
   },

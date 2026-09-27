@@ -610,12 +610,41 @@ async function cashbookSnapshot(page: Page) {
         }).catch(() => ({ found: false, max: 0, step: 0 }));
 
         if (resetState.found) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          const rowSignature = async () => {
+            const rows = await cashbookRows(page);
+            return [rows[0] ?? "", rows.at(-1) ?? "", String(rows.length)].join("|");
+          };
+          const waitForRowChange = async (previousSignature: string) => {
+            await page.waitForFunction(
+              (previous) => {
+                const visible = (el: Element) => {
+                  const node = el as HTMLElement;
+                  const style = getComputedStyle(node);
+                  const rect = node.getBoundingClientRect();
+                  return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+                };
+                const rows = Array.from(
+                  document.querySelectorAll("table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row")
+                )
+                  .filter(visible)
+                  .map((row) => (row.textContent || "").replace(/\s+/g, " ").trim())
+                  .filter(Boolean);
+                const current = [rows[0] ?? "", rows.at(-1) ?? "", String(rows.length)].join("|");
+                return current !== previous;
+              },
+              { timeout: 3_000 },
+              previousSignature,
+            ).catch(() => null);
+          };
+
+          const beforeReset = await rowSignature();
+          await waitForRowChange(beforeReset);
           const topRows = await cashbookRows(page);
           for (const row of topRows) seen.set(row, row);
 
           for (let scrollAttempt = 1; scrollAttempt <= 20 && seen.size < reportedTotalRows; scrollAttempt += 1) {
             const target = Math.min(resetState.max, scrollAttempt * resetState.step);
+            const beforeRows = await rowSignature();
             const scrollState = await page.evaluate((targetTop) => {
               const visible = (el: Element) => {
                 const node = el as HTMLElement;
@@ -639,7 +668,7 @@ async function cashbookSnapshot(page: Page) {
             }, target).catch(() => ({ moved: false, atEnd: false }));
 
             if (!scrollState.moved && target < resetState.max) continue;
-            await new Promise((resolve) => setTimeout(resolve, 450));
+            await waitForRowChange(beforeRows);
             const virtualRows = await cashbookRows(page);
             for (const row of virtualRows) seen.set(row, row);
             if (scrollState.atEnd) break;

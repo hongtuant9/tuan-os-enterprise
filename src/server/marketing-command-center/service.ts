@@ -117,7 +117,10 @@ export async function getMarketingCommandCenterSnapshot(
     const taggedEvents = attributableEvents.filter((row) => Boolean(
       s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
     ));
-    const attributionCoverage = attributableEvents.length ? taggedEvents.length / attributableEvents.length : null;
+    const eventSourceCoverage = attributableEvents.length ? taggedEvents.length / attributableEvents.length : null;
+    // Revenue attribution coverage must use VERIFIED business revenue as denominator.
+    // Until booking/payment revenue authority is linked into this read model, fail closed.
+    const attributionCoverage: number | null = null;
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
@@ -149,6 +152,7 @@ export async function getMarketingCommandCenterSnapshot(
         spendVerified,
         revenueVerified,
         attributionCoverage,
+        eventSourceCoverage,
       },
       channels,
       campaigns: campaignRows,
@@ -168,7 +172,7 @@ export async function getMarketingCommandCenterSnapshot(
       totals: {
         impressions: 0, reach: 0, clicks: 0, engagements: 0, sessions: 0,
         leads: 0, bookings: 0, spend: 0, revenue: 0, cpa: null, roas: null,
-        reachVerified: false, spendVerified: false, revenueVerified: false, attributionCoverage: null,
+        reachVerified: false, spendVerified: false, revenueVerified: false, attributionCoverage: null, eventSourceCoverage: null,
       },
       channels: [], campaigns: [], content: [], attribution: [], connectors: [],
       recommendations: [], marketIntelligence: [], sourceState: "NEED_VERIFY",

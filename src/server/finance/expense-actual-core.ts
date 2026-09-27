@@ -55,6 +55,7 @@ const LEGACY_NAME_TO_CODE: Array<[string, string]> = [
 function normalizeLabel(value: string) {
   return value
     .normalize("NFD")
+    .replace(/[đĐ]/g, (char) => char === "đ" ? "d" : "D")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/\s+/g, " ")

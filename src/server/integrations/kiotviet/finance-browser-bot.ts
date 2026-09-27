@@ -6,6 +6,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { reconcileCashbookTotals } from "@/server/finance/foundation";
+import { parseCashbookRowText } from "@/server/finance/cashbook-row-parser";
 import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
@@ -505,20 +506,6 @@ function parseMoneyText(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseCashbookRow(text: string) {
-  const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2})?)/);
-  const amountMatch = text.match(/(-?[\d.,]+)\s*$/);
-  const id = text.trim().split(/\s+/)[0] || "";
-  if (!dateMatch || !amountMatch || !id) return null;
-  const amount = parseMoneyText(amountMatch[1]);
-  if (amount === null) return null;
-  const groupLabel = text.slice(dateMatch.index! + dateMatch[0].length, amountMatch.index).trim();
-  let isReceipt: boolean | null = null;
-  if (/\[TCE-(?:R|RN)|\bThu\b/i.test(groupLabel)) isReceipt = true;
-  if (/\[TCE-(?:C|F|H|N)|\bChi\b/i.test(groupLabel)) isReceipt = false;
-  return { id, transDate: dateMatch[1], amount: Math.abs(amount), isReceipt, groupLabel, status: "Đã thanh toán" };
-}
-
 async function cashbookSnapshot(page: Page) {
   const body = (await visibleText(page)).replace(/\s+/g, " ").trim();
   const metric = (label: string) => {
@@ -647,7 +634,7 @@ async function cashbookSnapshot(page: Page) {
   }
 
   const rawRows = [...seen.values()];
-  const parsedRows = rawRows.map(parseCashbookRow).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const parsedRows = rawRows.map(parseCashbookRowText).filter((row): row is NonNullable<typeof row> => Boolean(row));
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");

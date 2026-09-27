@@ -10,6 +10,7 @@ import {
   summarizeGrossProfit,
   summarizeRevenue,
 } from "./foundation.ts";
+import { parseCashbookRowText } from "./cashbook-row-parser.ts";
 
 test("A: revenue 100m, COGS 40m => gross profit 60m, margin 60%", () => {
   const result = summarizeGrossProfit(100_000_000, {
@@ -115,4 +116,23 @@ test("date-only business range includes the entire UTC+7 end date", () => {
   assert.ok(Date.parse("2026-09-26T17:00:00Z") >= start);
   assert.ok(Date.parse("2026-09-27T16:59:59Z") <= end);
   assert.ok(Date.parse("2026-09-27T17:00:00Z") > end);
+});
+
+test("cashbook parser accepts amount before trailing payment status", () => {
+  const row = parseCashbookRowText(
+    "TTHD000999 27/09/2026 10:30 Thu Tiền khách trả 5.700.000 Đã thanh toán",
+  );
+  assert.ok(row);
+  assert.equal(row.id, "TTHD000999");
+  assert.equal(row.amount, 5_700_000);
+  assert.equal(row.isReceipt, true);
+});
+
+test("cashbook parser keeps existing amount-at-end format", () => {
+  const row = parseCashbookRowText(
+    "TTDP002925 25/09/2026 11:07 Thu Tiền khách trả 550.000",
+  );
+  assert.ok(row);
+  assert.equal(row.amount, 550_000);
+  assert.equal(row.isReceipt, true);
 });

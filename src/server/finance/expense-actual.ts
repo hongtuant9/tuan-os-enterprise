@@ -13,7 +13,8 @@ export async function readCashbookExpenseActual() {
     const reconciliation = snapshot?.cashbook?.reconciliation;
     if (
       !snapshot ||
-      snapshot.state !== "READ_VERIFIED" ||
+      !snapshot.authenticated ||
+      !snapshot.cashbookVisible ||
       !snapshot.cashbook ||
       !reconciliation?.verified
     ) {

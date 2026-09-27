@@ -40,14 +40,14 @@ test("AP: mismatched supplier debt fails reconciliation", () => {
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Cần trả NCC"],
-      cells: [["2.000.000"]],
+      headers: ["Mã nhập hàng", "Cần trả NCC"],
+      cells: [["PN1", "2.000.000"]],
     },
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Nợ cần trả hiện tại"],
-      cells: [["1.500.000"]],
+      headers: ["Mã NCC", "Nợ cần trả hiện tại"],
+      cells: [["NCC1", "1.500.000"]],
     },
   );
   assert.equal(result.state, "NEED_VERIFY");
@@ -60,16 +60,45 @@ test("AP: incomplete structured cells fail closed", () => {
     {
       state: "READ_VERIFIED",
       rowCount: 2,
-      headers: ["Cần trả NCC"],
-      cells: [["2.000.000"]],
+      headers: ["Mã nhập hàng", "Cần trả NCC"],
+      cells: [["PN1", ""]],
     },
     {
       state: "READ_VERIFIED",
       rowCount: 1,
-      headers: ["Nợ cần trả hiện tại"],
-      cells: [["2.000.000"]],
+      headers: ["Mã NCC", "Nợ cần trả hiện tại"],
+      cells: [["NCC1", "2.000.000"]],
     },
   );
   assert.equal(result.state, "NEED_VERIFY");
   assert.match(result.reason, /coverage/i);
+});
+
+
+test("AP: ignores header/summary/detail rows and keeps business supplier rows", () => {
+  const result = summarizeApSystem(
+    "HOTEL",
+    {
+      state: "READ_VERIFIED",
+      rowCount: 2,
+      headers: ["Mã nhập hàng", "Thời gian", "Nhà cung cấp", "Cần trả NCC", "Trạng thái"],
+      cells: [["Chưa có phiếu nhập hàng"]],
+    },
+    {
+      state: "READ_VERIFIED",
+      rowCount: 4,
+      headers: ["Mã nhà cung cấp", "Tên nhà cung cấp", "Điện thoại", "Email", "Nợ cần trả hiện tại", "Tổng mua"],
+      cells: [
+        ["", "", "", "", "800,000,000", "800,000,000"],
+        ["NCC000001", "FootPrint", "123456789", "", "800,000,000", "800,000,000"],
+        ["Tổng quan...", "", "", "", "", ""],
+      ],
+    },
+  );
+  assert.equal(result.state, "NEED_VERIFY");
+  assert.equal(result.purchaseOrderRows, 0);
+  assert.equal(result.supplierRows, 1);
+  assert.equal(result.purchaseOrderOutstanding, 0);
+  assert.equal(result.supplierOutstanding, 800_000_000);
+  assert.equal(result.variance, -800_000_000);
 });

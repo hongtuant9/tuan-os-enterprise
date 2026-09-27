@@ -114,6 +114,10 @@ docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$APP_CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
+  -e TCE_KIOTVIET_FINANCE_BOT_ENABLED=true \
+  -e TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED=true \
+  -e TCE_KIOTVIET_INVENTORY_BOT_ENABLED=true \
+  -e TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED=true \
   -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" \
   -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" \
   -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" \
@@ -135,7 +139,7 @@ if [ "$primary_ok" != true ]; then
   log "Primary health failed; attempting rollback"
   docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
   if [ -n "$PREVIOUS_IMAGE" ]; then
-    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" "${NETWORK_ARGS[@]}" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
+    docker run -d --name "$APP_CONTAINER" --restart unless-stopped --env-file "$ENV_FILE" -e TCE_KIOTVIET_FINANCE_BOT_ENABLED=true -e TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED=true -e TCE_KIOTVIET_INVENTORY_BOT_ENABLED=true -e TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED=true -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" -v "$INVENTORY_BOT_STATE_DIR:/var/lib/tce-inventory-bot" -v "$AUTH_BROWSER_STATE_DIR:/var/lib/tce-auth-browser" "${NETWORK_ARGS[@]}" -p "127.0.0.1:${APP_PORT}:3000" "$PREVIOUS_IMAGE" >/dev/null || true
   fi
   docker rm -f "$CANDIDATE_CONTAINER" >/dev/null 2>&1 || true
   fail "primary verification failed; rollback attempted"

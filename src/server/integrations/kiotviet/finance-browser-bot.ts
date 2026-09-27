@@ -63,6 +63,20 @@ export type FinanceBotSnapshot = {
       groupLabel: string;
       status: string;
     }>;
+    diagnostics?: {
+      rawRowCount: number;
+      parsedRowCount: number;
+      unparsedRowShapes: string[];
+      scrollContainers: Array<{
+        tag: string;
+        className: string;
+        clientHeight: number;
+        scrollHeight: number;
+        scrollTop: number;
+        overflowY: string;
+        rowDescendants: number;
+      }>;
+    };
   };
   detail?: string;
 };
@@ -635,6 +649,50 @@ async function cashbookSnapshot(page: Page) {
 
   const rawRows = [...seen.values()];
   const parsedRows = rawRows.map(parseCashbookRowText).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const unparsedRowShapes = rawRows
+    .filter((row) => !parseCashbookRowText(row))
+    .slice(0, 5)
+    .map((row) =>
+      row
+        .replace(/\p{L}+/gu, "X")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 240)
+    );
+  const scrollContainers = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("*"))
+      .map((el) => {
+        const node = el as HTMLElement;
+        const style = getComputedStyle(node);
+        const className = String(node.className || "");
+        const rowDescendants = node.querySelectorAll(
+          "table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row"
+        ).length;
+        return {
+          tag: node.tagName.toLowerCase(),
+          className: className.slice(0, 160),
+          clientHeight: node.clientHeight,
+          scrollHeight: node.scrollHeight,
+          scrollTop: node.scrollTop,
+          overflowY: style.overflowY,
+          rowDescendants,
+        };
+      })
+      .filter((item) =>
+        item.scrollHeight > item.clientHeight + 2 &&
+        (item.rowDescendants > 0 || /grid|table|scroll|content|body/i.test(item.className))
+      )
+      .sort((a, b) => b.rowDescendants - a.rowDescendants || b.scrollHeight - a.scrollHeight)
+      .slice(0, 20)
+  ).catch(() => [] as Array<{
+    tag: string;
+    className: string;
+    clientHeight: number;
+    scrollHeight: number;
+    scrollTop: number;
+    overflowY: string;
+    rowDescendants: number;
+  }>);
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");
@@ -658,6 +716,12 @@ async function cashbookSnapshot(page: Page) {
     paginationComplete: paginationEvidence && reconciliation.verified,
     reconciliation,
     rows: parsedRows,
+    diagnostics: {
+      rawRowCount: rawRows.length,
+      parsedRowCount: parsedRows.length,
+      unparsedRowShapes,
+      scrollContainers,
+    },
     rawRows,
   };
 }
@@ -1118,6 +1182,7 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
           paginationComplete: cashbook.paginationComplete,
           reconciliation: cashbook.reconciliation,
           rows: cashbook.rows,
+          diagnostics: cashbook.diagnostics,
         },
         detail,
       };

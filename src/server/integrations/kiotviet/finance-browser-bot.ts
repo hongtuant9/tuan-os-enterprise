@@ -782,17 +782,47 @@ async function cashbookSnapshot(page: Page) {
     }).catch(() => null);
 
     if (virtualBox) {
+      const collect = async () => {
+        for (const row of await cashbookRows(page)) seen.set(row, row);
+      };
+
       await page.mouse.move(virtualBox.x, virtualBox.y);
+      await page.mouse.click(virtualBox.x, virtualBox.y).catch(() => undefined);
       await page.mouse.wheel({ deltaY: -10_000 });
       await new Promise((resolve) => setTimeout(resolve, 500));
-      for (const row of await cashbookRows(page)) seen.set(row, row);
+      await collect();
 
       const step = Math.max(80, Math.floor(virtualBox.clientHeight * 0.4));
       const attempts = Math.min(60, Math.ceil(virtualBox.max / step) + 6);
       for (let attempt = 0; attempt < attempts && seen.size < reportedTotalRows; attempt += 1) {
         await page.mouse.wheel({ deltaY: step });
         await new Promise((resolve) => setTimeout(resolve, 250));
-        for (const row of await cashbookRows(page)) seen.set(row, row);
+        await collect();
+      }
+
+      // Some Hotel Kendo builds recycle rows only on keyboard/absolute-scroll events.
+      // Sweep deterministic positions and keyboard navigation as a second DOM-only path.
+      for (const ratio of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
+        if (seen.size >= reportedTotalRows) break;
+        await page.evaluate((nextRatio) => {
+          const candidates = Array.from(document.querySelectorAll(
+            ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,[role='grid']"
+          )) as HTMLElement[];
+          const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
+          if (!scroller) return;
+          const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          scroller.scrollTop = Math.round(max * nextRatio);
+          scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        }, ratio).catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        await collect();
+      }
+
+      for (const key of ["Home", "PageDown", "PageDown", "End", "PageUp", "PageUp"] as const) {
+        if (seen.size >= reportedTotalRows) break;
+        await page.keyboard.press(key).catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        await collect();
       }
     }
   }

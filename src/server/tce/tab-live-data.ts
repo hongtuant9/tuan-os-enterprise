@@ -567,7 +567,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-        "Chi phí Actual": "NEED VERIFY",
+        "Chi phí vận hành": "NEED VERIFY",
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
         "Cash Out": cashflowSummary.cashOut === null ? "NEED VERIFY" : money(cashflowSummary.cashOut),
         "Dòng tiền ròng": cashflowSummary.netCashFlow === null ? "NEED VERIFY" : money(cashflowSummary.netCashFlow),
@@ -580,7 +580,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
-        "Chi phí Actual": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
+        "Chi phí vận hành": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow API chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow API chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",

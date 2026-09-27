@@ -31,7 +31,7 @@ test("expense mapper keeps broad groups NEED_VERIFY", () => {
 
 test("expense mapper flags payment rows without canonical taxonomy code", () => {
   const result = summarizeExpenseActualRows([
-    { id:"1", transDate:"01/09/2026", amount:300_000, isReceipt:false, groupLabel:"Chi phí khác legacy", status:"Đã thanh toán" },
+    { id:"1", transDate:"01/09/2026", amount:300_000, isReceipt:false, groupLabel:"Legacy custom group", status:"Đã thanh toán" },
   ]);
   assert.equal(result.unknownExpenseRows, 1);
 });

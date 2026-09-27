@@ -74,7 +74,9 @@ async function fnbApiShape() {
       .map((row) => row.invoiceDetails ?? row.details ?? row.invoiceDetail)
       .find((value) => Array.isArray(value)) as unknown[] | undefined;
     const detailRow = firstDetails?.find((value) => Boolean(value && typeof value === "object")) as Record<string, unknown> | undefined;
-    const costFieldCandidates = ["cost", "costPrice", "basePrice", "lastCost", "averageCost"];
+    // basePrice is a selling-price field in KiotViet F&B, not COGS authority.
+    // Accept only fields whose semantics explicitly indicate cost.
+    const costFieldCandidates = ["cost", "costPrice", "lastCost", "averageCost"];
     const productsWithCostField = products.filter((row) =>
       costFieldCandidates.some((key) => row[key] !== undefined && row[key] !== null && Number.isFinite(Number(row[key])))
     ).length;
@@ -89,6 +91,7 @@ async function fnbApiShape() {
       invoiceDetailKeys: detailRow ? Object.keys(detailRow).sort() : [],
       productsWithCostField,
       costCoveragePct: products.length ? (productsWithCostField / products.length) * 100 : 0,
+      costSemanticGuard: "basePrice excluded; invoiceDetails has no cost field => COST-001 remains COGS authority unless explicit cost field/source is verified.",
     };
   } catch {
     return { state: "ERROR" as const };

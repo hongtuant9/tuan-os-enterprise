@@ -74,7 +74,9 @@ export async function normalizeGa4DailyMetrics(
         source: row.source,
         medium: row.medium,
         total_users: row.totalUsers,
-        metric_semantics: "GA4 sessions/engagedSessions/keyEvents; not ad reach/spend",
+        metric_semantics: "GA4 sessions/engagedSessions/keyEvents; not ad reach/spend and not verified business conversion",
+        business_conversion_verified: false,
+        platform_reported_only: true,
       },
     }));
     if (payload.length) {

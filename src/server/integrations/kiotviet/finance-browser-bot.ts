@@ -802,7 +802,26 @@ async function cashbookSnapshot(page: Page) {
 
       // Some Hotel Kendo builds recycle rows only on keyboard/absolute-scroll events.
       // Sweep deterministic positions and keyboard navigation as a second DOM-only path.
-      for (const ratio of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
+      // Dense absolute sweep: Hotel Kendo can recycle a row between coarse 20% jumps.
+      // Walk the full scroll range in small deterministic increments and collect every window.
+      const denseMax = Math.max(0, virtualBox.max);
+      const denseStep = Math.max(18, Math.min(48, Math.floor(virtualBox.clientHeight / 8)));
+      for (let top = 0; top <= denseMax + denseStep; top += denseStep) {
+        if (seen.size >= reportedTotalRows) break;
+        await page.evaluate((nextTop) => {
+          const candidates = Array.from(document.querySelectorAll(
+            ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,[role='grid']"
+          )) as HTMLElement[];
+          const scroller = candidates.find((el) => el.scrollHeight > el.clientHeight + 2);
+          if (!scroller) return;
+          scroller.scrollTop = Math.min(nextTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+          scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        }, top).catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        await collect();
+      }
+
+      for (const ratio of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
         if (seen.size >= reportedTotalRows) break;
         await page.evaluate((nextRatio) => {
           const candidates = Array.from(document.querySelectorAll(
@@ -814,7 +833,7 @@ async function cashbookSnapshot(page: Page) {
           scroller.scrollTop = Math.round(max * nextRatio);
           scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
         }, ratio).catch(() => undefined);
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        await new Promise((resolve) => setTimeout(resolve, 280));
         await collect();
       }
 

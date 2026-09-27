@@ -3,6 +3,7 @@ import "server-only";
 import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
 import { KiotVietRetailFinanceClient } from "./retail-finance-client";
+import { dedupeBySourceTransactionId } from "@/server/finance/foundation";
 
 export type KiotVietCashflowSnapshot = {
   source: "KIOTVIET_FNB" | "KIOTVIET_HOTEL";
@@ -57,7 +58,7 @@ function rows(payload: unknown): Row[] {
 }
 
 function normalize(source: KiotVietCashflowSnapshot["source"], from: string, to: string, input: Row[], status: number): KiotVietCashflowSnapshot {
-  const normalized = input.map((row) => {
+  const normalized = dedupeBySourceTransactionId(input.map((row) => {
     const isReceipt = boolOrNull(row.isReceipt);
     const amount = Math.abs(num(row.amount));
     return {
@@ -80,7 +81,7 @@ function normalize(source: KiotVietCashflowSnapshot["source"], from: string, to:
       description: String(row.description ?? row.Description ?? ""),
       status: String(row.statusValue ?? row.status ?? ""),
     };
-  });
+  }));
 
   return {
     source,

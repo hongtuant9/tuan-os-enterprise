@@ -205,6 +205,8 @@ function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: strin
     to,
     invoiceCount: 0,
     excludedCount: 0,
+    duplicateCount: 0,
+    missingSourceIdCount: 0,
     revenue: 0,
     collected: 0,
     branchBreakdown: [],

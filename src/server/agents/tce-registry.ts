@@ -155,7 +155,7 @@ export const TCE_AGENT_REGISTRY: TceAgentDefinition[] = [
   },
   {
     id: "computer_operator", name: "Computer Operator Controller", domain: "execution", mode: "active", permission: "L2_APPROVAL",
-    mission: "Điều phối browser worker cho tác vụ không có API/Terminal/DOM phù hợp; tự thực thi non-financial task trong policy.",
+    mission: "Ưu tiên API/Terminal; chỉ dùng Chromium/DOM self-hosted khi nhà cung cấp không có API phù hợp; GUI là phương án cuối.",
     sources: ["verified task envelope", "runtime access matrix", "TASK-001"],
     capabilities: ["task queue", "worker handoff", "evidence capture", "result verification"],
     outputs: [{ label: "AI Manager / execution queue", href: "/ai-manager", kind: "runtime" }, { label: "TASK-001", href: "https://docs.google.com/spreadsheets/d/1uVG0L9FzcPBgOCk5IyWNuYVneCCgupqg-SH0TcERSjM/edit", kind: "task" }],

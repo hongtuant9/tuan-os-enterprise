@@ -7,6 +7,15 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function rowShape(value: string) {
+  return value
+    .replace(/\p{L}/gu, "X")
+    .replace(/\d/g, "#")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 280);
+}
+
 function publicSummary(snapshot: InventoryBotSnapshot | null) {
   if (!snapshot) {
     return {
@@ -17,11 +26,22 @@ function publicSummary(snapshot: InventoryBotSnapshot | null) {
     };
   }
 
+  const targetIds = new Set(["PRODUCTS", "PURCHASE_ORDERS", "SUPPLIERS", "PURCHASE_INVOICES"]);
   return {
     state: snapshot.state,
     checkedAt: snapshot.checkedAt,
     verifiedModules: snapshot.verifiedModules,
     moduleCount: snapshot.moduleCount,
+    sourceDiagnostics: snapshot.modules
+      .filter((module) => targetIds.has(module.id))
+      .map((module) => ({
+        id: module.id,
+        state: module.state,
+        checkedAt: module.checkedAt,
+        rowCount: module.rowCount,
+        headers: module.headers ?? [],
+        rowShapes: (module.rawRows ?? []).slice(0, 3).map(rowShape),
+      })),
   };
 }
 

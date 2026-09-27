@@ -41,6 +41,7 @@ export type InventoryModuleSnapshot = {
   contentHash: string | null;
   url: string;
   detail: string;
+  headers?: string[];
   rawRows?: string[];
 };
 
@@ -357,6 +358,16 @@ async function readModule(
       const normalize = (value: string) =>
         value.replace(/\s+/g, " ").trim();
 
+      const headers = Array.from(
+        document.querySelectorAll(
+          "table thead th,.k-grid-header th,[role='columnheader'],.bk-table thead th"
+        )
+      )
+        .filter(visible)
+        .map((cell) => normalize(cell.textContent || ""))
+        .filter(Boolean)
+        .slice(0, 80);
+
       const candidates = Array.from(
         document.querySelectorAll(
           "table tbody tr,.k-grid-content tr,[role='row'],.kv-table-row,.bk-table tbody tr"
@@ -372,6 +383,7 @@ async function readModule(
         href: location.href,
         title: document.title,
         body,
+        headers,
         rows,
       };
     });
@@ -389,6 +401,7 @@ async function readModule(
         contentHash: null,
         url: data.href,
         detail: "Module page did not render readable content.",
+        headers: [],
         rawRows: [],
       };
     }
@@ -410,6 +423,7 @@ async function readModule(
         data.rows.length > 0
           ? `Readable; visible_rows=${data.rows.length}.`
           : "Readable; no visible data rows in current view.",
+      headers: data.headers,
       rawRows: data.rows,
     };
   } catch (error) {

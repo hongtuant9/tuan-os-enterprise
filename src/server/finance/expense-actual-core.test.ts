@@ -53,3 +53,14 @@ test("unknown legacy labels remain visible for reconciliation", () => {
   ]);
   assert.deepEqual(result.unknownGroupLabels, ["Legacy custom group"]);
 });
+
+
+test("supplier payment cashbook label maps to N01 and stays out of Expense", () => {
+  const result = summarizeExpenseActualRows([
+    { id:"PCPN1", transDate:"27/09/2026", amount:7_493_030, isReceipt:false, groupLabel:"Phiếu chi tiền trả ncc", status:"Đã thanh toán" },
+  ]);
+  assert.equal(resolveExpenseCode("Phiếu chi tiền trả ncc"), "N01");
+  assert.equal(result.groups.length, 0);
+  assert.equal(result.excludedNonPnlRows, 1);
+  assert.equal(result.directMappedAmount, 0);
+});

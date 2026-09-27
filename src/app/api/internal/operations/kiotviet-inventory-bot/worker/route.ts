@@ -56,10 +56,12 @@ export async function POST(req: NextRequest) {
       ? "alert"
       : "info",
     message: results
-      .map(
-        (item) =>
-          `${item.system}: state=${item.state} modules=${item.verifiedModules}/${item.moduleCount}`
-      )
+      .map((item) => {
+        const modules = item.modules
+          .map((module) => `${module.id}=${module.state}:${module.rowCount}`)
+          .join(",");
+        return `${item.system}: state=${item.state} modules=${item.verifiedModules}/${item.moduleCount} [${modules}]`;
+      })
       .join(" | "),
   }).catch(() => undefined);
 

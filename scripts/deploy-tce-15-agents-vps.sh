@@ -166,7 +166,7 @@ for unit in tce-finance-read.service tce-finance-read.timer tce-inventory-read.s
     install -m 0644 "$source_unit" "/etc/systemd/system/$unit"
   fi
 done
-install -m 0755 "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh" "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh"
+chmod 0755 "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh"
 systemctl daemon-reload
 systemctl enable --now tce-finance-read.timer tce-inventory-read.timer >/dev/null 2>&1 || log "WARN: read-only KiotViet timers could not be enabled"
 systemctl start --no-block tce-finance-read.service tce-inventory-read.service >/dev/null 2>&1 || log "WARN: initial KiotViet read refresh could not be queued"

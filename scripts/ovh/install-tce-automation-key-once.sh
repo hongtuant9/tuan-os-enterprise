@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MARKER="/opt/tuan-ai/deploy-state/tce-automation-key-v2-20260927.installed"
+MARKER="/opt/tuan-ai/deploy-state/tce-automation-key-v3-20260927.installed"
 PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIb3nxzhZ8AD9scLnuMZ6hK/zSJ1mhsa0+zN7+Oe/ez tce-automation2-2026-09-27'
 
 if [ -f "$MARKER" ]; then

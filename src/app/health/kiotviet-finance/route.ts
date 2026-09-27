@@ -47,6 +47,7 @@ function publicSummary(snapshot: FinanceBotSnapshot | null) {
           parsedRowCount: cashbook.diagnostics.parsedRowCount,
           unparsedRowShapes: cashbook.diagnostics.unparsedRowShapes,
           scrollContainers: cashbook.diagnostics.scrollContainers,
+          kendoDataSources: cashbook.diagnostics.kendoDataSources ?? [],
         }
       : null,
   };

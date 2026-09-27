@@ -98,11 +98,37 @@ async function fnbApiShape() {
   }
 }
 
+
+async function fnbApApiShape() {
+  try {
+    const client = new KiotVietFnbClient();
+    if (!client.isConfigured()) return { state: "UNAVAILABLE" as const };
+    const [purchaseOrdersResult, suppliersResult] = await Promise.all([
+      client.probePurchaseOrders(),
+      client.probeSuppliers(),
+    ]);
+    const purchaseOrders = payloadRows(purchaseOrdersResult.data);
+    const suppliers = payloadRows(suppliersResult.data);
+    return {
+      state: purchaseOrdersResult.ok && suppliersResult.ok ? "READ_VERIFIED" as const : "NEED_VERIFY" as const,
+      purchaseOrdersHttpStatus: purchaseOrdersResult.status,
+      suppliersHttpStatus: suppliersResult.status,
+      purchaseOrderCount: purchaseOrders.length,
+      supplierCount: suppliers.length,
+      purchaseOrderKeys: purchaseOrders[0] ? Object.keys(purchaseOrders[0]).sort() : [],
+      supplierKeys: suppliers[0] ? Object.keys(suppliers[0]).sort() : [],
+    };
+  } catch {
+    return { state: "ERROR" as const };
+  }
+}
+
 export async function GET() {
-  const [fnb, hotel, apiShape] = await Promise.all([
+  const [fnb, hotel, apiShape, apApiShape] = await Promise.all([
     readInventoryBotSummary("FNB"),
     readInventoryBotSummary("HOTEL"),
     fnbApiShape(),
+    fnbApApiShape(),
   ]);
 
   const systems = {
@@ -121,6 +147,7 @@ export async function GET() {
       writeEnabled: false,
       systems,
       fnbApiShape: apiShape,
+      fnbApApiShape: apApiShape,
       checkedAt: new Date().toISOString(),
     },
     { headers: { "Cache-Control": "no-store" } }

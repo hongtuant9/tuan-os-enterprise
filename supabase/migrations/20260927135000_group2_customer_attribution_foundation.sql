@@ -85,7 +85,27 @@ alter table public.marketing_attribution_events
   add column if not exists utm_term text,
   add column if not exists ad_group text,
   add column if not exists ad text,
-  add column if not exists self_reported_source text;
+  add column if not exists self_reported_source text,
+  add column if not exists anonymous_id text,
+  add column if not exists ga_client_id text,
+  add column if not exists ga_session_id text;
+
+alter table public.marketing_attribution_events
+  drop constraint if exists marketing_attribution_events_event_type_check;
+alter table public.marketing_attribution_events
+  add constraint marketing_attribution_events_event_type_check
+  check (event_type in (
+    'session','engagement','inquiry','lead','booking_started','booking','checked_in',
+    'purchase','review_submitted','return_visit','upsell','revenue',
+    'ad_click','website_visit','directions_click','whatsapp_click'
+  ));
+
+create index if not exists marketing_attribution_lead_idx
+  on public.marketing_attribution_events(lead_id, occurred_at desc)
+  where lead_id is not null;
+create index if not exists marketing_attribution_click_id_idx
+  on public.marketing_attribution_events(gclid, gbraid, wbraid)
+  where gclid is not null or gbraid is not null or wbraid is not null;
 
 alter table public.cozy_review_clicks
   add column if not exists customer_id uuid references public.hospitality_customers(id) on delete set null,
@@ -153,6 +173,58 @@ set leads_platform = 0,
     verification_status = case when verification_status = 'VERIFIED' then 'PARTIAL' else verification_status end,
     metadata = coalesce(metadata,'{}'::jsonb) || '{"lead_semantics":"canonical hospitality_leads only; conversations are inquiries"}'::jsonb
 where connector_id = 'hospitality_crm';
+
+
+create or replace function public.apply_customer_attribution_touch()
+returns trigger
+language plpgsql
+set search_path = public
+as $
+declare
+  effective_source text;
+begin
+  if new.customer_id is null then
+    return new;
+  end if;
+  if new.attribution_status not in ('DIRECT_VERIFIED','ASSISTED_VERIFIED','SELF_REPORTED') then
+    return new;
+  end if;
+  effective_source := coalesce(nullif(new.source,''), nullif(new.self_reported_source,''), nullif(new.utm_source,''));
+  if effective_source is null then
+    return new;
+  end if;
+
+  update public.hospitality_customers c
+  set
+    first_touch_source = case
+      when c.first_touch_at is null or new.occurred_at < c.first_touch_at then effective_source
+      else c.first_touch_source
+    end,
+    first_touch_at = case
+      when c.first_touch_at is null or new.occurred_at < c.first_touch_at then new.occurred_at
+      else c.first_touch_at
+    end,
+    last_touch_source = case
+      when c.last_touch_at is null or new.occurred_at >= c.last_touch_at then effective_source
+      else c.last_touch_source
+    end,
+    last_touch_at = case
+      when c.last_touch_at is null or new.occurred_at >= c.last_touch_at then new.occurred_at
+      else c.last_touch_at
+    end,
+    journey_entry = coalesce(c.journey_entry, nullif(new.journey_entry,'')),
+    updated_at = now()
+  where c.id = new.customer_id;
+
+  return new;
+end;
+$;
+
+drop trigger if exists marketing_attribution_customer_touch on public.marketing_attribution_events;
+create trigger marketing_attribution_customer_touch
+after insert or update of customer_id,source,self_reported_source,utm_source,occurred_at,attribution_status,journey_entry
+on public.marketing_attribution_events
+for each row execute function public.apply_customer_attribution_touch();
 
 create or replace view public.hospitality_customer_profile_v
 with (security_invoker = true)

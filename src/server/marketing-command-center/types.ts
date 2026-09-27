@@ -38,6 +38,7 @@ export type MarketingCommandCenterSnapshot = {
     spendVerified: boolean;
     revenueVerified: boolean;
     attributionCoverage: number | null;
+    eventSourceCoverage: number | null;
   };
   channels: MarketingPerformanceRow[];
   campaigns: Array<Record<string, unknown>>;

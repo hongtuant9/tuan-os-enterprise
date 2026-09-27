@@ -19,7 +19,7 @@ import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
-import { buildIdentityCandidates } from "@/server/ai-receptionist/customer-identity";
+import { buildIdentityCandidates, canResolveCanonicalCustomer } from "@/server/ai-receptionist/customer-identity";
 import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
 import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
@@ -278,11 +278,34 @@ export class AiReceptionistService {
     let customerId: string | null = null;
     for (const candidate of candidates) {
       const existingIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);
-      if (existingIdentity) { customerId = existingIdentity.customer_id; break; }
+      if (!existingIdentity) continue;
+      if (!canResolveCanonicalCustomer(candidate, existingIdentity.verified_at)) {
+        await this.activityLog.record({
+          agent: "AI Receptionist",
+          unit: "Tam Cốc",
+          message: `Identity resolution HOLD: type=${candidate.type}; existing unverified identity cannot merge customer; channel=${input.channel}.`,
+          type: "alert",
+        });
+        continue;
+      }
+      customerId = existingIdentity.customer_id;
+      await this.activityLog.record({
+        agent: "AI Receptionist",
+        unit: "Tam Cốc",
+        message: `Identity resolution VERIFIED: type=${candidate.type}; customer_id=${customerId}; channel=${input.channel}. Linkage is reversible by customer_id reassignment.`,
+        type: "info",
+      });
+      break;
     }
     if (!customerId) {
       const customer = await this.repo.createCustomer({ display_name: input.customerName?.trim() || null, preferred_language: input.language ?? null, metadata: { created_from: input.channel } });
       customerId = customer.id;
+      await this.activityLog.record({
+        agent: "AI Receptionist",
+        unit: "Tam Cốc",
+        message: `Identity resolution NEW: created separate customer_id=${customerId}; no verified identity merge was allowed; channel=${input.channel}.`,
+        type: "info",
+      });
     }
     for (const candidate of candidates) {
       const existingIdentity = await this.repo.findCustomerIdentityByHash(candidate.hash);

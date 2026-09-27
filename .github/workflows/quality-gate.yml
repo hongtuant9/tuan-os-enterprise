@@ -26,6 +26,9 @@ jobs:
       - name: Kiểm tra lint
         run: npm run lint
 
+      - name: Kiểm tra attribution foundation
+        run: npm run test:attribution-foundation
+
       - name: Kiểm tra build
         run: npm run build
         env:

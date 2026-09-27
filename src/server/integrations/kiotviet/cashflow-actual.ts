@@ -4,7 +4,11 @@ import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
 import { KiotVietRetailFinanceClient } from "./retail-finance-client";
 import { readFinanceBotSummary, type FinanceBotSystem } from "./finance-browser-bot";
-import { dedupeBySourceTransactionId } from "@/server/finance/foundation";
+import {
+  cashbookSnapshotCoversRange,
+  dedupeBySourceTransactionId,
+  normalizeFinanceDate,
+} from "@/server/finance/foundation";
 
 export type KiotVietCashflowSnapshot = {
   source: "KIOTVIET_FNB" | "KIOTVIET_HOTEL";
@@ -135,13 +139,6 @@ function totalOf(payload: unknown, fallback: number) {
   return fallback;
 }
 
-function browserDateToEpoch(value: string) {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
-  if (!match) return Number.NaN;
-  const [, dd, mm, yyyy, hh = "00", min = "00"] = match;
-  return Date.parse(`${yyyy}-${mm}-${dd}T${hh}:${min}:00+07:00`);
-}
-
 async function browserCashflowFallback(
   system: FinanceBotSystem,
   source: KiotVietCashflowSnapshot["source"],
@@ -154,14 +151,15 @@ async function browserCashflowFallback(
   const checkedAt = Date.parse(snapshot.checkedAt);
   if (!Number.isFinite(checkedAt) || Date.now() - checkedAt > 30 * 60 * 1000) return null;
   if (!snapshot.cashbook.paginationComplete) return null;
+  if (!cashbookSnapshotCoversRange(snapshot.cashbook.periodLabel, snapshot.checkedAt, from, to)) return null;
 
-  const fromMs = Date.parse(from);
-  const toMs = Date.parse(to);
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
+  const fromDate = normalizeFinanceDate(from);
+  const toDate = normalizeFinanceDate(to);
+  if (!fromDate || !toDate) return null;
 
   const normalized = snapshot.cashbook.rows
-    .map((row) => ({ row, ts: browserDateToEpoch(row.transDate) }))
-    .filter(({ ts }) => Number.isFinite(ts) && ts >= fromMs && ts <= toMs)
+    .map((row) => ({ row, date: normalizeFinanceDate(row.transDate) }))
+    .filter(({ date }) => date !== null && date >= fromDate && date <= toDate)
     .map(({ row }) => ({
       id: row.id,
       code: row.id,

@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  cashbookSnapshotCoversRange,
   dedupeBySourceTransactionId,
   freshnessState,
+  normalizeFinanceDate,
   outstandingAmount,
   summarizeCashflow,
   summarizeGrossProfit,
@@ -74,4 +76,25 @@ test("H: stale source is not VERIFIED live", () => {
   const now = new Date("2026-09-27T06:00:00Z");
   assert.equal(freshnessState("2026-09-27T05:30:00Z", 3_600_000, now), "VERIFIED");
   assert.equal(freshnessState("2026-09-27T03:00:00Z", 3_600_000, now), "NEED_VERIFY");
+});
+
+test("I: finance date normalization is date-only and timezone-safe", () => {
+  assert.equal(normalizeFinanceDate("01/09/2026 00:30"), "2026-09-01");
+  assert.equal(normalizeFinanceDate("2026-09-27T23:59:59"), "2026-09-27");
+});
+
+test("J: cashbook snapshot must cover the requested business-date period", () => {
+  const checkedAt = "2026-09-27T06:00:00Z"; // 13:00 UTC+7
+  assert.equal(
+    cashbookSnapshotCoversRange("Tháng này", checkedAt, "2026-09-01T00:00:00", "2026-09-27T23:59:59"),
+    true,
+  );
+  assert.equal(
+    cashbookSnapshotCoversRange("Hôm nay", checkedAt, "2026-09-01T00:00:00", "2026-09-27T23:59:59"),
+    false,
+  );
+  assert.equal(
+    cashbookSnapshotCoversRange(null, checkedAt, "2026-09-27T00:00:00", "2026-09-27T23:59:59"),
+    false,
+  );
 });

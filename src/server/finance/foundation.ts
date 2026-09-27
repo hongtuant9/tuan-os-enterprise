@@ -87,3 +87,61 @@ export function freshnessState(
   if (!Number.isFinite(timestamp)) return "NEED_VERIFY";
   return now.getTime() - timestamp <= staleAfterMs ? "VERIFIED" : "NEED_VERIFY";
 }
+
+export const FINANCE_BUSINESS_TIME_ZONE = "Asia/Bangkok";
+
+export function normalizeFinanceDate(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const vi = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(raw);
+  if (vi) return `${vi[3]}-${vi[2].padStart(2, "0")}-${vi[1].padStart(2, "0")}`;
+  return null;
+}
+
+export function financeBusinessDateKey(now: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FINANCE_BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function mondayOfWeek(dateKey: string) {
+  const date = new Date(dateKey + "T00:00:00Z");
+  const day = date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() - (day === 0 ? 6 : day - 1));
+  return date.toISOString().slice(0, 10);
+}
+
+export function cashbookSnapshotCoversRange(
+  periodLabel: string | null | undefined,
+  checkedAt: string,
+  from: string,
+  to: string,
+) {
+  const fromKey = normalizeFinanceDate(from);
+  const toKey = normalizeFinanceDate(to);
+  const checked = new Date(checkedAt);
+  if (!fromKey || !toKey || Number.isNaN(checked.getTime())) return false;
+  const today = financeBusinessDateKey(checked);
+  const label = (periodLabel ?? "").trim().toLowerCase();
+
+  let start: string;
+  const end = today;
+  if (label === "hôm nay") {
+    start = today;
+  } else if (label === "tháng này") {
+    start = today.slice(0, 7) + "-01";
+  } else if (label === "tuần này") {
+    start = mondayOfWeek(today);
+  } else {
+    return false;
+  }
+
+  return fromKey >= start && toKey <= end;
+}

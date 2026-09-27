@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeApSystem } from "./ap-candidate.ts";
+import { summarizeApSystem } from "./ap-candidate-core.ts";
 
 test("AP: Purchase Orders reconciles with Supplier debt", () => {
   const result = summarizeApSystem(

@@ -49,7 +49,7 @@ export function summarizeApSystem(
   if (poDueIndex < 0 || supplierDebtIndex < 0) {
     return {
       system, state: "NEED_VERIFY",
-      purchaseOrderRows: poCells.length, supplierRows: supplierCells.length,
+      purchaseOrderRows: purchaseOrders.rowCount, supplierRows: suppliers.rowCount,
       purchaseOrderOutstanding: null, supplierOutstanding: null, variance: null,
       reason: "Không map được field Cần trả NCC / Nợ cần trả hiện tại.",
     };

@@ -37,6 +37,7 @@ const NON_PNL_CODES = new Set(["N01", "N02", "N03", "N04", "N05"]);
 const RECEIPT_CODES = new Set(["R01", "RN01", "RN02"]);
 
 const LEGACY_NAME_TO_CODE: Array<[string, string]> = [
+  ["phieu chi tien tra ncc", "N01"],
   ["chi phi khac co giai trinh", "C11"],
   ["chi phi thue kho bai, mat bang kinh doanh", "C05"],
   ["chi phi hoi nghi, su kien, cong tac phi", "C08"],

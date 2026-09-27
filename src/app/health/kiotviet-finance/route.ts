@@ -41,6 +41,14 @@ function publicSummary(snapshot: FinanceBotSnapshot | null) {
           headerBalanceReconciled: cashbook.reconciliation.headerBalanceReconciled,
         }
       : null,
+    diagnostics: cashbook?.diagnostics
+      ? {
+          rawRowCount: cashbook.diagnostics.rawRowCount,
+          parsedRowCount: cashbook.diagnostics.parsedRowCount,
+          unparsedRowShapes: cashbook.diagnostics.unparsedRowShapes,
+          scrollContainers: cashbook.diagnostics.scrollContainers,
+        }
+      : null,
   };
 }
 

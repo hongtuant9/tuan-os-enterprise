@@ -7,6 +7,7 @@ import {
   inventoryBotConfigStatus,
   readInventoryBotSummary,
   runInventoryBotRead,
+  type InventoryBotSnapshot,
   type InventoryBotSystem,
 } from "@/server/integrations/kiotviet/inventory-browser-bot";
 
@@ -85,9 +86,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const results = [];
+  const results: InventoryBotSnapshot[] = [];
   for (const system of systems) {
-    results.push(await runInventoryBotRead(system));
+    try {
+      results.push(await runInventoryBotRead(system));
+    } catch (error) {
+      results.push({
+        system,
+        state: "ERROR",
+        checkedAt: new Date().toISOString(),
+        authenticated: false,
+        moduleCount: 0,
+        verifiedModules: 0,
+        modules: [],
+        writeEnabled: false,
+        detail:
+          "Inventory read failed before a durable snapshot could be persisted: " +
+          (error instanceof Error ? error.message : "Unknown error"),
+      });
+    }
   }
 
   return NextResponse.json(

@@ -1,7 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readlink, rename, unlink, writeFile } from "node:fs/promises";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import {
@@ -33,6 +34,23 @@ export type FinanceBotSnapshot = {
   taxonomyExpected: number;
   taxonomyVisible: number;
   taxonomyMissing: string[];
+  cashbook?: {
+    periodLabel: string | null;
+    openingBalance: number | null;
+    totalReceipts: number | null;
+    totalPayments: number | null;
+    closingBalance: number | null;
+    reportedTotalRows: number | null;
+    paginationComplete: boolean;
+    rows: Array<{
+      id: string;
+      transDate: string;
+      amount: number;
+      isReceipt: boolean | null;
+      groupLabel: string;
+      status: string;
+    }>;
+  };
   detail?: string;
 };
 
@@ -189,10 +207,41 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+async function clearStaleChromiumSingleton(profile: string) {
+  const lockPath = join(profile, "SingletonLock");
+  let stale = false;
+  try {
+    const target = await readlink(lockPath);
+    const match = target.match(/^(.*)-(\d+)$/);
+    if (!match) {
+      stale = true;
+    } else {
+      const [, lockHost, pidText] = match;
+      const pid = Number(pidText);
+      if (lockHost !== hostname()) {
+        stale = true;
+      } else {
+        try {
+          process.kill(pid, 0);
+        } catch {
+          stale = true;
+        }
+      }
+    }
+  } catch {
+    return;
+  }
+  if (!stale) return;
+  for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
+    await unlink(join(profile, name)).catch(() => undefined);
+  }
+}
+
 async function launch(system: FinanceBotSystem): Promise<Browser> {
   await mkdir(STATE_ROOT, { recursive: true });
   const profile = join(STATE_ROOT, system.toLowerCase() + "-profile");
   await mkdir(profile, { recursive: true });
+  await clearStaleChromiumSingleton(profile);
   return puppeteer.launch({
     executablePath: await findChromium(),
     headless: true,
@@ -433,6 +482,81 @@ async function cashbookRows(page: Page): Promise<string[]> {
       .filter(Boolean)
       .slice(0, 500);
   });
+}
+
+function parseMoneyText(value: string | undefined): number | null {
+  if (!value) return null;
+  const digits = value.replace(/[^0-9-]/g, "");
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseCashbookRow(text: string) {
+  const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2})?)/);
+  const amountMatch = text.match(/(-?[\d.,]+)\s*$/);
+  const id = text.trim().split(/\s+/)[0] || "";
+  if (!dateMatch || !amountMatch || !id) return null;
+  const amount = parseMoneyText(amountMatch[1]);
+  if (amount === null) return null;
+  const groupLabel = text.slice(dateMatch.index! + dateMatch[0].length, amountMatch.index).trim();
+  let isReceipt: boolean | null = null;
+  if (/\[TCE-(?:R|RN)|\bThu\b/i.test(groupLabel)) isReceipt = true;
+  if (/\[TCE-(?:C|F|H|N)|\bChi\b/i.test(groupLabel)) isReceipt = false;
+  return { id, transDate: dateMatch[1], amount: Math.abs(amount), isReceipt, groupLabel, status: "Đã thanh toán" };
+}
+
+async function cashbookSnapshot(page: Page) {
+  const body = (await visibleText(page)).replace(/\s+/g, " ").trim();
+  const metric = (label: string) => {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = body.match(new RegExp(escaped + "\\s+(-?[\\d.,]+)", "i"));
+    return parseMoneyText(match?.[1]);
+  };
+  const periodMatch = body.match(/Thời gian\s+(Hôm nay|Tháng này|Tuần này)(?=\s+(?:Lựa chọn khác|Phòng|Kênh bán|Người tạo|Nhân viên|Người nộp\/nhận))/i);
+  const totalMatch = body.match(/trên tổng số\s+(\d+)\s+phiếu/i);
+  const reportedTotalRows = totalMatch ? Number(totalMatch[1]) : null;
+  const seen = new Map<string, string>();
+
+  for (let pageIndex = 0; pageIndex < 100; pageIndex += 1) {
+    const current = await cashbookRows(page);
+    for (const row of current) seen.set(row, row);
+    if (reportedTotalRows !== null && seen.size >= reportedTotalRows) break;
+    const clicked = await page.evaluate(() => {
+      const visible = (el: Element) => {
+        const node = el as HTMLElement;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+      };
+      const candidates = Array.from(document.querySelectorAll("button,a,[role='button']")).filter(visible);
+      const next = candidates.find((el) => {
+        const node = el as HTMLElement;
+        const text = `${node.innerText || node.textContent || ""} ${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""} ${String(el.className || "")}`.toLowerCase();
+        const disabled = el.getAttribute("aria-disabled") === "true" || el.hasAttribute("disabled") || /disabled/.test(String(el.className));
+        return !disabled && /trang tiếp|tiếp theo|next page|pager-next|k-i-arrow-e|caret-alt-right/.test(text);
+      });
+      if (!next) return false;
+      (next as HTMLElement).click();
+      return true;
+    });
+    if (!clicked) break;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
+  const rawRows = [...seen.values()];
+  const parsedRows = rawRows.map(parseCashbookRow).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  return {
+    periodLabel: periodMatch?.[1]?.trim() || null,
+    openingBalance: metric("Quỹ đầu kỳ"),
+    totalReceipts: metric("Tổng thu"),
+    totalPayments: metric("Tổng chi"),
+    closingBalance: metric("Tồn quỹ"),
+    reportedTotalRows,
+    paginationComplete: reportedTotalRows === null ? rawRows.length > 0 : rawRows.length >= reportedTotalRows,
+    rows: parsedRows,
+    rawRows,
+  };
 }
 
 async function cashbookCreateCapability(page: Page): Promise<boolean> {
@@ -783,7 +907,26 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
       };
     }
 
-    const browser = await launch(system);
+    let browser: Browser;
+    try {
+      browser = await launch(system);
+    } catch (error) {
+      const snapshot: FinanceBotSnapshot = {
+        system,
+        state: "ERROR",
+        checkedAt,
+        authenticated: false,
+        cashbookVisible: false,
+        rowCount: 0,
+        contentHash: null,
+        taxonomyExpected: expected.length,
+        taxonomyVisible: 0,
+        taxonomyMissing: expected.map(cashflowGroupDisplayName),
+        detail: error instanceof Error ? error.message : "Browser launch failed",
+      };
+      await saveSummary(system, snapshot);
+      return snapshot;
+    }
     try {
       const page = await browser.newPage();
       const auth = await login(page, system);
@@ -807,7 +950,8 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
         return snapshot;
       }
 
-      const rows = await cashbookRows(page);
+      const cashbook = await cashbookSnapshot(page);
+      const rows = cashbook.rawRows;
       let taxonomyVisible = 0;
       let taxonomyMissing = expected.map(cashflowGroupDisplayName);
       let state: FinanceBotState = "READ_VERIFIED";
@@ -861,6 +1005,16 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
         taxonomyExpected: expected.length,
         taxonomyVisible,
         taxonomyMissing,
+        cashbook: {
+          periodLabel: cashbook.periodLabel,
+          openingBalance: cashbook.openingBalance,
+          totalReceipts: cashbook.totalReceipts,
+          totalPayments: cashbook.totalPayments,
+          closingBalance: cashbook.closingBalance,
+          reportedTotalRows: cashbook.reportedTotalRows,
+          paginationComplete: cashbook.paginationComplete,
+          rows: cashbook.rows,
+        },
         detail,
       };
       await saveSummary(system, snapshot);

@@ -19,6 +19,7 @@ import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-ce
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
 import { isTaskOverdue } from "@/server/tasks/overdue";
 import { summarizeCashflow } from "@/server/finance/foundation";
+import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 
 export type TceTabScreen =
   | "business"
@@ -318,7 +319,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
@@ -326,6 +327,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       container.dashboard.stats(),
       fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
       fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
+      readFinanceBotSummary("HOTEL"),
+      readFinanceBotSummary("FNB"),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -356,6 +359,15 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const cashflowSummary = summarizeCashflow([hotelCashflow, fnbCashflow]);
     const cashflowReadReady = cashflowSummary.state === "VERIFIED";
     const unknownDirectionCount = cashflowSummary.unknownDirectionCount;
+    const financeBotSnapshots = [hotelFinanceBot, fnbFinanceBot];
+    const cashBalanceReady = financeBotSnapshots.every((snapshot) => {
+      if (!snapshot?.cashbook || snapshot.cashbook.closingBalance === null) return false;
+      const checkedAt = Date.parse(snapshot.checkedAt);
+      return Number.isFinite(checkedAt) && Date.now() - checkedAt <= 30 * 60 * 1000;
+    });
+    const cashBalanceActual = cashBalanceReady
+      ? financeBotSnapshots.reduce((sum, snapshot) => sum + (snapshot?.cashbook?.closingBalance ?? 0), 0)
+      : null;
     // Accounting guardrail: Cash Out is not Expense/COGS. Do not derive P&L from cashflow.
     const costClassificationReady = false;
     const periodCostActual = 0;
@@ -567,11 +579,11 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-        "Chi phí Actual": "NEED VERIFY",
+        "Chi phí vận hành": "NEED VERIFY",
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
         "Cash Out": cashflowSummary.cashOut === null ? "NEED VERIFY" : money(cashflowSummary.cashOut),
         "Dòng tiền ròng": cashflowSummary.netCashFlow === null ? "NEED VERIFY" : money(cashflowSummary.netCashFlow),
-        "Số dư tiền mặt": "NEED VERIFY",
+        "Số dư tiền mặt": cashBalanceActual === null ? "NEED VERIFY" : money(cashBalanceActual),
         "Công nợ phải thu": "NEED VERIFY",
         "Công nợ phải trả": "NEED VERIFY",
         "Nợ vay": "NEED VERIFY",
@@ -580,11 +592,13 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
-        "Chi phí Actual": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
-        "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow API chưa VERIFIED",
-        "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow API chưa VERIFIED",
+        "Chi phí vận hành": "NEED VERIFY: chưa có canonical Expense Actual đủ authority; không dùng Cash Out thay Expense.",
+        "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
+        "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
-        "Số dư tiền mặt": "NEED VERIFY: cần fund/account balance từ nguồn authenticated; không suy từ Net Cash Flow.",
+        "Số dư tiền mặt": cashBalanceActual === null
+          ? "NEED VERIFY: chờ Tồn quỹ từ cả KiotViet Hotel và F&B qua authenticated Browser DOM."
+          : "VERIFIED: tổng Tồn quỹ hiện tại từ KiotViet Hotel + F&B; không suy từ Net Cash Flow.",
         "Công nợ phải thu": "NEED VERIFY: chưa có canonical AR source/mapping.",
         "Công nợ phải trả": "NEED VERIFY: chờ KiotViet Nhập hàng/Nhà cung cấp hoặc source authenticated tương đương.",
         "Nợ vay": "Authority = FIN-HOSPITALITY-001 / Owner-approved financial source; runtime bridge chưa VERIFIED.",

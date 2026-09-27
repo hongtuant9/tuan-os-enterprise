@@ -268,7 +268,16 @@ function providerEvidence(id: CustomerChannelId): {
     case "google_maps":
       return { providerConfig: "NOT_REQUIRED", providerVerification: "NOT_REQUIRED" };
     case "google_search":
+      return { providerConfig: "NOT_REQUIRED", providerVerification: "NOT_REQUIRED" };
     case "google_ads":
+      return {
+        providerConfig: configStatus([
+          "GOOGLE_OAUTH_CLIENT_ID",
+          "GOOGLE_OAUTH_CLIENT_SECRET",
+          "GOOGLE_ADS_CUSTOMER_ID",
+        ]),
+        providerVerification: "NEED_VERIFY",
+      };
     case "referral":
     case "travel_partner":
     case "other":

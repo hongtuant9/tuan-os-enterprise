@@ -186,13 +186,14 @@ Viewer access to every Sheet/Doc a source points at.
 1. Create a project (or reuse one) at
    [console.cloud.google.com](https://console.cloud.google.com).
 2. **APIs & Services > Library** — enable the **Google Drive API**, **Google
-   Sheets API**, and **Google Docs API**.
+   Sheets API**, **Google Docs API**, and **Google Ads API**.
 3. **APIs & Services > OAuth consent screen** — configure it (Internal if
    your Google Workspace supports it, otherwise External + Testing mode is
    fine for a single connected account). Add these scopes:
    - `drive.metadata.readonly`
    - `spreadsheets.readonly`
    - `documents.readonly`
+   - `adwords` (Google Ads API; write vẫn đi qua Approval Gate)
    - `userinfo.email` (used only to show which Google account is connected —
      Google has no way to identify the account without it)
 4. **APIs & Services > Credentials > Create Credentials > OAuth client ID**,

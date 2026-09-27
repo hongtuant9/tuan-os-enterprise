@@ -8,14 +8,16 @@ export const GOOGLE_OAUTH_TARGET_COOKIE = "google_oauth_target";
 
 /**
  * Keep the long-lived system Google connection separate from per-property Gmail
- * connections. Customer-care mailboxes receive Gmail-only permissions; they must
- * never inherit Drive/Sheets/Analytics access.
+ * connections. The system connection covers Workspace + Analytics + Google Ads;
+ * customer-care mailboxes receive Gmail-only permissions and must never inherit
+ * Drive/Sheets/Analytics/Ads access.
  */
 export const GOOGLE_SYNC_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/documents.readonly",
+  "https://www.googleapis.com/auth/adwords",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/analytics.readonly",
 ];

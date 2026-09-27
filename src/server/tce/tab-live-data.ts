@@ -20,6 +20,7 @@ import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/
 import { isTaskOverdue } from "@/server/tasks/overdue";
 import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
+import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 
 export type TceTabScreen =
   | "business"
@@ -114,7 +115,7 @@ const KIOTVIET_API_CAPABILITIES = [
 
 function localDateKey(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -319,7 +320,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
@@ -329,6 +330,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
       readFinanceBotSummary("HOTEL"),
       readFinanceBotSummary("FNB"),
+      readHospitalityDebtSnapshot(),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -361,13 +363,22 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const unknownDirectionCount = cashflowSummary.unknownDirectionCount;
     const financeBotSnapshots = [hotelFinanceBot, fnbFinanceBot];
     const cashBalanceReady = financeBotSnapshots.every((snapshot) => {
-      if (!snapshot?.cashbook || snapshot.cashbook.closingBalance === null) return false;
+      if (
+        !snapshot?.cashbook ||
+        !snapshot.authenticated ||
+        !snapshot.cashbookVisible ||
+        snapshot.cashbook.closingBalance === null ||
+        !snapshot.cashbook.reconciliation?.headerBalanceReconciled
+      ) return false;
       const checkedAt = Date.parse(snapshot.checkedAt);
       return Number.isFinite(checkedAt) && Date.now() - checkedAt <= 30 * 60 * 1000;
     });
-    const cashBalanceActual = cashBalanceReady
+    const kiotVietFundBalanceCandidate = cashBalanceReady
       ? financeBotSnapshots.reduce((sum, snapshot) => sum + (snapshot?.cashbook?.closingBalance ?? 0), 0)
       : null;
+    // Do not label KiotViet aggregate "Tồn quỹ" as Cash on hand / Bank balance
+    // until fund/account semantics are mapped and reconciled.
+    const cashBalanceActual: number | null = null;
     // Accounting guardrail: Cash Out is not Expense/COGS. Do not derive P&L from cashflow.
     const costClassificationReady = false;
     const periodCostActual = 0;
@@ -586,7 +597,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Số dư tiền mặt": cashBalanceActual === null ? "NEED VERIFY" : money(cashBalanceActual),
         "Công nợ phải thu": "NEED VERIFY",
         "Công nợ phải trả": "NEED VERIFY",
-        "Nợ vay": "NEED VERIFY",
+        "Nợ vay": debtSnapshot.state === "VERIFIED" && debtSnapshot.principalOutstanding !== null
+          ? money(debtSnapshot.principalOutstanding)
+          : "NEED VERIFY",
         "Lợi nhuận gộp": "NEED VERIFY",
         "Biên lợi nhuận gộp": "NEED VERIFY",
       },
@@ -596,12 +609,20 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
-        "Số dư tiền mặt": cashBalanceActual === null
-          ? "NEED VERIFY: chờ Tồn quỹ từ cả KiotViet Hotel và F&B qua authenticated Browser DOM."
-          : "VERIFIED: tổng Tồn quỹ hiện tại từ KiotViet Hotel + F&B; không suy từ Net Cash Flow.",
+        "Số dư tiền mặt": kiotVietFundBalanceCandidate === null
+          ? "NEED VERIFY: chưa có Tồn quỹ authenticated + header reconciliation đủ cho cả Hotel và F&B."
+          : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) +
+            ", nhưng chưa map fund/account để phân biệt Cash on hand và Bank/account balance.",
         "Công nợ phải thu": "NEED VERIFY: chưa có canonical AR source/mapping.",
         "Công nợ phải trả": "NEED VERIFY: chờ KiotViet Nhập hàng/Nhà cung cấp hoặc source authenticated tương đương.",
-        "Nợ vay": "Authority = FIN-HOSPITALITY-001 / Owner-approved financial source; runtime bridge chưa VERIFIED.",
+        "Nợ vay": debtSnapshot.state === "VERIFIED"
+          ? "VERIFIED · FIN-HOSPITALITY-001 · đáo hạn " + (debtSnapshot.maturityDate ?? "NEED VERIFY") +
+            " · source updated " + (debtSnapshot.lastSourceUpdate ?? "NEED VERIFY")
+          : debtSnapshot.principalOutstanding !== null
+            ? "NEED VERIFY: FIN-HOSPITALITY-001 có last-known " + money(debtSnapshot.principalOutstanding) +
+              " · xác nhận " + (debtSnapshot.confirmationDate ?? "không rõ ngày") +
+              " · thiếu canonical Last Updated/current statement read-back."
+            : "NEED VERIFY: Authority = FIN-HOSPITALITY-001; runtime read hoặc confirmation chưa PASS.",
         "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; COGS production chưa đủ authority/coverage.",
         "Biên lợi nhuận gộp": "NEED VERIFY: chỉ tính khi Gross Profit VERIFIED và COGS coverage đủ.",
       },

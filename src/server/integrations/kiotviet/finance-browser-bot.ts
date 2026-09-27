@@ -5,6 +5,7 @@ import { access, mkdir, readFile, readlink, rename, unlink, writeFile } from "no
 import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import { reconcileCashbookTotals } from "@/server/finance/foundation";
 import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
@@ -42,6 +43,17 @@ export type FinanceBotSnapshot = {
     closingBalance: number | null;
     reportedTotalRows: number | null;
     paginationComplete: boolean;
+    reconciliation: {
+      rowReceipts: number;
+      rowPayments: number;
+      unknownDirectionCount: number;
+      receiptVariance: number | null;
+      paymentVariance: number | null;
+      headerBalanceVariance: number | null;
+      headerBalanceReconciled: boolean;
+      rowsMatchHeader: boolean;
+      verified: boolean;
+    };
     rows: Array<{
       id: string;
       transDate: string;
@@ -544,10 +556,13 @@ async function cashbookSnapshot(page: Page) {
         const rect = node.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
       };
-      const candidates = Array.from(document.querySelectorAll("button,a,[role='button']")).filter(visible);
+      const candidates = Array.from(document.querySelectorAll(
+        "button,a,[role='button'],.k-pager-next,[data-command='PageNext']"
+      )).filter(visible);
       const nextCandidates = candidates.filter((el) => {
         const node = el as HTMLElement;
-        const text = `${node.innerText || node.textContent || ""} ${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""} ${String(el.className || "")}`.toLowerCase();
+        const descendant = el.querySelector("[class*='caret-alt-right'],[class*='arrow-e'],[class*='pager-next']");
+        const text = `${node.innerText || node.textContent || ""} ${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""} ${String(el.className || "")} ${String((descendant as HTMLElement | null)?.className || "")}`.toLowerCase();
         return /trang sau|trang tiếp|tiếp theo|next page|pager-next|k-i-arrow-e|caret-alt-right/.test(text);
       });
       if (!nextCandidates.length) return { clicked: false, terminal: false };
@@ -568,14 +583,28 @@ async function cashbookSnapshot(page: Page) {
 
   const rawRows = [...seen.values()];
   const parsedRows = rawRows.map(parseCashbookRow).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const openingBalance = metric("Quỹ đầu kỳ");
+  const totalReceipts = metric("Tổng thu");
+  const totalPayments = metric("Tổng chi");
+  const closingBalance = metric("Tồn quỹ");
+  const reconciliation = reconcileCashbookTotals({
+    openingBalance,
+    totalReceipts,
+    totalPayments,
+    closingBalance,
+    rows: parsedRows,
+  });
+  const paginationEvidence =
+    reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows;
   return {
     periodLabel: periodMatch?.[1]?.trim() || null,
-    openingBalance: metric("Quỹ đầu kỳ"),
-    totalReceipts: metric("Tổng thu"),
-    totalPayments: metric("Tổng chi"),
-    closingBalance: metric("Tồn quỹ"),
+    openingBalance,
+    totalReceipts,
+    totalPayments,
+    closingBalance,
     reportedTotalRows,
-    paginationComplete: reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows,
+    paginationComplete: paginationEvidence && reconciliation.verified,
+    reconciliation,
     rows: parsedRows,
     rawRows,
   };
@@ -1035,6 +1064,7 @@ export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy 
           closingBalance: cashbook.closingBalance,
           reportedTotalRows: cashbook.reportedTotalRows,
           paginationComplete: cashbook.paginationComplete,
+          reconciliation: cashbook.reconciliation,
           rows: cashbook.rows,
         },
         detail,

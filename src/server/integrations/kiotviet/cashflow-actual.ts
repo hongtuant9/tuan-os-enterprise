@@ -4,7 +4,10 @@ import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
 import { KiotVietRetailFinanceClient } from "./retail-finance-client";
 import { readFinanceBotSummary, type FinanceBotSystem } from "./finance-browser-bot";
-import { dedupeBySourceTransactionId } from "@/server/finance/foundation";
+import {
+  businessRangeEpoch,
+  dedupeBySourceTransactionId,
+} from "@/server/finance/foundation";
 
 export type KiotVietCashflowSnapshot = {
   source: "KIOTVIET_FNB" | "KIOTVIET_HOTEL";
@@ -153,10 +156,10 @@ async function browserCashflowFallback(
   if (!["READ_VERIFIED", "SETUP_VERIFIED", "CREATE_READY"].includes(snapshot.state)) return null;
   const checkedAt = Date.parse(snapshot.checkedAt);
   if (!Number.isFinite(checkedAt) || Date.now() - checkedAt > 30 * 60 * 1000) return null;
-  if (!snapshot.cashbook.paginationComplete) return null;
+  if (!snapshot.cashbook.paginationComplete || !snapshot.cashbook.reconciliation?.verified) return null;
 
-  const fromMs = Date.parse(from);
-  const toMs = Date.parse(to);
+  const fromMs = businessRangeEpoch(from, "start");
+  const toMs = businessRangeEpoch(to, "end");
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
 
   const normalized = snapshot.cashbook.rows
@@ -189,7 +192,7 @@ async function browserCashflowFallback(
     rows: normalized,
     notes: [
       "Đọc từ KiotViet Sổ quỹ qua authenticated server-side Browser DOM.",
-      `Finance Bot snapshot checkedAt=${snapshot.checkedAt}; paginationComplete=true.`,
+      `Finance Bot snapshot checkedAt=${snapshot.checkedAt}; paginationComplete=true; header/row reconciliation=VERIFIED.`,
       "Nguồn vẫn là KiotViet; không dùng Google Drive/Sheet làm transaction fallback.",
     ],
   };

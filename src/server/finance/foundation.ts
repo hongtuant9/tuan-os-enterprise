@@ -56,6 +56,66 @@ export function summarizeGrossProfit(revenue: number | null, cogs: CogsActualInp
   return { state: "VERIFIED" as const, grossProfit, grossMarginPct, coveragePct: cogs.revenueCoveragePct };
 }
 
+export type CashbookReconciliationInput = {
+  openingBalance: number | null;
+  totalReceipts: number | null;
+  totalPayments: number | null;
+  closingBalance: number | null;
+  rows: Array<{ amount: number; isReceipt: boolean | null }>;
+};
+
+export function reconcileCashbookTotals(input: CashbookReconciliationInput) {
+  const rowReceipts = input.rows
+    .filter((row) => row.isReceipt === true)
+    .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+  const rowPayments = input.rows
+    .filter((row) => row.isReceipt === false)
+    .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+  const unknownDirectionCount = input.rows.filter((row) => row.isReceipt === null).length;
+  const headerReceipts = input.totalReceipts === null ? null : Math.abs(input.totalReceipts);
+  const headerPayments = input.totalPayments === null ? null : Math.abs(input.totalPayments);
+  const receiptVariance = headerReceipts === null ? null : rowReceipts - headerReceipts;
+  const paymentVariance = headerPayments === null ? null : rowPayments - headerPayments;
+  const rowsMatchHeader =
+    headerReceipts !== null &&
+    headerPayments !== null &&
+    unknownDirectionCount === 0 &&
+    receiptVariance === 0 &&
+    paymentVariance === 0;
+  const headerBalanceVariance =
+    input.openingBalance === null ||
+    headerReceipts === null ||
+    headerPayments === null ||
+    input.closingBalance === null
+      ? null
+      : input.openingBalance + headerReceipts - headerPayments - input.closingBalance;
+  const headerBalanceReconciled = headerBalanceVariance === 0;
+
+  return {
+    rowReceipts,
+    rowPayments,
+    unknownDirectionCount,
+    headerReceipts,
+    headerPayments,
+    receiptVariance,
+    paymentVariance,
+    rowsMatchHeader,
+    headerBalanceVariance,
+    headerBalanceReconciled,
+    verified: rowsMatchHeader && headerBalanceReconciled,
+  };
+}
+
+export function businessRangeEpoch(value: string, boundary: "start" | "end") {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return Date.parse(
+      trimmed + (boundary === "start" ? "T00:00:00.000+07:00" : "T23:59:59.999+07:00"),
+    );
+  }
+  return Date.parse(trimmed);
+}
+
 export function dedupeBySourceTransactionId<T extends { id: string }>(rows: T[]) {
   const seen = new Set<string>();
   return rows.filter((row) => {

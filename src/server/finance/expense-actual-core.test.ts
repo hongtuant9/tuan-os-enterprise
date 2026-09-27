@@ -53,3 +53,13 @@ test("unknown legacy labels remain visible for reconciliation", () => {
   ]);
   assert.deepEqual(result.unknownGroupLabels, ["Legacy custom group"]);
 });
+
+
+test("legacy supplier-payment label maps to N01 and is excluded from P&L", () => {
+  const result = summarizeExpenseActualRows([
+    { id:"1", transDate:"27/09/2026", amount:7493030, isReceipt:false, groupLabel:"Phiếu chi tiền trả ncc", status:"Đã thanh toán" },
+  ]);
+  assert.equal(result.groups.length, 0);
+  assert.equal(result.excludedNonPnlRows, 1);
+  assert.equal(result.unknownExpenseRows, 0);
+});

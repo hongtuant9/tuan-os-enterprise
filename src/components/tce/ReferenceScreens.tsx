@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { TceWorkspaceShell } from "@/components/tce/TceShell";
 import MobileMockupScreen from "@/components/tce/MobileMockup";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
+import VerificationHelp, { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/VerificationHelp";
 
 type ScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -17,6 +18,7 @@ type Metric = {
   note: string;
   tone: Tone;
   icon: string;
+  verificationGuide?: VerificationGuide;
 };
 
 type ScreenMeta = {
@@ -243,7 +245,10 @@ function MetricCard({ metric }: { metric: Metric }) {
           <p className={"mt-1 text-[12px] font-bold " + t.delta}>{metric.delta || "↗"}</p>
         </div>
       </div>
-      <p className="mt-2 whitespace-normal text-[8.5px] leading-[10px] text-[#6f86ad]">{viDisplay(metric.note)}</p>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <p className="min-w-0 flex-1 whitespace-normal text-[8.5px] leading-[10px] text-[#6f86ad]">{viDisplay(metric.note)}</p>
+        {metric.verificationGuide ? <VerificationHelp guide={metric.verificationGuide} compact /> : null}
+      </div>
     </div>
   );
 }
@@ -298,7 +303,12 @@ function DataTable({ columns, data }: { columns: string[]; rows?: number; data?:
         <tbody className="divide-y divide-[#e8f0f7] text-[#3e5b84]">
           {liveRows ? liveRows.map((row, r) => (
             <tr key={r} className="h-[31px]">
-              {columns.map((col, i) => <td key={col + i} className="truncate px-1.5 py-1.5" title={viDisplay(row[i] ?? "—")}>{viDisplay(row[i] ?? "—")}</td>)}
+              {columns.map((col, i) => {
+                const raw = String(row[i] ?? "—");
+                const display = viDisplay(raw);
+                const unresolved = /NEED[_ ]VERIFY|CẦN XÁC MINH|HOLD|TẠM DỪNG|CHƯA ĐẦY ĐỦ/i.test(raw + " " + display);
+                return <td key={col + i} className="truncate px-1.5 py-1.5" title={display}>{unresolved ? <span className="inline-flex items-center gap-1"><span>{display}</span><VerificationHelp compact guide={fallbackVerificationGuide(`${col} — ${row[1] ?? row[0] ?? "Dữ liệu"}`, raw)} /></span> : display}</td>;
+              })}
             </tr>
           )) : (
             <tr>
@@ -727,7 +737,9 @@ export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; d
     const label = screen === "business" && metric.label === "Doanh thu hôm nay" && data?.period.key !== "today"
       ? "Doanh thu " + data?.period.label.toLowerCase()
       : metric.label;
-    return { ...metric, label, value, note };
+    const unresolved = /NEED[_ ]VERIFY|CẦN XÁC MINH|HOLD|TẠM DỪNG|CHƯA ĐẦY ĐỦ/i.test(String(value ?? "") + " " + String(note ?? ""));
+    const guide = data?.verificationGuides[metric.label] ?? (unresolved ? fallbackVerificationGuide(metric.label, String(note ?? "")) : undefined);
+    return { ...metric, label, value, note, verificationGuide: guide };
   });
   return (
     <>

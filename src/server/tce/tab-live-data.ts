@@ -51,11 +51,17 @@ export type TcePeriodResolved = {
   elapsedDays: number;
 };
 
+export type TceVerificationGuide = {
+  title: string; status: string; reason: string; verifyWhat: string[]; evidenceRequired: string[]; steps: string[];
+  owner: string; provider: string; completionCriteria: string[]; nextAction: string; source?: string; severity?: "P0" | "P1" | "P2";
+};
+
 export type TceTabLiveData = {
   generatedAt: string;
   period: TcePeriodResolved;
   metricValues: Record<string, string>;
   metricNotes: Record<string, string>;
+  verificationGuides: Record<string, TceVerificationGuide>;
   tables: Record<string, string[][]>;
   lists: Record<string, string[]>;
   sourceState: "LIVE" | "PARTIAL" | "NEED_VERIFY";
@@ -298,12 +304,14 @@ function result(
   tables: Record<string, string[][]> = {},
   lists: Record<string, string[]> = {},
   sourceState: TceTabLiveData["sourceState"] = "LIVE",
+  verificationGuides: Record<string, TceVerificationGuide> = {},
 ): TceTabLiveData {
   return {
     generatedAt: new Date().toISOString(),
     period,
     metricValues,
     metricNotes,
+    verificationGuides,
     tables,
     lists,
     sourceState,
@@ -328,7 +336,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     tables: Record<string, string[][]> = {},
     lists: Record<string, string[]> = {},
     sourceState: TceTabLiveData["sourceState"] = "LIVE",
-  ) => result(period, metricValues, metricNotes, tables, lists, sourceState);
+    verificationGuides: Record<string, TceVerificationGuide> = {},
+  ) => result(period, metricValues, metricNotes, tables, lists, sourceState, verificationGuides);
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
@@ -409,6 +418,35 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const periodProfitActual: number | null = null;
     const periodMarginActual: number | null = null;
 
+    const financeVerificationGuides: Record<string, TceVerificationGuide> = {
+      "Chi phí": { title: "Chi phí thực tế", status: "CẦN XÁC MINH", severity: "P0",
+        reason: `Expense Actual coverage ${foundationReadiness.expense.coveragePct.toFixed(1)}%; missing=${foundationReadiness.expense.missingRows}; partial=${foundationReadiness.expense.partialRows}. Source Map đã ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows}.`,
+        verifyWhat: ["32 dòng Expense Actual bắt buộc của Homestay + Cozy Garden.", "Khoản nào là P&L Expense, khoản nào chỉ là Cash Out/non-P&L.", "Kỳ, cơ sở, category và payment/evidence của từng khoản."],
+        evidenceRequired: ["Payroll/chấm công đã chốt + chứng từ thanh toán lương.", "Hóa đơn điện/nước/Internet/software/marketing/repair/fees đúng kỳ.", "KiotViet Sổ quỹ hoặc module nguồn + Source ID, ngày, cơ sở và chứng từ đi kèm."],
+        steps: ["AI CFO đọc FIN-HOSPITALITY-001 Source Map 32/32.", "Finance Browser/Inventory Browser lấy transaction/module evidence từ KiotViet.", "Đối chiếu chứng từ với category và business unit; loại N01/CAPEX/gốc vay khỏi P&L.", "Cập nhật Actual + Verification Status; chạy reconciliation và coverage."],
+        owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + bộ phận kế toán/lương + Tuấn với chứng từ owner-paid", source: "FIN-HOSPITALITY-001 + KiotViet authenticated runtime + evidence gốc",
+        completionCriteria: ["32/32 dòng có amount=0 VERIFIED hoặc Actual VERIFIED/approved exception.", "Không còn cashout bị dùng thay Expense.", "Không duplicate giữa Nhập hàng/Bảng lương/Sổ quỹ."],
+        nextAction: `Đóng ${foundationReadiness.expense.missingRows} dòng missing trước, sau đó ${foundationReadiness.expense.partialRows} dòng partial theo Source Map.` },
+      "Chi phí vận hành": null as unknown as TceVerificationGuide,
+      "Lợi nhuận gộp": { title: "Lợi nhuận gộp", status: "CẦN XÁC MINH", severity: "P0",
+        reason: `Revenue đã có nhưng COGS sold-SKU chưa đủ: BOM VERIFIED ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; COST-001 match ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}.`,
+        verifyWhat: ["COGS cho từng SKU thực bán trong kỳ.", "BOM/định lượng/giá nguyên liệu đủ production authority.", "Gross Profit = Net Revenue − COGS, không suy từ Cash Out."],
+        evidenceRequired: ["InvoiceDetails SKU thực bán từ KiotViet F&B.", "BOM VERIFIED/GO từ COST-001 và giá nguyên liệu authority.", "Đối với Homestay: direct-cost definition đã chốt trong FIN-HOSPITALITY-001."],
+        steps: ["Ưu tiên 13 SKU đã bán nhưng chưa match COST-001.", "Nghiệm thu BOM các SKU có doanh số theo tần suất/giá trị bán.", "Tính COGS theo sales quantity × verified unit COGS.", "Đối soát coverage=100% trước khi tính Gross Profit."],
+        owner: "AI CFO + AI COO/Cost Controller", provider: "Quản lý Cozy/Bếp/Bar cung cấp công thức-định lượng; Tuấn duyệt exception/authority khi cần", source: "KiotViet F&B sold SKU × COST-001",
+        completionCriteria: ["Sold-SKU match coverage = 100%.", "Sold-SKU BOM VERIFIED coverage = 100% hoặc exception Owner-approved.", "COGS reconciliation PASS."],
+        nextAction: `Xử lý 13 SKU chưa match và nghiệm thu BOM cho ${foundationReadiness.cogs.soldSkuCount} SKU thực bán theo thứ tự doanh số.` },
+      "Biên lợi nhuận": { title: "Biên lợi nhuận", status: "CẦN XÁC MINH", severity: "P0", reason: "Biên lợi nhuận chỉ hợp lệ khi Gross Profit và COGS coverage đã VERIFIED.",
+        verifyWhat: ["Gross Profit đã VERIFIED.", "Net Revenue denominator đúng kỳ và không bằng 0.", "COGS coverage của sold SKU đạt gate."], evidenceRequired: ["Revenue reconciliation PASS.", "COGS reconciliation PASS.", "Gross Profit calculation evidence."],
+        steps: ["Đóng COGS blocker.", "Tính Gross Profit.", "Tính Gross Margin = Gross Profit / Net Revenue × 100.", "Nếu Revenue=0 hiển thị N/A."], owner: "AI CFO", provider: "Không cần chứng từ riêng ngoài Revenue/COGS đã VERIFIED", source: "Canonical Finance Calculation Layer", completionCriteria: ["Gross Profit VERIFIED.", "COGS coverage PASS.", "Formula và period PASS."], nextAction: "Không xử lý riêng; tự chuyển VERIFIED ngay sau khi Gross Profit/COGS đạt gate." },
+      "Dòng tiền ròng": { title: "Dòng tiền ròng", status: "CẦN XÁC MINH", severity: "P0", reason: `F&B Cashflow=${fnbCashflow.state}; Hotel Cashflow=${hotelCashflow.state}. Toàn kỳ chỉ VERIFIED khi cả hai nguồn reconcile.`,
+        verifyWhat: ["Hotel Cash In/Out đầy đủ và reconciliation với header.", "F&B Cashflow tiếp tục fresh/VERIFIED.", "Net Cash Flow = Cash In − Cash Out."], evidenceRequired: ["Hotel authenticated Sổ quỹ 14/14 hoặc authenticated Export.", "Header totals + row totals + timestamp/source."], steps: ["Dùng Browser VPS đọc Hotel Sổ quỹ.", "Nếu virtual-grid thiếu dòng, dùng Export từ authenticated UI.", "Parse file, dedupe source transaction, reconcile header vs rows.", "Khi Hotel+F&B VERIFIED, tính Net Cash Flow."], owner: "AI CTO + AI CFO", provider: "Quản lý Hotel chỉ hỗ trợ nếu session/MFA hoặc source UI thay đổi", source: "KiotViet Hotel/F&B Sổ quỹ authenticated Browser VPS", completionCriteria: ["Hotel reported=raw/parsed đầy đủ.", "Receipt/payment variance = 0.", "F&B và Hotel đều VERIFIED, snapshot fresh."], nextAction: "Đóng Hotel Cashflow 13/14 và variance 5,7 triệu bằng authenticated Export fallback." },
+      "Số dư tiền mặt": { title: "Số dư tiền mặt", status: "CẦN XÁC MINH", severity: "P1", reason: "KiotViet aggregate Tồn quỹ chưa được map thành Cash on hand/Bank account nên không được gọi là số dư tiền mặt chính thức.", verifyWhat: ["Từng quỹ/tài khoản đại diện tiền mặt hay ngân hàng.", "Opening/closing balance và bank reconciliation."], evidenceRequired: ["KiotViet fund/account mapping.", "Bank statement/current balance cho tài khoản ngân hàng liên quan."], steps: ["Map từng fund/account.", "Tách cash-on-hand và bank.", "Reconcile closing balance với source bank/cash count.", "Chỉ publish aggregate sau PASS."], owner: "AI CFO + Audit", provider: "Tuấn/kế toán cung cấp statement hoặc xác nhận fund-account mapping", source: "KiotViet Tồn quỹ + authenticated bank evidence", completionCriteria: ["100% fund mapped.", "Bank/cash reconciliation PASS.", "Không dùng aggregate chưa map."], nextAction: "Xác nhận fund/account mapping trước, sau đó đối soát số dư ngân hàng hiện tại." },
+      "Công nợ phải trả": { title: "Công nợ phải trả (AP)", status: "CẦN XÁC MINH", severity: "P0", reason: foundationReadiness.ap.systems.map(x=>`${x.system}: ${x.reason}`).join(" | "), verifyWhat: ["Purchase Orders outstanding và Supplier current debt theo từng hệ thống.", "Khoản đã trả/đã tất toán không còn outstanding."], evidenceRequired: ["KiotViet Nhập hàng/Purchase Orders.", "KiotViet Suppliers current debt.", "Payment evidence khi có mismatch."], steps: ["Đọc structured business rows từ PO + Suppliers.", "Reconcile theo supplier/source reference.", "Điều tra mismatch; không suy empty view = AP 0.", "Đóng AP khi variance=0 hoặc exception có authority."], owner: "AI CFO + AI COO", provider: "Quản lý mua hàng/Kho + kế toán/NCC khi cần chứng từ thanh toán", source: "KiotViet Purchase Orders + Suppliers authenticated Browser", completionCriteria: ["PO outstanding = Supplier debt theo scope.", "Không còn unmatched payable trọng yếu.", "Evidence paid/unpaid đầy đủ."], nextAction: "Điều tra Hotel Supplier outstanding 800 triệu không có PO tương ứng; F&B empty view vẫn giữ NEED VERIFY." },
+      "Nợ vay": { title: "Nợ vay", status: "CẦN XÁC MINH", severity: "P0", reason: `Nguồn authority gần nhất được xác nhận ngày ${debtSnapshot.confirmationDate ?? "không rõ"}; chưa có current bank evidence đủ mới.`, verifyWhat: ["Principal outstanding hiện tại.", "Lãi suất hiện tại, maturity/đáo hạn, next payment nếu có.", "Ngày xác minh và source authority."], evidenceRequired: ["Statement/loan/overdraft evidence hiện tại từ ngân hàng.", "FIN-HOSPITALITY-001 debt record đã cập nhật."], steps: ["Đọc authenticated bank evidence/statement mới nhất.", "Đối chiếu principal/rate/maturity với FIN.", "Cập nhật Last Verified/Last Updated.", "Nếu chưa có bank evidence giữ NEED VERIFY."], owner: "AI CFO + Audit", provider: "Tuấn/người có quyền truy cập ngân hàng cung cấp hoặc cho phép read-back authenticated statement", source: "FIN-HOSPITALITY-001 + current bank evidence", completionCriteria: ["Principal/rate/maturity current và có timestamp.", "Reconciliation với FIN PASS."], nextAction: "Bổ sung statement/read-back ngân hàng mới hơn confirmation 12/08/2026." },
+    };
+    financeVerificationGuides["Chi phí vận hành"] = financeVerificationGuides["Chi phí"];
+
     if (screen === "business") {
       return makeResult(
         {
@@ -469,6 +507,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
+        financeVerificationGuides,
       );
     }
 
@@ -748,6 +787,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         ],
       },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",
+      { ...financeVerificationGuides, "Biên lợi nhuận gộp": financeVerificationGuides["Biên lợi nhuận"] },
     );
   }
 

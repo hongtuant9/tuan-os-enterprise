@@ -62,6 +62,8 @@ export type InventoryBotSnapshot = {
     openingDebtLabelVisible: boolean;
     debtAdjustmentLabelVisible: boolean;
     purchaseHistoryLabelVisible: boolean;
+    containerFound?: boolean;
+    containerTextShape?: string;
     dateTokens: string[];
     amountTokens: number[];
   }>;
@@ -513,16 +515,27 @@ async function readSupplierDebtDiagnostics(
       (target as HTMLElement).click(); return true;
     }, code).catch(() => false);
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    const detail = await page.evaluate(() => {
-      const text=(document.body?.innerText||"").replace(/\s+/g," ").trim();
+    const detail = await page.evaluate((supplierCode) => {
+      const visible=(el:Element)=>{const n=el as HTMLElement,s=getComputedStyle(n),r=n.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>2&&r.height>2;};
+      const selectors=["[role='dialog']",".k-window",".k-dialog",".modal",".drawer",".offcanvas",".ant-drawer",".ant-modal",".MuiDialog-root"];
+      const overlayCandidates=Array.from(document.querySelectorAll(selectors.join(","))).filter(visible);
+      const codeCandidates=Array.from(document.querySelectorAll("div,section,aside,article,form,tr")).filter(visible).filter((el)=>(el.textContent||"").includes(supplierCode));
+      const candidates=[...overlayCandidates,...codeCandidates]
+        .map((el)=>({text:((el as HTMLElement).innerText||el.textContent||"").replace(/\s+/g," ").trim()}))
+        .filter((item)=>item.text.length>=20&&item.text.length<=6000);
+      candidates.sort((a,b)=>a.text.length-b.text.length);
+      const chosen=(candidates.find((item)=>item.text.includes(supplierCode))||candidates[0])?.text||"";
+      const text=chosen || ((document.body?.innerText||"").replace(/\s+/g," ").trim());
       return {
         openingDebtLabelVisible: /nợ đầu kỳ|công nợ đầu kỳ/i.test(text),
         debtAdjustmentLabelVisible: /điều chỉnh công nợ|điều chỉnh nợ/i.test(text),
         purchaseHistoryLabelVisible: /lịch sử nhập|lịch sử mua|nhập hàng|mua hàng/i.test(text),
+        containerFound: Boolean(chosen),
+        containerTextShape: text.replace(/\p{L}+/gu,"X").replace(/\s+/g," ").trim().slice(0,800),
         dateTokens: Array.from(new Set(text.match(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\b/g) || [])).slice(0,20),
         amountTokens: Array.from(new Set((text.match(/-?\d[\d.,]{3,}/g)||[]).map((v)=>Number(v.replace(/[^\d-]/g,""))).filter((v)=>Number.isFinite(v)&&Math.abs(v)>=1000))).slice(0,30),
       };
-    }).catch(() => ({ openingDebtLabelVisible:false,debtAdjustmentLabelVisible:false,purchaseHistoryLabelVisible:false,dateTokens:[] as string[],amountTokens:[] as number[] }));
+    }, code).catch(() => ({ openingDebtLabelVisible:false,debtAdjustmentLabelVisible:false,purchaseHistoryLabelVisible:false,containerFound:false,containerTextShape:"",dateTokens:[] as string[],amountTokens:[] as number[] }));
     results.push({ code, currentDebt, totalPurchase, detailOpened, ...detail });
   }
   return results;

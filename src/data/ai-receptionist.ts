@@ -162,6 +162,7 @@ export type PilotMessageInput = {
   wbraid?: string;
   gaClientId?: string;
   gaSessionId?: string;
+  selfReportedSource?: string;
   referralSource?: string;
   pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
   carePhase?: CustomerCarePhase;

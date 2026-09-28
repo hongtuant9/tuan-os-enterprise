@@ -126,7 +126,6 @@ export async function getMarketingCommandCenterSnapshot(
     const paidChannels = channels.filter((row) => paidChannelIds.has(row.channelId));
     const paidSpend = paidChannels.reduce((sum, row) => sum + row.spend, 0);
     const paidLeads = paidChannels.reduce((sum, row) => sum + row.leads, 0);
-    const paidRevenue = paidChannels.reduce((sum, row) => sum + row.revenue, 0);
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
     const taggedEvents = attributableEvents.filter((row) => Boolean(
       s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)

@@ -48,6 +48,7 @@ function publicSummary(snapshot: FinanceBotSnapshot | null) {
           unparsedRowShapes: cashbook.diagnostics.unparsedRowShapes,
           unparsedRowTokens: cashbook.diagnostics.unparsedRowTokens ?? [],
           exportControlLabels: cashbook.diagnostics.exportControlLabels ?? [],
+          exportCapture: cashbook.diagnostics.exportCapture ?? null,
           scrollContainers: cashbook.diagnostics.scrollContainers,
           kendoDataSources: cashbook.diagnostics.kendoDataSources ?? [],
         }
@@ -64,9 +65,10 @@ export async function GET() {
     FNB: publicSummary(fnb),
     HOTEL: publicSummary(hotel),
   };
+  const readableStates = new Set(["READ_VERIFIED", "SETUP_VERIFIED", "CREATE_READY"]);
   const ready = [systems.FNB, systems.HOTEL].every(
     (item) =>
-      item.state === "READ_VERIFIED" &&
+      readableStates.has(item.state) &&
       item.authenticated &&
       item.cashbookVisible &&
       item.paginationComplete &&

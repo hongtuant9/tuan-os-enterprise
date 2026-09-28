@@ -692,6 +692,7 @@ export class AiReceptionistService {
       wbraid: input.wbraid ?? existingMetadata.wbraid ?? null,
       ga_client_id: input.gaClientId ?? existingMetadata.ga_client_id ?? null,
       ga_session_id: input.gaSessionId ?? existingMetadata.ga_session_id ?? null,
+      self_reported_source: input.selfReportedSource ?? existingMetadata.self_reported_source ?? null,
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
       page_entity: pageEntity,
       preferred_language: rendered.detectedLanguage,

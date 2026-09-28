@@ -227,6 +227,169 @@ from public.hospitality_bookings hb;
 
 grant select on public.hospitality_booking_reconciliation_v to authenticated, service_role;
 
+
+create table if not exists public.hospitality_reviews (
+  id uuid primary key default gen_random_uuid(),
+  source_system text not null,
+  source_review_id text,
+  customer_id uuid references public.hospitality_customers(id) on delete set null,
+  hospitality_booking_id uuid references public.hospitality_bookings(id) on delete set null,
+  property_id uuid references public.properties(id) on delete set null,
+  entity_name text,
+  platform text not null,
+  review_date timestamptz,
+  rating numeric(3,2),
+  review_text text,
+  review_reference text,
+  response_status text,
+  issue_category text,
+  sentiment text,
+  verification_status text not null default 'NEED_VERIFY'
+    check (verification_status in ('VERIFIED','NEED_VERIFY','HOLD')),
+  evidence jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_system, source_review_id),
+  check (rating is null or (rating >= 0 and rating <= 10))
+);
+alter table public.hospitality_reviews enable row level security;
+drop policy if exists "Hospitality reviews viewable by authenticated users" on public.hospitality_reviews;
+create policy "Hospitality reviews viewable by authenticated users"
+  on public.hospitality_reviews for select to authenticated using (true);
+grant select on public.hospitality_reviews to authenticated;
+grant select, insert, update, delete on public.hospitality_reviews to service_role;
+drop trigger if exists set_updated_at on public.hospitality_reviews;
+create trigger set_updated_at before update on public.hospitality_reviews
+for each row execute procedure public.set_updated_at();
+create index if not exists hospitality_reviews_customer_date_idx
+  on public.hospitality_reviews(customer_id,review_date desc) where customer_id is not null;
+create index if not exists hospitality_reviews_booking_idx
+  on public.hospitality_reviews(hospitality_booking_id) where hospitality_booking_id is not null;
+
+create or replace function public.refresh_hospitality_customer_review_rollup(p_customer_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path=public
+as $
+begin
+  if p_customer_id is null then return; end if;
+  update public.hospitality_customers c
+  set review_count=(
+        select count(*)::integer from public.hospitality_reviews r
+        where r.customer_id=p_customer_id and r.verification_status='VERIFIED'
+      ),
+      updated_at=now()
+  where c.id=p_customer_id;
+end;
+$;
+
+create or replace function public.hospitality_review_rollup_trigger()
+returns trigger
+language plpgsql
+security invoker
+set search_path=public
+as $
+begin
+  if tg_op='DELETE' then
+    perform public.refresh_hospitality_customer_review_rollup(old.customer_id);
+    return old;
+  end if;
+  perform public.refresh_hospitality_customer_review_rollup(new.customer_id);
+  if tg_op='UPDATE' and old.customer_id is distinct from new.customer_id then
+    perform public.refresh_hospitality_customer_review_rollup(old.customer_id);
+  end if;
+  return new;
+end;
+$;
+drop trigger if exists hospitality_review_customer_rollup on public.hospitality_reviews;
+create trigger hospitality_review_customer_rollup
+after insert or update or delete on public.hospitality_reviews
+for each row execute function public.hospitality_review_rollup_trigger();
+
+create or replace view public.marketing_source_map_v
+with (security_invoker = true)
+as
+select
+  mc.id as source_id,
+  mc.display_name as source_name,
+  mc.provider,
+  case mc.id
+    when 'kiotviet_hotel' then 'booking, stay, verified revenue'
+    when 'kiotviet_fnb' then 'F&B transaction and revenue'
+    when 'ga4' then 'website session and tracked events'
+    when 'google_ads' then 'campaign, impression, click, spend, platform conversion'
+    when 'hospitality_crm' then 'customer, conversation, canonical lead'
+    when 'ai_receptionist' then 'conversation and AI handling evidence'
+    else mc.channel_id
+  end as metric_scope,
+  case
+    when mc.id in ('kiotviet_hotel','kiotviet_fnb') then 'AUTHENTICATED_RUNTIME_SSOT'
+    when mc.id in ('ga4','google_ads') then 'AUTHENTICATED_PLATFORM_EVIDENCE'
+    when mc.id in ('hospitality_crm','ai_receptionist') then 'TUAN_OS_CANONICAL_RUNTIME'
+    else 'CHANNEL_EVIDENCE'
+  end as authority_class,
+  mc.read_mode,
+  mc.write_mode,
+  mc.last_success_at as freshness_at,
+  case
+    when mc.status='LIVE' and mc.auth_state in ('VERIFIED','NOT_REQUIRED') then 'VERIFIED'
+    when mc.status='ERROR' then 'HOLD'
+    else 'NEED_VERIFY'
+  end as verification_status,
+  mc.metadata
+from public.marketing_connectors mc;
+grant select on public.marketing_source_map_v to authenticated,service_role;
+
+create or replace view public.marketing_attribution_quality_v
+with (security_invoker = true)
+as
+select
+  occurred_at::date as event_date,
+  event_type,
+  count(*) as total_events,
+  count(*) filter (where verification_status='VERIFIED') as verified_events,
+  count(*) filter (where customer_id is not null) as customer_linked,
+  count(*) filter (where lead_id is not null) as lead_linked,
+  count(*) filter (where booking_record_id is not null or hospitality_booking_id is not null) as booking_linked,
+  count(*) filter (where revenue_amount>0 and verification_status='VERIFIED') as verified_revenue_events,
+  count(*) filter (where attribution_status in ('UNATTRIBUTED','NEED_VERIFY')) as unattributed_or_unverified
+from public.marketing_attribution_events
+group by occurred_at::date,event_type;
+grant select on public.marketing_attribution_quality_v to authenticated,service_role;
+
+create or replace view public.group2_data_quality_v
+with (security_invoker = true)
+as
+select 'customer_without_verified_identity'::text as issue_type, count(*)::bigint as issue_count
+from public.hospitality_customers c
+where not exists (
+  select 1 from public.hospitality_customer_identities i
+  where i.customer_id=c.id and i.verified_at is not null
+)
+union all
+select 'booking_without_customer', count(*)::bigint
+from public.hospitality_bookings where customer_id is null
+union all
+select 'completed_booking_without_verified_revenue', count(*)::bigint
+from public.hospitality_bookings
+where booking_status='COMPLETED' and revenue_verification_status<>'VERIFIED'
+union all
+select 'lead_without_customer', count(*)::bigint
+from public.hospitality_leads where customer_id is null
+union all
+select 'review_without_customer', count(*)::bigint
+from public.hospitality_reviews where customer_id is null
+union all
+select 'verified_revenue_without_booking_link', count(*)::bigint
+from public.marketing_attribution_events
+where event_type='revenue' and verification_status='VERIFIED'
+  and hospitality_booking_id is null and booking_record_id is null;
+grant select on public.group2_data_quality_v to authenticated,service_role;
+
+comment on table public.hospitality_reviews is
+'Canonical review/loyalty evidence across TCE entities. Review-to-customer/booking linkage remains nullable until evidence exists.';
+
 comment on table public.hospitality_bookings is
 'Canonical hospitality booking runtime entity. KiotViet/OTA bookings must not be inserted into ai_booking_records unless actually created by AI_DIRECT.';
 comment on column public.hospitality_bookings.verified_revenue is

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getAdminContainer } from "@/server/container";
 import { getMarketingCommandCenterSnapshot } from "./service";
 import { syncKiotVietHotelBookings } from "./kiotviet-hotel-sync";
+import { materializeHospitalityLeads } from "./lead-sync";
 
 type DbError = { message?: string } | null;
 type DbResult = { data?: unknown; error?: DbError };
@@ -672,6 +673,7 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
   let runtime = { conversations: 0, leads: 0, bookings: 0, upsells: 0, metricRows: 0, attributionRows: 0 };
   let kiotvietHotel = { orders: 0, bookings: 0, revenueLinked: 0, customersResolved: 0 };
   let kiotvietError = "";
+  let leadMaterialization = { evaluated: 0, materialized: 0 };
   let runtimeError = "";
   try {
     await syncPlanConnectorHealth(db, nowIso);
@@ -686,13 +688,14 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
         last_error: kiotvietError,
       }).eq("id", "kiotviet_hotel");
     }
+    leadMaterialization = await materializeHospitalityLeads(db, now);
     runtime = await syncRuntimeAttribution(db, now);
     await db.from("marketing_sync_runs").update({
       status: "success",
       completed_at: new Date().toISOString(),
       records_read: runtime.conversations + runtime.leads + runtime.bookings + runtime.upsells,
       records_written: runtime.metricRows + runtime.attributionRows,
-      metadata: { plan_campaigns: plan.campaigns, plan_content: plan.content, kiotviet_hotel: kiotvietHotel, kiotviet_error: kiotvietError || null },
+      metadata: { plan_campaigns: plan.campaigns, plan_content: plan.content, kiotviet_hotel: kiotvietHotel, lead_materialization: leadMaterialization, kiotviet_error: kiotvietError || null },
     }).eq("id", runtimeRunId);
   } catch (error) {
     runtimeError = error instanceof Error ? error.message.slice(0, 240) : "Marketing Command Center runtime sync failed";
@@ -729,7 +732,7 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
     optimization: recommendations >= 0 ? "READY" : "PARTIAL",
   } as const;
 
-  const digest = createHash("sha256").update(JSON.stringify({ phases, plan, runtime, kiotvietHotel, connectors, recommendations, reportSnapshots, runtimeError, kiotvietError })).digest("hex").slice(0, 16);
+  const digest = createHash("sha256").update(JSON.stringify({ phases, plan, runtime, kiotvietHotel, leadMaterialization, connectors, recommendations, reportSnapshots, runtimeError, kiotvietError })).digest("hex").slice(0, 16);
   const latestLog = await db.from("activity_logs").select("message").eq("unit", "TCE Marketing Command Center").order("created_at", { ascending: false }).limit(1);
   const previous = str(rowList(latestLog)[0]?.message);
   const changed = !previous.includes("digest=" + digest);

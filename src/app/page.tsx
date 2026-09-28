@@ -26,7 +26,8 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type PeriodKey = "today" | "7d" | "month" | "year";
+type PeriodKey = "today" | "7d" | "month" | "year" | "custom";
+type PropertyKey = "all" | "lavender" | "ruby" | "cozy";
 
 function localDateKey(now: Date) {
   return businessDateKey(now);
@@ -38,21 +39,30 @@ function addDays(dateKey: string, delta: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function periodBounds(period: PeriodKey, now: Date) {
+function validDateKey(value: string | undefined) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function periodBounds(period: PeriodKey, now: Date, customFrom?: string, customTo?: string) {
   const today = localDateKey(now);
   const year = today.slice(0, 4);
   const month = today.slice(0, 7);
-  const from =
-    period === "today"
+  const customValid = period === "custom" && validDateKey(customFrom) && validDateKey(customTo) && customFrom! <= customTo!;
+  const from = customValid
+    ? customFrom!
+    : period === "today"
       ? today
       : period === "7d"
         ? addDays(today, -6)
         : period === "month"
           ? month + "-01"
-          : year + "-01-01";
+          : period === "year"
+            ? year + "-01-01"
+            : today;
+  const toDate = customValid ? customTo! : today;
   const fullDaysBeforeToday = Math.max(
     0,
-    Math.round((new Date(today + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86400000),
+    Math.round((new Date(toDate + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86400000),
   );
   const timeParts = new Intl.DateTimeFormat("en-CA", {
     timeZone: BUSINESS_TIME_ZONE,
@@ -64,8 +74,16 @@ function periodBounds(period: PeriodKey, now: Date) {
   const part = (type: string) => Number(timeParts.find((p) => p.type === type)?.value ?? 0);
   const elapsedToday = Math.max(0.01, Math.min(1, (part("hour") * 3600 + part("minute") * 60 + part("second")) / 86400));
   const elapsedDays = fullDaysBeforeToday + elapsedToday;
-  const label = period === "today" ? "hôm nay" : period === "7d" ? "7 ngày gần nhất" : period === "month" ? "tháng này" : "năm nay";
-  return { from: from + "T00:00:00", to: today + "T23:59:59", elapsedDays, label };
+  const label = customValid
+    ? `từ ${customFrom} đến ${customTo}`
+    : period === "today"
+      ? "hôm nay"
+      : period === "7d"
+        ? "7 ngày gần nhất"
+        : period === "month"
+          ? "tháng này"
+          : "năm nay";
+  return { from: from + "T00:00:00", to: toDate + "T23:59:59", elapsedDays, label, fromDate: from, toDate };
 }
 
 function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: string): RevenueSnapshot {
@@ -185,14 +203,16 @@ function sourceStatus(lastSyncedAt: string | null | undefined, status: string | 
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: Promise<{ period?: string }>;
+  searchParams?: Promise<{ period?: string; from?: string; to?: string; property?: string }>;
 }) {
   const params = searchParams ? await searchParams : {};
   const requested = params.period;
-  const period: PeriodKey = requested === "7d" || requested === "month" || requested === "year" ? requested : "today";
+  const period: PeriodKey = requested === "7d" || requested === "month" || requested === "year" || requested === "custom" ? requested : "today";
+  const property: PropertyKey = params.property === "lavender" || params.property === "ruby" || params.property === "cozy" ? params.property : "all";
+  const propertyLabel = property === "lavender" ? "Lavender Homestay" : property === "ruby" ? "Ruby Homestay" : property === "cozy" ? "Cozy Garden" : "Tất cả cơ sở";
   const now = new Date();
   const today = localDateKey(now);
-  const bounds = periodBounds(period, now);
+  const bounds = periodBounds(period, now, params.from, params.to);
 
   const container = await getRequestContainer();
 
@@ -245,19 +265,34 @@ export default async function Home({
   const actionItems = allActionItems.slice(0, 12);
   const exceptionItems = allActionItems.filter((item) => item.overdue || item.priority === "P0" || item.priority === "P1");
 
-  const homestayRevenue = hotel.state === "VERIFIED" ? hotel.revenue : 0;
   const hotelBranches = hotel.state === "VERIFIED" ? hotel.branchBreakdown : [];
-  const branchRevenue = (needle: string) =>
-    hotelBranches
-      .filter((item) => item.branchName.toLowerCase().includes(needle))
-      .reduce((sum, item) => sum + item.revenue, 0);
-  const lavenderRevenue = branchRevenue("lavender");
-  const rubyRevenue = branchRevenue("ruby");
-  const cozyRevenue = fnb.state === "VERIFIED" ? fnb.revenue : 0;
-  const totalRevenue = homestayRevenue + cozyRevenue;
+  const branchRows = (needle: string) => hotelBranches.filter((item) => item.branchName.toLowerCase().includes(needle));
+  const branchRevenue = (needle: string) => branchRows(needle).reduce((sum, item) => sum + item.revenue, 0);
+  const branchCollected = (needle: string) => branchRows(needle).reduce((sum, item) => sum + item.collected, 0);
+  const rawLavenderRevenue = branchRevenue("lavender");
+  const rawRubyRevenue = branchRevenue("ruby");
+  const rawCozyRevenue = fnb.state === "VERIFIED" ? fnb.revenue : 0;
+  const lavenderRevenue = property === "all" || property === "lavender" ? rawLavenderRevenue : 0;
+  const rubyRevenue = property === "all" || property === "ruby" ? rawRubyRevenue : 0;
+  const cozyRevenue = property === "all" || property === "cozy" ? rawCozyRevenue : 0;
+  const selectedHomestayRevenue = lavenderRevenue + rubyRevenue;
+  const totalRevenue = selectedHomestayRevenue + cozyRevenue;
   const totalCollected =
-    (hotel.state === "VERIFIED" ? hotel.collected : 0) +
-    (fnb.state === "VERIFIED" ? fnb.collected : 0);
+    property === "all"
+      ? (hotel.state === "VERIFIED" ? hotel.collected : 0) + (fnb.state === "VERIFIED" ? fnb.collected : 0)
+      : property === "lavender"
+        ? branchCollected("lavender")
+        : property === "ruby"
+          ? branchCollected("ruby")
+          : (fnb.state === "VERIFIED" ? fnb.collected : 0);
+  const selectedBranches = [
+    ...(property === "cozy" ? [] : hotel.branchBreakdown
+      .filter((item) => property === "all" || item.branchName.toLowerCase().includes(property))
+      .map((item) => ({ name: item.branchName || "Homestay", revenue: item.revenue, invoices: item.invoiceCount }))),
+    ...(property === "all" || property === "cozy"
+      ? fnb.branchBreakdown.map((item) => ({ name: item.branchName || "Cozy Garden", revenue: item.revenue, invoices: item.invoiceCount }))
+      : []),
+  ];
 
   // Cashflow is not P&L: Expense ≠ Cash Out and Revenue ≠ Cash In.
   // Until an authoritative Expense/COGS layer is VERIFIED, profit and margin must fail closed.
@@ -304,7 +339,7 @@ export default async function Home({
   ];
   const verifiedSources = sources.filter((item) => item.status === "online").length;
 
-  const marketingSpendEstimate = homestayRevenue * 0.03 + cozyRevenue * 0.02;
+  const marketingSpendEstimate = selectedHomestayRevenue * 0.03 + cozyRevenue * 0.02;
 
   return (
     <div className="flex min-h-screen bg-[#f4f8fd]">
@@ -314,8 +349,12 @@ export default async function Home({
           generatedAt={now.toISOString()}
           period={period}
           periodLabel={bounds.label}
+          property={property}
+          propertyLabel={propertyLabel}
+          periodFrom={bounds.fromDate}
+          periodTo={bounds.toDate}
           revenue={{
-            homestay: homestayRevenue,
+            homestay: selectedHomestayRevenue,
             lavender: lavenderRevenue,
             ruby: rubyRevenue,
             cozy: cozyRevenue,
@@ -323,18 +362,7 @@ export default async function Home({
             collected: totalCollected,
             hotelState: hotel.state,
             cozyState: fnb.state,
-            branches: [
-              ...hotel.branchBreakdown.map((item) => ({
-                name: item.branchName || "Homestay",
-                revenue: item.revenue,
-                invoices: item.invoiceCount,
-              })),
-              ...fnb.branchBreakdown.map((item) => ({
-                name: item.branchName || "Cozy Garden",
-                revenue: item.revenue,
-                invoices: item.invoiceCount,
-              })),
-            ],
+            branches: selectedBranches,
           }}
           finance={{
             costEstimate: costRecorded,

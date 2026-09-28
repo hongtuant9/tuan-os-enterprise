@@ -52,6 +52,19 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function validDate(form: FormData, key: string) {
+  const value = requiredText(form,key);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value + "T00:00:00Z"))) throw new Error(key + " không phải ngày hợp lệ.");
+  return value;
+}
+
+function decimal(form: FormData, key: string) {
+  const raw = String(form.get(key) ?? "").trim().replace(",", ".");
+  const value = raw === "" ? 0 : Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(key + " không hợp lệ.");
+  return value;
+}
+
 async function insertOrUpdate(
   db: SupabaseClient,
   table: string,
@@ -139,7 +152,7 @@ export async function savePersonalTransaction(form: FormData) {
   }
   const now = nowIso();
   const payload = {
-    transaction_date: requiredText(form, "transaction_date"),
+    transaction_date: validDate(form, "transaction_date"),
     transaction_type: txTypeCode,
     category: category.name,
     category_code: category.code || null,
@@ -181,7 +194,7 @@ export async function savePersonalAccount(form: FormData) {
     institution_code: institutionCode,
     currency: "VND",
     current_balance: amount(form, "current_balance"),
-    balance_as_of: requiredText(form, "balance_as_of"),
+    balance_as_of: validDate(form, "balance_as_of"),
     is_liquid: booleanField(form, "is_liquid"),
     is_emergency_fund: booleanField(form, "is_emergency_fund"),
     source: APP_SOURCE,
@@ -210,11 +223,11 @@ export async function savePersonalDebt(form: FormData) {
     lender_institution_code: lenderCode,
     opening_principal: amount(form, "opening_principal"),
     current_principal: amount(form, "current_principal"),
-    interest_rate_annual: amount(form, "interest_rate_annual"),
+    interest_rate_annual: decimal(form, "interest_rate_annual"),
     monthly_debt_service: amount(form, "monthly_debt_service"),
     maturity_date: optionalText(form, "maturity_date"),
     next_payment_date: optionalText(form, "next_payment_date"),
-    as_of_date: requiredText(form, "as_of_date"),
+    as_of_date: validDate(form, "as_of_date"),
     source: APP_SOURCE,
     source_reference: optionalText(form, "evidence_reference"),
     source_updated_at: now,
@@ -254,7 +267,7 @@ export async function saveOwnerBusinessTransfer(form: FormData) {
   const { db, userId } = await ownerContext();
   const recordId = optionalText(form, "record_id");
   await insertOrUpdate(db, "owner_business_transfers", recordId, {
-    transfer_date: requiredText(form, "transfer_date"),
+    transfer_date: validDate(form, "transfer_date"),
     business_unit: requiredText(form, "business_unit"),
     direction: requiredText(form, "direction"),
     transfer_type: requiredText(form, "transfer_type"),

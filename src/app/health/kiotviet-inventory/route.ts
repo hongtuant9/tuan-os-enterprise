@@ -33,6 +33,7 @@ function publicSummary(snapshot: InventoryBotSnapshot | null) {
     checkedAt: snapshot.checkedAt,
     verifiedModules: snapshot.verifiedModules,
     moduleCount: snapshot.moduleCount,
+    supplierDebtDiagnostics: snapshot.supplierDebtDiagnostics ?? [],
     sourceDiagnostics: snapshot.modules
       .filter((module) => targetIds.has(module.id))
       .map((module) => ({

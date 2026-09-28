@@ -54,6 +54,17 @@ export type InventoryBotSnapshot = {
   moduleCount: number;
   verifiedModules: number;
   modules: InventoryModuleSnapshot[];
+  supplierDebtDiagnostics?: Array<{
+    code: string;
+    currentDebt: number | null;
+    totalPurchase: number | null;
+    detailOpened: boolean;
+    openingDebtLabelVisible: boolean;
+    debtAdjustmentLabelVisible: boolean;
+    purchaseHistoryLabelVisible: boolean;
+    dateTokens: string[];
+    amountTokens: number[];
+  }>;
   writeEnabled: false;
   detail: string;
 };
@@ -453,6 +464,60 @@ async function readModule(
   }
 }
 
+
+function parseMoneyToken(value: string): number | null {
+  const cleaned = value.replace(/[^\d-]/g, "");
+  if (!cleaned || cleaned === "-") return null;
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+async function readSupplierDebtDiagnostics(
+  page: Page,
+  system: InventoryBotSystem,
+  retailer: string,
+  supplierModule: InventoryModuleSnapshot | undefined
+): Promise<InventoryBotSnapshot["supplierDebtDiagnostics"]> {
+  if (system !== "HOTEL" || !supplierModule?.cells?.length) return [];
+  const headerIndex = new Map((supplierModule.headers ?? []).map((h, i) => [h.trim().toLowerCase(), i]));
+  const codeIndex = headerIndex.get("mã nhà cung cấp") ?? 0;
+  const debtIndex = headerIndex.get("nợ cần trả hiện tại") ?? -1;
+  const purchaseIndex = headerIndex.get("tổng mua") ?? -1;
+  const rows = supplierModule.cells
+    .filter((row) => /^NCC\d+/i.test(row[codeIndex] || ""))
+    .slice(0, 5);
+  const results: NonNullable<InventoryBotSnapshot["supplierDebtDiagnostics"]> = [];
+  for (const row of rows) {
+    const code = row[codeIndex] || "";
+    const currentDebt = debtIndex >= 0 ? parseMoneyToken(row[debtIndex] || "") : null;
+    const totalPurchase = purchaseIndex >= 0 ? parseMoneyToken(row[purchaseIndex] || "") : null;
+    const supplierUrl = MODULES[system].find((item) => item.id === "SUPPLIERS")?.path(retailer);
+    if (!supplierUrl) continue;
+    await page.goto(supplierUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    const detailOpened = await page.evaluate((supplierCode) => {
+      const visible=(el:Element)=>{const n=el as HTMLElement,s=getComputedStyle(n),r=n.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>2&&r.height>2;};
+      const cells=Array.from(document.querySelectorAll("td,[role='gridcell'],a,button,span")).filter(visible);
+      const target=cells.find((el)=>(el.textContent||"").replace(/\s+/g," ").trim()===supplierCode);
+      if(!target) return false;
+      (target as HTMLElement).click(); return true;
+    }, code).catch(() => false);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const detail = await page.evaluate(() => {
+      const text=(document.body?.innerText||"").replace(/\s+/g," ").trim();
+      return {
+        openingDebtLabelVisible: /nợ đầu kỳ|công nợ đầu kỳ/i.test(text),
+        debtAdjustmentLabelVisible: /điều chỉnh công nợ|điều chỉnh nợ/i.test(text),
+        purchaseHistoryLabelVisible: /lịch sử nhập|lịch sử mua|nhập hàng|mua hàng/i.test(text),
+        dateTokens: Array.from(new Set(text.match(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\b/g) || [])).slice(0,20),
+        amountTokens: Array.from(new Set((text.match(/-?\d[\d.,]{3,}/g)||[]).map((v)=>Number(v.replace(/[^\d-]/g,""))).filter((v)=>Number.isFinite(v)&&Math.abs(v)>=1000))).slice(0,30),
+      };
+    }).catch(() => ({ openingDebtLabelVisible:false,debtAdjustmentLabelVisible:false,purchaseHistoryLabelVisible:false,dateTokens:[] as string[],amountTokens:[] as number[] }));
+    results.push({ code, currentDebt, totalPurchase, detailOpened, ...detail });
+  }
+  return results;
+}
+
 async function saveSummary(
   system: InventoryBotSystem,
   snapshot: InventoryBotSnapshot
@@ -546,6 +611,10 @@ export async function runInventoryBotRead(
         modules.push(await readModule(page, definition, cfg.retailer));
       }
 
+      const supplierDebtDiagnostics = await readSupplierDebtDiagnostics(
+        page, system, cfg.retailer, modules.find((item) => item.id === "SUPPLIERS")
+      );
+
       const verifiedModules = modules.filter(
         (item) => item.state === "READ_VERIFIED"
       ).length;
@@ -564,6 +633,7 @@ export async function runInventoryBotRead(
         moduleCount: definitions.length,
         verifiedModules,
         modules,
+        supplierDebtDiagnostics,
         writeEnabled: false,
         detail: `Inventory/Purchase READ audit: verified=${verifiedModules}/${definitions.length}; writes disabled.`,
       };

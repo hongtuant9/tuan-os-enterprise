@@ -201,6 +201,7 @@ export async function syncKiotVietHotelBookings(
   );
 
   let revenueLinked = 0;
+  const daily = new Map<string, { date: string; channel: string; bookings: number; revenue: number }>();
   for (const order of orders) {
     const revenue = revenueMap.get(order.sourceBookingUuid);
     const saleChannelName = saleChannels.get(order.saleChannelId || "") || null;
@@ -262,6 +263,14 @@ export async function syncKiotVietHotelBookings(
     }
 
     const channel = channelForSaleChannel(saleChannelName);
+    if (order.bookingStatus === "CONFIRMED" || order.bookingStatus === "COMPLETED") {
+      const date = (order.purchaseAt || order.sourceCreatedAt || nowIso).slice(0, 10);
+      const key = date + "|" + channel;
+      const metric = daily.get(key) ?? { date, channel, bookings: 0, revenue: 0 };
+      metric.bookings += 1;
+      if (revenueVerified) metric.revenue += revenue?.verifiedRevenue ?? 0;
+      daily.set(key, metric);
+    }
     const bookingEvent = {
       external_event_key: "kiotviet-booking:" + order.sourceBookingUuid,
       occurred_at: order.purchaseAt || order.sourceCreatedAt || nowIso,
@@ -301,6 +310,38 @@ export async function syncKiotVietHotelBookings(
       }, { onConflict: "external_event_key" });
       if (revenueEventResult.error) throw new Error(revenueEventResult.error.message || "REVENUE_ATTRIBUTION_UPSERT_FAILED");
     }
+  }
+
+  for (const metric of daily.values()) {
+    const metricResult = await db.from("marketing_daily_metrics").upsert({
+      metric_key: "kiotviet_hotel:" + metric.date + ":" + metric.channel,
+      metric_date: metric.date,
+      channel_id: metric.channel,
+      connector_id: "kiotviet_hotel",
+      campaign_id: null,
+      provider_campaign_id: null,
+      impressions: 0,
+      reach: 0,
+      clicks: 0,
+      engagements: 0,
+      sessions: 0,
+      leads_platform: 0,
+      leads_verified: 0,
+      bookings_verified: metric.bookings,
+      conversions: metric.bookings,
+      spend: 0,
+      attributed_revenue: metric.revenue,
+      currency: "VND",
+      verification_status: "VERIFIED",
+      source_updated_at: nowIso,
+      synced_at: nowIso,
+      metadata: {
+        source: "KiotViet Hotel authenticated runtime",
+        booking_semantics: "CONFIRMED/COMPLETED only; CANCELLED/UNCONFIRMED excluded",
+        revenue_semantics: "completed invoice(s) linked by invoice.orderUuid = booking.uuid",
+      },
+    }, { onConflict: "metric_key" });
+    if (metricResult.error) throw new Error(metricResult.error.message || "KIOTVIET_METRIC_UPSERT_FAILED");
   }
 
   const connectorUpdate = await db.from("marketing_connectors").update({

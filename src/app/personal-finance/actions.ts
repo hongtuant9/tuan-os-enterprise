@@ -66,35 +66,116 @@ async function insertOrUpdate(
   return data;
 }
 
+type MasterType =
+  | "TRANSACTION_TYPE" | "EXPENSE_CATEGORY" | "INCOME_CATEGORY" | "ACCOUNT_TYPE"
+  | "INSTITUTION" | "DEBT_TYPE" | "ASSET_TYPE" | "CURRENCY" | "PAYMENT_METHOD"
+  | "INCOME_SOURCE" | "TRANSACTION_SOURCE" | "VERIFICATION_STATUS";
+
+async function masterItem(db: SupabaseClient, type: MasterType, code: string, activeOnly = true) {
+  let q = db.from("finance_master_data").select("code,name,is_active,record_status").eq("master_data_type", type).eq("code", code);
+  if (activeOnly) q = q.eq("is_active", true).eq("record_status", "ACTIVE");
+  const { data, error } = await q.maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Danh mục " + type + "/" + code + " không hợp lệ hoặc đã ngừng sử dụng.");
+  return data as { code: string; name: string; is_active: boolean; record_status: string };
+}
+
+function legacyAccountType(code: string) {
+  if (code === "CASH") return "CASH";
+  if (code === "BANK" || code === "DEPOSIT") return "BANK";
+  if (code === "E_WALLET") return "E_WALLET";
+  return "OTHER";
+}
+
+function legacyDebtType(code: string) {
+  if (code === "OVERDRAFT") return "OVERDRAFT";
+  if (code === "FAMILY_LOAN") return "FAMILY";
+  if (code === "BUSINESS_LOAN") return "BUSINESS_PERSONAL_LIABILITY";
+  if (code === "BANK_LOAN" || code === "ASSET_LOAN" || code === "CREDIT_CARD") return "BANK";
+  return "OTHER";
+}
+
+function legacyAssetType(code: string) {
+  if (code === "CASH" || code === "DEPOSIT" || code === "FINANCIAL_ASSET") return "LIQUID";
+  if (code === "BUSINESS_ASSET") return "BUSINESS_RELATED";
+  if (code === "REAL_ESTATE" || code === "VEHICLE") return "NON_LIQUID";
+  return "OTHER";
+}
+
+async function auditAction(db: SupabaseClient, input: {
+  entityType: string; entityId: string | null; action: "VOID" | "INACTIVATE" | "SUPERSEDE";
+  actorId: string; source: string; reason: string; before?: unknown; after?: unknown;
+}) {
+  const { error } = await db.from("personal_finance_audit_log").insert({
+    entity_type: input.entityType,
+    entity_id: input.entityId,
+    action: input.action,
+    actor_id: input.actorId,
+    source: input.source,
+    before_data: input.before ?? null,
+    after_data: input.after ?? null,
+    metadata: { reason: input.reason },
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function savePersonalTransaction(form: FormData) {
   const { db, userId } = await ownerContext();
-  await insertOrUpdate(db, "personal_finance_transactions", null, {
+  const recordId = optionalText(form, "record_id");
+  const txTypeCode = requiredText(form, "transaction_type");
+  await masterItem(db, "TRANSACTION_TYPE", txTypeCode);
+  const categoryCode = requiredText(form, "category_code");
+  const categoryType: MasterType = txTypeCode === "INCOME" ? "INCOME_CATEGORY" : "EXPENSE_CATEGORY";
+  const category = await masterItem(db, categoryType, categoryCode);
+  const accountId = optionalText(form, "account_id");
+  if (accountId) {
+    const { data: account, error } = await db.from("personal_finance_accounts").select("id").eq("id", accountId).eq("record_status","ACTIVE").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!account) throw new Error("Tài khoản không hợp lệ hoặc đã ngừng sử dụng.");
+  }
+  const now = nowIso();
+  const payload = {
     transaction_date: requiredText(form, "transaction_date"),
-    transaction_type: requiredText(form, "transaction_type"),
-    category: requiredText(form, "category"),
+    transaction_type: txTypeCode,
+    category: category.name,
+    category_code: category.code,
+    subcategory_code: optionalText(form, "subcategory_code"),
+    account_id: accountId,
     description: optionalText(form, "description"),
-    amount: amount(form, "amount"),
+    amount: amount(form, "amount", false),
+    currency_code: "VND",
+    payment_method_code: optionalText(form, "payment_method_code"),
+    income_source_code: optionalText(form, "income_source_code"),
+    transaction_source_code: "APP_OWNER",
     is_essential: booleanField(form, "is_essential"),
     is_sustainable_income: booleanField(form, "is_sustainable_income"),
     source: APP_SOURCE,
     source_reference: optionalText(form, "evidence_reference"),
-    source_updated_at: nowIso(),
+    source_updated_at: now,
     verification_status: "NEED_VERIFY",
-    created_by: userId,
     updated_by: userId,
     record_status: "ACTIVE",
-  });
+    ...(recordId ? {} : { created_by: userId }),
+  };
+  await insertOrUpdate(db, "personal_finance_transactions", recordId, payload);
   revalidatePath("/personal-finance");
 }
 
 export async function savePersonalAccount(form: FormData) {
   const { db, userId } = await ownerContext();
   const recordId = optionalText(form, "record_id");
+  const accountTypeCode = requiredText(form, "account_type_code");
+  await masterItem(db, "ACCOUNT_TYPE", accountTypeCode);
+  const institutionCode = optionalText(form, "institution_code");
+  const institution = institutionCode ? await masterItem(db, "INSTITUTION", institutionCode) : null;
   const now = nowIso();
   await insertOrUpdate(db, "personal_finance_accounts", recordId, {
     name: requiredText(form, "name"),
-    account_type: requiredText(form, "account_type"),
-    institution: optionalText(form, "institution"),
+    account_type: legacyAccountType(accountTypeCode),
+    account_type_code: accountTypeCode,
+    institution: institution?.name ?? null,
+    institution_code: institutionCode,
+    currency: "VND",
     current_balance: amount(form, "current_balance"),
     balance_as_of: requiredText(form, "balance_as_of"),
     is_liquid: booleanField(form, "is_liquid"),
@@ -103,7 +184,9 @@ export async function savePersonalAccount(form: FormData) {
     source_reference: optionalText(form, "evidence_reference"),
     source_updated_at: now,
     verification_status: "NEED_VERIFY",
-    ...(recordId ? { updated_by: userId } : { created_by: userId, updated_by: userId }),
+    updated_by: userId,
+    record_status: "ACTIVE",
+    ...(recordId ? {} : { created_by: userId }),
   });
   revalidatePath("/personal-finance");
 }
@@ -111,10 +194,16 @@ export async function savePersonalAccount(form: FormData) {
 export async function savePersonalDebt(form: FormData) {
   const { db, userId } = await ownerContext();
   const recordId = optionalText(form, "record_id");
+  const debtTypeCode = requiredText(form, "debt_type_code");
+  await masterItem(db, "DEBT_TYPE", debtTypeCode);
+  const lenderCode = optionalText(form, "lender_institution_code");
+  if (lenderCode) await masterItem(db, "INSTITUTION", lenderCode);
   const now = nowIso();
   await insertOrUpdate(db, "personal_finance_debts", recordId, {
     name: requiredText(form, "name"),
-    debt_type: requiredText(form, "debt_type"),
+    debt_type: legacyDebtType(debtTypeCode),
+    debt_type_code: debtTypeCode,
+    lender_institution_code: lenderCode,
     opening_principal: amount(form, "opening_principal"),
     current_principal: amount(form, "current_principal"),
     interest_rate_annual: amount(form, "interest_rate_annual"),
@@ -127,7 +216,8 @@ export async function savePersonalDebt(form: FormData) {
     source_updated_at: now,
     verification_status: "NEED_VERIFY",
     status: "ACTIVE",
-    ...(recordId ? { updated_by: userId } : { created_by: userId, updated_by: userId }),
+    updated_by: userId,
+    ...(recordId ? {} : { created_by: userId }),
   });
   revalidatePath("/personal-finance");
 }
@@ -135,10 +225,13 @@ export async function savePersonalDebt(form: FormData) {
 export async function savePersonalAsset(form: FormData) {
   const { db, userId } = await ownerContext();
   const recordId = optionalText(form, "record_id");
+  const assetTypeCode = requiredText(form, "asset_type_code");
+  await masterItem(db, "ASSET_TYPE", assetTypeCode);
   const now = nowIso();
   await insertOrUpdate(db, "personal_finance_assets", recordId, {
     name: requiredText(form, "name"),
-    asset_type: requiredText(form, "asset_type"),
+    asset_type: legacyAssetType(assetTypeCode),
+    asset_type_code: assetTypeCode,
     value_amount: amount(form, "value_amount"),
     valuation_kind: requiredText(form, "valuation_kind"),
     as_of_date: requiredText(form, "as_of_date"),
@@ -147,27 +240,95 @@ export async function savePersonalAsset(form: FormData) {
     source_updated_at: now,
     verification_status: "NEED_VERIFY",
     record_status: "ACTIVE",
-    ...(recordId ? { updated_by: userId } : { created_by: userId, updated_by: userId }),
+    updated_by: userId,
+    ...(recordId ? {} : { created_by: userId }),
   });
   revalidatePath("/personal-finance");
 }
 
 export async function saveOwnerBusinessTransfer(form: FormData) {
   const { db, userId } = await ownerContext();
-  await insertOrUpdate(db, "owner_business_transfers", null, {
+  const recordId = optionalText(form, "record_id");
+  await insertOrUpdate(db, "owner_business_transfers", recordId, {
     transfer_date: requiredText(form, "transfer_date"),
     business_unit: requiredText(form, "business_unit"),
     direction: requiredText(form, "direction"),
     transfer_type: requiredText(form, "transfer_type"),
     amount: amount(form, "amount", false),
+    currency_code: "VND",
     source: APP_SOURCE,
     source_reference: requiredText(form, "evidence_reference"),
     source_updated_at: nowIso(),
     verification_status: "NEED_VERIFY",
-    created_by: userId,
     updated_by: userId,
     record_status: "ACTIVE",
+    ...(recordId ? {} : { created_by: userId }),
   });
+  revalidatePath("/personal-finance");
+}
+
+export async function saveFinanceMasterData(form: FormData) {
+  const { db, userId } = await ownerContext();
+  const recordId = optionalText(form, "record_id");
+  const type = requiredText(form, "master_data_type") as MasterType;
+  const code = requiredText(form, "code").toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  const payload = {
+    master_data_type: type,
+    code,
+    name: requiredText(form, "name"),
+    parent_code: optionalText(form, "parent_code"),
+    display_order: Number(form.get("display_order") || 100),
+    is_active: booleanField(form, "is_active"),
+    record_status: booleanField(form, "is_active") ? "ACTIVE" : "INACTIVE",
+    source: APP_SOURCE,
+    source_reference: optionalText(form, "source_reference") ?? "Personal Finance → Cài đặt danh mục",
+    updated_by: userId,
+    ...(recordId ? {} : { created_by: userId }),
+  };
+  await insertOrUpdate(db, "finance_master_data", recordId, payload);
+  revalidatePath("/personal-finance");
+}
+
+export async function setFinanceMasterDataActive(form: FormData) {
+  const { db, userId } = await ownerContext();
+  const id = requiredText(form, "record_id");
+  const reason = requiredText(form, "reason");
+  const active = booleanField(form, "is_active");
+  const { data: before, error: readError } = await db.from("finance_master_data").select("*").eq("id",id).single();
+  if (readError) throw new Error(readError.message);
+  const { data: after, error } = await db.from("finance_master_data").update({
+    is_active: active,
+    record_status: active ? "ACTIVE" : "INACTIVE",
+    updated_by: userId,
+  }).eq("id",id).select("*").single();
+  if (error) throw new Error(error.message);
+  await auditAction(db,{ entityType:"finance_master_data",entityId:id,action:active?"SUPERSEDE":"INACTIVATE",actorId:userId,source:APP_SOURCE,reason,before,after });
+  revalidatePath("/personal-finance");
+}
+
+export async function voidPersonalRecord(form: FormData) {
+  const { db, userId } = await ownerContext();
+  const table = requiredText(form, "table");
+  const id = requiredText(form, "record_id");
+  const reason = requiredText(form, "reason");
+  const allowed = new Set(["personal_finance_transactions","owner_business_transfers","personal_finance_accounts","personal_finance_assets","personal_finance_debts"]);
+  if (!allowed.has(table)) throw new Error("Loại bản ghi không hợp lệ.");
+  const { data: before, error: readError } = await db.from(table).select("*").eq("id",id).single();
+  if (readError) throw new Error(readError.message);
+  const now = nowIso();
+  const patch: Record<string, unknown> = {
+    verification_status: "NEED_VERIFY",
+    status_reason: reason,
+    status_changed_at: now,
+    status_changed_by: userId,
+    updated_by: userId,
+  };
+  if (table === "personal_finance_transactions" || table === "owner_business_transfers") patch.record_status = "VOIDED";
+  else if (table === "personal_finance_accounts" || table === "personal_finance_assets") patch.record_status = "INACTIVE";
+  else if (table === "personal_finance_debts") patch.status = "HOLD";
+  const { data: after, error } = await db.from(table).update(patch).eq("id",id).select("*").single();
+  if (error) throw new Error(error.message);
+  await auditAction(db,{ entityType:table,entityId:id,action:table.includes("transactions")||table.includes("transfers")?"VOID":"INACTIVATE",actorId:userId,source:APP_SOURCE,reason,before,after });
   revalidatePath("/personal-finance");
 }
 

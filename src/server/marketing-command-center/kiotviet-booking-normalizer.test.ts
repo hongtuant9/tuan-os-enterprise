@@ -4,7 +4,7 @@ import {
   invoiceRevenueByOrderUuid,
   normalizeKiotVietHotelOrder,
   normalizeKiotVietBookingStatus,
-} from "./kiotviet-booking-normalizer";
+} from "./kiotviet-booking-normalizer.ts";
 
 test("maps KiotViet Hotel booking status without guessing", () => {
   assert.equal(normalizeKiotVietBookingStatus(1), "CONFIRMED");

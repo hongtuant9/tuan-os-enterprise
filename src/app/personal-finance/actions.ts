@@ -13,8 +13,6 @@ const FIN_HOSPITALITY_ID = "124W9FqdLI00VH8mZx4r6mrIbgD9XbtLShapAuLGPGMg";
 const APP_SOURCE = "APP_PERSONAL_FINANCE_OWNER";
 const LEGACY_SOURCE = "TUAN OS — Mô hình tài chính gia đình";
 
-type Db = SupabaseClient<Record<string, never>>;
-
 function untyped<T>(db: T) {
   return db as unknown as SupabaseClient;
 }

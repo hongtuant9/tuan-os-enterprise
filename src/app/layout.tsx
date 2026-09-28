@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import RefreshOnView from "@/components/RefreshOnView";
 
 export const metadata: Metadata = {
   title: "Tổng quan điều hành | TUAN OS",
@@ -13,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><RefreshOnView intervalMs={15000} />{children}</body>
     </html>
   );
 }

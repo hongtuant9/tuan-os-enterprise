@@ -1,11 +1,11 @@
 [Unit]
-Description=Refresh TCE KiotViet Inventory read-only snapshots every 6 hours
+Description=Refresh TCE KiotViet Inventory read-only snapshots every 5 minutes
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=6h
+OnBootSec=2min
+OnUnitActiveSec=5min
 Persistent=true
-RandomizedDelaySec=2min
+RandomizedDelaySec=30
 
 [Install]
 WantedBy=timers.target

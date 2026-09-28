@@ -115,17 +115,22 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const now = new Date();
   const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(now) + "-01";
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
     raw.from("personal_finance_assets").select("*").eq("record_status","ACTIVE").order("value_amount", { ascending: false }),
-    raw.from("personal_finance_accounts").select("*").order("current_balance", { ascending: false }),
+    raw.from("personal_finance_accounts").select("*").eq("record_status","ACTIVE").order("current_balance", { ascending: false }),
     raw.from("personal_finance_goals").select("*").eq("status", "ACTIVE"),
     raw.from("personal_finance_transactions").select("*").eq("record_status","ACTIVE").gte("transaction_date", month).order("transaction_date", { ascending: false }).limit(100),
     raw.from("owner_business_transfers").select("*").eq("record_status","ACTIVE").gte("transfer_date", month).order("transfer_date", { ascending: false }).limit(100),
     raw.from("personal_finance_audit_log").select("metadata,created_at").eq("entity_type","IMPORT").order("created_at",{ascending:false}).limit(1).maybeSingle(),
     raw.from("finance_master_data").select("*").order("master_data_type").order("display_order").order("name"),
+    raw.from("personal_finance_transactions").select("*").order("transaction_date", { ascending: false }).limit(500),
+    raw.from("personal_finance_accounts").select("*").order("updated_at", { ascending: false }).limit(500),
+    raw.from("personal_finance_debts").select("*").order("updated_at", { ascending: false }).limit(500),
+    raw.from("personal_finance_assets").select("*").order("updated_at", { ascending: false }).limit(500),
+    raw.from("owner_business_transfers").select("*").order("transfer_date", { ascending: false }).limit(500),
   ]);
 
   const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes];
@@ -139,6 +144,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const transactions = (txRes.data ?? []) as Row[];
   const transfers = (transferRes.data ?? []) as Row[];
   const masterData = (masterRes.data ?? []) as Row[];
+  const historyTransactions = (historyTxRes.data ?? []) as Row[];
+  const historyAccounts = (historyAccountRes.data ?? []) as Row[];
+  const historyDebts = (historyDebtRes.data ?? []) as Row[];
+  const historyAssets = (historyAssetRes.data ?? []) as Row[];
+  const historyTransfers = (historyTransferRes.data ?? []) as Row[];
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -149,6 +159,8 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const institutions = activeMaster("INSTITUTION");
   const debtTypes = activeMaster("DEBT_TYPE");
   const assetTypes = activeMaster("ASSET_TYPE");
+  const paymentMethods = activeMaster("PAYMENT_METHOD");
+  const incomeSources = activeMaster("INCOME_SOURCE");
 
   const editTransaction = editType === "transaction" ? transactions.find((x)=>String(x.id)===editId) ?? null : null;
   const editAccount = editType === "account" ? accounts.find((x)=>String(x.id)===editId) ?? null : null;
@@ -162,11 +174,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     const status = String(row.record_status ?? row.status ?? row.verification_status ?? "ACTIVE");
     return (!listQuery || haystack.includes(listQuery)) && (!listStatus || listStatus === "ALL" || status === listStatus);
   };
-  const filteredTransactions = transactions.filter(matchesList);
-  const filteredAccounts = accounts.filter(matchesList);
-  const filteredDebts = debts.filter(matchesList);
-  const filteredAssets = assets.filter(matchesList);
-  const filteredTransfers = transfers.filter(matchesList);
+  const filteredTransactions = historyTransactions.filter(matchesList);
+  const filteredAccounts = historyAccounts.filter(matchesList);
+  const filteredDebts = historyDebts.filter(matchesList);
+  const filteredAssets = historyAssets.filter(matchesList);
+  const filteredTransfers = historyTransfers.filter(matchesList);
 
   const assetSourceAt = latest([...assets,...accounts],"source_updated_at");
   const debtSourceAt = latest(debts,"source_updated_at");
@@ -262,7 +274,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
           {[["personal_finance_transactions","Giao dịch",filteredTransactions,"transaction_date","amount"],["personal_finance_accounts","Tài khoản",filteredAccounts,"name","current_balance"],["personal_finance_debts","Khoản nợ",filteredDebts,"name","current_principal"],["personal_finance_assets","Tài sản",filteredAssets,"name","value_amount"],["owner_business_transfers","Business ↔ Personal",filteredTransfers,"transfer_date","amount"]].map(([table,label,rows,labelKey,amountKey])=><details key={String(table)} className="rounded-lg border border-[#dce8f4] p-3">
             <summary className="cursor-pointer text-[11px] font-bold text-[#17345f]">{String(label)} · {(rows as Row[]).length} bản ghi</summary>
             <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px] text-[#243b5f]"><thead className="bg-[#eaf2fb] text-[#17345f]"><tr><th className="p-2 text-left">Bản ghi</th><th className="p-2 text-right">Số tiền</th><th className="p-2">Trạng thái</th><th className="p-2">Cập nhật</th><th className="p-2">Hành động</th></tr></thead><tbody>
-              {(rows as Row[]).map((x)=><tr key={String(x.id)} className="border-t border-[#e4ecf5]"><td className="p-2">{String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}</td><td className="p-2 text-right">{money(x[amountKey as string])}</td><td className="p-2 text-center">{String(x.record_status ?? x.status ?? "ACTIVE")}</td><td className="p-2">{fmtDate(x.updated_at)}</td><td className="p-2"><form action={voidPersonalRecord} className="flex gap-1"><input type="hidden" name="table" value={String(table)}/><input type="hidden" name="record_id" value={String(x.id)}/><input className={inputClass} name="reason" placeholder="Lý do hủy/ngừng" required/><ConfirmSubmitButton className="rounded bg-[#8a2d2d] px-2 py-1 font-bold text-white" label={String(table).includes("transactions")||String(table).includes("transfers")?"Hủy giao dịch":"Ngừng sử dụng"} message="Bạn có chắc muốn hủy/ngừng sử dụng bản ghi này? Bản ghi sẽ được giữ trong lịch sử và audit trail."/></form><a className="ml-2 font-bold text-[#1769d2] hover:underline" href={String(table)==="personal_finance_transactions"?`/personal-finance?editType=transaction&editId=${String(x.id)}#input-transaction`:String(table)==="personal_finance_accounts"?`/personal-finance?editType=account&editId=${String(x.id)}#input-account`:String(table)==="personal_finance_debts"?`/personal-finance?editType=debt&editId=${String(x.id)}#input-debt`:String(table)==="personal_finance_assets"?`/personal-finance?editType=asset&editId=${String(x.id)}#input-asset`:`/personal-finance?editType=transfer&editId=${String(x.id)}#input-transfer`}>Sửa</a></td></tr>)}
+              {(rows as Row[]).map((x)=><tr key={String(x.id)} className="border-t border-[#e4ecf5]"><td className="p-2">{String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}</td><td className="p-2 text-right">{money(x[amountKey as string])}</td><td className="p-2 text-center">{String(x.record_status ?? x.status ?? "ACTIVE")}</td><td className="p-2">{fmtDate(x.updated_at)}</td><td className="p-2"><form action={voidPersonalRecord} className="flex gap-1"><input type="hidden" name="table" value={String(table)}/><input type="hidden" name="record_id" value={String(x.id)}/><input className={inputClass} name="reason" placeholder="Lý do hủy/ngừng" required/><ConfirmSubmitButton className="rounded bg-[#8a2d2d] px-2 py-1 font-bold text-white" label={String(table).includes("transactions")||String(table).includes("transfers")?"Hủy giao dịch":"Ngừng sử dụng"} message={`Bạn có chắc muốn hủy/ngừng sử dụng bản ghi này?\nBản ghi: ${String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}\nSố tiền: ${money(x[amountKey as string])}\nNgày: ${fmtDate(x.transaction_date ?? x.transfer_date ?? x.as_of_date ?? x.balance_as_of)}\nTác động: bản ghi sẽ không còn tham gia Actual active nhưng vẫn được giữ trong lịch sử và audit trail.`}/></form><a className="ml-2 font-bold text-[#1769d2] hover:underline" href={String(table)==="personal_finance_transactions"?`/personal-finance?editType=transaction&editId=${String(x.id)}#input-transaction`:String(table)==="personal_finance_accounts"?`/personal-finance?editType=account&editId=${String(x.id)}#input-account`:String(table)==="personal_finance_debts"?`/personal-finance?editType=debt&editId=${String(x.id)}#input-debt`:String(table)==="personal_finance_assets"?`/personal-finance?editType=asset&editId=${String(x.id)}#input-asset`:`/personal-finance?editType=transfer&editId=${String(x.id)}#input-transfer`}>Sửa</a></td></tr>)}
             </tbody></table></div>
           </details>)}
         </div>
@@ -278,7 +290,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
             <select className={inputClass} name="master_data_type" defaultValue={editMaster ? String(editMaster.master_data_type) : "EXPENSE_CATEGORY"} required>{["EXPENSE_CATEGORY","INCOME_CATEGORY","INSTITUTION","PAYMENT_METHOD","INCOME_SOURCE","TRANSACTION_SOURCE"].map(x=><option key={x}>{x}</option>)}</select>
             <input className={inputClass} name="code" defaultValue={editMaster ? String(editMaster.code) : ""} placeholder="Mã canonical" required/>
             <input className={inputClass+" col-span-2"} name="name" defaultValue={editMaster ? String(editMaster.name) : ""} placeholder="Tên hiển thị tiếng Việt" required/>
-            <input className={inputClass} name="parent_code" defaultValue={editMaster ? String(editMaster.parent_code ?? "") : ""} placeholder="Mã cha (nếu có)"/>
+            <select className={inputClass} name="parent_code" defaultValue={editMaster ? String(editMaster.parent_code ?? "") : ""}>
+              <option value="">Không có danh mục cha</option>
+              {[...expenseCategories,...incomeCategories].filter((x)=>!editMaster || x.code !== String(editMaster.code)).map((x)=><option key={x.code} value={x.code}>{x.name}</option>)}
+            </select>
             <input className={inputClass} name="display_order" type="number" defaultValue={editMaster ? String(editMaster.display_order ?? 100) : "100"}/>
             <input className={inputClass+" col-span-2"} name="source_reference" defaultValue={editMaster ? String(editMaster.source_reference ?? "") : ""} placeholder="Nguồn / evidence"/>
             <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_active" defaultChecked={editMaster ? editMaster.is_active === true : true}/> Đang sử dụng</label>
@@ -301,6 +316,8 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
             <TransactionMasterFields transactionTypes={transactionTypes} expenseCategories={expenseCategories} incomeCategories={incomeCategories} className={inputClass} defaultType={editTransaction ? String(editTransaction.transaction_type) : "EXPENSE"} defaultCategory={editTransaction ? String(editTransaction.category_code ?? "") : ""}/>
             <select className={inputClass} name="account_id" defaultValue={editTransaction ? String(editTransaction.account_id ?? "") : ""}><option value="">Chọn tài khoản nếu áp dụng</option>{accounts.filter(x=>x.record_status==="ACTIVE").map(x=><option key={String(x.id)} value={String(x.id)}>{String(x.name)}</option>)}</select>
             <input className={inputClass} name="amount" inputMode="decimal" defaultValue={editTransaction ? String(editTransaction.amount ?? "") : ""} placeholder="Số tiền > 0" required/>
+            <MasterDataSelect name="payment_method_code" options={paymentMethods} defaultValue={editTransaction ? String(editTransaction.payment_method_code ?? "") : ""} placeholder="Phương thức thanh toán (nếu áp dụng)" className={inputClass}/>
+            <MasterDataSelect name="income_source_code" options={incomeSources} defaultValue={editTransaction ? String(editTransaction.income_source_code ?? "") : ""} placeholder="Nguồn thu nhập (nếu áp dụng)" className={inputClass}/>
             <input className={inputClass+" col-span-2"} name="description" defaultValue={editTransaction ? String(editTransaction.description ?? "") : ""} placeholder="Mô tả"/>
             <input className={inputClass+" col-span-2"} name="evidence_reference" defaultValue={editTransaction ? String(editTransaction.source_reference ?? "") : ""} placeholder="Link/mã bằng chứng"/>
             <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_essential" defaultChecked={editTransaction?.is_essential === true}/> Chi thiết yếu</label>

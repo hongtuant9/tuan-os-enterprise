@@ -1043,6 +1043,30 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
   const client = await page.createCDPSession();
   try {
     await client.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dir, eventsEnabled: true });
+
+    const attachmentHolder: { current: { buffer: Buffer; fileName: string } | null } = { current: null };
+    const captureAttachment = async (response: import("puppeteer-core").HTTPResponse) => {
+      if (attachmentHolder.current) return;
+      try {
+        const headers = response.headers();
+        const disposition = headers["content-disposition"] || "";
+        const contentType = (headers["content-type"] || "").toLowerCase();
+        const attachmentLike = /attachment/i.test(disposition) || /spreadsheet|excel|csv|octet-stream/i.test(contentType);
+        if (!attachmentLike) return;
+        const buffer = await response.buffer();
+        if (!buffer.length) return;
+        const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+        const quoted = disposition.match(/filename="([^"]+)"/i)?.[1];
+        const plain = disposition.match(/filename=([^;]+)/i)?.[1]?.trim();
+        const rawName = encoded ? decodeURIComponent(encoded) : quoted || plain || `kiotviet-${system.toLowerCase()}-cashbook-export.bin`;
+        const fileName = rawName.replace(/[\\/:*?"<>|]/g, "_").slice(0, 180);
+        attachmentHolder.current = { buffer, fileName };
+      } catch {
+        // A response can disappear before its body becomes readable; keep waiting for another attachment-like response.
+      }
+    };
+    page.on("response", captureAttachment);
+
     const clicked = await clickByText(page, ["Xuất file", "Xuất", "Export"]);
     if (!clicked) throw new Error("Export control could not be clicked.");
     await new Promise((resolve) => setTimeout(resolve, 700));
@@ -1066,20 +1090,29 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
       await clickByText(page, ["Excel", "Xuất Excel", "XLSX", "CSV"]).catch(() => false);
     }
     let captured: string | null = null;
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+    let content: Buffer | null = null;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 250));
+      const attachment = attachmentHolder.current;
+      if (attachment) {
+        captured = attachment.fileName;
+        content = attachment.buffer;
+        await writeFile(join(dir, captured), content);
+        break;
+      }
       const names = await readdir(dir).catch(() => [] as string[]);
       const candidates = names.filter((name) => !before.has(name) && !name.endsWith(".crdownload"));
       if (candidates.length) { captured = candidates[0]; break; }
     }
+    page.off("response", captureAttachment);
     if (!captured) {
-      const result = { attempted: true, state: "NO_DOWNLOAD" as const, capturedAt: new Date().toISOString(), postClickControlLabels, detail: "Export control clicked but no completed download appeared within 10s." };
+      const result = { attempted: true, state: "NO_DOWNLOAD" as const, capturedAt: new Date().toISOString(), postClickControlLabels, detail: "Export control clicked but neither a completed browser download nor an attachment-like export response appeared within 15s." };
       await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8");
       return result;
     }
     const full = join(dir, captured);
     const meta = await stat(full);
-    const content = await readFile(full);
+    if (!content) content = await readFile(full);
     const result = {
       attempted: true,
       state: "CAPTURED" as const,

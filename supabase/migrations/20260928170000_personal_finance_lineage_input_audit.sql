@@ -2,6 +2,8 @@
 -- Additive hardening after 20260928133000 Financial Foundation.
 -- No external financial commit is enabled.
 
+create schema if not exists private;
+
 alter table public.personal_finance_accounts
   add column if not exists created_by uuid references public.users(id) on delete set null,
   add column if not exists updated_by uuid references public.users(id) on delete set null,
@@ -63,17 +65,17 @@ set verification_evidence = coalesce(verification_evidence,'Owner-approved goal 
 where verification_status='VERIFIED' and source_reference='03_TaiSan_MucTieu_FI!B19';
 
 create unique index if not exists personal_finance_accounts_source_external_uq
-  on public.personal_finance_accounts(source,external_key) where external_key is not null;
+  on public.personal_finance_accounts(source,external_key);
 create unique index if not exists personal_finance_transactions_source_external_uq
-  on public.personal_finance_transactions(source,external_key) where external_key is not null;
+  on public.personal_finance_transactions(source,external_key);
 create unique index if not exists personal_finance_debts_source_external_uq
-  on public.personal_finance_debts(source,external_key) where external_key is not null;
+  on public.personal_finance_debts(source,external_key);
 create unique index if not exists personal_finance_assets_source_external_uq
-  on public.personal_finance_assets(source,external_key) where external_key is not null;
+  on public.personal_finance_assets(source,external_key);
 create unique index if not exists personal_finance_goals_source_external_uq
-  on public.personal_finance_goals(source,external_key) where external_key is not null;
+  on public.personal_finance_goals(source,external_key);
 create unique index if not exists owner_business_transfers_source_external_uq
-  on public.owner_business_transfers(source,external_key) where external_key is not null;
+  on public.owner_business_transfers(source,external_key);
 
 create table if not exists public.personal_finance_audit_log (
   id uuid primary key default gen_random_uuid(),

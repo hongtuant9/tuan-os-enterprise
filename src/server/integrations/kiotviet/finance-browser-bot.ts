@@ -780,6 +780,47 @@ async function cashbookSnapshot(page: Page) {
     }
   }
 
+  // Last DOM-only fallback: temporarily expand the Kendo virtual viewport so
+  // the browser itself asks the widget to render a larger row window. This is
+  // presentation-only DOM manipulation; it does not call internal/private APIs.
+  if (reportedTotalRows !== null && seen.size < reportedTotalRows) {
+    const expanded = await page.evaluate(() => {
+      const candidates = Array.from(document.querySelectorAll(
+        ".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,[role='grid']"
+      )) as HTMLElement[];
+      const scroller = candidates.find((el) => {
+        const style = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" &&
+          rect.width > 20 && rect.height > 20 && el.scrollHeight > el.clientHeight + 2;
+      });
+      if (!scroller) return false;
+      scroller.dataset.tceOriginalHeight = scroller.style.height || "";
+      scroller.dataset.tceOriginalMaxHeight = scroller.style.maxHeight || "";
+      scroller.dataset.tceOriginalOverflow = scroller.style.overflowY || "";
+      const target = Math.min(5000, Math.max(scroller.scrollHeight + 200, scroller.clientHeight * 5));
+      scroller.style.height = `${target}px`;
+      scroller.style.maxHeight = "none";
+      scroller.style.overflowY = "auto";
+      scroller.dispatchEvent(new Event("resize", { bubbles: true }));
+      window.dispatchEvent(new Event("resize"));
+      return true;
+    }).catch(() => false);
+    if (expanded) {
+      await page.setViewport({ width: 1440, height: 5000 }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      for (const row of await cashbookRows(page)) seen.set(row, row);
+      await page.evaluate(() => {
+        const scroller = document.querySelector(".k-grid-content.k-virtual-content,.k-grid-content,.k-grid-content-wrap,[role='grid']") as HTMLElement | null;
+        if (!scroller) return;
+        scroller.style.height = scroller.dataset.tceOriginalHeight || "";
+        scroller.style.maxHeight = scroller.dataset.tceOriginalMaxHeight || "";
+        scroller.style.overflowY = scroller.dataset.tceOriginalOverflow || "";
+        window.dispatchEvent(new Event("resize"));
+      }).catch(() => undefined);
+    }
+  }
+
   // KiotViet Hotel uses a virtualized Kendo grid. Programmatic scrollTop can
   // leave rows unrendered, so use real wheel input over the live scrollbox and
   // collect each rendered window before deciding the cashbook is complete.

@@ -667,6 +667,20 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
   const container = getAdminContainer();
   const db = dbOf(container.db);
   const nowIso = now.toISOString();
+  const staleBeforeIso = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+  const staleCleanup = await db.from("marketing_sync_runs").update({
+    status: "failed",
+    completed_at: nowIso,
+    error_code: "STALE_RUNTIME_RUN",
+    error_message: "Auto-closed stale Marketing Command Center runtime lock before starting a new cycle.",
+  })
+    .eq("connector_id", "hospitality_crm")
+    .eq("status", "running")
+    .lte("started_at", staleBeforeIso);
+  if (staleCleanup.error) {
+    throw new Error(staleCleanup.error.message || "MARKETING_STALE_RUN_CLEANUP_FAILED");
+  }
+
   const runtimeRunId = randomUUID();
   const runInsert = await db.from("marketing_sync_runs").insert({
     id: runtimeRunId,

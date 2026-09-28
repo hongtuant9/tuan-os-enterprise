@@ -141,7 +141,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
     const [fin, cost, fnbInventory, hotelInventory, apCandidate, soldFnbSkus] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: FIN_ID,
-        ranges: ["'ACTUAL LIVE — 2026-09'!A1:L120"],
+        ranges: ["'99_STAGING_ACTUAL_2026_09'!A1:L120"],
         valueRenderOption: "FORMATTED_VALUE",
       }),
       sheets.spreadsheets.values.batchGet({

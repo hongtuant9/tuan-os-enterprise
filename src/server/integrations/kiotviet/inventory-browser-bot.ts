@@ -483,14 +483,24 @@ async function readSupplierDebtDiagnostics(
   const codeIndex = headerIndex.get("mã nhà cung cấp") ?? 0;
   const debtIndex = headerIndex.get("nợ cần trả hiện tại") ?? -1;
   const purchaseIndex = headerIndex.get("tổng mua") ?? -1;
-  const rows = supplierModule.cells
+  const structuredRows = supplierModule.cells
     .filter((row) => /^NCC\d+/i.test(row[codeIndex] || ""))
+    .slice(0, 5)
+    .map((row) => ({
+      code: row[codeIndex] || "",
+      currentDebt: debtIndex >= 0 ? parseMoneyToken(row[debtIndex] || "") : null,
+      totalPurchase: purchaseIndex >= 0 ? parseMoneyToken(row[purchaseIndex] || "") : null,
+    }));
+  const fallbackCodes = (supplierModule.rawRows ?? [])
+    .flatMap((row) => row.match(/\bNCC\d+\b/gi) ?? [])
+    .filter((code, index, all) => all.findIndex((item) => item.toUpperCase() === code.toUpperCase()) === index)
     .slice(0, 5);
+  const rows = structuredRows.length ? structuredRows : fallbackCodes.map((code) => ({ code, currentDebt: null, totalPurchase: null }));
   const results: NonNullable<InventoryBotSnapshot["supplierDebtDiagnostics"]> = [];
   for (const row of rows) {
-    const code = row[codeIndex] || "";
-    const currentDebt = debtIndex >= 0 ? parseMoneyToken(row[debtIndex] || "") : null;
-    const totalPurchase = purchaseIndex >= 0 ? parseMoneyToken(row[purchaseIndex] || "") : null;
+    const code = row.code;
+    const currentDebt = row.currentDebt;
+    const totalPurchase = row.totalPurchase;
     const supplierUrl = MODULES[system].find((item) => item.id === "SUPPLIERS")?.path(retailer);
     if (!supplierUrl) continue;
     await page.goto(supplierUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);

@@ -55,3 +55,29 @@ export function personalMetricState(input: {
   if (input.currentPeriodStart && input.sourceUpdatedAt.slice(0, 10) < input.currentPeriodStart) return "STALE" as const;
   return "VERIFIED" as const;
 }
+
+
+export type FinanceMasterRow = { code: string; name: string; isActive: boolean; recordStatus: "ACTIVE" | "INACTIVE" | "SUPERSEDED" };
+
+export function activeMasterOptions(rows: FinanceMasterRow[]) {
+  return rows.filter((row) => row.isActive && row.recordStatus === "ACTIVE");
+}
+
+export function deduplicateMasterRows<T extends { type: string; code: string }>(rows: T[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = row.type + ":" + row.code;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function verificationAfterMaterialEdit(previous: VerificationStatus, materialChanged: boolean): VerificationStatus {
+  if (!materialChanged) return previous;
+  return "NEED_VERIFY";
+}
+
+export function activeActualAmount(rows: Array<{ amount: number; status: VerificationStatus; recordStatus: string }>) {
+  return rows.filter((row) => row.status === "VERIFIED" && row.recordStatus === "ACTIVE").reduce((sum,row)=>sum+row.amount,0);
+}

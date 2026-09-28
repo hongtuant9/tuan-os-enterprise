@@ -9,7 +9,13 @@ import {
   savePersonalAsset,
   savePersonalDebt,
   savePersonalTransaction,
+  saveFinanceMasterData,
+  setFinanceMasterDataActive,
+  voidPersonalRecord,
 } from "./actions";
+import { MasterDataSelect } from "./MasterDataSelect";
+import { TransactionMasterFields } from "./TransactionMasterFields";
+import { ConfirmSubmitButton } from "./ConfirmSubmitButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -85,7 +91,7 @@ function FormShell({ id, title, children, disabled }: { id: string; title: strin
   </details>;
 }
 
-const inputClass = "rounded-md border border-[#cbd8e8] px-2 py-2 text-[11px]";
+const inputClass = "w-full rounded-md border border-[#9fb4cf] bg-white px-2 py-2 text-[11px] text-[#183252] placeholder:text-[#6b7f9b] disabled:bg-[#edf2f7] disabled:text-[#75869f] focus:border-[#1769d2] focus:outline-none";
 
 export default async function PersonalFinancePage() {
   const db = await createClient();
@@ -98,7 +104,7 @@ export default async function PersonalFinancePage() {
   const now = new Date();
   const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(now) + "-01";
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -108,9 +114,10 @@ export default async function PersonalFinancePage() {
     raw.from("personal_finance_transactions").select("*").eq("record_status","ACTIVE").gte("transaction_date", month).order("transaction_date", { ascending: false }).limit(100),
     raw.from("owner_business_transfers").select("*").eq("record_status","ACTIVE").gte("transfer_date", month).order("transfer_date", { ascending: false }).limit(100),
     raw.from("personal_finance_audit_log").select("metadata,created_at").eq("entity_type","IMPORT").order("created_at",{ascending:false}).limit(1).maybeSingle(),
+    raw.from("finance_master_data").select("*").order("master_data_type").order("display_order").order("name"),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -120,6 +127,17 @@ export default async function PersonalFinancePage() {
   const goals = (goalsRes.data ?? []) as Row[];
   const transactions = (txRes.data ?? []) as Row[];
   const transfers = (transferRes.data ?? []) as Row[];
+  const masterData = (masterRes.data ?? []) as Row[];
+  const activeMaster = (type: string) => masterData
+    .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
+    .map((x) => ({ code: String(x.code), name: String(x.name) }));
+  const transactionTypes = activeMaster("TRANSACTION_TYPE");
+  const expenseCategories = activeMaster("EXPENSE_CATEGORY");
+  const incomeCategories = activeMaster("INCOME_CATEGORY");
+  const accountTypes = activeMaster("ACCOUNT_TYPE");
+  const institutions = activeMaster("INSTITUTION");
+  const debtTypes = activeMaster("DEBT_TYPE");
+  const assetTypes = activeMaster("ASSET_TYPE");
 
   const assetSourceAt = latest([...assets,...accounts],"source_updated_at");
   const debtSourceAt = latest(debts,"source_updated_at");
@@ -141,10 +159,9 @@ export default async function PersonalFinancePage() {
   const cashflowReady = Number(monthly?.verified_cashflow_count ?? 0) > 0 && Number(monthly?.unverified_cashflow_count ?? 0) === 0;
 
   const verifiedExpenses = transactions.filter((x) => x.transaction_type === "EXPENSE" && x.verification_status === "VERIFIED");
-  const expenseCategories = ["Ăn uống","Giáo dục","Nhà ở","Đi lại","Y tế"] as const;
-  const expenseSummary = [...expenseCategories,"Khác"].map((category) => ({
-    category,
-    amount: verifiedExpenses.filter((x) => category === "Khác" ? !expenseCategories.includes(String(x.category) as typeof expenseCategories[number]) : String(x.category) === category).reduce((s,x) => s + Number(x.amount ?? 0),0),
+  const expenseSummary = expenseCategories.slice(0, 8).map((category) => ({
+    category: category.name,
+    amount: verifiedExpenses.filter((x) => String(x.category_code ?? "") === category.code).reduce((s,x) => s + Number(x.amount ?? 0),0),
   }));
 
   const assetStatus = totalAssetsReady ? effectiveStatus("VERIFIED",assetSourceAt,month) : "NEED_VERIFY";
@@ -204,17 +221,64 @@ export default async function PersonalFinancePage() {
         ].map(([label,value],i)=><div key={label} className="rounded-lg bg-[#f5f9fd] p-3 text-center text-[10px]"><b>{i+1}. {label}</b><div className="mt-2 text-[#667b9b]">{value}</div></div>)}
       </div><p className="mt-3 text-[9px] text-[#8795aa]">Không có Financial Freedom Score. Chỉ dùng Actual VERIFIED/current; dữ liệu cũ hoặc thiếu evidence hiển thị — / CẦN XÁC MINH.</p></section>
 
-      <section className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">9. Nhập / cập nhật dữ liệu</h2><p className="mt-1 text-[10px] text-[#7185a5]">CEO thao tác tại đây; không sửa database trực tiếp. Mọi bản ghi do App tạo mặc định NEED_VERIFY cho tới khi evidence được reconciliation.</p>
+      <section className="rounded-xl border border-[#dce8f4] bg-white p-4">
+        <h2 className="text-[14px] font-extrabold text-[#102456]">9. Danh sách dữ liệu & thao tác an toàn</h2>
+        <p className="mt-1 text-[10px] text-[#445b7d]">Không hard delete. Giao dịch/transfer dùng Hủy; account/asset/debt dùng Ngừng sử dụng/HOLD. Mọi thao tác ghi lý do và audit before/after.</p>
+        <div className="mt-3 space-y-3">
+          {[["personal_finance_transactions","Giao dịch",transactions,"transaction_date","amount"],["personal_finance_accounts","Tài khoản",accounts,"name","current_balance"],["personal_finance_debts","Khoản nợ",debts,"name","current_principal"],["personal_finance_assets","Tài sản",assets,"name","value_amount"],["owner_business_transfers","Business ↔ Personal",transfers,"transfer_date","amount"]].map(([table,label,rows,labelKey,amountKey])=><details key={String(table)} className="rounded-lg border border-[#dce8f4] p-3">
+            <summary className="cursor-pointer text-[11px] font-bold text-[#17345f]">{String(label)} · {(rows as Row[]).length} bản ghi</summary>
+            <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px] text-[#243b5f]"><thead className="bg-[#eaf2fb] text-[#17345f]"><tr><th className="p-2 text-left">Bản ghi</th><th className="p-2 text-right">Số tiền</th><th className="p-2">Trạng thái</th><th className="p-2">Cập nhật</th><th className="p-2">Hành động</th></tr></thead><tbody>
+              {(rows as Row[]).map((x)=><tr key={String(x.id)} className="border-t border-[#e4ecf5]"><td className="p-2">{String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}</td><td className="p-2 text-right">{money(x[amountKey as string])}</td><td className="p-2 text-center">{String(x.record_status ?? x.status ?? "ACTIVE")}</td><td className="p-2">{fmtDate(x.updated_at)}</td><td className="p-2"><form action={voidPersonalRecord} className="flex gap-1"><input type="hidden" name="table" value={String(table)}/><input type="hidden" name="record_id" value={String(x.id)}/><input className={inputClass} name="reason" placeholder="Lý do hủy/ngừng" required/><ConfirmSubmitButton className="rounded bg-[#8a2d2d] px-2 py-1 font-bold text-white" label={String(table).includes("transactions")||String(table).includes("transfers")?"Hủy giao dịch":"Ngừng sử dụng"} message="Bạn có chắc muốn hủy/ngừng sử dụng bản ghi này? Bản ghi sẽ được giữ trong lịch sử và audit trail."/></form><a className="ml-2 font-bold text-[#1769d2] hover:underline" href={String(table)==="personal_finance_transactions"?"#input-transaction":String(table)==="personal_finance_accounts"?"#input-account":String(table)==="personal_finance_debts"?"#input-debt":String(table)==="personal_finance_assets"?"#input-asset":"#input-transfer"}>Sửa</a></td></tr>)}
+            </tbody></table></div>
+          </details>)}
+        </div>
+      </section>
+
+      <section id="master-data-settings" className="rounded-xl border border-[#c9d9ec] bg-white p-4 text-[#1f3657]">
+        <h2 className="text-[14px] font-extrabold text-[#102456]">10. Cài đặt danh mục</h2>
+        <p className="mt-1 text-[10px] text-[#445b7d]">Supabase Master Data là canonical runtime. Không xóa cứng taxonomy đã dùng; tắt bằng INACTIVE. Code kỹ thuật được giữ trong database, UI hiển thị tên tiếng Việt.</p>
+        {migrationMissing ? <p className="mt-3 rounded bg-amber-50 p-3 text-[10px] font-semibold text-amber-800">HOLD tới khi migration Master Data + RLS PASS.</p> : <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <form action={saveFinanceMasterData} className="grid grid-cols-2 gap-2 rounded-lg bg-[#f6f9fd] p-3">
+            <select className={inputClass+" col-span-2"} name="record_id"><option value="">Thêm mới</option>{masterData.map(x=><option key={String(x.id)} value={String(x.id)}>Sửa: {String(x.master_data_type)} · {String(x.name)}</option>)}</select>
+            <select className={inputClass} name="master_data_type" required>{["EXPENSE_CATEGORY","INCOME_CATEGORY","INSTITUTION","PAYMENT_METHOD","INCOME_SOURCE","TRANSACTION_SOURCE"].map(x=><option key={x}>{x}</option>)}</select>
+            <input className={inputClass} name="code" placeholder="Mã canonical" required/>
+            <input className={inputClass+" col-span-2"} name="name" placeholder="Tên hiển thị tiếng Việt" required/>
+            <input className={inputClass} name="parent_code" placeholder="Mã cha (nếu có)"/>
+            <input className={inputClass} name="display_order" type="number" defaultValue="100"/>
+            <input className={inputClass+" col-span-2"} name="source_reference" placeholder="Nguồn / evidence"/>
+            <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_active" defaultChecked/> Đang sử dụng</label>
+            <button className="rounded bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Thêm danh mục</button>
+          </form>
+          <div className="max-h-[420px] overflow-auto rounded-lg border border-[#dce8f4]">
+            <table className="w-full text-[10px] text-[#243b5f]"><thead className="sticky top-0 bg-[#dfeaf7] text-[#102456]"><tr><th className="p-2 text-left">Loại</th><th className="p-2 text-left">Tên</th><th className="p-2">TT</th><th className="p-2">Bật/tắt</th></tr></thead><tbody>
+              {masterData.map((x)=><tr key={String(x.id)} className="border-t border-[#dce8f4]"><td className="p-2">{String(x.master_data_type)}</td><td className="p-2"><b>{String(x.name)}</b><div className="text-[#6a7e9b]">{String(x.code)}</div></td><td className="p-2 text-center">{String(x.record_status)}</td><td className="p-2"><form action={setFinanceMasterDataActive} className="flex gap-1"><input type="hidden" name="record_id" value={String(x.id)}/><input type="hidden" name="is_active" value={x.is_active?"":"1"}/><input className={inputClass} name="reason" placeholder="Lý do" required/><ConfirmSubmitButton className="rounded bg-[#294b77] px-2 py-1 font-bold text-white" label={x.is_active?"Tắt":"Bật"} message={x.is_active?"Ngừng sử dụng danh mục này? Bản ghi cũ vẫn được giữ nguyên.":"Kích hoạt lại danh mục này?"}/></form></td></tr>)}
+            </tbody></table>
+          </div>
+        </div>}
+      </section>
+
+      <section className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">11. Nhập / cập nhật dữ liệu</h2><p className="mt-1 text-[10px] text-[#7185a5]">CEO thao tác tại đây; không sửa database trực tiếp. Mọi bản ghi do App tạo mặc định NEED_VERIFY cho tới khi evidence được reconciliation.</p>
         <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <FormShell id="input-transaction" title="+ Giao dịch" disabled={migrationMissing}><form action={savePersonalTransaction} className="mt-3 grid grid-cols-2 gap-2"><input className={inputClass} name="transaction_date" type="date" required/><select className={inputClass} name="transaction_type"><option value="EXPENSE">Chi</option><option value="INCOME">Thu</option><option value="DEBT_PAYMENT">Trả nợ</option><option value="TRANSFER">Chuyển nội bộ</option></select><input className={inputClass} name="category" placeholder="Danh mục" required/><input className={inputClass} name="amount" inputMode="decimal" placeholder="Số tiền" required/><input className={inputClass+" col-span-2"} name="description" placeholder="Mô tả"/><input className={inputClass+" col-span-2"} name="evidence_reference" placeholder="Link/mã bằng chứng (nếu có)"/><label className="text-[10px]"><input type="checkbox" name="is_essential"/> Chi thiết yếu</label><label className="text-[10px]"><input type="checkbox" name="is_sustainable_income"/> Thu nhập bền vững</label><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
+          <FormShell id="input-transaction" title="+ Giao dịch" disabled={migrationMissing}><form action={savePersonalTransaction} className="mt-3 grid grid-cols-2 gap-2">
+            <select className={inputClass} name="record_id"><option value="">Tạo giao dịch mới</option>{transactions.map(x=><option key={String(x.id)} value={String(x.id)}>Sửa: {String(x.transaction_date)} · {String(x.category)}</option>)}</select>
+            <input className={inputClass} name="transaction_date" type="date" required/>
+            <TransactionMasterFields transactionTypes={transactionTypes} expenseCategories={expenseCategories} incomeCategories={incomeCategories} className={inputClass}/>
+            <select className={inputClass} name="account_id"><option value="">Chọn tài khoản nếu áp dụng</option>{accounts.filter(x=>x.record_status==="ACTIVE").map(x=><option key={String(x.id)} value={String(x.id)}>{String(x.name)}</option>)}</select>
+            <input className={inputClass} name="amount" inputMode="decimal" placeholder="Số tiền > 0" required/>
+            <input className={inputClass+" col-span-2"} name="description" placeholder="Mô tả"/>
+            <input className={inputClass+" col-span-2"} name="evidence_reference" placeholder="Link/mã bằng chứng"/>
+            <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_essential"/> Chi thiết yếu</label>
+            <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_sustainable_income"/> Thu nhập bền vững</label>
+            <button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu / cập nhật → NEED_VERIFY</button>
+          </form></FormShell>
 
-          <FormShell id="input-account" title="+ Tài khoản / cập nhật số dư" disabled={migrationMissing}><form action={savePersonalAccount} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo tài khoản mới</option>{accounts.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên tài khoản" required/><select className={inputClass} name="account_type"><option>CASH</option><option>BANK</option><option>E_WALLET</option><option>BUSINESS_DISTRIBUTION</option><option>OTHER</option></select><input className={inputClass} name="institution" placeholder="Ngân hàng/tổ chức"/><input className={inputClass} name="current_balance" placeholder="Số dư" required/><input className={inputClass} name="balance_as_of" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Sao kê/link bằng chứng"/><label className="text-[10px]"><input type="checkbox" name="is_liquid" defaultChecked/> Thanh khoản</label><label className="text-[10px]"><input type="checkbox" name="is_emergency_fund"/> Quỹ dự phòng</label><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
+          <FormShell id="input-account" title="+ Tài khoản / cập nhật số dư" disabled={migrationMissing}><form action={savePersonalAccount} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo tài khoản mới</option>{accounts.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên tài khoản" required/><MasterDataSelect name="account_type_code" options={accountTypes} required placeholder="Loại tài khoản" className={inputClass}/><MasterDataSelect name="institution_code" options={institutions} placeholder="Ngân hàng/tổ chức" className={inputClass}/><input className={inputClass} name="current_balance" placeholder="Số dư" required/><input className={inputClass} name="balance_as_of" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Sao kê/link bằng chứng"/><label className="text-[10px]"><input type="checkbox" name="is_liquid" defaultChecked/> Thanh khoản</label><label className="text-[10px]"><input type="checkbox" name="is_emergency_fund"/> Quỹ dự phòng</label><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
 
-          <FormShell id="input-debt" title="+ Khoản nợ / cập nhật dư nợ" disabled={migrationMissing}><form action={savePersonalDebt} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo khoản nợ mới</option>{debts.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên khoản nợ" required/><select className={inputClass} name="debt_type"><option>BANK</option><option>OVERDRAFT</option><option>FAMILY</option><option>BUSINESS_PERSONAL_LIABILITY</option><option>OTHER</option></select><input className={inputClass} name="opening_principal" placeholder="Dư gốc ban đầu" required/><input className={inputClass} name="current_principal" placeholder="Dư gốc hiện tại" required/><input className={inputClass} name="interest_rate_annual" placeholder="Lãi suất năm (vd 0.06)"/><input className={inputClass} name="monthly_debt_service" placeholder="Nghĩa vụ/tháng"/><input className={inputClass} name="maturity_date" type="date"/><input className={inputClass} name="next_payment_date" type="date"/><input className={inputClass} name="as_of_date" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Sao kê/hợp đồng"/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
+          <FormShell id="input-debt" title="+ Khoản nợ / cập nhật dư nợ" disabled={migrationMissing}><form action={savePersonalDebt} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo khoản nợ mới</option>{debts.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên khoản nợ" required/><MasterDataSelect name="debt_type_code" options={debtTypes} required placeholder="Loại nợ" className={inputClass}/><MasterDataSelect name="lender_institution_code" options={institutions} placeholder="Tổ chức cho vay" className={inputClass}/><input className={inputClass} name="opening_principal" placeholder="Dư gốc ban đầu" required/><input className={inputClass} name="current_principal" placeholder="Dư gốc hiện tại" required/><input className={inputClass} name="interest_rate_annual" placeholder="Lãi suất năm (vd 0.06)"/><input className={inputClass} name="monthly_debt_service" placeholder="Nghĩa vụ/tháng"/><input className={inputClass} name="maturity_date" type="date"/><input className={inputClass} name="next_payment_date" type="date"/><input className={inputClass} name="as_of_date" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Sao kê/hợp đồng"/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
 
-          <FormShell id="input-asset" title="+ Tài sản / cập nhật giá trị" disabled={migrationMissing}><form action={savePersonalAsset} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo tài sản mới</option>{assets.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên tài sản" required/><select className={inputClass} name="asset_type"><option>LIQUID</option><option>NON_LIQUID</option><option>BUSINESS_RELATED</option><option>OTHER</option></select><input className={inputClass} name="value_amount" placeholder="Giá trị" required/><select className={inputClass} name="valuation_kind"><option value="ESTIMATED">ESTIMATED</option><option value="VERIFIED">VERIFIED VALUE evidence pending</option><option value="UNKNOWN">UNKNOWN</option></select><input className={inputClass} name="as_of_date" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Chứng thư/link bằng chứng"/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
+          <FormShell id="input-asset" title="+ Tài sản / cập nhật giá trị" disabled={migrationMissing}><form action={savePersonalAsset} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass+" col-span-2"} name="record_id"><option value="">Tạo tài sản mới</option>{assets.map(x=><option key={String(x.id)} value={String(x.id)}>Cập nhật: {String(x.name)}</option>)}</select><input className={inputClass} name="name" placeholder="Tên tài sản" required/><MasterDataSelect name="asset_type_code" options={assetTypes} required placeholder="Loại tài sản" className={inputClass}/><input className={inputClass} name="value_amount" placeholder="Giá trị" required/><select className={inputClass} name="valuation_kind"><option value="ESTIMATED">ESTIMATED</option><option value="VERIFIED">VERIFIED VALUE evidence pending</option><option value="UNKNOWN">UNKNOWN</option></select><input className={inputClass} name="as_of_date" type="date" required/><input className={inputClass} name="evidence_reference" placeholder="Chứng thư/link bằng chứng"/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
 
-          <FormShell id="input-transfer" title="+ Business ↔ Personal transfer" disabled={migrationMissing}><form action={saveOwnerBusinessTransfer} className="mt-3 grid grid-cols-2 gap-2"><input className={inputClass} name="transfer_date" type="date" required/><select className={inputClass} name="business_unit"><option>LAVENDER</option><option>RUBY</option><option>COZY_GARDEN</option><option>HOSPITALITY_SHARED</option><option>OTHER</option></select><select className={inputClass} name="direction"><option>BUSINESS_TO_PERSONAL</option><option>PERSONAL_TO_BUSINESS</option></select><select className={inputClass} name="transfer_type"><option>OWNER_DISTRIBUTION</option><option>OWNER_DRAW</option><option>SALARY_COMPENSATION</option><option>OWNER_CONTRIBUTION</option><option>PERSONAL_PAID_BUSINESS</option><option>BUSINESS_PAID_PERSONAL</option><option>OTHER</option></select><input className={inputClass} name="amount" placeholder="Số tiền" required/><input className={inputClass} name="evidence_reference" placeholder="Bằng chứng giao dịch" required/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
+          <FormShell id="input-transfer" title="+ Business ↔ Personal transfer" disabled={migrationMissing}><form action={saveOwnerBusinessTransfer} className="mt-3 grid grid-cols-2 gap-2"><select className={inputClass} name="record_id"><option value="">Tạo transfer mới</option>{transfers.map(x=><option key={String(x.id)} value={String(x.id)}>Sửa: {String(x.transfer_date)} · {String(x.business_unit)} · {money(x.amount)}</option>)}</select><input className={inputClass} name="transfer_date" type="date" required/><select className={inputClass} name="business_unit"><option>LAVENDER</option><option>RUBY</option><option>COZY_GARDEN</option><option>HOSPITALITY_SHARED</option><option>OTHER</option></select><select className={inputClass} name="direction"><option>BUSINESS_TO_PERSONAL</option><option>PERSONAL_TO_BUSINESS</option></select><select className={inputClass} name="transfer_type"><option>OWNER_DISTRIBUTION</option><option>OWNER_DRAW</option><option>SALARY_COMPENSATION</option><option>OWNER_CONTRIBUTION</option><option>PERSONAL_PAID_BUSINESS</option><option>BUSINESS_PAID_PERSONAL</option><option>OTHER</option></select><input className={inputClass} name="amount" placeholder="Số tiền" required/><input className={inputClass} name="evidence_reference" placeholder="Bằng chứng giao dịch" required/><button className="col-span-2 rounded-md bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Lưu NEED_VERIFY</button></form></FormShell>
 
           <FormShell id="import-history" title="Import dữ liệu lịch sử từ Sheet" disabled={migrationMissing}><form action={importLegacyPersonalFinance} className="mt-3"><p className="text-[10px] text-[#64799d]">Đọc 04_GiaoDich + baseline nợ/quỹ từ workbook gia đình; import idempotent và mặc định NEED_VERIFY. Phân phối Hospitality có conflict sẽ không tự VERIFIED.</p><button className="mt-3 rounded-md bg-[#102456] px-3 py-2 text-[11px] font-bold text-white">Audit + Import lịch sử</button>{auditRes.data ? <pre className="mt-3 overflow-auto rounded-lg bg-slate-50 p-3 text-[9px]">{JSON.stringify(auditRes.data.metadata,null,2)}</pre>:null}</form></FormShell>
         </div>

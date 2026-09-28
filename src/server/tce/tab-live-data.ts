@@ -23,6 +23,7 @@ import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-br
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
+import { readRevenueFromSupabase } from "@/server/finance/kiotviet-supabase-read-model";
 
 export type TceTabScreen =
   | "business"
@@ -234,17 +235,29 @@ function emptyRevenue(source: RevenueSnapshot["source"], from: string, to: strin
 
 async function safeHotel(from: string, to: string) {
   try {
+    const cached = await readRevenueFromSupabase("kiotviet_hotel_invoices", "KIOTVIET_HOTEL", from, to);
+    if (cached) return cached;
     return await fetchHotelRevenueActual(from, to);
   } catch {
-    return emptyRevenue("KIOTVIET_HOTEL", from, to);
+    try {
+      return await fetchHotelRevenueActual(from, to);
+    } catch {
+      return emptyRevenue("KIOTVIET_HOTEL", from, to);
+    }
   }
 }
 
 async function safeFnb(from: string, to: string) {
   try {
+    const cached = await readRevenueFromSupabase("kiotviet_fnb_invoices", "KIOTVIET_FNB", from, to);
+    if (cached) return cached;
     return await fetchFnbRevenueActual(from, to);
   } catch {
-    return emptyRevenue("KIOTVIET_FNB", from, to);
+    try {
+      return await fetchFnbRevenueActual(from, to);
+    } catch {
+      return emptyRevenue("KIOTVIET_FNB", from, to);
+    }
   }
 }
 

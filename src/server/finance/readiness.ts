@@ -32,7 +32,7 @@ export type FinanceFoundationReadiness = {
     soldSkuCoveragePct: number;
     soldSkuBomReadyPct: number;
     unmatchedSoldSkus: Array<{ code: string; name: string }>;
-    matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string }>;
+    matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string; soldQuantity: number; salesAmount: number }>;
   };
   ap: {
     purchaseOrdersReadable: boolean;
@@ -93,13 +93,13 @@ function payloadTotal(payload: unknown, fallback: number) {
 
 async function readSoldFnbSkus(from: string, to: string) {
   const client = new KiotVietFnbClient();
-  const sold = new Map<string, { code: string; name: string }>();
+  const sold = new Map<string, { code: string; name: string; soldQuantity: number; salesAmount: number }>();
   if (!client.isConfigured()) return sold;
   let currentItem = 0;
   for (let page = 0; page < 1000; page += 1) {
     const query = new URLSearchParams({ fromPurchaseDate: from, toPurchaseDate: to, pageSize: "100", currentItem: String(currentItem), orderBy: "Id", orderDirection: "Asc" });
     const res = await client.listInvoices(query.toString());
-    if (!res.ok) return new Map<string, { code: string; name: string }>();
+    if (!res.ok) return new Map<string, { code: string; name: string; soldQuantity: number; salesAmount: number }>();
     const batch = invoiceRows(res.data);
     for (const invoice of batch) {
       const label = text(invoice.statusValue).toLowerCase();
@@ -111,7 +111,19 @@ async function readSoldFnbSkus(from: string, to: string) {
         const code = text(detail.productCode);
         const name = text(detail.productName);
         const key = code || normalizeName(name);
-        if (key) sold.set(key, { code, name });
+        if (!key) continue;
+        const quantity = Number(detail.quantity ?? 0);
+        const returnQuantity = Number(detail.returnQuantity ?? 0);
+        const soldQuantity = Number.isFinite(quantity) ? Math.max(0, quantity - (Number.isFinite(returnQuantity) ? returnQuantity : 0)) : 0;
+        const subTotal = Number(detail.subTotal ?? 0);
+        const salesAmount = Number.isFinite(subTotal) ? Math.max(0, subTotal) : 0;
+        const current = sold.get(key);
+        if (current) {
+          current.soldQuantity += soldQuantity;
+          current.salesAmount += salesAmount;
+        } else {
+          sold.set(key, { code, name, soldQuantity, salesAmount });
+        }
       }
     }
     currentItem += batch.length;
@@ -187,7 +199,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
     let matchedSoldSkuCount = 0;
     let verifiedSoldSkuCount = 0;
     const unmatchedSoldSkus: Array<{ code: string; name: string }> = [];
-    const matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string }> = [];
+    const matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string; soldQuantity: number; salesAmount: number }> = [];
     for (const sold of soldFnbSkus.values()) {
       const menuRow = (sold.code && menuByCode.get(sold.code)) || menuByName.get(normalizeName(sold.name));
       const bomRow = (sold.code && bomByCode.get(sold.code)) || bomByName.get(normalizeName(sold.name));
@@ -198,7 +210,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       matchedSoldSkuCount += 1;
       const bomStatus = menuRow ? text(menuRow[11]) : text(bomRow?.[12]);
       if (isProductionReadyBom(bomStatus)) verifiedSoldSkuCount += 1;
-      else matchedButUnverifiedSoldSkus.push({ code: sold.code, name: sold.name, bomStatus: bomStatus || "MISSING" });
+      else matchedButUnverifiedSoldSkus.push({ code: sold.code, name: sold.name, bomStatus: bomStatus || "MISSING", soldQuantity: sold.soldQuantity, salesAmount: sold.salesAmount });
     }
     const soldSkuCount = soldFnbSkus.size;
     const soldSkuCoveragePct = soldSkuCount ? (matchedSoldSkuCount / soldSkuCount) * 100 : 0;
@@ -252,7 +264,9 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         soldSkuCoveragePct,
         soldSkuBomReadyPct,
         unmatchedSoldSkus: unmatchedSoldSkus.slice(0, 50),
-        matchedButUnverifiedSoldSkus: matchedButUnverifiedSoldSkus.slice(0, 200),
+        matchedButUnverifiedSoldSkus: matchedButUnverifiedSoldSkus
+          .sort((a, b) => b.salesAmount - a.salesAmount || b.soldQuantity - a.soldQuantity)
+          .slice(0, 200),
       },
       ap: {
         purchaseOrdersReadable,

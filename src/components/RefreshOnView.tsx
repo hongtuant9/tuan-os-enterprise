@@ -9,6 +9,7 @@ export default function RefreshOnView({ intervalMs = 60000 }: { intervalMs?: num
 
   useEffect(() => {
     const refresh = () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
       const now = Date.now();
       if (now - lastRefresh.current < 5000) return;
       lastRefresh.current = now;
@@ -20,11 +21,13 @@ export default function RefreshOnView({ intervalMs = 60000 }: { intervalMs?: num
     };
 
     window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", onVisibility);
-    const timer = window.setInterval(refresh, Math.max(30000, intervalMs));
+    const timer = window.setInterval(refresh, Math.max(15000, intervalMs));
 
     return () => {
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(timer);
     };

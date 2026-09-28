@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
+import VerificationHelp, { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/VerificationHelp";
 
 export type MobileScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -27,6 +28,7 @@ type Kpi = {
   tone: Tone;
   delta?: string;
   down?: boolean;
+  verificationGuide?: VerificationGuide;
 };
 
 type MobileMeta = {
@@ -309,7 +311,10 @@ function KpiGrid({ items }: { items: Kpi[] }) {
               <div className="min-w-0 pt-[1px]">
                 <p className="truncate text-[7px] text-[#6a80a6]">{item.label}</p>
                 <p className="mt-[3px] truncate text-[12px] font-extrabold leading-none text-[#071b45]">{viDisplay(item.value)}</p>
-                <p className={"mt-[5px] text-[8px] font-bold " + (item.down ? "text-[#ff4354]" : t.delta)}>{item.delta || "↑"}</p>
+                <div className="mt-[3px] flex items-center gap-1">
+                  <p className={"text-[8px] font-bold " + (item.down ? "text-[#ff4354]" : t.delta)}>{item.delta || "↑"}</p>
+                  {item.verificationGuide ? <VerificationHelp guide={item.verificationGuide} compact /> : null}
+                </div>
               </div>
             </div>
           </div>
@@ -380,7 +385,11 @@ function RowTable({ rows, cols = 3 }: { rows: string[][]; cols?: number }) {
       <div className="space-y-[2px]" style={{ minWidth }}>
       {rows.map((row, i) => (
         <div key={i} className={"grid min-h-[24px] items-center rounded-[5px] px-[5px] text-[7px] text-[#19325c] " + (i % 2 === 0 ? "bg-[#f6f9fd]" : "bg-white")} style={{ gridTemplateColumns: "repeat(" + cols + ", minmax(78px, 1fr))" }}>
-          {row.map((cell, j) => <span key={j} className={"whitespace-normal break-words pr-1 " + (j === 0 ? "font-semibold" : "")}>{viDisplay(cell)}</span>)}
+          {row.map((cell, j) => {
+            const display = viDisplay(cell);
+            const unresolved = /NEED[_ ]VERIFY|CẦN XÁC MINH|HOLD|TẠM DỪNG|CHƯA ĐẦY ĐỦ/i.test(String(cell) + " " + display);
+            return <span key={j} className={"whitespace-normal break-words pr-1 " + (j === 0 ? "font-semibold" : "")}>{unresolved ? <span className="inline-flex items-center gap-1"><span>{display}</span><VerificationHelp compact guide={fallbackVerificationGuide(`Dữ liệu — ${row[0] ?? "Cần xác minh"}`, String(cell))}/></span> : display}</span>;
+          })}
         </div>
       ))}
       </div>
@@ -650,7 +659,11 @@ export default function MobileMockupScreen({ screen, data }: { screen: MobileScr
     const label = screen === "business" && kpi.label === "Doanh thu hôm nay" && data?.period.key !== "today"
       ? "Doanh thu " + data?.period.label.toLowerCase()
       : kpi.label;
-    return { ...kpi, label, value: data?.metricValues[key] ?? kpi.value };
+    const value = data?.metricValues[key] ?? kpi.value;
+    const note = data?.metricNotes[key] ?? "";
+    const unresolved = /NEED[_ ]VERIFY|CẦN XÁC MINH|HOLD|TẠM DỪNG|CHƯA ĐẦY ĐỦ/i.test(String(value) + " " + String(note));
+    const verificationGuide = data?.verificationGuides[key] ?? (unresolved ? fallbackVerificationGuide(key, note || String(value)) : undefined);
+    return { ...kpi, label, value, verificationGuide };
   });
   return (
     <div className="min-h-screen bg-[#f4f8fd] pb-[76px] text-[#102a56]">

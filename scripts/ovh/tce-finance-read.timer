@@ -1,11 +1,11 @@
 [Unit]
-Description=Refresh TCE KiotViet Finance read-only snapshots every 20 minutes
+Description=Refresh TCE KiotViet Finance read-only snapshots every 2 minutes
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=20min
+OnBootSec=90s
+OnUnitActiveSec=2min
 Persistent=true
-RandomizedDelaySec=30
+RandomizedDelaySec=15
 
 [Install]
 WantedBy=timers.target

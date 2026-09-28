@@ -270,7 +270,7 @@ create or replace view public.personal_finance_monthly_v
 with (security_invoker=true) as
 with tx as (
   select owner_user_id,date_trunc('month',transaction_date)::date as month,
-    sum(amount) filter(where direction='INCOME' and verification_status='VERIFIED') as income_actual,
+    sum(amount) filter(where direction='INCOME' and verification_status='VERIFIED' and business_transfer_id is null) as income_actual,
     sum(amount) filter(where direction='EXPENSE' and verification_status='VERIFIED') as expense_actual
   from public.personal_finance_transactions
   group by owner_user_id,date_trunc('month',transaction_date)::date

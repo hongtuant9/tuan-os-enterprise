@@ -1,6 +1,10 @@
 import Link from "next/link";
 import RefreshOnView from "./RefreshOnView";
 import MobileExecutiveDashboard from "@/components/tce/MobileExecutiveDashboard";
+import ExecutiveDashboardFilters, {
+  type DashboardPeriodKey,
+  type DashboardPropertyKey,
+} from "@/components/ExecutiveDashboardFilters";
 
 export type ExecutiveAction = {
   id: string;
@@ -26,8 +30,12 @@ export type ExecutiveSource = {
 
 export type ExecutiveDashboardProps = {
   generatedAt: string;
-  period: "today" | "7d" | "month" | "year";
+  period: DashboardPeriodKey;
   periodLabel: string;
+  property: DashboardPropertyKey;
+  propertyLabel: string;
+  periodFrom: string;
+  periodTo: string;
   revenue: {
     homestay: number;
     lavender: number;
@@ -103,13 +111,6 @@ function timeParts(value: string) {
     time: new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Ho_Chi_Minh" }).format(d),
   };
 }
-
-const PERIODS = [
-  ["today", "Hôm nay"],
-  ["7d", "7 ngày"],
-  ["month", "Tháng"],
-  ["year", "Năm"],
-] as const;
 
 function Panel({
   title,
@@ -315,11 +316,12 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
             <span className="text-[9px]"><b className="block">Tuấn</b><small className="text-[#7285a3]">Chủ doanh nghiệp</small></span>
           </div>
         </div>
-        <div className="mt-[4px] flex justify-end gap-0">
-          {PERIODS.map(([key,label]) => <Link key={key} href={key === "today" ? "/" : "/?period="+key} className={"min-w-[72px] border px-3 py-[6px] text-center text-[9px] font-bold " + (props.period===key ? "border-[#2377ef] bg-[#2377ef] text-white" : "border-[#d5e1ef] bg-white text-[#314b72]")}>{label}</Link>)}
-          <span className="min-w-[82px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-center text-[9px] font-bold text-[#314b72]">Tùy chọn</span>
-          <span className="ml-3 min-w-[185px] rounded-[4px] border border-[#d5e1ef] bg-white px-3 py-[6px] text-[9px] font-bold text-[#314b72]">Tất cả cơ sở⌄</span>
-        </div>
+        <ExecutiveDashboardFilters
+          period={props.period}
+          property={props.property}
+          defaultFrom={props.periodFrom}
+          defaultTo={props.periodTo}
+        />
       </header>
 
       <main className="grid grid-cols-12 gap-2 p-[10px]">
@@ -334,7 +336,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
             <ActionTable items={props.actionCenter.items}/>
           </Panel>
 
-          <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Số liệu thực tế từ KiotViet / nguồn đã xác minh · " + props.periodLabel}>
+          <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Số liệu thực tế từ KiotViet / nguồn đã xác minh · " + props.propertyLabel + " · " + props.periodLabel}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
               <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="Số liệu thực tế từ KiotViet · Cập nhật trực tiếp" />
               <Stat

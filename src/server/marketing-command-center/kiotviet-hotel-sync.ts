@@ -181,9 +181,15 @@ export async function syncKiotVietHotelBookings(
   const revenueMap = invoiceRevenueByOrderUuid(invoices);
   const saleChannels = saleChannelNameMap(saleChannelsResult.data);
   const aiBookings = rows(aiBookingsResult);
-  const aiByUuid = new Map(aiBookings.map((row) => [s(row.kiotviet_booking_uuid), row]).filter(([uuid]) => Boolean(uuid)));
-  const aiCustomerByBookingUuid = new Map(
-    [...aiByUuid.entries()].map(([uuid, row]) => [uuid, s(row.customer_id)]).filter(([, customerId]) => Boolean(customerId)),
+  const aiByUuid = new Map<string, Row>(
+    aiBookings
+      .map((row): [string, Row] => [s(row.kiotviet_booking_uuid), row])
+      .filter(([uuid]) => Boolean(uuid)),
+  );
+  const aiCustomerByBookingUuid = new Map<string, string>(
+    [...aiByUuid.entries()]
+      .map(([uuid, row]): [string, string] => [uuid, s(row.customer_id)])
+      .filter(([, customerId]) => Boolean(customerId)),
   );
   const invoiceNames = new Map<string, string>();
   for (const invoice of invoices) {

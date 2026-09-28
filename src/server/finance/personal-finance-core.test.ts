@@ -7,6 +7,10 @@ import {
   personalIncomeFromBusiness,
   personalMetricState,
   validatePurchaseDraft,
+  activeMasterOptions,
+  deduplicateMasterRows,
+  verificationAfterMaterialEdit,
+  activeActualAmount,
 } from "./personal-finance-core.ts";
 
 test("business revenue is never copied directly into personal income", () => {
@@ -71,4 +75,35 @@ test("verified evidence becomes stale when source predates current review period
     sourceUpdatedAt: "2026-08-12T00:00:00+07:00",
     currentPeriodStart: "2026-09-01",
   }), "STALE");
+});
+
+
+test("active master dropdown excludes INACTIVE and SUPERSEDED", () => {
+  const rows = [
+    { code:"A", name:"Active", isActive:true, recordStatus:"ACTIVE" as const },
+    { code:"B", name:"Inactive", isActive:false, recordStatus:"INACTIVE" as const },
+    { code:"C", name:"Old", isActive:false, recordStatus:"SUPERSEDED" as const },
+  ];
+  assert.deepEqual(activeMasterOptions(rows).map(x=>x.code), ["A"]);
+});
+
+test("material edit always downgrades VERIFIED to NEED_VERIFY", () => {
+  assert.equal(verificationAfterMaterialEdit("VERIFIED", true), "NEED_VERIFY");
+  assert.equal(verificationAfterMaterialEdit("VERIFIED", false), "VERIFIED");
+});
+
+test("voided transaction is excluded from active actual", () => {
+  assert.equal(activeActualAmount([
+    { amount: 100, status:"VERIFIED", recordStatus:"ACTIVE" },
+    { amount: 50, status:"VERIFIED", recordStatus:"VOIDED" },
+  ]),100);
+});
+
+test("duplicate canonical master rows are deduplicated by type and code", () => {
+  const rows = deduplicateMasterRows([
+    { type:"EXPENSE_CATEGORY", code:"FOOD", name:"A" },
+    { type:"EXPENSE_CATEGORY", code:"FOOD", name:"B" },
+    { type:"ASSET_TYPE", code:"FOOD", name:"C" },
+  ]);
+  assert.equal(rows.length,2);
 });

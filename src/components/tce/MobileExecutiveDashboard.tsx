@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ExecutiveDashboardProps } from "@/components/ExecutiveDashboardLive";
+import ExecutiveDashboardFilters from "@/components/ExecutiveDashboardFilters";
 
 function money(value: number) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.round(value)) + " đ";
@@ -90,10 +91,12 @@ export default function MobileExecutiveDashboard(props: ExecutiveDashboardProps)
         <p className="mt-[3px] truncate text-[7px] text-[#7185a8]">Lavender Homestay · Ruby Homestay · Cozy Garden · Hệ thống vận hành</p>
       </header>
       <div className="border-y border-[#d9e6f4] bg-[#f4f8fd] px-[10px] py-[6px]">
-        <div className="flex h-[26px] items-center gap-1 rounded-[8px] border border-[#d9e5f2] bg-white px-[6px]">
-          {([["today","Hôm nay"],["7d","7 ngày"],["month","Tháng"]] as const).map(([key,label])=><Link key={key} href={key==="today"?"/":"/?period="+key} className={"grid h-[18px] min-w-[52px] place-items-center rounded-[5px] px-2 text-[7px] font-semibold " + (props.period===key?"bg-[#2d7ef4] text-white":"border border-[#dbe6f2] bg-white text-[#2a436c]")}>{label}</Link>)}
-          <span className="grid h-[18px] min-w-[82px] place-items-center rounded-[5px] border border-[#dbe6f2] bg-white px-2 text-[7px] font-semibold text-[#2a436c]">Tất cả cơ sở</span>
-        </div>
+        <ExecutiveDashboardFilters
+          period={props.period}
+          property={props.property}
+          defaultFrom={props.periodFrom}
+          defaultTo={props.periodTo}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-[6px] px-[10px] pt-[7px]">

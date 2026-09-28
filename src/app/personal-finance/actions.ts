@@ -71,9 +71,10 @@ async function insertOrUpdate(
   recordId: string | null,
   payload: Record<string, unknown>
 ) {
+  const stampedPayload = { ...payload, updated_at: nowIso() };
   const query = recordId
-    ? db.from(table).update(payload).eq("id", recordId).select("id").single()
-    : db.from(table).insert(payload).select("id").single();
+    ? db.from(table).update(stampedPayload).eq("id", recordId).select("id").single()
+    : db.from(table).insert(stampedPayload).select("id").single();
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
@@ -116,7 +117,7 @@ function legacyAssetType(code: string) {
 }
 
 async function auditAction(db: SupabaseClient, input: {
-  entityType: string; entityId: string | null; action: "VOID" | "INACTIVATE" | "SUPERSEDE";
+  entityType: string; entityId: string | null; action: "UPDATE" | "VOID" | "INACTIVATE" | "SUPERSEDE";
   actorId: string; source: string; reason: string; before?: unknown; after?: unknown;
 }) {
   const { error } = await db.from("personal_finance_audit_log").insert({
@@ -332,9 +333,10 @@ export async function setFinanceMasterDataActive(form: FormData) {
     is_active: active,
     record_status: active ? "ACTIVE" : "INACTIVE",
     updated_by: userId,
+    updated_at: nowIso(),
   }).eq("id",id).select("*").single();
   if (error) throw new Error(error.message);
-  await auditAction(db,{ entityType:"finance_master_data",entityId:id,action:active?"SUPERSEDE":"INACTIVATE",actorId:userId,source:APP_SOURCE,reason,before,after });
+  await auditAction(db,{ entityType:"finance_master_data",entityId:id,action:active?"UPDATE":"INACTIVATE",actorId:userId,source:APP_SOURCE,reason,before,after });
   revalidatePath("/personal-finance");
 }
 
@@ -354,6 +356,7 @@ export async function voidPersonalRecord(form: FormData) {
     status_changed_at: now,
     status_changed_by: userId,
     updated_by: userId,
+    updated_at: now,
   };
   if (table === "personal_finance_transactions" || table === "owner_business_transfers") patch.record_status = "VOIDED";
   else if (table === "personal_finance_accounts" || table === "personal_finance_assets") patch.record_status = "INACTIVE";

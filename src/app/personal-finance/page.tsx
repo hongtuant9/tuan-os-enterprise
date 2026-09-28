@@ -81,11 +81,21 @@ export default async function PersonalFinancePage() {
     );
   }
 
-  const monthKey = new Intl.DateTimeFormat("en-CA", {
+  const monthFormatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
     year: "numeric",
     month: "2-digit",
-  }).format(new Date()) + "-01";
+  });
+  const monthPrefix = monthFormatter.format(new Date());
+  const monthKey = monthPrefix + "-01";
+  const [yearText, monthText] = monthPrefix.split("-");
+  const nextMonthDate = new Date(Date.UTC(Number(yearText), Number(monthText), 1));
+  const nextMonthKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(nextMonthDate);
 
   const [
     summaryResult,
@@ -97,22 +107,28 @@ export default async function PersonalFinancePage() {
     freshnessTxResult,
     freshnessDebtResult,
     freshnessAssetResult,
+    accountsResult,
   ] = await Promise.all([
     db.from("owner_finance_summary_v").select("*").eq("owner_user_id", authData.user.id).maybeSingle(),
     db.from("personal_finance_monthly_v").select("*").eq("owner_user_id", authData.user.id).eq("month", monthKey).maybeSingle(),
     db.from("personal_finance_debts").select("id,name,debt_type,principal_outstanding,annual_interest_rate,monthly_debt_service,maturity_date,next_payment_date,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).eq("is_active", true).order("principal_outstanding", { ascending: false }),
     db.from("personal_finance_assets").select("id,name,asset_type,value_amount,value_as_of,value_status,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).order("value_amount", { ascending: false }),
     db.from("personal_finance_goals").select("id,name,goal_type,target_amount,target_date,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).eq("is_active", true),
-    db.from("personal_finance_transactions").select("category,amount").eq("owner_user_id", authData.user.id).eq("direction", "EXPENSE").eq("verification_status", "VERIFIED").gte("transaction_date", monthKey).lt("transaction_date", monthKey.slice(0, 7) + "-32"),
+    db.from("personal_finance_transactions").select("category,amount").eq("owner_user_id", authData.user.id).eq("direction", "EXPENSE").eq("verification_status", "VERIFIED").gte("transaction_date", monthKey).lt("transaction_date", nextMonthKey),
     db.from("personal_finance_transactions").select("updated_at").eq("owner_user_id", authData.user.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     db.from("personal_finance_debts").select("updated_at").eq("owner_user_id", authData.user.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     db.from("personal_finance_assets").select("updated_at").eq("owner_user_id", authData.user.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    db.from("personal_finance_accounts").select("id,current_balance,value_status,verification_status,updated_at").eq("owner_user_id", authData.user.id).eq("is_active", true),
   ]);
 
   const summary = summaryResult.data || {};
   const month = monthResult.data || {};
   const verifiedAssets = Number(summary.verified_assets || 0);
   const verifiedLiabilities = Number(summary.verified_liabilities || 0);
+  const verifiedAssetRows = (assetsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED" && row.value_status === "VERIFIED");
+  const verifiedDebtRows = (debtsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED");
+  const verifiedAccountRows = (accountsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED" && row.value_status === "VERIFIED");
+  const hasVerifiedBalanceSheet = verifiedAssetRows.length > 0 || verifiedDebtRows.length > 0;
   const netWorth = verifiedAssets - verifiedLiabilities;
   const verifiedEmergencyFund = Number(summary.verified_emergency_fund || 0);
   const verifiedAvailableCash = Number(summary.verified_available_cash || 0);
@@ -143,14 +159,14 @@ export default async function PersonalFinancePage() {
     >
       <div className="space-y-5 p-4 lg:p-5">
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card label="Tài sản ròng" value={money(netWorth)} source="Personal Finance verified assets − verified liabilities" updated={latestUpdated} />
-          <Card label="Tổng tài sản VERIFIED" value={money(verifiedAssets)} source="Supabase · personal_finance_assets" updated={latestUpdated} />
-          <Card label="Tổng nợ VERIFIED" value={money(verifiedLiabilities)} source="Supabase · personal_finance_debts" updated={latestUpdated} />
-          <Card label="Tiền khả dụng VERIFIED" value={money(verifiedAvailableCash)} source="Supabase · personal_finance_accounts" updated={latestUpdated} />
-          <Card label="Thu nhập tháng" value={money(income)} source="Personal Income + VERIFIED business distributions" updated={latestUpdated} />
-          <Card label="Chi phí tháng" value={money(expense)} source="Supabase · personal_finance_transactions" updated={latestUpdated} />
-          <Card label="Dòng tiền ròng tháng" value={money(netCashFlow)} source="Income − Expense" updated={latestUpdated} />
-          <Card label="Quỹ dự phòng VERIFIED" value={money(verifiedEmergencyFund)} source="Verified liquid emergency-fund assets" updated={latestUpdated} />
+          <Card label="Tài sản ròng" value={hasVerifiedBalanceSheet ? money(netWorth) : "—"} source="Personal Finance verified assets − verified liabilities" updated={latestUpdated} status={hasVerifiedBalanceSheet ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Tổng tài sản VERIFIED" value={verifiedAssetRows.length ? money(verifiedAssets) : "—"} source="Supabase · personal_finance_assets" updated={latestUpdated} status={verifiedAssetRows.length ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Tổng nợ VERIFIED" value={verifiedDebtRows.length ? money(verifiedLiabilities) : "—"} source="Supabase · personal_finance_debts" updated={latestUpdated} status={verifiedDebtRows.length ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Tiền khả dụng VERIFIED" value={verifiedAccountRows.length ? money(verifiedAvailableCash) : "—"} source="Supabase · personal_finance_accounts" updated={latestUpdated} status={verifiedAccountRows.length ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Thu nhập tháng" value={monthResult.data ? money(income) : "—"} source="Personal Income + VERIFIED business distributions" updated={latestUpdated} status={monthResult.data ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Chi phí tháng" value={monthResult.data ? money(expense) : "—"} source="Supabase · personal_finance_transactions" updated={latestUpdated} status={monthResult.data ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Dòng tiền ròng tháng" value={monthResult.data ? money(netCashFlow) : "—"} source="Income − Expense" updated={latestUpdated} status={monthResult.data ? "VERIFIED" : "NEED_VERIFY"} />
+          <Card label="Quỹ dự phòng VERIFIED" value={verifiedAssetRows.some((row: Record<string, unknown>) => row.is_emergency_fund === true) ? money(verifiedEmergencyFund) : "—"} source="Verified liquid emergency-fund assets" updated={latestUpdated} status={verifiedAssetRows.some((row: Record<string, unknown>) => row.is_emergency_fund === true) ? "VERIFIED" : "NEED_VERIFY"} />
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">

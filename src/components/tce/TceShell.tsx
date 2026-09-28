@@ -19,6 +19,7 @@ const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/customers", label: "Khách hàng", icon: "customers" },
   { href: "/hr", label: "Nhân sự", icon: "hr" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
+  { href: "/personal-finance", label: "Tài chính cá nhân", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },
   { href: "/agents", label: "Trợ lý AI", icon: "agents" },
   { href: "/owner-chat", label: "TUAN OS Chat", icon: "chat" },

@@ -46,6 +46,13 @@ function totalOf(payload: unknown, fallback: number): number {
 function identityHash(value: string): string {
   return createHash("sha256").update("kiotviet_customer_id:" + value).digest("hex");
 }
+function stableKiotVietCustomerUuid(value: string): string {
+  const hex = createHash("sha256").update("kiotviet_hotel_customer:" + value).digest("hex").slice(0, 32).split("");
+  hex[12] = "5";
+  hex[16] = ((parseInt(hex[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
+  const raw = hex.join("");
+  return `${raw.slice(0,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}-${raw.slice(16,20)}-${raw.slice(20,32)}`;
+}
 function channelForSaleChannel(nameRaw: string): string {
   const name = nameRaw.toLowerCase();
   if (name.includes("agoda")) return "agoda";
@@ -120,16 +127,17 @@ async function resolveCustomers(
     const aiCustomer = linkedOrder ? aiCustomerByBookingUuid.get(linkedOrder.sourceBookingUuid) : "";
     let customerId = aiCustomer || "";
     if (!customerId) {
-      const inserted = await db.from("hospitality_customers").insert({
+      customerId = stableKiotVietCustomerUuid(sourceId);
+      const inserted = await db.from("hospitality_customers").upsert({
+        id: customerId,
         display_name: invoiceNames.get(sourceId) || null,
         lifecycle_status: "guest",
         first_seen_at: linkedOrder?.sourceCreatedAt || nowIso,
         last_seen_at: linkedOrder?.sourceModifiedAt || nowIso,
         verification_status: "VERIFIED",
         metadata: { canonical_identity_source: "KIOTVIET_HOTEL" },
-      }).select("id");
-      if (inserted.error) throw new Error(inserted.error.message || "KIOTVIET_CUSTOMER_INSERT_FAILED");
-      customerId = s(rows(inserted)[0]?.id);
+      }, { onConflict: "id" }).select("id");
+      if (inserted.error) throw new Error(inserted.error.message || "KIOTVIET_CUSTOMER_UPSERT_FAILED");
     } else {
       await db.from("hospitality_customers").update({
         verification_status: "VERIFIED",
@@ -138,18 +146,27 @@ async function resolveCustomers(
     }
     if (!customerId) throw new Error("KIOTVIET_CUSTOMER_ID_MISSING_AFTER_INSERT");
 
-    const identity = await db.from("hospitality_customer_identities").insert({
+    const hash = identityHash(sourceId);
+    const identity = await db.from("hospitality_customer_identities").upsert({
       customer_id: customerId,
       identity_type: "kiotviet_customer_id",
       identity_value: sourceId,
-      identity_hash: identityHash(sourceId),
+      identity_hash: hash,
       source_channel: "kiotviet_hotel",
       is_primary: true,
       verified_at: nowIso,
       metadata: { evidence: "authenticated KiotViet Hotel customerId" },
-    });
-    if (identity.error) throw new Error(identity.error.message || "KIOTVIET_IDENTITY_INSERT_FAILED");
-    map.set(sourceId, customerId);
+    }, { onConflict: "identity_type,identity_hash", ignoreDuplicates: true });
+    if (identity.error) throw new Error(identity.error.message || "KIOTVIET_IDENTITY_UPSERT_FAILED");
+
+    const resolved = await db.from("hospitality_customer_identities")
+      .select("customer_id")
+      .eq("identity_type", "kiotviet_customer_id")
+      .eq("identity_hash", hash)
+      .limit(1);
+    if (resolved.error) throw new Error(resolved.error.message || "KIOTVIET_IDENTITY_RECHECK_FAILED");
+    const resolvedCustomerId = s(rows(resolved)[0]?.customer_id) || customerId;
+    map.set(sourceId, resolvedCustomerId);
   }
   return map;
 }

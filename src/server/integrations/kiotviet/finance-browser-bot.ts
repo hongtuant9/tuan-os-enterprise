@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readlink, rename, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, readlink, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
@@ -69,6 +69,16 @@ export type FinanceBotSnapshot = {
       unparsedRowShapes: string[];
       unparsedRowTokens?: Array<{ codeTokens: string[]; numericTokens: string[] }>;
       exportControlLabels?: string[];
+      exportCapture?: {
+        attempted: boolean;
+        state: "SKIPPED" | "CAPTURED" | "NO_DOWNLOAD" | "ERROR";
+        fileName?: string;
+        extension?: string;
+        sizeBytes?: number;
+        sha256?: string;
+        capturedAt?: string;
+        detail?: string;
+      };
       scrollContainers: Array<{
         tag: string;
         className: string;
@@ -983,6 +993,9 @@ async function cashbookSnapshot(page: Page) {
   });
   const paginationEvidence =
     reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows;
+  const exportCapture = !reconciliation.verified && exportControlLabels.length > 0
+    ? await captureCashbookExport(page, "HOTEL", exportControlLabels)
+    : { attempted: false, state: "SKIPPED" as const, detail: reconciliation.verified ? "Reconciliation already VERIFIED." : "No export control detected." };
   return {
     periodLabel: periodMatch?.[1]?.trim() || null,
     openingBalance,
@@ -999,11 +1012,78 @@ async function cashbookSnapshot(page: Page) {
       unparsedRowShapes,
       unparsedRowTokens,
       exportControlLabels,
+      exportCapture,
       scrollContainers,
       kendoDataSources,
     },
     rawRows,
   };
+}
+
+
+async function captureCashbookExport(page: Page, system: FinanceBotSystem, exportControlLabels: string[]) {
+  const markerFile = join(STATE_ROOT, `${system.toLowerCase()}-export-capture.json`);
+  const now = Date.now();
+  try {
+    const previous = JSON.parse(await readFile(markerFile, "utf8")) as { capturedAt?: string; state?: string };
+    const age = previous.capturedAt ? now - new Date(previous.capturedAt).getTime() : Number.POSITIVE_INFINITY;
+    if (previous.state === "CAPTURED" && Number.isFinite(age) && age < 6 * 60 * 60 * 1000) {
+      return { attempted: false, state: "SKIPPED" as const, capturedAt: previous.capturedAt, detail: "Recent export capture already exists (<6h)." };
+    }
+  } catch {
+    // No previous marker.
+  }
+  if (!exportControlLabels.some((label) => /xuất|export/i.test(label))) {
+    return { attempted: false, state: "SKIPPED" as const, detail: "No export control detected." };
+  }
+  const dir = join(STATE_ROOT, "exports", system.toLowerCase());
+  await mkdir(dir, { recursive: true });
+  const before = new Set(await readdir(dir).catch(() => [] as string[]));
+  const client = await page.createCDPSession();
+  try {
+    await client.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dir, eventsEnabled: true });
+    const clicked = await clickByText(page, ["Xuất file", "Xuất", "Export"]);
+    if (!clicked) throw new Error("Export control could not be clicked.");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    // Some KiotViet builds open an export-format menu after the first click.
+    const afterFirstClick = await readdir(dir).catch(() => [] as string[]);
+    if (!afterFirstClick.some((name) => !before.has(name) && !name.endsWith(".crdownload"))) {
+      await clickByText(page, ["Excel", "Xuất Excel", "XLSX", "CSV"]).catch(() => false);
+    }
+    let captured: string | null = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const names = await readdir(dir).catch(() => [] as string[]);
+      const candidates = names.filter((name) => !before.has(name) && !name.endsWith(".crdownload"));
+      if (candidates.length) { captured = candidates[0]; break; }
+    }
+    if (!captured) {
+      const result = { attempted: true, state: "NO_DOWNLOAD" as const, capturedAt: new Date().toISOString(), detail: "Export control clicked but no completed download appeared within 10s." };
+      await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8");
+      return result;
+    }
+    const full = join(dir, captured);
+    const meta = await stat(full);
+    const content = await readFile(full);
+    const result = {
+      attempted: true,
+      state: "CAPTURED" as const,
+      fileName: captured.slice(0, 180),
+      extension: captured.includes(".") ? captured.split(".").pop()?.toLowerCase() : "",
+      sizeBytes: meta.size,
+      sha256: createHash("sha256").update(content).digest("hex"),
+      capturedAt: new Date().toISOString(),
+      detail: "Authenticated KiotViet cashbook export captured in private VPS state; content is not exposed by health endpoint.",
+    };
+    await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8");
+    return result;
+  } catch (error) {
+    const result = { attempted: true, state: "ERROR" as const, capturedAt: new Date().toISOString(), detail: error instanceof Error ? error.message : "Export capture failed." };
+    await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8").catch(() => undefined);
+    return result;
+  } finally {
+    await client.detach().catch(() => undefined);
+  }
 }
 
 async function cashbookCreateCapability(page: Page): Promise<boolean> {

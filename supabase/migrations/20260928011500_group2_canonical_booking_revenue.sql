@@ -1,0 +1,225 @@
+-- Group 2 completion: canonical hospitality booking + verified revenue linkage.
+-- Additive only. KiotViet remains READ-ONLY; this schema stores authenticated runtime evidence.
+
+create table if not exists public.hospitality_bookings (
+  id uuid primary key default gen_random_uuid(),
+  source_system text not null check (source_system in ('KIOTVIET_HOTEL','AI_DIRECT')),
+  source_booking_uuid text not null,
+  source_booking_code text,
+  source_customer_id text,
+  property_id uuid references public.properties(id) on delete set null,
+  sale_channel_id text,
+  sale_channel_name text,
+  booking_status text not null check (booking_status in ('CONFIRMED','COMPLETED','CANCELLED','UNCONFIRMED','UNKNOWN')),
+  source_created_at timestamptz,
+  source_modified_at timestamptz,
+  purchase_at timestamptz,
+  check_in date,
+  check_out date,
+  adults integer not null default 1 check (adults >= 0),
+  children integer not null default 0 check (children >= 0),
+  room_count integer not null default 1 check (room_count >= 0),
+  room_names jsonb not null default '[]'::jsonb,
+  customer_id uuid references public.hospitality_customers(id) on delete set null,
+  ai_booking_record_id uuid references public.ai_booking_records(id) on delete set null,
+  gross_amount numeric(16,2) not null default 0 check (gross_amount >= 0),
+  collected_amount numeric(16,2) not null default 0 check (collected_amount >= 0),
+  verified_revenue numeric(16,2) not null default 0 check (verified_revenue >= 0),
+  currency text not null default 'VND',
+  consumed_at timestamptz,
+  verification_status text not null default 'NEED_VERIFY'
+    check (verification_status in ('VERIFIED','NEED_VERIFY','HOLD')),
+  revenue_verification_status text not null default 'NEED_VERIFY'
+    check (revenue_verification_status in ('VERIFIED','NEED_VERIFY','HOLD')),
+  evidence jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_system, source_booking_uuid),
+  check (check_out is null or check_in is null or check_out >= check_in)
+);
+
+alter table public.hospitality_bookings enable row level security;
+drop policy if exists "Hospitality bookings viewable by authenticated users" on public.hospitality_bookings;
+create policy "Hospitality bookings viewable by authenticated users"
+  on public.hospitality_bookings for select to authenticated using (true);
+grant select on public.hospitality_bookings to authenticated;
+grant select, insert, update, delete on public.hospitality_bookings to service_role;
+drop trigger if exists set_updated_at on public.hospitality_bookings;
+create trigger set_updated_at before update on public.hospitality_bookings
+for each row execute procedure public.set_updated_at();
+
+create index if not exists hospitality_bookings_customer_purchase_idx
+  on public.hospitality_bookings(customer_id, purchase_at desc) where customer_id is not null;
+create index if not exists hospitality_bookings_status_purchase_idx
+  on public.hospitality_bookings(booking_status, purchase_at desc);
+create index if not exists hospitality_bookings_source_code_idx
+  on public.hospitality_bookings(source_booking_code) where source_booking_code is not null;
+
+alter table public.hospitality_customer_identities
+  drop constraint if exists hospitality_customer_identities_identity_type_check;
+alter table public.hospitality_customer_identities
+  add constraint hospitality_customer_identities_identity_type_check
+  check (identity_type in ('phone','email','whatsapp','facebook','instagram','zalo','website','ota','kiotviet_customer_id','other'));
+
+alter table public.ai_conversations
+  add column if not exists hospitality_booking_id uuid references public.hospitality_bookings(id) on delete set null;
+alter table public.hospitality_leads
+  add column if not exists hospitality_booking_id uuid references public.hospitality_bookings(id) on delete set null;
+alter table public.marketing_attribution_events
+  add column if not exists hospitality_booking_id uuid references public.hospitality_bookings(id) on delete set null;
+alter table public.cozy_review_clicks
+  add column if not exists hospitality_booking_id uuid references public.hospitality_bookings(id) on delete set null;
+
+create index if not exists marketing_attribution_hospitality_booking_idx
+  on public.marketing_attribution_events(hospitality_booking_id, occurred_at desc)
+  where hospitality_booking_id is not null;
+
+create or replace function public.refresh_hospitality_customer_booking_rollup(p_customer_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_bookings integer;
+  v_stays integer;
+  v_revenue numeric(16,2);
+  v_last timestamptz;
+begin
+  if p_customer_id is null then return; end if;
+
+  select
+    count(*) filter (
+      where verification_status='VERIFIED'
+        and booking_status in ('CONFIRMED','COMPLETED')
+    )::integer,
+    count(*) filter (
+      where verification_status='VERIFIED'
+        and booking_status='COMPLETED'
+        and consumed_at is not null
+    )::integer,
+    coalesce(sum(verified_revenue) filter (
+      where revenue_verification_status='VERIFIED'
+    ),0),
+    max(coalesce(purchase_at,source_created_at))
+  into v_bookings,v_stays,v_revenue,v_last
+  from public.hospitality_bookings
+  where customer_id=p_customer_id;
+
+  update public.hospitality_customers
+  set booking_count=v_bookings,
+      stay_count=v_stays,
+      total_verified_revenue=v_revenue,
+      last_booking_at=v_last,
+      loyalty_status=case
+        when v_stays >= 2 then 'repeat_stay'
+        when v_bookings >= 2 then 'repeat_customer'
+        when v_bookings >= 1 then 'first_time'
+        else 'unknown'
+      end,
+      updated_at=now()
+  where id=p_customer_id;
+end;
+$$;
+
+create or replace function public.hospitality_booking_rollup_trigger()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if tg_op='DELETE' then
+    perform public.refresh_hospitality_customer_booking_rollup(old.customer_id);
+    return old;
+  end if;
+  perform public.refresh_hospitality_customer_booking_rollup(new.customer_id);
+  if tg_op='UPDATE' and old.customer_id is distinct from new.customer_id then
+    perform public.refresh_hospitality_customer_booking_rollup(old.customer_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists hospitality_booking_customer_rollup on public.hospitality_bookings;
+create trigger hospitality_booking_customer_rollup
+after insert or update or delete on public.hospitality_bookings
+for each row execute function public.hospitality_booking_rollup_trigger();
+
+-- customer_id on a conversation is linkage evidence, not sufficient identity verification.
+create or replace function public.set_ai_conversation_foundation_fields()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.source := coalesce(nullif(new.source,''), nullif(new.metadata->>'acquisition_source',''), new.channel);
+  new.primary_intent := coalesce(nullif(new.primary_intent,''), nullif(new.intent,''));
+  new.journey_entry := coalesce(nullif(new.journey_entry,''), nullif(new.metadata->>'journey_entry',''));
+  new.self_reported_source := coalesce(nullif(new.self_reported_source,''), nullif(new.metadata->>'self_reported_source',''));
+  if new.guest_count is null and coalesce(new.metadata->>'guest_count','') ~ '^\\d+$' then
+    new.guest_count := (new.metadata->>'guest_count')::integer;
+  end if;
+  return new;
+end;
+$$;
+
+-- Repair historical overstatement: only preserve VERIFIED when explicit verified identity exists.
+update public.ai_conversations c
+set verification_status='NEED_VERIFY'
+where c.verification_status='VERIFIED'
+  and c.customer_id is not null
+  and not exists (
+    select 1 from public.hospitality_customer_identities i
+    where i.customer_id=c.customer_id and i.verified_at is not null
+  );
+
+update public.marketing_attribution_events e
+set attribution_status=case
+      when nullif(e.self_reported_source,'') is not null then 'SELF_REPORTED'
+      else 'NEED_VERIFY'
+    end,
+    verification_status=case
+      when e.verification_status='VERIFIED' then 'PARTIAL'
+      else e.verification_status
+    end
+where e.event_type='inquiry'
+  and e.attribution_status in ('DIRECT_VERIFIED','ASSISTED_VERIFIED')
+  and not (
+    nullif(e.gclid,'') is not null or nullif(e.gbraid,'') is not null or nullif(e.wbraid,'') is not null
+    or nullif(e.utm_source,'') is not null or nullif(e.utm_campaign,'') is not null
+  );
+
+create or replace view public.hospitality_booking_reconciliation_v
+with (security_invoker = true)
+as
+select
+  hb.id as hospitality_booking_id,
+  hb.source_system,
+  hb.source_booking_uuid,
+  hb.source_booking_code,
+  hb.source_customer_id,
+  hb.sale_channel_id,
+  hb.sale_channel_name,
+  hb.booking_status,
+  hb.customer_id,
+  hb.purchase_at,
+  hb.check_in,
+  hb.check_out,
+  hb.gross_amount,
+  hb.collected_amount,
+  hb.verified_revenue,
+  hb.verification_status,
+  hb.revenue_verification_status,
+  (hb.customer_id is not null) as customer_linked,
+  (hb.revenue_verification_status='VERIFIED') as revenue_linked,
+  hb.evidence,
+  hb.updated_at
+from public.hospitality_bookings hb;
+
+grant select on public.hospitality_booking_reconciliation_v to authenticated, service_role;
+
+comment on table public.hospitality_bookings is
+'Canonical hospitality booking runtime entity. KiotViet/OTA bookings must not be inserted into ai_booking_records unless actually created by AI_DIRECT.';
+comment on column public.hospitality_bookings.verified_revenue is
+'Revenue proven by authenticated invoice evidence linked through source booking UUID; never quoted booking value.';

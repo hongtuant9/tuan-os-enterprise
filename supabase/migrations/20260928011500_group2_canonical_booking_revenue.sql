@@ -172,6 +172,57 @@ begin
 end;
 $$;
 
+
+
+create or replace function public.apply_customer_attribution_touch()
+returns trigger
+language plpgsql
+set search_path = public
+as $touch$
+declare
+  effective_source text;
+begin
+  if new.customer_id is null then
+    return new;
+  end if;
+  if new.attribution_status not in ('DIRECT_VERIFIED','ASSISTED_VERIFIED','SELF_REPORTED') then
+    return new;
+  end if;
+
+  effective_source := case
+    when new.attribution_status='SELF_REPORTED'
+      then nullif(new.self_reported_source,'')
+    else coalesce(nullif(new.source,''),nullif(new.utm_source,''))
+  end;
+  if effective_source is null then
+    return new;
+  end if;
+
+  update public.hospitality_customers c
+  set
+    first_touch_source = case
+      when c.first_touch_at is null or new.occurred_at < c.first_touch_at then effective_source
+      else c.first_touch_source
+    end,
+    first_touch_at = case
+      when c.first_touch_at is null or new.occurred_at < c.first_touch_at then new.occurred_at
+      else c.first_touch_at
+    end,
+    last_touch_source = case
+      when c.last_touch_at is null or new.occurred_at >= c.last_touch_at then effective_source
+      else c.last_touch_source
+    end,
+    last_touch_at = case
+      when c.last_touch_at is null or new.occurred_at >= c.last_touch_at then new.occurred_at
+      else c.last_touch_at
+    end,
+    journey_entry = coalesce(c.journey_entry,nullif(new.journey_entry,'')),
+    updated_at=now()
+  where c.id=new.customer_id;
+  return new;
+end;
+$touch$;
+
 -- Repair historical overstatement: only preserve VERIFIED when explicit verified identity exists.
 update public.ai_conversations c
 set verification_status='NEED_VERIFY'

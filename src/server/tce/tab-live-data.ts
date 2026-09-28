@@ -22,6 +22,7 @@ import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
+import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 
 export type TceTabScreen =
   | "business"
@@ -110,12 +111,12 @@ const KIOTVIET_API_CAPABILITIES = [
   ["F&B","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
   ["F&B","Categories","GET","LIVE","HTTP 200 · dùng mapping nhóm sản phẩm"],
   ["F&B","Products + Inventory Cost","GET","LIVE","HTTP 200 · có invoice detail + product cost hiện tại"],
-  ["F&B","Sổ quỹ / Cashflow","GET","HOLD","Retail finance connector đã sẵn sàng; credential hiện tại chưa tương thích, native F&B API trả 404"],
-  ["F&B","Purchase Orders","GET","HOLD","Public F&B API trả 404; Retail endpoint trả 401 với F&B token"],
+  ["F&B","Sổ quỹ / Cashflow","BROWSER DOM","LIVE","Authenticated Browser VPS · reconciliation VERIFIED; Public API không bắt buộc"],
+  ["F&B","Purchase Orders / Suppliers","BROWSER DOM","READ_VERIFIED","Authenticated Inventory Browser VPS; empty view không được suy AP=0"],
   ["Hotel","Branches / Categories / Products","GET","LIVE","HTTP 200"],
   ["Hotel","Invoices","GET","LIVE","HTTP 200 · nguồn doanh thu Actual"],
-  ["Hotel","Sổ quỹ / Cashflow","GET","HOLD","Cần finance Retail credential riêng; native Hotel API trả 404"],
-  ["Hotel","Purchase Orders / Suppliers","GET","HOLD","Public Hotel API trả 404"],
+  ["Hotel","Sổ quỹ / Cashflow","BROWSER DOM","HOLD","Authenticated Browser VPS; reconciliation chưa PASS nên fail-closed"],
+  ["Hotel","Purchase Orders / Suppliers","BROWSER DOM","READ_VERIFIED","Authenticated Inventory Browser VPS; AP reconciliation vẫn NEED VERIFY"],
   ["F&B","Loại thu/chi (cashFlowGroup)","POST/PUT","HOLD","Public API F&B không công bố CRUD Loại thu/chi; không gọi endpoint private/đoán"],
   ["Hotel","Loại thu/chi (cashFlowGroup)","POST/PUT","HOLD","Public API Hotel không công bố CRUD Loại thu/chi; không gọi endpoint private/đoán"],
 ] as const;
@@ -464,10 +465,10 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             "%; missing=" + foundationReadiness.expense.missingRows +
             "; partial=" + foundationReadiness.expense.partialRows +
             ". Cash Out không được dùng thay Expense.",
-          "Lợi nhuận gộp": "NEED VERIFY: COGS production-ready " +
-            foundationReadiness.cogs.productionReadyItems + "/" + foundationReadiness.cogs.menuItems +
-            "; nguyên liệu đã đối chiếu " + foundationReadiness.cogs.verifiedIngredients + "/" +
-            foundationReadiness.cogs.ingredientCount + ". Không suy từ cashflow.",
+          "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " +
+            foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
+            "; matched COST-001 " + foundationReadiness.cogs.matchedSoldSkuCount + "/" +
+            foundationReadiness.cogs.soldSkuCount + ". Không suy từ cashflow.",
           "Biên lợi nhuận": "NEED VERIFY: chỉ tính khi Gross Profit và COGS coverage đủ.",
           "Công suất phòng": "Property runtime",
         },
@@ -511,26 +512,32 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       );
     }
 
-    const cashflowRows = cashflowReadReady
-      ? [...hotelCashflow.rows.map((row) => ({...row, system: "Hotel"})), ...fnbCashflow.rows.map((row) => ({...row, system: "F&B"}))]
-          .filter((row) => row.isReceipt === false)
-          .sort((a, b) => b.transDate.localeCompare(a.transDate))
-          .map((row, i) => [
-            String(i + 1),
-            row.transDate ? row.transDate.slice(0, 16).replace("T", " ") : "—",
-            row.system,
-            row.cashFlowGroupName || row.cashFlowGroupId || "—",
-            row.description || row.partnerName || "—",
-            money(row.amount),
-            row.usedForFinancialReporting === true ? "KQKD" : row.usedForFinancialReporting === false ? "KHÔNG KQKD" : "NEED VERIFY",
-            row.code || "—",
-          ])
-      : [
-          ["—","—","KiotViet","—","Cashflow API chưa được provider hỗ trợ/xác minh","—","HOLD","—"],
-        ];
-    const kiotVietOnlyCoverage = cashflowReadReady
-      ? "Cashflow KiotViet VERIFIED cho dòng tiền; không dùng Cash Out thay Expense/COGS. P&L vẫn NEED VERIFY cho tới khi Expense/COGS authority PASS."
-      : "Doanh thu KiotViet Public API đang LIVE; cashflow F&B/Hotel hiện HOLD. Cash In/Out, Expense, Gross Profit và Gross Margin giữ NEED VERIFY.";
+    const verifiedCashflowRows = [
+      ...(hotelCashflow.state === "VERIFIED" ? hotelCashflow.rows.map((row) => ({ ...row, system: "Hotel" as const })) : []),
+      ...(fnbCashflow.state === "VERIFIED" ? fnbCashflow.rows.map((row) => ({ ...row, system: "F&B" as const })) : []),
+    ];
+    const cashflowRows = verifiedCashflowRows
+      .filter((row) => row.isReceipt === false)
+      .sort((a, b) => b.transDate.localeCompare(a.transDate))
+      .map((row, i) => [
+        String(i + 1),
+        row.transDate ? row.transDate.slice(0, 16).replace("T", " ") : "—",
+        row.system,
+        row.cashFlowGroupName || row.cashFlowGroupId || "—",
+        row.description || row.partnerName || "—",
+        money(row.amount),
+        row.usedForFinancialReporting === true ? "KQKD" : row.usedForFinancialReporting === false ? "KHÔNG KQKD" : "NEED VERIFY",
+        row.code || "—",
+      ]);
+    if (hotelCashflow.state !== "VERIFIED") {
+      cashflowRows.unshift(["—","—","Hotel","—","HOLD — authenticated Browser VPS chưa reconcile đầy đủ","—","HOLD","—"]);
+    }
+    if (fnbCashflow.state !== "VERIFIED") {
+      cashflowRows.unshift(["—","—","F&B","—","HOLD — authenticated Browser VPS chưa VERIFIED","—","HOLD","—"]);
+    }
+    const kiotVietOnlyCoverage =
+      "Cashflow runtime: F&B=" + fnbCashflow.state + "; Hotel=" + hotelCashflow.state +
+      ". Chỉ tổng hợp Net Cash Flow toàn hệ thống khi cả hai reconcile; không dùng Cash Out thay Expense/COGS.";
     const cashflowBranchNames = new Map<string, string>();
     for (const branch of hotelPeriod.branchBreakdown) {
       if (branch.branchId) cashflowBranchNames.set("Hotel|" + branch.branchId, branch.branchName || "Hotel");
@@ -539,69 +546,35 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       if (branch.branchId) cashflowBranchNames.set("F&B|" + branch.branchId, branch.branchName || "Cozy Garden");
     }
 
-    const actualCostGroups = new Map<string, {
-      unit: string;
-      group: string;
-      amount: number;
-      count: number;
-      evidence: string;
-    }>();
-    const collectCostGroups = (
-      system: "Hotel" | "F&B",
-      snapshot: typeof hotelCashflow,
-    ) => {
-      for (const row of snapshot.rows) {
-        if (
-          row.isReceipt !== false ||
-          row.usedForFinancialReporting === false ||
-          /hủy|huỷ|cancel|void/i.test(row.status)
-        ) continue;
-        const unit =
-          cashflowBranchNames.get(system + "|" + row.branchId) ||
-          (system === "Hotel" ? "KiotViet Hotel" : "Cozy Garden");
-        const group = row.cashFlowGroupName || row.cashFlowGroupId || "Chưa gán Loại chi";
-        const key = unit + "|" + group + "|" + String(row.usedForFinancialReporting);
-        const current = actualCostGroups.get(key) ?? {
-          unit,
-          group,
-          amount: 0,
-          count: 0,
-          evidence:
-            row.usedForFinancialReporting === true
-              ? "ACTUAL · KQKD"
-              : row.usedForFinancialReporting === false
-                ? "ACTUAL · KHÔNG KQKD"
-                : "NEED VERIFY · KQKD",
-        };
-        current.amount += row.amount;
-        current.count += 1;
-        actualCostGroups.set(key, current);
-      }
-    };
-    if (hotelCashflow.state === "VERIFIED") collectCostGroups("Hotel", hotelCashflow);
-    if (fnbCashflow.state === "VERIFIED") collectCostGroups("F&B", fnbCashflow);
-
-    const costCategoryRows = actualCostGroups.size > 0
-      ? [...actualCostGroups.values()]
-          .sort((a, b) => b.amount - a.amount)
-          .map((row, i) => [
-            String(i + 1),
-            row.unit,
-            row.group,
-            money(row.amount),
-            String(row.count),
-            row.evidence,
-            costClassificationReady ? "FULL" : "PARTIAL",
-          ])
-      : KIOTVIET_EXPENSE_TAXONOMY.map((row, i) => [
+    const expenseSummary = summarizeExpenseActualRows(verifiedCashflowRows.map((row) => ({
+      id: row.id,
+      transDate: row.transDate,
+      amount: row.amount,
+      isReceipt: row.isReceipt,
+      groupLabel: row.cashFlowGroupName || row.cashFlowGroupId || "",
+      status: row.status,
+    })));
+    const costCategoryRows = expenseSummary.groups.length > 0
+      ? expenseSummary.groups.map((group, i) => [
           String(i + 1),
-          row[2],
-          row[0] + " · " + row[1],
-          "NEED VERIFY",
+          "KiotViet",
+          `[TCE-${group.code}] ${group.canonicalCategory}`,
+          money(group.amount),
+          String(group.transactionCount),
+          group.verificationStatus,
+          group.verificationStatus === "VERIFIED" ? "ĐÃ XÁC MINH" : "CHƯA ĐẦY ĐỦ",
+        ])
+      : [[
           "—",
-          "KIOTVIET ONLY",
-          row[3],
-        ]);
+          "KiotViet",
+          "Chưa có Cash Out nào map được vào P&L Expense canonical",
+          "—",
+          "0",
+          expenseSummary.excludedNonPnlRows > 0
+            ? `ĐÃ LOẠI ${expenseSummary.excludedNonPnlRows} khoản non-P&L (N01/N02/N03/N04/N05)`
+            : "NEED VERIFY",
+          "CHƯA ĐẦY ĐỦ",
+        ]];
 
     const costStandardRows = KIOTVIET_EXPENSE_TAXONOMY.map((row) => [
       row[0],
@@ -704,9 +677,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
               " · xác nhận " + (debtSnapshot.confirmationDate ?? "không rõ ngày") +
               " · thiếu canonical Last Updated/current statement read-back."
             : "NEED VERIFY: Authority = FIN-HOSPITALITY-001; runtime read hoặc confirmation chưa PASS.",
-        "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; production-ready COGS=" +
-          foundationReadiness.cogs.productionReadyItems + "/" + foundationReadiness.cogs.menuItems +
-          ", ingredient verification=" + foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount + ".",
+        "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; sold-SKU BOM VERIFIED=" +
+          foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
+          ", matched COST-001=" + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + ".",
         "Biên lợi nhuận gộp": "NEED VERIFY: chỉ tính khi Gross Profit VERIFIED và COGS coverage đủ.",
       },
       {
@@ -716,16 +689,16 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ["Kỳ", period.label],
           ["Revenue Actual", "KiotViet Hotel + KiotViet F&B invoice API"],
           ["Doanh thu API", bothTodayVerified ? "VERIFIED" : "PARTIAL"],
-          ["Cashflow API", !cashflowReadReady
-            ? "HOLD — Public API F&B/Hotel chưa expose cashflow"
-            : unknownDirectionCount > 0
+          ["Cashflow runtime", cashflowReadReady
+            ? unknownDirectionCount > 0
               ? "NEED VERIFY — " + unknownDirectionCount + " giao dịch chưa xác định Thu/Chi"
-              : "VERIFIED — dùng cho Cash In/Out, không dùng thay Expense"],
+              : "VERIFIED — F&B + Hotel reconcile; dùng cho Cash In/Out, không dùng thay Expense"
+            : "PARTIAL — F&B=" + fnbCashflow.state + "; Hotel=" + hotelCashflow.state + "; Browser VPS authenticated"],
           ["Expense Actual", "NEED VERIFY — coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
             "% · missing=" + foundationReadiness.expense.missingRows + " · partial=" + foundationReadiness.expense.partialRows],
-          ["COGS / Gross Profit", "NEED VERIFY — production-ready " + foundationReadiness.cogs.productionReadyItems +
-            "/" + foundationReadiness.cogs.menuItems + " · ingredients verified " +
-            foundationReadiness.cogs.verifiedIngredients + "/" + foundationReadiness.cogs.ingredientCount],
+          ["COGS / Gross Profit", "NEED VERIFY — sold-SKU BOM VERIFIED " + foundationReadiness.cogs.verifiedSoldSkuCount +
+            "/" + foundationReadiness.cogs.soldSkuCount + " · COST-001 matched " +
+            foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount],
           ["AR candidate", arCandidateOutstanding === null
             ? "NEED VERIFY — invoice outstanding coverage/anomaly guard chưa PASS"
             : "MTD invoice outstanding " + money(arCandidateOutstanding) +
@@ -777,13 +750,13 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         financeActions: [
           "1. Tạo Loại thu/Loại chi trong KiotViet theo đúng tên [TCE-Cxx/Nxx/Rxx] ở bảng chuẩn; hiện Public API chưa có CRUD nhóm nên không tự gọi endpoint private.",
           "2. Mọi khoản mua hàng có tồn kho phải đi qua Nhập hàng; OPEX qua Sổ quỹ; không nhập lại cùng một chi phí ở hai nơi. Khoản thanh toán NCC hàng tồn dùng N01 và KHÔNG vào KQKD.",
-          "3. Khi cashflow API đọc được, chỉ dùng để tính Cash In/Cash Out/Net Cash Flow. Không dùng Cash Out thay Expense/COGS; P&L chỉ mở khi Expense/COGS source riêng được VERIFIED.",
+          "3. Cashflow unsupported API dùng authenticated Browser VPS. Chỉ dùng Cashflow để tính Cash In/Cash Out/Net Cash Flow; không dùng Cash Out thay Expense/COGS; P&L chỉ mở khi Expense/COGS source riêng được VERIFIED.",
         ],
         financeCoverageNotes: [
           kiotVietOnlyCoverage,
-          "Public API read đã xác minh: F&B invoices/categories/products = 200; Hotel branches/categories/products/invoices = 200.",
-          "Cashflow adapter hoạt động fail-closed và đã phân trang toàn bộ kỳ; khi F&B/Hotel GET cashflow trả 200 sẽ tự nhận dữ liệu.",
-          "Public API hiện không công bố endpoint tạo/sửa Loại thu/Loại chi. TCE không dùng private API hoặc endpoint suy đoán để tránh ảnh hưởng dữ liệu bán hàng.",
+          "Revenue API đã xác minh: F&B invoices/categories/products = 200; Hotel branches/categories/products/invoices = 200.",
+          "Cashflow unsupported API dùng authenticated Browser VPS: hệ thống hiển thị trạng thái từng nguồn và fail-closed khi reconciliation chưa PASS.",
+          "Public API hiện không công bố CRUD Loại thu/Loại chi. TCE không dùng private API hoặc endpoint suy đoán.",
         ],
       },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",

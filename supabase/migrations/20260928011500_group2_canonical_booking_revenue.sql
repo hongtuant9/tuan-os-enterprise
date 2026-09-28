@@ -387,6 +387,158 @@ where event_type='revenue' and verification_status='VERIFIED'
   and hospitality_booking_id is null and booking_record_id is null;
 grant select on public.group2_data_quality_v to authenticated,service_role;
 
+
+create or replace view public.group2_reconciliation_v
+with (security_invoker = true)
+as
+with
+canonical_leads as (
+  select count(*)::numeric as value
+  from public.hospitality_leads
+  where verification_status='VERIFIED'
+),
+event_leads as (
+  select count(*)::numeric as value
+  from public.marketing_attribution_events
+  where event_type='lead' and verification_status='VERIFIED'
+),
+canonical_bookings as (
+  select count(*)::numeric as value
+  from public.hospitality_bookings
+  where verification_status='VERIFIED'
+    and booking_status in ('CONFIRMED','COMPLETED')
+),
+event_bookings as (
+  select count(*)::numeric as value
+  from public.marketing_attribution_events
+  where event_type='booking' and verification_status='VERIFIED'
+    and hospitality_booking_id is not null
+),
+canonical_revenue as (
+  select coalesce(sum(verified_revenue),0)::numeric as value
+  from public.hospitality_bookings
+  where revenue_verification_status='VERIFIED'
+),
+event_revenue as (
+  select coalesce(sum(revenue_amount),0)::numeric as value
+  from public.marketing_attribution_events
+  where event_type='revenue' and verification_status='VERIFIED'
+    and hospitality_booking_id is not null
+),
+ads_clicks as (
+  select coalesce(sum(clicks),0)::numeric as value
+  from public.marketing_daily_metrics
+  where connector_id='google_ads' and verification_status='VERIFIED'
+),
+ga4_sessions as (
+  select coalesce(sum(sessions),0)::numeric as value
+  from public.marketing_daily_metrics
+  where connector_id='ga4' and verification_status='VERIFIED'
+)
+select
+  'CANONICAL_LEADS_VS_ATTRIBUTION_EVENTS'::text as reconciliation_key,
+  'hospitality_leads VERIFIED'::text as source_a,
+  'marketing_attribution_events lead VERIFIED'::text as source_b,
+  a.value as value_a,
+  b.value as value_b,
+  (b.value-a.value) as variance,
+  case when a.value=b.value then 'PASS' else 'NEED VERIFY' end::text as status,
+  'Expected 1:1 after Marketing Command Center cycle materializes canonical lead events.'::text as reason
+from canonical_leads a cross join event_leads b
+union all
+select
+  'CANONICAL_BOOKINGS_VS_ATTRIBUTION_EVENTS',
+  'hospitality_bookings VERIFIED confirmed/completed',
+  'marketing_attribution_events booking VERIFIED',
+  a.value,b.value,(b.value-a.value),
+  case when a.value=b.value then 'PASS' else 'NEED VERIFY' end,
+  'Expected 1:1 for canonical booking events; cancelled/unconfirmed bookings are excluded.'
+from canonical_bookings a cross join event_bookings b
+union all
+select
+  'VERIFIED_REVENUE_VS_ATTRIBUTION_REVENUE',
+  'hospitality_bookings verified_revenue',
+  'marketing_attribution_events revenue VERIFIED',
+  a.value,b.value,(b.value-a.value),
+  case when a.value=b.value then 'PASS' else 'FAIL' end,
+  'Verified business revenue must reconcile exactly to revenue events linked to canonical bookings.'
+from canonical_revenue a cross join event_revenue b
+union all
+select
+  'GOOGLE_ADS_CLICKS_VS_GA4_SESSIONS',
+  'Google Ads clicks',
+  'GA4 sessions',
+  a.value,b.value,(b.value-a.value),
+  'NEED VERIFY',
+  'Diagnostic reconciliation only: clicks and sessions are different metrics and are not expected to be equal; investigate large discontinuities by date/campaign.'
+from ads_clicks a cross join ga4_sessions b;
+
+grant select on public.group2_reconciliation_v to authenticated,service_role;
+
+create or replace view public.group2_attribution_gate_v
+with (security_invoker = true)
+as
+with booking_totals as (
+  select
+    count(*) filter (where verification_status='VERIFIED' and booking_status in ('CONFIRMED','COMPLETED'))::bigint as verified_bookings,
+    count(*) filter (where revenue_verification_status='VERIFIED')::bigint as revenue_linked_bookings,
+    coalesce(sum(verified_revenue) filter (where revenue_verification_status='VERIFIED'),0)::numeric as verified_revenue
+  from public.hospitality_bookings
+),
+attribution_totals as (
+  select
+    count(*) filter (
+      where event_type='revenue' and verification_status='VERIFIED'
+        and attribution_status in ('DIRECT_VERIFIED','ASSISTED_VERIFIED')
+        and hospitality_booking_id is not null
+    )::bigint as attributed_revenue_events,
+    coalesce(sum(revenue_amount) filter (
+      where event_type='revenue' and verification_status='VERIFIED'
+        and attribution_status in ('DIRECT_VERIFIED','ASSISTED_VERIFIED')
+        and hospitality_booking_id is not null
+    ),0)::numeric as attributed_verified_revenue,
+    count(*) filter (
+      where event_type='revenue' and verification_status='VERIFIED'
+        and channel_id in ('google_ads','meta_ads')
+        and hospitality_booking_id is not null
+        and (nullif(gclid,'') is not null or nullif(gbraid,'') is not null or nullif(wbraid,'') is not null
+          or nullif(utm_source,'') is not null or nullif(utm_campaign,'') is not null)
+    )::bigint as paid_verified_revenue_events
+  from public.marketing_attribution_events
+),
+connector_state as (
+  select
+    bool_or(id='ga4' and status='LIVE' and auth_state='VERIFIED') as ga4_live,
+    bool_or(id='google_ads' and status='LIVE' and auth_state='VERIFIED') as google_ads_live,
+    bool_or(id='kiotviet_hotel' and status='LIVE' and auth_state='VERIFIED') as kiotviet_hotel_live
+  from public.marketing_connectors
+)
+select
+  b.verified_bookings,
+  b.revenue_linked_bookings,
+  b.verified_revenue,
+  a.attributed_revenue_events,
+  a.attributed_verified_revenue,
+  case when b.verified_revenue>0 then a.attributed_verified_revenue/b.verified_revenue else null end as attribution_coverage,
+  a.paid_verified_revenue_events,
+  c.ga4_live,
+  c.google_ads_live,
+  c.kiotviet_hotel_live,
+  case
+    when not coalesce(c.kiotviet_hotel_live,false) then 'HOLD'
+    when b.verified_bookings=0 then 'NEED VERIFY'
+    when b.verified_revenue<=0 then 'NEED VERIFY'
+    when exists(select 1 from public.group2_reconciliation_v where status='FAIL') then 'HOLD'
+    else 'VERIFIED'
+  end::text as foundation_data_status,
+  case
+    when a.paid_verified_revenue_events>0 and coalesce(c.google_ads_live,false) then true
+    else false
+  end as paid_cac_roas_ready
+from booking_totals b cross join attribution_totals a cross join connector_state c;
+
+grant select on public.group2_attribution_gate_v to authenticated,service_role;
+
 comment on table public.hospitality_reviews is
 'Canonical review/loyalty evidence across TCE entities. Review-to-customer/booking linkage remains nullable until evidence exists.';
 

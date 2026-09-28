@@ -7,6 +7,8 @@ export type ApSystemCandidate = {
   supplierOutstanding: number | null;
   variance: number | null;
   reason: string;
+  purchaseOrderEvidence?: Array<{ code: string; due: number | null; status: string }>;
+  supplierEvidence?: Array<{ code: string; debt: number | null; totalPurchase: number | null }>;
 };
 
 function normalize(value: string) {
@@ -46,6 +48,8 @@ export function summarizeApSystem(
   const supplierHeaders = (suppliers.headers ?? []).map(normalize);
   const poDueIndex = poHeaders.findIndex((header) => header.includes("can tra ncc"));
   const supplierDebtIndex = supplierHeaders.findIndex((header) => header.includes("no can tra hien tai"));
+  const supplierTotalPurchaseIndex = supplierHeaders.findIndex((header) => header.includes("tong mua"));
+  const poStatusIndex = poHeaders.findIndex((header) => header.includes("trang thai"));
   if (poDueIndex < 0 || supplierDebtIndex < 0) {
     return {
       system, state: "NEED_VERIFY",
@@ -67,6 +71,16 @@ export function summarizeApSystem(
 
   const poValues = poCells.map((row) => money(row[poDueIndex] ?? "")).filter((value): value is number => value !== null);
   const supplierValues = supplierCells.map((row) => money(row[supplierDebtIndex] ?? "")).filter((value): value is number => value !== null);
+  const purchaseOrderEvidence = poCells.slice(0, 20).map((row) => ({
+    code: String(row[0] ?? "").trim().slice(0, 40),
+    due: money(row[poDueIndex] ?? ""),
+    status: poStatusIndex >= 0 ? String(row[poStatusIndex] ?? "").trim().slice(0, 80) : "",
+  }));
+  const supplierEvidence = supplierCells.slice(0, 20).map((row) => ({
+    code: String(row[0] ?? "").trim().slice(0, 40),
+    debt: money(row[supplierDebtIndex] ?? ""),
+    totalPurchase: supplierTotalPurchaseIndex >= 0 ? money(row[supplierTotalPurchaseIndex] ?? "") : null,
+  }));
   if (poValues.length !== poCells.length || supplierValues.length !== supplierCells.length) {
     return {
       system, state: "NEED_VERIFY",
@@ -75,6 +89,8 @@ export function summarizeApSystem(
       supplierOutstanding: supplierValues.reduce((sum, value) => sum + Math.max(0, value), 0),
       variance: null,
       reason: "Structured cell coverage chưa khớp visible row count.",
+      purchaseOrderEvidence,
+      supplierEvidence,
     };
   }
 
@@ -89,6 +105,8 @@ export function summarizeApSystem(
     purchaseOrderOutstanding,
     supplierOutstanding,
     variance,
+    purchaseOrderEvidence,
+    supplierEvidence,
     reason: variance === 0
       ? "Purchase Orders outstanding reconcile với Supplier current debt."
       : "Purchase Orders outstanding chưa reconcile với Supplier current debt.",

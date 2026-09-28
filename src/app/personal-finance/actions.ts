@@ -230,7 +230,7 @@ export async function importLegacyPersonalFinance() {
         stats.conflicts.push("Business distribution " + month + " row " + sheetRow + " chưa khớp FIN-HOSPITALITY-001.");
       }
       const { data: exists } = await db.from("owner_business_transfers").select("id").eq("source",LEGACY_SOURCE).eq("external_key",externalKey).maybeSingle();
-      if (exists) { stats.duplicate++; continue; }
+      if (exists) { stats.duplicate++; stats.skipped++; continue; }
       const { error } = await db.from("owner_business_transfers").insert({
         transfer_date: isoDate(date), business_unit: businessUnit, direction: "BUSINESS_TO_PERSONAL",
         transfer_type: "OWNER_DISTRIBUTION", amount: value, source: LEGACY_SOURCE,
@@ -244,7 +244,7 @@ export async function importLegacyPersonalFinance() {
 
     const txType = /chuyển nội bộ/i.test(kind) ? "TRANSFER" : /thu/i.test(kind) ? "INCOME" : /trả bớt gốc/i.test(group) ? "DEBT_PAYMENT" : "EXPENSE";
     const { data: exists } = await db.from("personal_finance_transactions").select("id").eq("source",LEGACY_SOURCE).eq("external_key",externalKey).maybeSingle();
-    if (exists) { stats.duplicate++; continue; }
+    if (exists) { stats.duplicate++; stats.skipped++; continue; }
     const { error } = await db.from("personal_finance_transactions").insert({
       transaction_date: isoDate(date), transaction_type: txType, category: group,
       description: [category,counterparty,accountName].filter(Boolean).join(" · "), amount: value,
@@ -264,7 +264,7 @@ export async function importLegacyPersonalFinance() {
     const value = parseViNumber(row[2])!;
     const externalKey = legacyKey(["03_TaiSan_MucTieu_FI",row[1],value]);
     const { data: exists } = await db.from("personal_finance_debts").select("id").eq("source",LEGACY_SOURCE).eq("external_key",externalKey).maybeSingle();
-    if (exists) { stats.duplicate++; continue; }
+    if (exists) { stats.duplicate++; stats.skipped++; continue; }
     const debtType = /thấu chi/i.test(row[1]) ? "OVERDRAFT" : /người thân/i.test(row[1]) ? "FAMILY" : "OTHER";
     const { error } = await db.from("personal_finance_debts").insert({
       name: row[1], debt_type: debtType, opening_principal: value, current_principal: value,
@@ -283,7 +283,7 @@ export async function importLegacyPersonalFinance() {
     stats.sourceRows++;
     const externalKey = legacyKey(["02_No_QuyAnToan","Quỹ hiện có",fundValue]);
     const { data: exists } = await db.from("personal_finance_accounts").select("id").eq("source",LEGACY_SOURCE).eq("external_key",externalKey).maybeSingle();
-    if (exists) stats.duplicate++;
+    if (exists) { stats.duplicate++; stats.skipped++; }
     else {
       const { error } = await db.from("personal_finance_accounts").insert({
         name: "Quỹ an toàn", account_type: "BANK", current_balance: fundValue, balance_as_of: "2026-08-12",

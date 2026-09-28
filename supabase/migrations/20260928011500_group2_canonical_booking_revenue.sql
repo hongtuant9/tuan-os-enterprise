@@ -157,6 +157,14 @@ begin
   new.primary_intent := coalesce(nullif(new.primary_intent,''), nullif(new.intent,''));
   new.journey_entry := coalesce(nullif(new.journey_entry,''), nullif(new.metadata->>'journey_entry',''));
   new.self_reported_source := coalesce(nullif(new.self_reported_source,''), nullif(new.metadata->>'self_reported_source',''));
+  new.routed_agent := coalesce(nullif(new.routed_agent,''), nullif(new.metadata->>'routed_agent',''));
+  if (new.requested_dates is null or new.requested_dates='{}'::jsonb)
+     and (nullif(new.metadata->>'check_in','') is not null or nullif(new.metadata->>'check_out','') is not null) then
+    new.requested_dates := jsonb_strip_nulls(jsonb_build_object(
+      'check_in', nullif(new.metadata->>'check_in',''),
+      'check_out', nullif(new.metadata->>'check_out','')
+    ));
+  end if;
   if new.guest_count is null and coalesce(new.metadata->>'guest_count','') ~ '^\\d+$' then
     new.guest_count := (new.metadata->>'guest_count')::integer;
   end if;

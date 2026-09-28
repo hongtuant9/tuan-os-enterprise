@@ -68,6 +68,7 @@ export type FinanceBotSnapshot = {
       parsedRowCount: number;
       unparsedRowShapes: string[];
       unparsedRowTokens?: Array<{ codeTokens: string[]; numericTokens: string[] }>;
+      exportControlLabels?: string[];
       scrollContainers: Array<{
         tag: string;
         className: string;
@@ -859,6 +860,21 @@ async function cashbookSnapshot(page: Page) {
     codeTokens: row.match(/\b[A-Za-z]{1,6}\d{3,}\b/g)?.slice(0, 8) ?? [],
     numericTokens: row.match(/-?\d[\d.,]*/g)?.slice(0, 24) ?? [],
   }));
+  const exportControlLabels = await page.evaluate(() => {
+    const visible = (el: Element) => {
+      const node = el as HTMLElement;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+    };
+    return Array.from(document.querySelectorAll("button,a,[role='button'],[role='menuitem'],li,.k-link"))
+      .filter(visible)
+      .map((el) => `${(el as HTMLElement).innerText || el.textContent || ""} ${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""}`.replace(/\s+/g, " ").trim())
+      .filter((label) => /xuất|export|excel|csv/i.test(label))
+      .filter((label, index, all) => label && all.indexOf(label) === index)
+      .slice(0, 20);
+  }).catch(() => [] as string[]);
+
   const scrollContainers = await page.evaluate(() =>
     Array.from(document.querySelectorAll("*"))
       .map((el) => {
@@ -982,6 +998,7 @@ async function cashbookSnapshot(page: Page) {
       parsedRowCount: parsedRows.length,
       unparsedRowShapes,
       unparsedRowTokens,
+      exportControlLabels,
       scrollContainers,
       kendoDataSources,
     },

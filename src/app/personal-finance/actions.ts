@@ -301,7 +301,7 @@ export async function importLegacyPersonalFinance() {
     }
   }
 
-  stats.variance = stats.sourceRows - stats.imported - stats.skipped - stats.duplicate;
+  stats.variance = stats.sourceRows - stats.imported - stats.skipped;
   const admin = untyped(createAdminClient());
   await admin.from("personal_finance_audit_log").insert({
     entity_type: "IMPORT", entity_id: null, action: "IMPORT", actor_id: userId,

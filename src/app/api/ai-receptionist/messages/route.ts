@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       wbraid: payload.wbraid,
       gaClientId: payload.gaClientId,
       gaSessionId: payload.gaSessionId,
+      selfReportedSource: payload.selfReportedSource,
       referralSource: payload.referralSource,
       pageEntity: payload.pageEntity,
       carePhase: payload.carePhase,

@@ -5,6 +5,7 @@ import {
   outstandingDebt,
   personalExpenseActual,
   personalIncomeFromBusiness,
+  personalMetricState,
   validatePurchaseDraft,
 } from "./personal-finance-core.ts";
 
@@ -47,4 +48,27 @@ test("canonical write key is stable for duplicate protection", () => {
   const a = canonicalKiotVietWriteKey("MOM_CASHBOOK", "DOC-001", "PURCHASE_RECEIPT");
   const b = canonicalKiotVietWriteKey("MOM_CASHBOOK", "DOC-001", "PURCHASE_RECEIPT");
   assert.equal(a, b);
+});
+
+
+test("no data is never treated as verified zero", () => {
+  assert.equal(personalMetricState({ verifiedRowCount: 0, unverifiedRowCount: 0, sourceUpdatedAt: null }), "NEED_VERIFY");
+});
+
+test("explicit verified zero can be verified when evidence row exists and source is current", () => {
+  assert.equal(personalMetricState({
+    verifiedRowCount: 1,
+    unverifiedRowCount: 0,
+    sourceUpdatedAt: "2026-09-28T00:00:00+07:00",
+    currentPeriodStart: "2026-09-01",
+  }), "VERIFIED");
+});
+
+test("verified evidence becomes stale when source predates current review period", () => {
+  assert.equal(personalMetricState({
+    verifiedRowCount: 1,
+    unverifiedRowCount: 0,
+    sourceUpdatedAt: "2026-08-12T00:00:00+07:00",
+    currentPeriodStart: "2026-09-01",
+  }), "STALE");
 });

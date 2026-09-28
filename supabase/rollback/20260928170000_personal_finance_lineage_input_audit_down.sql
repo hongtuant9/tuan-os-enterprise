@@ -12,14 +12,21 @@ begin
   ]
   loop
     execute format('drop trigger if exists personal_finance_audit on public.%I',t);
-    execute format('drop policy if exists %L on public.%I',t||' owner select',t);
-    execute format('drop policy if exists %L on public.%I',t||' owner insert',t);
-    execute format('drop policy if exists %L on public.%I',t||' owner update',t);
+    execute format('drop policy if exists %I on public.%I',t||' owner select',t);
+    execute format('drop policy if exists %I on public.%I',t||' owner insert',t);
+    execute format('drop policy if exists %I on public.%I',t||' owner update',t);
   end loop;
 end $$;
 
 drop function if exists private.personal_finance_audit_trigger();
 drop table if exists public.personal_finance_audit_log;
+
+alter table public.personal_finance_accounts drop constraint if exists personal_finance_accounts_verified_evidence_ck;
+alter table public.personal_finance_transactions drop constraint if exists personal_finance_transactions_verified_evidence_ck;
+alter table public.personal_finance_debts drop constraint if exists personal_finance_debts_verified_evidence_ck;
+alter table public.personal_finance_assets drop constraint if exists personal_finance_assets_verified_evidence_ck;
+alter table public.personal_finance_goals drop constraint if exists personal_finance_goals_verified_evidence_ck;
+alter table public.owner_business_transfers drop constraint if exists owner_business_transfers_verified_evidence_ck;
 
 drop index if exists public.personal_finance_accounts_source_external_uq;
 drop index if exists public.personal_finance_transactions_source_external_uq;

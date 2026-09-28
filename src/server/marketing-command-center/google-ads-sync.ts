@@ -24,6 +24,13 @@ function customerId(): string {
   return value;
 }
 function gaqlDate(date: Date): string { return date.toISOString().slice(0, 10); }
+function campaignStatus(value: unknown): "ACTIVE" | "PAUSED" | "ARCHIVED" | "HOLD" {
+  const status = s(value).toUpperCase();
+  if (status === "ENABLED") return "ACTIVE";
+  if (status === "PAUSED") return "PAUSED";
+  if (status === "REMOVED") return "ARCHIVED";
+  return "HOLD";
+}
 
 export async function syncGoogleAdsDaily(
   dbClient: unknown,
@@ -39,7 +46,7 @@ export async function syncGoogleAdsDaily(
   const query = [
     "SELECT",
     "segments.date,",
-    "campaign.id, campaign.name, campaign.status,",
+    "campaign.id, campaign.name, campaign.status, customer.currency_code,",
     "metrics.impressions, metrics.clicks, metrics.cost_micros,",
     "metrics.conversions, metrics.conversions_value",
     "FROM campaign",
@@ -57,6 +64,8 @@ export async function syncGoogleAdsDaily(
     const segment = object(row.segments);
     const campaign = object(row.campaign);
     const metrics = object(row.metrics);
+    const customer = object(row.customer);
+    const currency = s(customer.currencyCode) || "VND";
     const date = s(segment.date);
     const providerCampaignId = s(campaign.id);
     if (!date || !providerCampaignId) continue;
@@ -71,8 +80,8 @@ export async function syncGoogleAdsDaily(
       connector_id: "google_ads",
       provider_campaign_id: providerCampaignId,
       name: s(campaign.name) || providerCampaignId,
-      status: s(campaign.status) || "UNKNOWN",
-      currency: "VND",
+      status: campaignStatus(campaign.status),
+      currency,
       source_authority: "Google Ads API",
       verification_status: "VERIFIED",
       last_synced_at: now.toISOString(),
@@ -98,7 +107,7 @@ export async function syncGoogleAdsDaily(
       conversions: Math.trunc(n(metrics.conversions)),
       spend: cost,
       attributed_revenue: 0,
-      currency: "VND",
+      currency,
       verification_status: "VERIFIED",
       source_updated_at: now.toISOString(),
       synced_at: now.toISOString(),

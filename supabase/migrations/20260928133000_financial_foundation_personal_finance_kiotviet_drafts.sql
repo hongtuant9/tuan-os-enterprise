@@ -282,10 +282,10 @@ create policy "Financial drafts privileged read" on public.kiotviet_document_dra
 create policy "Financial drafts privileged write" on public.kiotviet_document_drafts for all to authenticated
   using (public.can_manage_financial_drafts()) with check (public.can_manage_financial_drafts());
 create policy "Financial draft items privileged read" on public.kiotviet_document_draft_items for select to authenticated
-  using (exists(select 1 from public.kiotviet_document_drafts d where d.id=draft_id and public.can_manage_financial_drafts()));
+  using (public.can_manage_financial_drafts());
 create policy "Financial draft items privileged write" on public.kiotviet_document_draft_items for all to authenticated
-  using (exists(select 1 from public.kiotviet_document_drafts d where d.id=draft_id and public.can_manage_financial_drafts()))
-  with check (exists(select 1 from public.kiotviet_document_drafts d where d.id=draft_id and public.can_manage_financial_drafts()));
+  using (public.can_manage_financial_drafts())
+  with check (public.can_manage_financial_drafts());
 
 grant select on public.business_finance_monthly to authenticated;
 grant all on public.business_finance_monthly to service_role;

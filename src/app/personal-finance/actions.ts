@@ -382,6 +382,26 @@ function isoDate(value: string) {
   return [match[3], match[2].padStart(2,"0"), match[1].padStart(2,"0")].join("-");
 }
 
+const legacyExpenseCodeByName: Record<string,string> = {
+  "Ăn uống + nhu yếu phẩm gia đình": "PERSONAL_EXPENSE_FOOD_HOUSEHOLD",
+  "Điện, nước, phí sinh hoạt nhà": "PERSONAL_EXPENSE_HOME_UTILITIES",
+  "Internet + điện thoại": "PERSONAL_EXPENSE_CONNECTIVITY",
+  "Đi lại/xăng/xe": "PERSONAL_EXPENSE_TRANSPORT",
+  "Quần áo + chi cá nhân chung": "PERSONAL_EXPENSE_CLOTHING_PERSONAL",
+  "Bảo trì nhà/đồ dùng": "PERSONAL_EXPENSE_HOME_MAINTENANCE",
+  "Hiếu hỉ/đối ngoại": "PERSONAL_EXPENSE_SOCIAL",
+  "Giải trí/ăn ngoài/gia đình": "PERSONAL_EXPENSE_LEISURE",
+  "Dự phòng sinh hoạt nhỏ": "PERSONAL_EXPENSE_SMALL_RESERVE",
+  "Con trai — Ban Mai lớp 11A, chi thường xuyên": "PERSONAL_EXPENSE_EDUCATION_SON",
+  "Con gái giữa — Tiểu học Yên Xá": "PERSONAL_EXPENSE_EDUCATION_MIDDLE",
+  "Con út — Tiểu học Ban Mai": "PERSONAL_EXPENSE_EDUCATION_YOUNGEST",
+  "Học thêm 3 con": "PERSONAL_EXPENSE_TUTORING",
+  "Y tế + bảo hiểm": "PERSONAL_EXPENSE_HEALTH_INSURANCE",
+  "Chi bắt buộc không đều khác": "PERSONAL_EXPENSE_OTHER_ESSENTIAL",
+  "Ngân sách cá nhân bổ sung của Tuấn": "PERSONAL_EXPENSE_OWNER_ALLOWANCE",
+  "Trả bớt gốc thấu chi": "PERSONAL_DEBT_PRINCIPAL",
+};
+
 export async function importLegacyPersonalFinance() {
   const { db, userId } = await ownerContext();
   const tokenStore = new GoogleOAuthTokenStore();
@@ -434,10 +454,11 @@ export async function importLegacyPersonalFinance() {
     }
 
     const txType = /chuyển nội bộ/i.test(kind) ? "TRANSFER" : /thu/i.test(kind) ? "INCOME" : /trả bớt gốc/i.test(group) ? "DEBT_PAYMENT" : "EXPENSE";
+    const legacyCategoryCode = txType === "EXPENSE" || txType === "DEBT_PAYMENT" ? (legacyExpenseCodeByName[group] ?? null) : null;
     const { data: exists } = await db.from("personal_finance_transactions").select("id").eq("source",LEGACY_SOURCE).eq("external_key",externalKey).maybeSingle();
     if (exists) { stats.duplicate++; stats.skipped++; continue; }
     const { error } = await db.from("personal_finance_transactions").insert({
-      transaction_date: isoDate(date), transaction_type: txType, category: group,
+      transaction_date: isoDate(date), transaction_type: txType, category: group, category_code: legacyCategoryCode, currency_code: "VND", transaction_source_code: "SHEET_LEGACY",
       description: [category,counterparty,accountName].filter(Boolean).join(" · "), amount: value,
       source: LEGACY_SOURCE, source_reference: "04_GiaoDich!A" + sheetRow + ":P" + sheetRow,
       source_updated_at: meta.modifiedTime,
@@ -458,7 +479,7 @@ export async function importLegacyPersonalFinance() {
     if (exists) { stats.duplicate++; stats.skipped++; continue; }
     const debtType = /thấu chi/i.test(row[1]) ? "OVERDRAFT" : /người thân/i.test(row[1]) ? "FAMILY" : "OTHER";
     const { error } = await db.from("personal_finance_debts").insert({
-      name: row[1], debt_type: debtType, opening_principal: value, current_principal: value,
+      name: row[1], debt_type: debtType, debt_type_code: debtType === "OVERDRAFT" ? "OVERDRAFT" : debtType === "FAMILY" ? "FAMILY_LOAN" : "OTHER", opening_principal: value, current_principal: value,
       as_of_date: "2026-08-12", source: LEGACY_SOURCE,
       source_reference: "03_TaiSan_MucTieu_FI", source_updated_at: "2026-08-12T00:00:00+07:00",
       verification_status: "NEED_VERIFY", status: "ACTIVE", external_key: externalKey,
@@ -477,7 +498,7 @@ export async function importLegacyPersonalFinance() {
     if (exists) { stats.duplicate++; stats.skipped++; }
     else {
       const { error } = await db.from("personal_finance_accounts").insert({
-        name: "Quỹ an toàn", account_type: "BANK", current_balance: fundValue, balance_as_of: "2026-08-12",
+        name: "Quỹ an toàn", account_type: "BANK", account_type_code: "BANK", currency: "VND", current_balance: fundValue, balance_as_of: "2026-08-12",
         is_liquid: true, is_emergency_fund: true, source: LEGACY_SOURCE,
         source_reference: "02_No_QuyAnToan!A11:B11 + 03_TaiSan_MucTieu_FI!A5:D5",
         source_updated_at: "2026-08-12T00:00:00+07:00", verification_status: "NEED_VERIFY",

@@ -75,6 +75,9 @@ export type FinanceBotSnapshot = {
         paymentLabelVisible: boolean;
         amountTokens: number[];
         dateTokens: string[];
+        expectedVarianceFoundInDom?: boolean;
+        targetRowNumericTokens?: number[];
+        targetRowAttributeNumericTokens?: number[];
       }>;
       exportControlLabels?: string[];
       exportCapture?: {
@@ -1162,18 +1165,29 @@ async function readCashbookVoucherDetailDiagnostics(
       (target as HTMLElement).click(); return true;
     }, code).catch(() => false);
     await new Promise((resolve)=>setTimeout(resolve,900));
-    const detail = await page.evaluate(() => {
+    const detail = await page.evaluate((targetCode) => {
       const text=(document.body?.innerText||"").replace(/\s+/g," ").trim();
-      const numeric=Array.from(new Set((text.match(/-?\d[\d.,]{3,}/g)||[])
+      const html=document.documentElement?.innerHTML||"";
+      const toAmounts=(value:string)=>Array.from(new Set((value.match(/-?\d[\d.,]{3,}/g)||[])
         .map((v)=>Number(v.replace(/[^\d-]/g,"")))
-        .filter((v)=>Number.isFinite(v)&&Math.abs(v)>=1000))).slice(0,40);
+        .filter((v)=>Number.isFinite(v)&&Math.abs(v)>=1000))).slice(0,60);
+      const nodes=Array.from(document.querySelectorAll("td,[role='gridcell'],tr,[role='row'],a,button,span,div"));
+      const target=nodes.find((el)=>(el.textContent||"").replace(/\s+/g," ").includes(targetCode));
+      const row=target?.closest("tr,[role='row']") || target?.parentElement || null;
+      const rowText=(row?.textContent||"").replace(/\s+/g," ").trim();
+      const attrText=row ? Array.from(row.querySelectorAll("*"))
+        .flatMap((el)=>Array.from(el.attributes).map((a)=>a.value))
+        .join(" ") : "";
       return {
         receiptLabelVisible: /phiếu thu|thu tiền|loại thu|tổng thu/i.test(text),
         paymentLabelVisible: /phiếu chi|chi tiền|loại chi|tổng chi/i.test(text),
-        amountTokens: numeric,
+        amountTokens: toAmounts(text),
         dateTokens: Array.from(new Set(text.match(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\b/g)||[])).slice(0,20),
+        expectedVarianceFoundInDom: /5[.,]?700[.,]?000|5700000/.test(text) || /5[.,]?700[.,]?000|5700000/.test(html),
+        targetRowNumericTokens: toAmounts(rowText),
+        targetRowAttributeNumericTokens: toAmounts(attrText),
       };
-    }).catch(()=>({receiptLabelVisible:false,paymentLabelVisible:false,amountTokens:[] as number[],dateTokens:[] as string[]}));
+    }, code).catch(()=>({receiptLabelVisible:false,paymentLabelVisible:false,amountTokens:[] as number[],dateTokens:[] as string[],expectedVarianceFoundInDom:false,targetRowNumericTokens:[] as number[],targetRowAttributeNumericTokens:[] as number[]}));
     results.push({code,opened,...detail});
     await page.keyboard.press("Escape").catch(()=>undefined);
     await new Promise((resolve)=>setTimeout(resolve,250));

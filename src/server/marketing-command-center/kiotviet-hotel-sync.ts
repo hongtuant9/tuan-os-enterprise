@@ -268,7 +268,7 @@ export async function syncKiotVietHotelBookings(
       }
     }
 
-    const channel = channelForSaleChannel(saleChannelName);
+    const channel = channelForSaleChannel(saleChannelName ?? "");
     if (order.bookingStatus === "CONFIRMED" || order.bookingStatus === "COMPLETED") {
       const date = (order.purchaseAt || order.sourceCreatedAt || nowIso).slice(0, 10);
       const key = date + "|" + channel;

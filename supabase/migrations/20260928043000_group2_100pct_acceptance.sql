@@ -216,7 +216,7 @@ ga4_cpc_sessions as (
     and lower(coalesce(metadata->>'medium','')) in ('cpc','ppc','paid','paid_search')
 ),
 ga4_key_events as (
-  select coalesce(sum(conversions_platform),0)::numeric value
+  select coalesce(sum(conversions),0)::numeric value
   from public.marketing_daily_metrics where connector_id='ga4' and verification_status='VERIFIED'
 ),
 review_totals as (

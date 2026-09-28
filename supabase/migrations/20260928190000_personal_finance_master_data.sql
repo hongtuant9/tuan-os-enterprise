@@ -126,7 +126,10 @@ values
  ('CURRENCY','VND','Việt Nam đồng',10,'SCHEMA_DEFAULT','personal_finance currency default'),
  ('VERIFICATION_STATUS','VERIFIED','Đã xác minh',10,'SCHEMA_CANONICAL','Personal Finance schema'),
  ('VERIFICATION_STATUS','NEED_VERIFY','Cần xác minh',20,'SCHEMA_CANONICAL','Personal Finance schema'),
- ('VERIFICATION_STATUS','HOLD','Tạm dừng',30,'SCHEMA_CANONICAL','Personal Finance schema')
+ ('VERIFICATION_STATUS','HOLD','Tạm dừng',30,'SCHEMA_CANONICAL','Personal Finance schema'),
+ ('INCOME_CATEGORY','PERSONAL_INCOME_OTHER','Thu nhập cá nhân khác',900,'CEO_DIRECTIVE_20260928','Canonical fallback; business distributions use owner_business_transfers'),
+ ('TRANSACTION_SOURCE','APP_OWNER','Nhập tại Tài chính cá nhân',10,'APP_CANONICAL','/personal-finance'),
+ ('TRANSACTION_SOURCE','SHEET_LEGACY','Dữ liệu lịch sử từ Sheet',20,'TUAN OS — Mô hình tài chính gia đình','04_GiaoDich')
 on conflict(master_data_type,code) do nothing;
 
 insert into public.finance_master_data(master_data_type,code,name,display_order,source,source_reference)

@@ -115,6 +115,11 @@ export async function getMarketingCommandCenterSnapshot(
     const leads = total("leads");
     const spend = total("spend");
     const revenue = total("revenue");
+    const paidChannelIds = new Set(["google_ads", "meta_ads"]);
+    const paidChannels = channels.filter((row) => paidChannelIds.has(row.channelId));
+    const paidSpend = paidChannels.reduce((sum, row) => sum + row.spend, 0);
+    const paidLeads = paidChannels.reduce((sum, row) => sum + row.leads, 0);
+    const paidRevenue = paidChannels.reduce((sum, row) => sum + row.revenue, 0);
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
     const taggedEvents = attributableEvents.filter((row) => Boolean(
       s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
@@ -134,6 +139,13 @@ export async function getMarketingCommandCenterSnapshot(
     const attributionCoverage = verifiedBusinessRevenue > 0
       ? Math.min(1, attributedVerifiedRevenue / verifiedBusinessRevenue)
       : null;
+    const paidAttributionReady = attributionRows.some((row) =>
+      s(row.event_type) === "revenue" &&
+      s(row.verification_status) === "VERIFIED" &&
+      paidChannelIds.has(s(row.channel_id)) &&
+      Boolean(s(row.hospitality_booking_id)) &&
+      Boolean(s(row.gclid) || s(row.gbraid) || s(row.wbraid) || s(row.utm_source) || s(row.utm_campaign))
+    );
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
@@ -159,8 +171,8 @@ export async function getMarketingCommandCenterSnapshot(
         bookings: total("bookings"),
         spend,
         revenue,
-        cpa: leads > 0 && spendVerified ? spend / leads : null,
-        roas: spend > 0 && spendVerified && revenueVerified ? revenue / spend : null,
+        cpa: paidLeads > 0 && paidSpend > 0 && spendVerified && paidAttributionReady ? paidSpend / paidLeads : null,
+        roas: paidSpend > 0 && spendVerified && revenueVerified && paidAttributionReady ? paidRevenue / paidSpend : null,
         reachVerified,
         spendVerified,
         revenueVerified,

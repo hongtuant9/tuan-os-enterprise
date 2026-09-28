@@ -162,6 +162,9 @@ export type PilotMessageInput = {
   wbraid?: string;
   gaClientId?: string;
   gaSessionId?: string;
+  landingPage?: string;
+  adGroup?: string;
+  ad?: string;
   selfReportedSource?: string;
   referralSource?: string;
   pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";

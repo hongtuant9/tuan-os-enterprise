@@ -12,7 +12,19 @@ type WebsiteInboundPayload = {
   pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
   acquisitionSource?: string;
   utmSource?: string;
+  utmMedium?: string;
   utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  gaClientId?: string;
+  gaSessionId?: string;
+  landingPage?: string;
+  adGroup?: string;
+  ad?: string;
+  selfReportedSource?: string;
   referralSource?: string;
 };
 
@@ -130,7 +142,19 @@ export async function POST(request: Request) {
       content: message,
       acquisitionSource: safeString(payload.acquisitionSource, 120) ?? "website",
       utmSource: safeString(payload.utmSource, 120),
+      utmMedium: safeString(payload.utmMedium, 120),
       utmCampaign: safeString(payload.utmCampaign, 180),
+      utmContent: safeString(payload.utmContent, 180),
+      utmTerm: safeString(payload.utmTerm, 180),
+      gclid: safeString(payload.gclid, 256),
+      gbraid: safeString(payload.gbraid, 256),
+      wbraid: safeString(payload.wbraid, 256),
+      gaClientId: safeString(payload.gaClientId, 128),
+      gaSessionId: safeString(payload.gaSessionId, 128),
+      landingPage: safeString(payload.landingPage, 500),
+      adGroup: safeString(payload.adGroup, 180),
+      ad: safeString(payload.ad, 180),
+      selfReportedSource: safeString(payload.selfReportedSource, 180),
       referralSource: safeString(payload.referralSource, 180),
       pageEntity,
       providerMessageType: "website_message",

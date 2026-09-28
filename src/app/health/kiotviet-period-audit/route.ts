@@ -34,6 +34,14 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function single(payload: unknown): Row | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Row;
+  const result = root.result;
+  if (result && typeof result === "object" && !Array.isArray(result)) return result as Row;
+  return root;
+}
+
 function validDate(value: string | null) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
@@ -139,11 +147,18 @@ export async function GET(request: Request) {
     }
 
     const details = await mapLimit([...uniqueOrderRefs.values()], 6, async (ref) => {
-      const query = ref.uuid
-        ? "uuid=" + encodeURIComponent(ref.uuid)
-        : "code=" + encodeURIComponent(ref.code || "");
-      const res = await hotelClient.getOrder(query);
-      return res.ok && res.data && typeof res.data === "object" ? res.data as Row : null;
+      if (ref.uuid) {
+        const byUuid = await hotelClient.getOrder("uuid=" + encodeURIComponent(ref.uuid));
+        if (byUuid.ok) {
+          const detail = single(byUuid.data);
+          if (detail) return detail;
+        }
+      }
+      if (ref.code) {
+        const byCode = await hotelClient.getOrder("code=" + encodeURIComponent(ref.code));
+        if (byCode.ok) return single(byCode.data);
+      }
+      return null;
     });
 
     let totalGuests = 0;

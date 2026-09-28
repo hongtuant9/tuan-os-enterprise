@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deriveCommercialLead } from "./lead-qualification";
+import { deriveCommercialLead } from "./lead-qualification.ts";
 
 test("general/support conversation remains inquiry", () => {
   assert.equal(deriveCommercialLead({ primaryIntent: "general" }).status, "INQUIRY");

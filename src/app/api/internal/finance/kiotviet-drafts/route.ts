@@ -269,12 +269,16 @@ export async function POST(request: Request) {
     }
   }
 
-  await db.from("activity_logs").insert({
-    agent: "TCE KiotViet Draft Writer",
-    unit: "Finance",
-    type: status === "READY_FOR_APPROVAL" ? "action" : "alert",
-    message: "KiotViet draft " + draftId + " status=" + status + " requested_by=" + principalLabel(principal),
-  }).then(() => undefined).catch(() => undefined);
+  try {
+    await db.from("activity_logs").insert({
+      agent: "TCE KiotViet Draft Writer",
+      unit: "Finance",
+      type: status === "READY_FOR_APPROVAL" ? "action" : "alert",
+      message: "KiotViet draft " + draftId + " status=" + status + " requested_by=" + principalLabel(principal),
+    });
+  } catch {
+    // Draft persistence is authoritative; activity logging failure must not mutate provider state.
+  }
 
   return NextResponse.json({
     ok: true,

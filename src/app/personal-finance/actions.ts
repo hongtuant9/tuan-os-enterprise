@@ -511,8 +511,8 @@ export async function importLegacyPersonalFinance() {
       stats.imported++; stats.needVerify++;
     }
     if (knownAssets.some((row) => row[0] === "Tiền" && parseViNumber(row[2]) === fundValue)) {
-      stats.skipped++; stats.duplicate++;
-      stats.conflicts.push("30.000.000đ xuất hiện ở cả Quỹ hiện có và Tiền mặt/tài khoản; chỉ import một account NEED_VERIFY để tránh double-count.");
+      stats.duplicate++;
+      stats.conflicts.push("30.000.000đ xuất hiện ở cả Quỹ hiện có và Tiền mặt/tài khoản; chỉ import một account NEED_VERIFY để tránh double-count. Đây là overlap informational, không tính vào sourceRows/skipped.");
     }
   }
 

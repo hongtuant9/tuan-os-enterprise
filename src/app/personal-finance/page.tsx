@@ -128,7 +128,7 @@ export default async function PersonalFinancePage() {
   const verifiedAssetRows = (assetsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED" && row.value_status === "VERIFIED");
   const verifiedDebtRows = (debtsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED");
   const verifiedAccountRows = (accountsResult.data || []).filter((row: Record<string, unknown>) => row.verification_status === "VERIFIED" && row.value_status === "VERIFIED");
-  const hasVerifiedBalanceSheet = verifiedAssetRows.length > 0 || verifiedDebtRows.length > 0;
+  const hasVerifiedBalanceSheet = verifiedAssetRows.length > 0 && verifiedDebtRows.length > 0;
   const netWorth = verifiedAssets - verifiedLiabilities;
   const verifiedEmergencyFund = Number(summary.verified_emergency_fund || 0);
   const verifiedAvailableCash = Number(summary.verified_available_cash || 0);

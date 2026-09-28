@@ -5,7 +5,10 @@ export function ConfirmSubmitButton(props: { label: string; message: string; cla
     type="submit"
     className={props.className}
     onClick={(event) => {
-      if (!window.confirm(props.message)) event.preventDefault();
+      const form = event.currentTarget.form;
+      const reason = form ? String(new FormData(form).get("reason") ?? "").trim() : "";
+      const message = props.message + (reason ? "\n\nLý do: " + reason : "\n\nLý do: chưa nhập");
+      if (!window.confirm(message)) event.preventDefault();
     }}
   >{props.label}</button>;
 }

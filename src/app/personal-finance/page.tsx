@@ -112,7 +112,7 @@ export default async function PersonalFinancePage() {
     db.from("owner_finance_summary_v").select("*").eq("owner_user_id", authData.user.id).maybeSingle(),
     db.from("personal_finance_monthly_v").select("*").eq("owner_user_id", authData.user.id).eq("month", monthKey).maybeSingle(),
     db.from("personal_finance_debts").select("id,name,debt_type,principal_outstanding,annual_interest_rate,monthly_debt_service,maturity_date,next_payment_date,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).eq("is_active", true).order("principal_outstanding", { ascending: false }),
-    db.from("personal_finance_assets").select("id,name,asset_type,value_amount,value_as_of,value_status,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).order("value_amount", { ascending: false }),
+    db.from("personal_finance_assets").select("id,name,asset_type,value_amount,value_as_of,value_status,is_emergency_fund,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).order("value_amount", { ascending: false }),
     db.from("personal_finance_goals").select("id,name,goal_type,target_amount,target_date,verification_status,source,updated_at").eq("owner_user_id", authData.user.id).eq("is_active", true),
     db.from("personal_finance_transactions").select("category,amount").eq("owner_user_id", authData.user.id).eq("direction", "EXPENSE").eq("verification_status", "VERIFIED").gte("transaction_date", monthKey).lt("transaction_date", nextMonthKey),
     db.from("personal_finance_transactions").select("updated_at").eq("owner_user_id", authData.user.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),

@@ -7,7 +7,7 @@ import { signOut } from "@/app/actions/auth";
 
 type IconName =
   | "home" | "business" | "marketing" | "operations" | "reception"
-  | "customers" | "hr" | "finance" | "reports" | "agents" | "chat" | "settings"
+  | "customers" | "hr" | "finance" | "personalFinance" | "reports" | "agents" | "chat" | "settings"
   | "bell" | "chevron";
 
 const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
@@ -19,6 +19,7 @@ const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/customers", label: "Khách hàng", icon: "customers" },
   { href: "/hr", label: "Nhân sự", icon: "hr" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
+  { href: "/personal-finance", label: "Tài chính cá nhân", icon: "personalFinance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },
   { href: "/agents", label: "Trợ lý AI", icon: "agents" },
   { href: "/owner-chat", label: "TUAN OS Chat", icon: "chat" },
@@ -36,6 +37,7 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
     customers: <><circle cx="9" cy="8" r="3" {...common}/><circle cx="17" cy="9" r="2.5" {...common}/><path d="M3 20c.4-4 2.4-6 6-6s5.6 2 6 6M14 15c3.6 0 5.7 1.7 6 5" {...common}/></>,
     hr: <><circle cx="8" cy="8" r="3" {...common}/><circle cx="16" cy="8" r="3" {...common}/><path d="M2 20c.6-4 2.6-6 6-6s5.4 2 6 6M10 20c.6-4 2.6-6 6-6s5.4 2 6 6" {...common}/></>,
     finance: <><rect x="4" y="5" width="16" height="16" rx="2" {...common}/><path d="M8 9h8M12 8v10M9.5 12.5h5M9.5 16h5" {...common}/></>,
+    personalFinance: <><circle cx="12" cy="8" r="3" {...common}/><path d="M6 20c.5-4 2.5-6 6-6s5.5 2 6 6" {...common}/><path d="M18 5v6M15 8h6" {...common}/></>,
     reports: <><path d="M5 3h10l4 4v14H5V3Z" {...common}/><path d="M15 3v5h5M8 17l3-3 2 2 3-4" {...common}/></>,
     agents: <><circle cx="12" cy="12" r="9" {...common}/><path d="M12 8v8M8 12h8" {...common}/></>,
     chat: <><path d="M4 5h16v11H8l-4 4V5Z" {...common}/><path d="M8 9h8M8 12h5" {...common}/></>,

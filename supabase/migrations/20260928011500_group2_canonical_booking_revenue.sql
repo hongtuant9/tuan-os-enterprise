@@ -322,7 +322,7 @@ returns void
 language plpgsql
 security invoker
 set search_path=public
-as $
+as $$
 begin
   if p_customer_id is null then return; end if;
   update public.hospitality_customers c
@@ -333,14 +333,14 @@ begin
       updated_at=now()
   where c.id=p_customer_id;
 end;
-$;
+$$;
 
 create or replace function public.hospitality_review_rollup_trigger()
 returns trigger
 language plpgsql
 security invoker
 set search_path=public
-as $
+as $$
 begin
   if tg_op='DELETE' then
     perform public.refresh_hospitality_customer_review_rollup(old.customer_id);
@@ -352,7 +352,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 drop trigger if exists hospitality_review_customer_rollup on public.hospitality_reviews;
 create trigger hospitality_review_customer_rollup
 after insert or update or delete on public.hospitality_reviews

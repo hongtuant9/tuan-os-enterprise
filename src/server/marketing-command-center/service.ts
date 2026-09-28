@@ -83,6 +83,7 @@ export async function getMarketingCommandCenterSnapshot(
     const [
       metricResult, channelResult, campaignResult, contentResult,
       attributionResult, bookingRuntimeResult, connectorResult, recommendationResult, intelligenceResult,
+      group2DataQualityResult, group2ReconciliationResult, group2GateResult,
     ] = await Promise.all([
       db.from("marketing_daily_metrics").select("*").gte("metric_date", from).lte("metric_date", to),
       db.from("marketing_channels").select("*").order("display_name", { ascending: true }),
@@ -93,6 +94,9 @@ export async function getMarketingCommandCenterSnapshot(
       db.from("marketing_connectors").select("*").order("display_name", { ascending: true }),
       db.from("marketing_recommendations").select("*").in("status", ["OPEN", "ACKNOWLEDGED", "APPROVED"]).order("generated_at", { ascending: false }).limit(20),
       db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-market-intelligence").order("synced_at", { ascending: false }).limit(20),
+      db.from("group2_data_quality_v").select("*").order("issue_type", { ascending: true }),
+      db.from("group2_reconciliation_v").select("*").order("reconciliation_key", { ascending: true }),
+      db.from("group2_attribution_gate_v").select("*").limit(1),
     ]);
     const metricRows = rows(metricResult);
     const channelRows = rows(channelResult);
@@ -106,6 +110,9 @@ export async function getMarketingCommandCenterSnapshot(
     const connectorRows = rows(connectorResult);
     const recommendationRows = rows(recommendationResult);
     const intelligenceRows = rows(intelligenceResult);
+    const group2DataQualityRows = rows(group2DataQualityResult);
+    const group2ReconciliationRows = rows(group2ReconciliationResult);
+    const group2GateRows = rows(group2GateResult);
     const channels = channelAggregate(metricRows, channelRows);
 
     const total = (key: keyof MarketingPerformanceRow) => channels.reduce((sum, row) => {
@@ -119,7 +126,6 @@ export async function getMarketingCommandCenterSnapshot(
     const paidChannels = channels.filter((row) => paidChannelIds.has(row.channelId));
     const paidSpend = paidChannels.reduce((sum, row) => sum + row.spend, 0);
     const paidLeads = paidChannels.reduce((sum, row) => sum + row.leads, 0);
-    const paidRevenue = paidChannels.reduce((sum, row) => sum + row.revenue, 0);
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
     const taggedEvents = attributableEvents.filter((row) => Boolean(
       s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
@@ -128,24 +134,36 @@ export async function getMarketingCommandCenterSnapshot(
     const verifiedBusinessRevenue = bookingRuntimeRows
       .filter((row) => s(row.revenue_verification_status) === "VERIFIED")
       .reduce((sum, row) => sum + n(row.verified_revenue), 0);
-    const attributedVerifiedRevenue = attributionRows
-      .filter((row) =>
-        s(row.event_type) === "revenue" &&
-        s(row.verification_status) === "VERIFIED" &&
-        ["DIRECT_VERIFIED","ASSISTED_VERIFIED"].includes(s(row.attribution_status)) &&
-        Boolean(s(row.hospitality_booking_id))
-      )
+    const verifiedRevenueEvents = attributionRows.filter((row) =>
+      s(row.event_type) === "revenue" &&
+      s(row.verification_status) === "VERIFIED" &&
+      Boolean(s(row.hospitality_booking_id))
+    );
+    const attributedVerifiedRevenue = verifiedRevenueEvents
+      .filter((row) => ["DIRECT_VERIFIED","ASSISTED_VERIFIED"].includes(s(row.attribution_status)))
       .reduce((sum, row) => sum + n(row.revenue_amount), 0);
+    const selfReportedVerifiedRevenue = verifiedRevenueEvents
+      .filter((row) => s(row.attribution_status) === "SELF_REPORTED")
+      .reduce((sum, row) => sum + n(row.revenue_amount), 0);
+    const inferredVerifiedRevenue = verifiedRevenueEvents
+      .filter((row) => s(row.attribution_status) === "INFERRED")
+      .reduce((sum, row) => sum + n(row.revenue_amount), 0);
+    const unattributedVerifiedRevenue = Math.max(
+      0,
+      verifiedBusinessRevenue - attributedVerifiedRevenue - selfReportedVerifiedRevenue - inferredVerifiedRevenue,
+    );
+    const paidVerifiedRevenueEvents = verifiedRevenueEvents.filter((row) =>
+      paidChannelIds.has(s(row.channel_id)) &&
+      Boolean(s(row.gclid) || s(row.gbraid) || s(row.wbraid) || s(row.utm_source) || s(row.utm_campaign))
+    );
+    const paidVerifiedRevenue = paidVerifiedRevenueEvents.reduce((sum, row) => sum + n(row.revenue_amount), 0);
+    const paidAcquiredCustomers = new Set(
+      paidVerifiedRevenueEvents.map((row) => s(row.customer_id)).filter(Boolean),
+    ).size;
     const attributionCoverage = verifiedBusinessRevenue > 0
       ? Math.min(1, attributedVerifiedRevenue / verifiedBusinessRevenue)
       : null;
-    const paidAttributionReady = attributionRows.some((row) =>
-      s(row.event_type) === "revenue" &&
-      s(row.verification_status) === "VERIFIED" &&
-      paidChannelIds.has(s(row.channel_id)) &&
-      Boolean(s(row.hospitality_booking_id)) &&
-      Boolean(s(row.gclid) || s(row.gbraid) || s(row.wbraid) || s(row.utm_source) || s(row.utm_campaign))
-    );
+    const paidAttributionReady = paidVerifiedRevenueEvents.length > 0 && paidAcquiredCustomers > 0;
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
@@ -171,8 +189,17 @@ export async function getMarketingCommandCenterSnapshot(
         bookings: total("bookings"),
         spend,
         revenue,
-        cpa: paidLeads > 0 && paidSpend > 0 && spendVerified && paidAttributionReady ? paidSpend / paidLeads : null,
-        roas: paidSpend > 0 && spendVerified && revenueVerified && paidAttributionReady ? paidRevenue / paidSpend : null,
+        cpa: paidLeads > 0 && paidSpend > 0 && spendVerified ? paidSpend / paidLeads : null,
+        cac: paidAcquiredCustomers > 0 && paidSpend > 0 && spendVerified && paidAttributionReady ? paidSpend / paidAcquiredCustomers : null,
+        roas: paidSpend > 0 && spendVerified && revenueVerified && paidAttributionReady ? paidVerifiedRevenue / paidSpend : null,
+        verifiedBusinessRevenue,
+        attributedVerifiedRevenue,
+        selfReportedVerifiedRevenue,
+        inferredVerifiedRevenue,
+        unattributedVerifiedRevenue,
+        paidVerifiedRevenue,
+        paidAcquiredCustomers,
+        paidAttributionReady,
         reachVerified,
         spendVerified,
         revenueVerified,
@@ -185,6 +212,9 @@ export async function getMarketingCommandCenterSnapshot(
       attribution: attributionRows,
       connectors: connectorRows,
       recommendations: recommendationRows,
+      group2DataQuality: group2DataQualityRows,
+      group2Reconciliation: group2ReconciliationRows,
+      group2Gate: group2GateRows[0] ?? null,
       marketIntelligence: intelligenceRows.map((row) => {
         const data = row.data;
         return data && typeof data === "object" && !Array.isArray(data) ? data as Row : row;
@@ -196,11 +226,14 @@ export async function getMarketingCommandCenterSnapshot(
       period: { from, to },
       totals: {
         impressions: 0, reach: 0, clicks: 0, engagements: 0, sessions: 0,
-        leads: 0, bookings: 0, spend: 0, revenue: 0, cpa: null, roas: null,
+        leads: 0, bookings: 0, spend: 0, revenue: 0, cpa: null, cac: null, roas: null,
+        verifiedBusinessRevenue: 0, attributedVerifiedRevenue: 0, selfReportedVerifiedRevenue: 0,
+        inferredVerifiedRevenue: 0, unattributedVerifiedRevenue: 0, paidVerifiedRevenue: 0,
+        paidAcquiredCustomers: 0, paidAttributionReady: false,
         reachVerified: false, spendVerified: false, revenueVerified: false, attributionCoverage: null, eventSourceCoverage: null,
       },
       channels: [], campaigns: [], content: [], attribution: [], connectors: [],
-      recommendations: [], marketIntelligence: [], sourceState: "NEED_VERIFY",
+      recommendations: [], marketIntelligence: [], group2DataQuality: [], group2Reconciliation: [], group2Gate: null, sourceState: "NEED_VERIFY",
     };
   }
 }

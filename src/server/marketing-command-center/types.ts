@@ -33,7 +33,16 @@ export type MarketingCommandCenterSnapshot = {
     spend: number;
     revenue: number;
     cpa: number | null;
+    cac: number | null;
     roas: number | null;
+    verifiedBusinessRevenue: number;
+    attributedVerifiedRevenue: number;
+    selfReportedVerifiedRevenue: number;
+    inferredVerifiedRevenue: number;
+    unattributedVerifiedRevenue: number;
+    paidVerifiedRevenue: number;
+    paidAcquiredCustomers: number;
+    paidAttributionReady: boolean;
     reachVerified: boolean;
     spendVerified: boolean;
     revenueVerified: boolean;
@@ -47,6 +56,9 @@ export type MarketingCommandCenterSnapshot = {
   connectors: Array<Record<string, unknown>>;
   recommendations: Array<Record<string, unknown>>;
   marketIntelligence: Array<Record<string, unknown>>;
+  group2DataQuality: Array<Record<string, unknown>>;
+  group2Reconciliation: Array<Record<string, unknown>>;
+  group2Gate: Record<string, unknown> | null;
   sourceState: "LIVE" | "PARTIAL" | "NEED_VERIFY";
 };
 

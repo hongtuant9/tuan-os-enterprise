@@ -56,3 +56,21 @@ test("CAC fails closed unless both spend and acquired-customer denominator are v
     acquiredCustomersVerified: false,
   }), null);
 });
+
+
+test("A assisted: tracked prior touch with assisted evidence stays ASSISTED_VERIFIED", () => {
+  assert.equal(attributionStatusFor({ trackedSource: true, assistedEvidence: true }), "ASSISTED_VERIFIED");
+});
+
+test("Self-reported evidence never overrides stronger tracked evidence", () => {
+  assert.equal(attributionStatusFor({ trackedSource: true, selfReportedSource: true }), "DIRECT_VERIFIED");
+  assert.equal(attributionStatusFor({ selfReportedSource: true }), "SELF_REPORTED");
+});
+
+test("Inferred-only attribution remains distinct from verified attribution", () => {
+  assert.equal(attributionStatusFor({ inferredOnly: true }), "INFERRED");
+});
+
+test("Contradictory evidence fails closed", () => {
+  assert.equal(attributionStatusFor({ trackedSource: true, contradictoryEvidence: true }), "NEED_VERIFY");
+});

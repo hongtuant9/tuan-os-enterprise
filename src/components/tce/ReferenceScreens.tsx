@@ -477,6 +477,17 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
             <DataTable columns={["#","Nguồn","Nhà cung cấp","Trạng thái","Xác thực","Lần thành công gần nhất","Lỗi"]} data={data?.tables.marketingDataHealth}/>
           </Section>
 
+          <Section title="Độ phủ phân bổ doanh thu" subtitle="Phân biệt VERIFIED / self-reported / inferred / unattributed; không ép gán nguồn" className="col-span-12 lg:col-span-5 h-[240px]" icon="◔">
+            <DataTable columns={["Nhóm","Doanh thu","Tỷ lệ","Trạng thái"]} data={data?.tables.marketingAttributionCoverage}/>
+          </Section>
+          <Section title="Đối soát Nhóm 2" subtitle="Ads ↔ GA4 ↔ Lead ↔ Booking ↔ KiotViet ↔ Revenue ↔ Review" className="col-span-12 lg:col-span-7 h-[240px]" icon="↔">
+            <DataTable columns={["Đối soát","Nguồn A","Nguồn B","A","B","Chênh lệch","Trạng thái"]} data={data?.tables.marketingGroup2Reconciliation}/>
+          </Section>
+
+          <Section title="Chất lượng dữ liệu Nhóm 2" subtitle="Chỉ hiện lỗi/gap đang tồn tại; VALID_MULTI_ENTRY không bị coi là lỗi funnel" className="col-span-12 h-[230px]" icon="✓">
+            <DataTable columns={["Kiểm tra","Phân loại","Số lượng","Trạng thái","Giải thích"]} data={data?.tables.marketingGroup2DataQuality}/>
+          </Section>
+
           <Section title="Phân tích thị trường & đối thủ" subtitle="Bằng chứng và nhận định từ CMI và bảng tính; không thay thế dữ liệu kinh doanh thực tế đang vận hành" className="col-span-12 lg:col-span-6 h-[210px]" icon="◉">
             <DataTable columns={["#","ID","Loại","Chủ đề / đối thủ","Xác minh","Hành động"]} data={data?.tables.marketingMarketIntel}/>
           </Section>

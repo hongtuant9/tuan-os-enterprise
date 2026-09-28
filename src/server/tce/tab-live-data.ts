@@ -778,7 +778,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
     const leadValue = mcc.totals.leads;
     const bookingValue = mcc.totals.bookings;
-    const revenueValue = mcc.totals.revenue;
+    const revenueValue = mcc.totals.attributedVerifiedRevenue;
     const interactionValue = mcc.totals.engagements;
     const attributionCoverage = mcc.totals.attributionCoverage === null ? "NEED VERIFY" : pct(mcc.totals.attributionCoverage * 100);
     const eventSourceCoverage = mcc.totals.eventSourceCoverage === null ? "NEED VERIFY" : pct(mcc.totals.eventSourceCoverage * 100);
@@ -879,20 +879,20 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       {
         "Tiếp cận": mcc.totals.reachVerified ? String(mcc.totals.reach) : "NEED VERIFY",
         "Tương tác": String(interactionValue),
-        "Lead đã xác minh": String(leadValue),
-        "Booking / Order": String(bookingValue),
+        "Khách hàng tiềm năng": String(leadValue),
+        "Đặt chỗ / Đơn hàng": String(bookingValue),
         "Doanh thu quy đổi": mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY",
         "Chi phí quảng cáo": mcc.totals.spendVerified ? money(mcc.totals.spend) : "NEED VERIFY",
-        "ROAS": mcc.totals.spendVerified && mcc.totals.revenueVerified && mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY",
+        "Hiệu quả chi tiêu quảng cáo": mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "HOLD",
       },
       {
         "Tiếp cận": mcc.totals.reachVerified ? "Provider Actual · " + period.label : "Reach/impressions provider chưa có Actual authority",
         "Tương tác": "Chuẩn hóa từ GA4/CRM/provider đã kết nối · " + period.label,
-        "Lead đã xác minh": "Chỉ hospitality_leads VERIFIED; conversation/inquiry không tự động được tính là lead · " + period.label,
-        "Booking / Order": "Verified AI/CRM booking · " + period.label,
-        "Doanh thu quy đổi": mcc.totals.revenueVerified ? "KiotViet/finance authority + attribution linkage VERIFIED" : "KiotViet revenue linkage chưa VERIFIED; booked upsell không được dùng thay revenue",
-        "Chi phí quảng cáo": mcc.totals.spendVerified ? "Google/Meta Ads Actual" : "Google/Meta Ads spend chưa VERIFIED",
-        "ROAS": mcc.totals.spendVerified && mcc.totals.revenueVerified ? "Verified attributed revenue / verified spend" : "Fail closed khi spend hoặc revenue authority chưa đủ",
+        "Khách hàng tiềm năng": "Chỉ hospitality_leads VERIFIED; conversation/inquiry không tự động được tính là lead · " + period.label,
+        "Đặt chỗ / Đơn hàng": "Canonical booking VERIFIED; OTA/KiotViet multi-entry không bắt buộc phải có lead · " + period.label,
+        "Doanh thu quy đổi": mcc.totals.revenueVerified ? "Attributed VERIFIED revenue; tổng verified business revenue = " + money(mcc.totals.verifiedBusinessRevenue) : "KiotViet revenue linkage chưa VERIFIED",
+        "Chi phí quảng cáo": mcc.totals.spendVerified ? "Google/Meta Ads Actual · read-only" : "Google/Meta Ads spend chưa VERIFIED",
+        "Hiệu quả chi tiêu quảng cáo": mcc.totals.paidAttributionReady ? "TUAN OS verified ROAS = paid attributed verified revenue / verified paid spend" : "HOLD: chưa có paid touch → customer → booking → verified revenue đủ evidence",
       },
       {
         marketingChannels,
@@ -915,19 +915,49 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           ["Doanh thu", mcc.totals.revenueVerified ? money(revenueValue) : "NEED VERIFY"],
         ],
         marketingConversion: [
-          ["Revenue attribution coverage", attributionCoverage],
+          ["Attribution coverage", attributionCoverage],
           ["Event source coverage", eventSourceCoverage],
-          ["Lead / Click", mcc.totals.clicks > 0 && leadValue > 0 ? pct((leadValue / mcc.totals.clicks) * 100) : "NEED VERIFY"],
+          ["Lead / Click", mcc.totals.clicks > 0 ? pct((leadValue / mcc.totals.clicks) * 100) : "NEED VERIFY"],
           ["Booking / Lead", leadValue > 0 ? pct((bookingValue / leadValue) * 100) : "NEED VERIFY"],
-          ["CPA", mcc.totals.cpa !== null ? money(mcc.totals.cpa) : "NEED VERIFY"],
-          ["ROAS", mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "NEED VERIFY"],
+          ["Paid acquired customers", String(mcc.totals.paidAcquiredCustomers)],
+          ["CAC", mcc.totals.cac !== null ? money(mcc.totals.cac) : "HOLD"],
+          ["TUAN OS verified ROAS", mcc.totals.roas !== null ? mcc.totals.roas.toFixed(2) + "x" : "HOLD"],
         ],
+        marketingAttributionCoverage: [
+          ["Total VERIFIED revenue", money(mcc.totals.verifiedBusinessRevenue), "100%", "VERIFIED"],
+          ["Attributed VERIFIED", money(mcc.totals.attributedVerifiedRevenue), attributionCoverage, mcc.totals.attributedVerifiedRevenue > 0 ? "VERIFIED" : "READY_EMPTY"],
+          ["Self-reported", money(mcc.totals.selfReportedVerifiedRevenue), mcc.totals.verifiedBusinessRevenue > 0 ? pct((mcc.totals.selfReportedVerifiedRevenue / mcc.totals.verifiedBusinessRevenue) * 100) : "—", "EVIDENCE_CLASS"],
+          ["Inferred", money(mcc.totals.inferredVerifiedRevenue), mcc.totals.verifiedBusinessRevenue > 0 ? pct((mcc.totals.inferredVerifiedRevenue / mcc.totals.verifiedBusinessRevenue) * 100) : "—", "NOT_VERIFIED_ATTRIBUTION"],
+          ["Unattributed", money(mcc.totals.unattributedVerifiedRevenue), mcc.totals.verifiedBusinessRevenue > 0 ? pct((mcc.totals.unattributedVerifiedRevenue / mcc.totals.verifiedBusinessRevenue) * 100) : "—", "UNATTRIBUTED"],
+          ["Paid VERIFIED revenue", money(mcc.totals.paidVerifiedRevenue), mcc.totals.paidAttributionReady ? "READY" : "0%", mcc.totals.paidAttributionReady ? "VERIFIED" : "HOLD"],
+        ],
+        marketingGroup2Reconciliation: mcc.group2Reconciliation.map((row) => [
+          textField(row, "reconciliation_key"),
+          textField(row, "source_a"),
+          textField(row, "source_b"),
+          textField(row, "value_a"),
+          textField(row, "value_b"),
+          textField(row, "variance"),
+          textField(row, "status"),
+        ]),
+        marketingGroup2DataQuality: mcc.group2DataQuality
+          .filter((row) => numberField(row, "issue_count") > 0 || !["PASS"].includes(textField(row, "status")))
+          .map((row) => [
+            textField(row, "issue_type"),
+            textField(row, "classification"),
+            textField(row, "issue_count"),
+            textField(row, "status"),
+            textField(row, "reason"),
+          ]),
       },
       {
         marketingSignals: [
           "Workbook sync: " + workbookFreshness.state + (workbookFreshness.changed ? " · đã reconcile bản sửa mới" : " · current"),
           "Data Health: " + mcc.connectors.filter((row) => ["LIVE","READY"].includes(textField(row, "status"))).length + "/" + mcc.connectors.length + " nguồn LIVE/READY",
           "Revenue attribution coverage: " + attributionCoverage,
+          "Paid attribution gate: " + (mcc.totals.paidAttributionReady ? "VERIFIED" : "HOLD"),
+          "Verified business revenue: " + money(mcc.totals.verifiedBusinessRevenue),
+          "Unattributed verified revenue: " + money(mcc.totals.unattributedVerifiedRevenue),
           "Event source coverage: " + eventSourceCoverage,
           "AI Lễ Tân mở trong kỳ: " + periodConversations.filter((conversation) => conversation.status !== "closed").length,
           "Review quản lý trong kỳ: " + receptionist.managerReviews.filter((review) => inPeriod(review.createdAt)).length,

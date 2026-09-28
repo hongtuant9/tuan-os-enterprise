@@ -232,8 +232,8 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
       <section id="data-source-map" className="rounded-xl border border-[#dce8f4] bg-white p-4">
         <h2 className="text-[14px] font-extrabold text-[#102456]">2. Bản đồ nguồn dữ liệu (Data Source Map)</h2>
         <p className="mt-1 text-[10px] text-[#7185a5]">Supabase là canonical runtime Personal Finance sau migration; Sheet gia đình là nguồn lịch sử/planning/evidence. FIN-HOSPITALITY-001 chỉ là Business Finance.</p>
-        <div className="mt-3 overflow-x-auto"><table className="min-w-[1050px] w-full text-[10px]"><thead className="bg-[#f3f7fb] text-[#466084]"><tr>{["Metric","Authority","Bảng nguồn","View/query","Calculation","CEO cập nhật"].map(x=><th key={x} className="p-2 text-left">{x}</th>)}</tr></thead><tbody>
-          {sourceMap.map((r)=><tr key={r[0]} className="border-t">{r.map((x,i)=><td key={i} className="p-2 align-top">{x}</td>)}</tr>)}
+        <div className="mt-3 overflow-x-auto"><table className="min-w-[1050px] w-full text-[10px] text-[#17233d]"><thead className="bg-[#f3f7fb] text-[#294567]"><tr>{["Metric","Authority","Bảng nguồn","View/query","Calculation","CEO cập nhật"].map(x=><th key={x} className="p-2 text-left font-bold">{x}</th>)}</tr></thead><tbody className="text-[#17233d]">
+          {sourceMap.map((r)=><tr key={r[0]} className="border-t border-[#dce8f4] bg-white text-[#17233d]">{r.map((x,i)=><td key={i} className="p-2 align-top text-[#17233d]">{x}</td>)}</tr>)}
         </tbody></table></div>
       </section>
 

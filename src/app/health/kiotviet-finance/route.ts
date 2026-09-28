@@ -47,6 +47,7 @@ function publicSummary(snapshot: FinanceBotSnapshot | null) {
           parsedRowCount: cashbook.diagnostics.parsedRowCount,
           unparsedRowShapes: cashbook.diagnostics.unparsedRowShapes,
           unparsedRowTokens: cashbook.diagnostics.unparsedRowTokens ?? [],
+          unparsedRowDetailDiagnostics: cashbook.diagnostics.unparsedRowDetailDiagnostics ?? [],
           exportControlLabels: cashbook.diagnostics.exportControlLabels ?? [],
           exportCapture: cashbook.diagnostics.exportCapture ?? null,
           scrollContainers: cashbook.diagnostics.scrollContainers,

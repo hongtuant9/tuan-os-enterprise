@@ -82,13 +82,14 @@ export async function getMarketingCommandCenterSnapshot(
   try {
     const [
       metricResult, channelResult, campaignResult, contentResult,
-      attributionResult, connectorResult, recommendationResult, intelligenceResult,
+      attributionResult, bookingRuntimeResult, connectorResult, recommendationResult, intelligenceResult,
     ] = await Promise.all([
       db.from("marketing_daily_metrics").select("*").gte("metric_date", from).lte("metric_date", to),
       db.from("marketing_channels").select("*").order("display_name", { ascending: true }),
       db.from("marketing_campaigns").select("*").order("updated_at", { ascending: false }).limit(50),
       db.from("marketing_content_items").select("*").order("updated_at", { ascending: false }).limit(50),
       db.from("marketing_attribution_events").select("*").gte("occurred_at", from + "T00:00:00+07:00").lte("occurred_at", to + "T23:59:59.999+07:00").order("occurred_at", { ascending: false }).limit(500),
+      db.from("hospitality_bookings").select("id,verified_revenue,revenue_verification_status,purchase_at").gte("purchase_at", from + "T00:00:00+07:00").lte("purchase_at", to + "T23:59:59.999+07:00").limit(5000),
       db.from("marketing_connectors").select("*").order("display_name", { ascending: true }),
       db.from("marketing_recommendations").select("*").in("status", ["OPEN", "ACKNOWLEDGED", "APPROVED"]).order("generated_at", { ascending: false }).limit(20),
       db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-market-intelligence").order("synced_at", { ascending: false }).limit(20),
@@ -101,6 +102,7 @@ export async function getMarketingCommandCenterSnapshot(
     const contentRows = rows(contentResult)
       .sort((a, b) => s(a.content_id).localeCompare(s(b.content_id)));
     const attributionRows = rows(attributionResult);
+    const bookingRuntimeRows = rows(bookingRuntimeResult);
     const connectorRows = rows(connectorResult);
     const recommendationRows = rows(recommendationResult);
     const intelligenceRows = rows(intelligenceResult);
@@ -113,14 +115,37 @@ export async function getMarketingCommandCenterSnapshot(
     const leads = total("leads");
     const spend = total("spend");
     const revenue = total("revenue");
+    const paidChannelIds = new Set(["google_ads", "meta_ads"]);
+    const paidChannels = channels.filter((row) => paidChannelIds.has(row.channelId));
+    const paidSpend = paidChannels.reduce((sum, row) => sum + row.spend, 0);
+    const paidLeads = paidChannels.reduce((sum, row) => sum + row.leads, 0);
+    const paidRevenue = paidChannels.reduce((sum, row) => sum + row.revenue, 0);
     const attributableEvents = attributionRows.filter((row) => ["inquiry","lead","booking","upsell","revenue"].includes(s(row.event_type)));
     const taggedEvents = attributableEvents.filter((row) => Boolean(
       s(row.utm_source) || s(row.utm_campaign) || s(row.source) || s(row.journey_id)
     ));
     const eventSourceCoverage = attributableEvents.length ? taggedEvents.length / attributableEvents.length : null;
-    // Revenue attribution coverage must use VERIFIED business revenue as denominator.
-    // Until booking/payment revenue authority is linked into this read model, fail closed.
-    const attributionCoverage: number | null = null;
+    const verifiedBusinessRevenue = bookingRuntimeRows
+      .filter((row) => s(row.revenue_verification_status) === "VERIFIED")
+      .reduce((sum, row) => sum + n(row.verified_revenue), 0);
+    const attributedVerifiedRevenue = attributionRows
+      .filter((row) =>
+        s(row.event_type) === "revenue" &&
+        s(row.verification_status) === "VERIFIED" &&
+        ["DIRECT_VERIFIED","ASSISTED_VERIFIED"].includes(s(row.attribution_status)) &&
+        Boolean(s(row.hospitality_booking_id))
+      )
+      .reduce((sum, row) => sum + n(row.revenue_amount), 0);
+    const attributionCoverage = verifiedBusinessRevenue > 0
+      ? Math.min(1, attributedVerifiedRevenue / verifiedBusinessRevenue)
+      : null;
+    const paidAttributionReady = attributionRows.some((row) =>
+      s(row.event_type) === "revenue" &&
+      s(row.verification_status) === "VERIFIED" &&
+      paidChannelIds.has(s(row.channel_id)) &&
+      Boolean(s(row.hospitality_booking_id)) &&
+      Boolean(s(row.gclid) || s(row.gbraid) || s(row.wbraid) || s(row.utm_source) || s(row.utm_campaign))
+    );
 
     const reachConnectors = new Set(["google_ads","meta_ads","facebook_organic","instagram_organic","google_business_profile"]);
     const spendConnectors = new Set(["google_ads","meta_ads"]);
@@ -146,8 +171,8 @@ export async function getMarketingCommandCenterSnapshot(
         bookings: total("bookings"),
         spend,
         revenue,
-        cpa: leads > 0 && spendVerified ? spend / leads : null,
-        roas: spend > 0 && spendVerified && revenueVerified ? revenue / spend : null,
+        cpa: paidLeads > 0 && paidSpend > 0 && spendVerified && paidAttributionReady ? paidSpend / paidLeads : null,
+        roas: paidSpend > 0 && spendVerified && revenueVerified && paidAttributionReady ? paidRevenue / paidSpend : null,
         reachVerified,
         spendVerified,
         revenueVerified,

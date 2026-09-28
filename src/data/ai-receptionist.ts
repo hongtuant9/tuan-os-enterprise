@@ -153,7 +153,16 @@ export type PilotMessageInput = {
   scenarioTag?: string;
   acquisitionSource?: string;
   utmSource?: string;
+  utmMedium?: string;
   utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  gaClientId?: string;
+  gaSessionId?: string;
+  selfReportedSource?: string;
   referralSource?: string;
   pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
   carePhase?: CustomerCarePhase;

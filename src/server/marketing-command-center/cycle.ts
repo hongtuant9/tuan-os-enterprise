@@ -6,7 +6,7 @@ import { syncKiotVietHotelBookings } from "./kiotviet-hotel-sync";
 import { materializeHospitalityLeads } from "./lead-sync";
 import { syncGoogleAdsDaily } from "./google-ads-sync";
 
-type DbError = { message?: string } | null;
+type DbError = { message?: string; code?: string } | null;
 type DbResult = { data?: unknown; error?: DbError };
 type Query = PromiseLike<DbResult> & {
   select(columns?: string): Query;
@@ -386,7 +386,13 @@ async function syncRuntimeAttribution(db: UntypedDb, now: Date) {
       ad_group: str(metadata.ad_group) || null,
       ad: str(metadata.ad) || null,
       self_reported_source: selfReportedSource || null,
-      attribution_status: selfReportedSource ? "SELF_REPORTED" : source ? "DIRECT_VERIFIED" : "UNATTRIBUTED",
+      attribution_status: (str(metadata.gclid) || str(metadata.gbraid) || str(metadata.wbraid) || str(metadata.utm_source) || str(metadata.utm_campaign))
+        ? "DIRECT_VERIFIED"
+        : selfReportedSource
+          ? "SELF_REPORTED"
+          : source
+            ? "NEED_VERIFY"
+            : "UNATTRIBUTED",
       revenue_amount: 0,
       currency: "VND",
       verification_status: "VERIFIED",
@@ -662,7 +668,7 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
   const db = dbOf(container.db);
   const nowIso = now.toISOString();
   const runtimeRunId = randomUUID();
-  await db.from("marketing_sync_runs").insert({
+  const runInsert = await db.from("marketing_sync_runs").insert({
     id: runtimeRunId,
     connector_id: "hospitality_crm",
     run_type: "runtime",
@@ -670,6 +676,30 @@ export async function runMarketingCommandCenterCycle(now = new Date()): Promise<
     started_at: nowIso,
     metadata: { cycle: "TCE Marketing Command Center V1" },
   });
+  if (runInsert.error) {
+    const duplicate = runInsert.error.code === "23505" || (runInsert.error.message ?? "").toLowerCase().includes("duplicate key");
+    if (!duplicate) throw new Error(runInsert.error.message || "MARKETING_CYCLE_LOCK_FAILED");
+    const connectorResult = await db.from("marketing_connectors").select("id,status");
+    const connectorRows = rowList(connectorResult);
+    return {
+      ok: true,
+      generatedAt: nowIso,
+      phases: { measurement: "READY", channels: "READY", attribution: "READY", optimization: "READY" },
+      plan: { campaigns: 0, content: 0 },
+      runtime: { conversations: 0, leads: 0, bookings: 0, upsells: 0, metricRows: 0, attributionRows: 0 },
+      kiotvietHotel: { orders: 0, bookings: 0, revenueLinked: 0, customersResolved: 0 },
+      googleAds: { rows: 0, campaigns: 0, spend: 0, clicks: 0 },
+      connectors: {
+        total: connectorRows.length,
+        liveOrReady: connectorRows.filter((row) => ["LIVE","READY"].includes(str(row.status))).length,
+        notConnected: connectorRows.filter((row) => ["NOT_CONNECTED","NEED_VERIFY","HOLD"].includes(str(row.status))).length,
+        errors: connectorRows.filter((row) => str(row.status) === "ERROR").length,
+      },
+      recommendations: 0,
+      reportSnapshots: 0,
+      changed: false,
+    };
+  }
 
   let plan = { campaigns: 0, content: 0 };
   let runtime = { conversations: 0, leads: 0, bookings: 0, upsells: 0, metricRows: 0, attributionRows: 0 };

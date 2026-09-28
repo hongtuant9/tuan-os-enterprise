@@ -67,6 +67,7 @@ export type FinanceBotSnapshot = {
       rawRowCount: number;
       parsedRowCount: number;
       unparsedRowShapes: string[];
+      unparsedRowTokens?: Array<{ codeTokens: string[]; numericTokens: string[] }>;
       scrollContainers: Array<{
         tag: string;
         className: string;
@@ -848,16 +849,16 @@ async function cashbookSnapshot(page: Page) {
 
   const rawRows = [...seen.values()];
   const parsedRows = rawRows.map(parseCashbookRowText).filter((row): row is NonNullable<typeof row> => Boolean(row));
-  const unparsedRowShapes = rawRows
-    .filter((row) => !parseCashbookRowText(row))
-    .slice(0, 5)
-    .map((row) =>
-      row
-        .replace(/\p{L}+/gu, "X")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 240)
-    );
+  const unparsedRows = rawRows.filter((row) => !parseCashbookRowText(row)).slice(0, 5);
+  const unparsedRowShapes = unparsedRows.map((row) =>
+    row.replace(/\p{L}+/gu, "X").replace(/\s+/g, " ").trim().slice(0, 240)
+  );
+  // Safe diagnostics for parser work: preserve only code-like and numeric tokens.
+  // Names/descriptions are intentionally omitted.
+  const unparsedRowTokens = unparsedRows.map((row) => ({
+    codeTokens: row.match(/\b[A-Za-z]{1,6}\d{3,}\b/g)?.slice(0, 8) ?? [],
+    numericTokens: row.match(/-?\d[\d.,]*/g)?.slice(0, 24) ?? [],
+  }));
   const scrollContainers = await page.evaluate(() =>
     Array.from(document.querySelectorAll("*"))
       .map((el) => {
@@ -980,6 +981,7 @@ async function cashbookSnapshot(page: Page) {
       rawRowCount: rawRows.length,
       parsedRowCount: parsedRows.length,
       unparsedRowShapes,
+      unparsedRowTokens,
       scrollContainers,
       kendoDataSources,
     },

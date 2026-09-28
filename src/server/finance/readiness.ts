@@ -31,6 +31,8 @@ export type FinanceFoundationReadiness = {
     verifiedSoldSkuCount: number;
     soldSkuCoveragePct: number;
     soldSkuBomReadyPct: number;
+    unmatchedSoldSkus: Array<{ code: string; name: string }>;
+    matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string }>;
   };
   ap: {
     purchaseOrdersReadable: boolean;
@@ -173,11 +175,17 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
     const menuByName = new Map(menuRows.map((row) => [normalizeName(row[3]), row]));
     let matchedSoldSkuCount = 0;
     let verifiedSoldSkuCount = 0;
+    const unmatchedSoldSkus: Array<{ code: string; name: string }> = [];
+    const matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string }> = [];
     for (const sold of soldFnbSkus.values()) {
       const row = (sold.code && menuByCode.get(sold.code)) || menuByName.get(normalizeName(sold.name));
-      if (!row) continue;
+      if (!row) {
+        unmatchedSoldSkus.push({ code: sold.code, name: sold.name });
+        continue;
+      }
       matchedSoldSkuCount += 1;
       if (isProductionReadyBom(text(row[11]))) verifiedSoldSkuCount += 1;
+      else matchedButUnverifiedSoldSkus.push({ code: sold.code, name: sold.name, bomStatus: text(row[11]) || "MISSING" });
     }
     const soldSkuCount = soldFnbSkus.size;
     const soldSkuCoveragePct = soldSkuCount ? (matchedSoldSkuCount / soldSkuCount) * 100 : 0;
@@ -230,6 +238,8 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         verifiedSoldSkuCount,
         soldSkuCoveragePct,
         soldSkuBomReadyPct,
+        unmatchedSoldSkus: unmatchedSoldSkus.slice(0, 50),
+        matchedButUnverifiedSoldSkus: matchedButUnverifiedSoldSkus.slice(0, 200),
       },
       ap: {
         purchaseOrdersReadable,
@@ -259,6 +269,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
         verifiedIngredients: 0,
         ingredientCoveragePct: 0,
         soldSkuCount: 0, matchedSoldSkuCount: 0, verifiedSoldSkuCount: 0, soldSkuCoveragePct: 0, soldSkuBomReadyPct: 0,
+        unmatchedSoldSkus: [], matchedButUnverifiedSoldSkus: [],
       },
       ap: {
         purchaseOrdersReadable: false,

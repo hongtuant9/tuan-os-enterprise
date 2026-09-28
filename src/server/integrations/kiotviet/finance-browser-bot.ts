@@ -994,6 +994,23 @@ async function cashbookSnapshot(page: Page) {
     itemKeys: string[];
     sampleShapes: string[];
   }>);
+  const detailEvidenceRows = unparsedRowDetailDiagnostics
+    .filter((item) => item.opened && item.dateTokens.length > 0 && item.amountTokens.length > 0)
+    .map((item) => {
+      const amount = Math.max(...item.amountTokens.filter((value) => Math.abs(value) >= 1000 && Math.abs(value) < 1_000_000_000));
+      if (!Number.isFinite(amount) || amount <= 0) return null;
+      return {
+        id: item.code,
+        transDate: item.dateTokens[0],
+        amount: Math.abs(amount),
+        isReceipt: item.receiptLabelVisible && !item.paymentLabelVisible ? true : item.paymentLabelVisible && !item.receiptLabelVisible ? false : null,
+        groupLabel: "DETAIL_EVIDENCE",
+        status: "Đã thanh toán",
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .filter((row) => !parsedRows.some((existing) => existing.id === row.id));
+  const reconciliationRows = [...parsedRows, ...detailEvidenceRows];
   const openingBalance = metric("Quỹ đầu kỳ");
   const totalReceipts = metric("Tổng thu");
   const totalPayments = metric("Tổng chi");
@@ -1003,7 +1020,7 @@ async function cashbookSnapshot(page: Page) {
     totalReceipts,
     totalPayments,
     closingBalance,
-    rows: parsedRows,
+    rows: reconciliationRows,
   });
   const paginationEvidence =
     reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows;
@@ -1019,10 +1036,11 @@ async function cashbookSnapshot(page: Page) {
     reportedTotalRows,
     paginationComplete: paginationEvidence && reconciliation.verified,
     reconciliation,
-    rows: parsedRows,
+    rows: reconciliationRows,
     diagnostics: {
       rawRowCount: rawRows.length,
       parsedRowCount: parsedRows.length,
+      detailEvidenceRowCount: detailEvidenceRows.length,
       unparsedRowShapes,
       unparsedRowTokens,
       unparsedRowDetailDiagnostics,

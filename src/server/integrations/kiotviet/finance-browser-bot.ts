@@ -73,6 +73,8 @@ export type FinanceBotSnapshot = {
         opened: boolean;
         receiptLabelVisible: boolean;
         paymentLabelVisible: boolean;
+        containerFound?: boolean;
+        containerTextShape?: string;
         amountTokens: number[];
         dateTokens: string[];
       }>;
@@ -1151,8 +1153,8 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
 async function readCashbookVoucherDetailDiagnostics(
   page: Page,
   codeTokens: string[]
-): Promise<Array<{ code: string; opened: boolean; receiptLabelVisible: boolean; paymentLabelVisible: boolean; amountTokens: number[]; dateTokens: string[] }>> {
-  const results: Array<{ code: string; opened: boolean; receiptLabelVisible: boolean; paymentLabelVisible: boolean; amountTokens: number[]; dateTokens: string[] }> = [];
+): Promise<Array<{ code: string; opened: boolean; receiptLabelVisible: boolean; paymentLabelVisible: boolean; containerFound: boolean; containerTextShape: string; amountTokens: number[]; dateTokens: string[] }>> {
+  const results: Array<{ code: string; opened: boolean; receiptLabelVisible: boolean; paymentLabelVisible: boolean; containerFound: boolean; containerTextShape: string; amountTokens: number[]; dateTokens: string[] }> = [];
   for (const code of Array.from(new Set(codeTokens)).slice(0, 5)) {
     const opened = await page.evaluate((targetCode) => {
       const visible=(el:Element)=>{const n=el as HTMLElement,s=getComputedStyle(n),r=n.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>2&&r.height>2;};
@@ -1162,18 +1164,29 @@ async function readCashbookVoucherDetailDiagnostics(
       (target as HTMLElement).click(); return true;
     }, code).catch(() => false);
     await new Promise((resolve)=>setTimeout(resolve,900));
-    const detail = await page.evaluate(() => {
-      const text=(document.body?.innerText||"").replace(/\s+/g," ").trim();
+    const detail = await page.evaluate((targetCode) => {
+      const visible=(el:Element)=>{const n=el as HTMLElement,s=getComputedStyle(n),r=n.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>2&&r.height>2;};
+      const selectors=["[role='dialog']",".k-window",".k-dialog",".modal",".drawer",".offcanvas",".ant-drawer",".ant-modal",".MuiDialog-root"];
+      const overlayCandidates=Array.from(document.querySelectorAll(selectors.join(","))).filter(visible);
+      const codeCandidates=Array.from(document.querySelectorAll("div,section,aside,article,form,tr")).filter(visible).filter((el)=>(el.textContent||"").includes(targetCode));
+      const candidates=[...overlayCandidates,...codeCandidates]
+        .map((el)=>({el,text:((el as HTMLElement).innerText||el.textContent||"").replace(/\s+/g," ").trim()}))
+        .filter((item)=>item.text.length>=20&&item.text.length<=6000);
+      candidates.sort((a,b)=>a.text.length-b.text.length);
+      const chosen=(candidates.find((item)=>item.text.includes(targetCode))||candidates[0])?.text||"";
+      const text=chosen || ((document.body?.innerText||"").replace(/\s+/g," ").trim());
       const numeric=Array.from(new Set((text.match(/-?\d[\d.,]{3,}/g)||[])
         .map((v)=>Number(v.replace(/[^\d-]/g,"")))
         .filter((v)=>Number.isFinite(v)&&Math.abs(v)>=1000))).slice(0,40);
       return {
         receiptLabelVisible: /phiếu thu|thu tiền|loại thu|tổng thu/i.test(text),
         paymentLabelVisible: /phiếu chi|chi tiền|loại chi|tổng chi/i.test(text),
+        containerFound: Boolean(chosen),
+        containerTextShape: text.replace(/\p{L}+/gu,"X").replace(/\s+/g," ").trim().slice(0,800),
         amountTokens: numeric,
         dateTokens: Array.from(new Set(text.match(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\b/g)||[])).slice(0,20),
       };
-    }).catch(()=>({receiptLabelVisible:false,paymentLabelVisible:false,amountTokens:[] as number[],dateTokens:[] as string[]}));
+    }, code).catch(()=>({receiptLabelVisible:false,paymentLabelVisible:false,containerFound:false,containerTextShape:"",amountTokens:[] as number[],dateTokens:[] as string[]}));
     results.push({code,opened,...detail});
     await page.keyboard.press("Escape").catch(()=>undefined);
     await new Promise((resolve)=>setTimeout(resolve,250));

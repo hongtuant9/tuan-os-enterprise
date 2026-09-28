@@ -124,9 +124,13 @@ export async function savePersonalTransaction(form: FormData) {
   const recordId = optionalText(form, "record_id");
   const txTypeCode = requiredText(form, "transaction_type");
   await masterItem(db, "TRANSACTION_TYPE", txTypeCode);
-  const categoryCode = requiredText(form, "category_code");
-  const categoryType: MasterType = txTypeCode === "INCOME" ? "INCOME_CATEGORY" : "EXPENSE_CATEGORY";
-  const category = await masterItem(db, categoryType, categoryCode);
+  const categoryCode = optionalText(form, "category_code");
+  let category = { code: categoryCode ?? "", name: txTypeCode === "TRANSFER" ? "Chuyển nội bộ" : txTypeCode === "DEBT_PAYMENT" ? "Trả nợ" : "Khác" };
+  if (txTypeCode === "INCOME" || txTypeCode === "EXPENSE") {
+    if (!categoryCode) throw new Error("Danh mục là bắt buộc cho giao dịch Thu/Chi.");
+    const categoryType: MasterType = txTypeCode === "INCOME" ? "INCOME_CATEGORY" : "EXPENSE_CATEGORY";
+    category = await masterItem(db, categoryType, categoryCode);
+  }
   const accountId = optionalText(form, "account_id");
   if (accountId) {
     const { data: account, error } = await db.from("personal_finance_accounts").select("id").eq("id", accountId).eq("record_status","ACTIVE").maybeSingle();
@@ -138,7 +142,7 @@ export async function savePersonalTransaction(form: FormData) {
     transaction_date: requiredText(form, "transaction_date"),
     transaction_type: txTypeCode,
     category: category.name,
-    category_code: category.code,
+    category_code: category.code || null,
     subcategory_code: optionalText(form, "subcategory_code"),
     account_id: accountId,
     description: optionalText(form, "description"),

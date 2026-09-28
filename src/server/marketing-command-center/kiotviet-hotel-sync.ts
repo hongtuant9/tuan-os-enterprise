@@ -294,25 +294,27 @@ export async function syncKiotVietHotelBookings(
       if (revenueVerified) metric.revenue += revenue?.verifiedRevenue ?? 0;
       daily.set(key, metric);
     }
-    const bookingEvent = {
-      external_event_key: "kiotviet-booking:" + order.sourceBookingUuid,
-      occurred_at: order.purchaseAt || order.sourceCreatedAt || nowIso,
-      customer_id: customerId,
-      hospitality_booking_id: hospitalityBookingId,
-      channel_id: channel,
-      event_type: "booking",
-      touch_type: "LAST",
-      source: saleChannelName || "KiotViet Hotel",
-      attribution_status: saleChannelName ? "DIRECT_VERIFIED" : "UNATTRIBUTED",
-      revenue_amount: 0,
-      currency: "VND",
-      verification_status: "VERIFIED",
-      evidence_source: "KiotViet Hotel /public/order/list",
-      metadata: { source_booking_uuid: order.sourceBookingUuid, booking_status: order.bookingStatus },
-    };
-    const bookingEventResult = await db.from("marketing_attribution_events")
-      .upsert(bookingEvent, { onConflict: "external_event_key" });
-    if (bookingEventResult.error) throw new Error(bookingEventResult.error.message || "BOOKING_ATTRIBUTION_UPSERT_FAILED");
+    if (order.bookingStatus === "CONFIRMED" || order.bookingStatus === "COMPLETED") {
+      const bookingEvent = {
+        external_event_key: "kiotviet-booking:" + order.sourceBookingUuid,
+        occurred_at: order.purchaseAt || order.sourceCreatedAt || nowIso,
+        customer_id: customerId,
+        hospitality_booking_id: hospitalityBookingId,
+        channel_id: channel,
+        event_type: "booking",
+        touch_type: "LAST",
+        source: saleChannelName || "KiotViet Hotel",
+        attribution_status: saleChannelName ? "DIRECT_VERIFIED" : "UNATTRIBUTED",
+        revenue_amount: 0,
+        currency: "VND",
+        verification_status: "VERIFIED",
+        evidence_source: "KiotViet Hotel /public/order/list",
+        metadata: { source_booking_uuid: order.sourceBookingUuid, booking_status: order.bookingStatus },
+      };
+      const bookingEventResult = await db.from("marketing_attribution_events")
+        .upsert(bookingEvent, { onConflict: "external_event_key" });
+      if (bookingEventResult.error) throw new Error(bookingEventResult.error.message || "BOOKING_ATTRIBUTION_UPSERT_FAILED");
+    }
 
     if (revenueVerified && (revenue?.verifiedRevenue ?? 0) > 0) {
       const revenueEventResult = await db.from("marketing_attribution_events").upsert({

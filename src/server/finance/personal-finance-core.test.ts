@@ -5,6 +5,7 @@ import {
   outstandingDebt,
   personalExpenseActual,
   personalIncomeFromBusiness,
+  personalMetricState,
   validatePurchaseDraft,
 } from "./personal-finance-core.ts";
 

@@ -64,6 +64,19 @@ set verification_evidence = coalesce(verification_evidence,'Owner-approved goal 
     source_updated_at = coalesce(source_updated_at,timestamptz '2026-08-12 00:00:00+07')
 where verification_status='VERIFIED' and source_reference='03_TaiSan_MucTieu_FI!B19';
 
+alter table public.personal_finance_accounts add constraint personal_finance_accounts_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+alter table public.personal_finance_transactions add constraint personal_finance_transactions_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+alter table public.personal_finance_debts add constraint personal_finance_debts_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+alter table public.personal_finance_assets add constraint personal_finance_assets_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+alter table public.personal_finance_goals add constraint personal_finance_goals_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+alter table public.owner_business_transfers add constraint owner_business_transfers_verified_evidence_ck
+  check (verification_status <> 'VERIFIED' or (nullif(trim(verification_evidence),'') is not null and verified_at is not null and source_updated_at is not null));
+
 create unique index if not exists personal_finance_accounts_source_external_uq
   on public.personal_finance_accounts(source,external_key);
 create unique index if not exists personal_finance_transactions_source_external_uq
@@ -155,9 +168,9 @@ begin
   ]
   loop
     execute format('revoke delete on public.%I from authenticated',t);
-    execute format('create policy %L on public.%I for select to authenticated using (public.is_personal_finance_owner())',t||' owner select',t);
-    execute format('create policy %L on public.%I for insert to authenticated with check (public.is_personal_finance_owner())',t||' owner insert',t);
-    execute format('create policy %L on public.%I for update to authenticated using (public.is_personal_finance_owner()) with check (public.is_personal_finance_owner())',t||' owner update',t);
+    execute format('create policy %I on public.%I for select to authenticated using (public.is_personal_finance_owner())',t||' owner select',t);
+    execute format('create policy %I on public.%I for insert to authenticated with check (public.is_personal_finance_owner())',t||' owner insert',t);
+    execute format('create policy %I on public.%I for update to authenticated using (public.is_personal_finance_owner()) with check (public.is_personal_finance_owner())',t||' owner update',t);
   end loop;
 end $$;
 

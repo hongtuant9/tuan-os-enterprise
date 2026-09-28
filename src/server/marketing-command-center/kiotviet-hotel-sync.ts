@@ -194,8 +194,12 @@ export async function syncKiotVietHotelBookings(
   if (!saleChannelsResult.ok) throw new Error("KIOTVIET_SALE_CHANNEL_HTTP_" + saleChannelsResult.status);
   if (aiBookingsResult.error) throw new Error(aiBookingsResult.error.message || "AI_BOOKING_READ_FAILED");
 
-  const orders = ordersRaw.map(normalizeKiotVietHotelOrder).filter((v): v is NonNullable<typeof v> => Boolean(v));
+  const normalizedOrders = ordersRaw.map(normalizeKiotVietHotelOrder).filter((v): v is NonNullable<typeof v> => Boolean(v));
   const revenueMap = invoiceRevenueByOrderUuid(invoices);
+  const orders = normalizedOrders.map((order) => ({
+    ...order,
+    sourceCustomerId: order.sourceCustomerId ?? revenueMap.get(order.sourceBookingUuid)?.customerId ?? null,
+  }));
   const saleChannels = saleChannelNameMap(saleChannelsResult.data);
   const aiBookings = rows(aiBookingsResult);
   const aiByUuid = new Map<string, Row>(

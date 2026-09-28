@@ -151,15 +151,30 @@ export async function savePersonalTransaction(form: FormData) {
     if (!account) throw new Error("Tài khoản không hợp lệ hoặc đã ngừng sử dụng.");
   }
   const now = nowIso();
+  const transactionDate = validDate(form, "transaction_date");
+  const transactionAmount = amount(form, "amount", false);
+  if (!recordId) {
+    let duplicateQuery = db.from("personal_finance_transactions")
+      .select("id")
+      .eq("transaction_date", transactionDate)
+      .eq("transaction_type", txTypeCode)
+      .eq("amount", transactionAmount)
+      .eq("record_status","ACTIVE");
+    if (category.code) duplicateQuery = duplicateQuery.eq("category_code", category.code);
+    if (accountId) duplicateQuery = duplicateQuery.eq("account_id", accountId);
+    const { data: duplicate, error: dupError } = await duplicateQuery.limit(1);
+    if (dupError) throw new Error(dupError.message);
+    if (duplicate?.length) throw new Error("Phát hiện giao dịch có khả năng trùng. Hãy kiểm tra bản ghi hiện có trước khi lưu.");
+  }
   const payload = {
-    transaction_date: validDate(form, "transaction_date"),
+    transaction_date: transactionDate,
     transaction_type: txTypeCode,
     category: category.name,
     category_code: category.code || null,
     subcategory_code: optionalText(form, "subcategory_code"),
     account_id: accountId,
     description: optionalText(form, "description"),
-    amount: amount(form, "amount", false),
+    amount: transactionAmount,
     currency_code: "VND",
     payment_method_code: optionalText(form, "payment_method_code"),
     income_source_code: optionalText(form, "income_source_code"),

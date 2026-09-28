@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/supabase/types";
 import {
   fetchFnbRevenueActual,
   fetchHotelRevenueActual,
@@ -118,8 +119,8 @@ export async function syncKiotVietRevenueRangeToSupabase(fromInput: string, toIn
     ]);
 
     const writes = [
-      { source_key: "kiotviet_hotel_invoices", external_id: date, target_table: "kiotviet_daily_revenue", target_id: null, data: hotel, synced_at: new Date().toISOString() },
-      { source_key: "kiotviet_fnb_invoices", external_id: date, target_table: "kiotviet_daily_revenue", target_id: null, data: fnb, synced_at: new Date().toISOString() },
+      { source_key: "kiotviet_hotel_invoices", external_id: date, target_table: "kiotviet_daily_revenue", target_id: null, data: hotel as unknown as Json, synced_at: new Date().toISOString() },
+      { source_key: "kiotviet_fnb_invoices", external_id: date, target_table: "kiotviet_daily_revenue", target_id: null, data: fnb as unknown as Json, synced_at: new Date().toISOString() },
     ];
     const { error } = await db.from("sync_records").upsert(writes, { onConflict: "source_key,external_id" });
     if (error) throw error;

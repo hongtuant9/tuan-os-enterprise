@@ -134,7 +134,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       }),
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: COST_ID,
-        ranges: ["'01_DANH_MỤC_MÓN'!A1:L220", "'05_NGUYÊN_LIỆU'!A1:J220"],
+        ranges: ["'01_DANH_MỤC_MÓN'!A1:L220", "'05_NGUYÊN_LIỆU'!A1:J220", "'09_BOM_CHI_TIẾT'!A1:M1001"],
         valueRenderOption: "FORMATTED_VALUE",
       }),
       readInventoryBotSummary("FNB"),
@@ -173,19 +173,32 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
     const productionReadyItems = menuRows.filter((row) => isProductionReadyBom(text(row[11]))).length;
     const menuByCode = new Map(menuRows.map((row) => [text(row[1]), row]));
     const menuByName = new Map(menuRows.map((row) => [normalizeName(row[3]), row]));
+    const bomDetailRows = ((cost.data.valueRanges?.[2]?.values ?? []) as unknown[][])
+      .slice(1)
+      .filter((row) => Boolean(text(row[0])) && Boolean(text(row[1])));
+    const bomByCode = new Map<string, unknown[]>();
+    const bomByName = new Map<string, unknown[]>();
+    for (const row of bomDetailRows) {
+      const code = text(row[0]);
+      const name = normalizeName(row[1]);
+      if (code && !bomByCode.has(code)) bomByCode.set(code, row);
+      if (name && !bomByName.has(name)) bomByName.set(name, row);
+    }
     let matchedSoldSkuCount = 0;
     let verifiedSoldSkuCount = 0;
     const unmatchedSoldSkus: Array<{ code: string; name: string }> = [];
     const matchedButUnverifiedSoldSkus: Array<{ code: string; name: string; bomStatus: string }> = [];
     for (const sold of soldFnbSkus.values()) {
-      const row = (sold.code && menuByCode.get(sold.code)) || menuByName.get(normalizeName(sold.name));
-      if (!row) {
+      const menuRow = (sold.code && menuByCode.get(sold.code)) || menuByName.get(normalizeName(sold.name));
+      const bomRow = (sold.code && bomByCode.get(sold.code)) || bomByName.get(normalizeName(sold.name));
+      if (!menuRow && !bomRow) {
         unmatchedSoldSkus.push({ code: sold.code, name: sold.name });
         continue;
       }
       matchedSoldSkuCount += 1;
-      if (isProductionReadyBom(text(row[11]))) verifiedSoldSkuCount += 1;
-      else matchedButUnverifiedSoldSkus.push({ code: sold.code, name: sold.name, bomStatus: text(row[11]) || "MISSING" });
+      const bomStatus = menuRow ? text(menuRow[11]) : text(bomRow?.[12]);
+      if (isProductionReadyBom(bomStatus)) verifiedSoldSkuCount += 1;
+      else matchedButUnverifiedSoldSkus.push({ code: sold.code, name: sold.name, bomStatus: bomStatus || "MISSING" });
     }
     const soldSkuCount = soldFnbSkus.size;
     const soldSkuCoveragePct = soldSkuCount ? (matchedSoldSkuCount / soldSkuCount) * 100 : 0;
@@ -250,7 +263,7 @@ export async function readFinanceFoundationReadiness(): Promise<FinanceFoundatio
       checkedAt,
       notes: [
         "Expense coverage excludes Budget/Forecast and counts only required Actual rows.",
-        "COGS Gate uses actual sold-SKU coverage for the current period × COST-001 BOM status; unsold catalog items remain governance backlog but do not block period COGS. Test/pending BOM is never accepted as VERIFIED.",
+        "COGS Gate uses actual sold-SKU coverage for the current period × COST-001 canonical BOM status. Mapping uses 01_DANH_MỤC_MÓN with 09_BOM_CHI_TIẾT as fallback for sold variants/combos; test/pending BOM is never accepted as VERIFIED.",
         apCandidate.state === "VERIFIED"
           ? "AP candidate reconciled: Purchase Orders Cần trả NCC = Supplier Nợ cần trả hiện tại for all readable systems."
           : "Readable Purchase Orders/Suppliers proves source access; AP remains NEED_VERIFY until visible structured rows reconcile. " +

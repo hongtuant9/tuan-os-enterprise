@@ -41,3 +41,17 @@ export function validatePurchaseDraft(input: {
     commitPerformed: false,
   };
 }
+
+
+export function personalMetricState(input: {
+  verifiedRowCount: number;
+  unverifiedRowCount?: number;
+  sourceUpdatedAt?: string | null;
+  currentPeriodStart?: string;
+}) {
+  if (input.verifiedRowCount <= 0) return "NEED_VERIFY" as const;
+  if ((input.unverifiedRowCount ?? 0) > 0) return "NEED_VERIFY" as const;
+  if (!input.sourceUpdatedAt) return "NEED_VERIFY" as const;
+  if (input.currentPeriodStart && input.sourceUpdatedAt.slice(0, 10) < input.currentPeriodStart) return "STALE" as const;
+  return "VERIFIED" as const;
+}

@@ -93,7 +93,18 @@ function FormShell({ id, title, children, disabled }: { id: string; title: strin
 
 const inputClass = "w-full rounded-md border border-[#9fb4cf] bg-white px-2 py-2 text-[11px] text-[#183252] placeholder:text-[#6b7f9b] disabled:bg-[#edf2f7] disabled:text-[#75869f] focus:border-[#1769d2] focus:outline-none";
 
-export default async function PersonalFinancePage() {
+type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+export default async function PersonalFinancePage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const editType = firstParam(params.editType);
+  const editId = firstParam(params.editId);
+  const listQuery = firstParam(params.q).trim().toLocaleLowerCase("vi");
+  const listStatus = firstParam(params.status).trim();
   const db = await createClient();
   const { data: auth } = await db.auth.getUser();
   if (!auth.user) redirect("/login");
@@ -138,6 +149,24 @@ export default async function PersonalFinancePage() {
   const institutions = activeMaster("INSTITUTION");
   const debtTypes = activeMaster("DEBT_TYPE");
   const assetTypes = activeMaster("ASSET_TYPE");
+
+  const editTransaction = editType === "transaction" ? transactions.find((x)=>String(x.id)===editId) ?? null : null;
+  const editAccount = editType === "account" ? accounts.find((x)=>String(x.id)===editId) ?? null : null;
+  const editDebt = editType === "debt" ? debts.find((x)=>String(x.id)===editId) ?? null : null;
+  const editAsset = editType === "asset" ? assets.find((x)=>String(x.id)===editId) ?? null : null;
+  const editTransfer = editType === "transfer" ? transfers.find((x)=>String(x.id)===editId) ?? null : null;
+  const editMaster = editType === "master" ? masterData.find((x)=>String(x.id)===editId) ?? null : null;
+
+  const matchesList = (row: Row) => {
+    const haystack = Object.values(row).map((v)=>String(v ?? "")).join(" ").toLocaleLowerCase("vi");
+    const status = String(row.record_status ?? row.status ?? row.verification_status ?? "ACTIVE");
+    return (!listQuery || haystack.includes(listQuery)) && (!listStatus || listStatus === "ALL" || status === listStatus);
+  };
+  const filteredTransactions = transactions.filter(matchesList);
+  const filteredAccounts = accounts.filter(matchesList);
+  const filteredDebts = debts.filter(matchesList);
+  const filteredAssets = assets.filter(matchesList);
+  const filteredTransfers = transfers.filter(matchesList);
 
   const assetSourceAt = latest([...assets,...accounts],"source_updated_at");
   const debtSourceAt = latest(debts,"source_updated_at");
@@ -224,11 +253,16 @@ export default async function PersonalFinancePage() {
       <section className="rounded-xl border border-[#dce8f4] bg-white p-4">
         <h2 className="text-[14px] font-extrabold text-[#102456]">9. Danh sách dữ liệu & thao tác an toàn</h2>
         <p className="mt-1 text-[10px] text-[#445b7d]">Không hard delete. Giao dịch/transfer dùng Hủy; account/asset/debt dùng Ngừng sử dụng/HOLD. Mọi thao tác ghi lý do và audit before/after.</p>
+        <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px_auto]" action="/personal-finance">
+          <input className={inputClass} name="q" defaultValue={firstParam(params.q)} placeholder="Tìm theo tên, ngày, danh mục, số tiền..."/>
+          <select className={inputClass} name="status" defaultValue={listStatus || "ALL"}><option value="ALL">Tất cả trạng thái</option><option value="ACTIVE">ACTIVE</option><option value="NEED_VERIFY">NEED_VERIFY</option><option value="VERIFIED">VERIFIED</option><option value="HOLD">HOLD</option><option value="VOIDED">VOIDED</option><option value="INACTIVE">INACTIVE</option></select>
+          <button className="rounded-md bg-[#294b77] px-3 py-2 text-[11px] font-bold text-white">Lọc / tìm</button>
+        </form>
         <div className="mt-3 space-y-3">
-          {[["personal_finance_transactions","Giao dịch",transactions,"transaction_date","amount"],["personal_finance_accounts","Tài khoản",accounts,"name","current_balance"],["personal_finance_debts","Khoản nợ",debts,"name","current_principal"],["personal_finance_assets","Tài sản",assets,"name","value_amount"],["owner_business_transfers","Business ↔ Personal",transfers,"transfer_date","amount"]].map(([table,label,rows,labelKey,amountKey])=><details key={String(table)} className="rounded-lg border border-[#dce8f4] p-3">
+          {[["personal_finance_transactions","Giao dịch",filteredTransactions,"transaction_date","amount"],["personal_finance_accounts","Tài khoản",filteredAccounts,"name","current_balance"],["personal_finance_debts","Khoản nợ",filteredDebts,"name","current_principal"],["personal_finance_assets","Tài sản",filteredAssets,"name","value_amount"],["owner_business_transfers","Business ↔ Personal",filteredTransfers,"transfer_date","amount"]].map(([table,label,rows,labelKey,amountKey])=><details key={String(table)} className="rounded-lg border border-[#dce8f4] p-3">
             <summary className="cursor-pointer text-[11px] font-bold text-[#17345f]">{String(label)} · {(rows as Row[]).length} bản ghi</summary>
             <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px] text-[#243b5f]"><thead className="bg-[#eaf2fb] text-[#17345f]"><tr><th className="p-2 text-left">Bản ghi</th><th className="p-2 text-right">Số tiền</th><th className="p-2">Trạng thái</th><th className="p-2">Cập nhật</th><th className="p-2">Hành động</th></tr></thead><tbody>
-              {(rows as Row[]).map((x)=><tr key={String(x.id)} className="border-t border-[#e4ecf5]"><td className="p-2">{String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}</td><td className="p-2 text-right">{money(x[amountKey as string])}</td><td className="p-2 text-center">{String(x.record_status ?? x.status ?? "ACTIVE")}</td><td className="p-2">{fmtDate(x.updated_at)}</td><td className="p-2"><form action={voidPersonalRecord} className="flex gap-1"><input type="hidden" name="table" value={String(table)}/><input type="hidden" name="record_id" value={String(x.id)}/><input className={inputClass} name="reason" placeholder="Lý do hủy/ngừng" required/><ConfirmSubmitButton className="rounded bg-[#8a2d2d] px-2 py-1 font-bold text-white" label={String(table).includes("transactions")||String(table).includes("transfers")?"Hủy giao dịch":"Ngừng sử dụng"} message="Bạn có chắc muốn hủy/ngừng sử dụng bản ghi này? Bản ghi sẽ được giữ trong lịch sử và audit trail."/></form><a className="ml-2 font-bold text-[#1769d2] hover:underline" href={String(table)==="personal_finance_transactions"?"#input-transaction":String(table)==="personal_finance_accounts"?"#input-account":String(table)==="personal_finance_debts"?"#input-debt":String(table)==="personal_finance_assets"?"#input-asset":"#input-transfer"}>Sửa</a></td></tr>)}
+              {(rows as Row[]).map((x)=><tr key={String(x.id)} className="border-t border-[#e4ecf5]"><td className="p-2">{String(x[labelKey as string] ?? x.category ?? x.name ?? x.id)}</td><td className="p-2 text-right">{money(x[amountKey as string])}</td><td className="p-2 text-center">{String(x.record_status ?? x.status ?? "ACTIVE")}</td><td className="p-2">{fmtDate(x.updated_at)}</td><td className="p-2"><form action={voidPersonalRecord} className="flex gap-1"><input type="hidden" name="table" value={String(table)}/><input type="hidden" name="record_id" value={String(x.id)}/><input className={inputClass} name="reason" placeholder="Lý do hủy/ngừng" required/><ConfirmSubmitButton className="rounded bg-[#8a2d2d] px-2 py-1 font-bold text-white" label={String(table).includes("transactions")||String(table).includes("transfers")?"Hủy giao dịch":"Ngừng sử dụng"} message="Bạn có chắc muốn hủy/ngừng sử dụng bản ghi này? Bản ghi sẽ được giữ trong lịch sử và audit trail."/></form><a className="ml-2 font-bold text-[#1769d2] hover:underline" href={String(table)==="personal_finance_transactions"?`/personal-finance?editType=transaction&editId=${String(x.id)}#input-transaction`:String(table)==="personal_finance_accounts"?`/personal-finance?editType=account&editId=${String(x.id)}#input-account`:String(table)==="personal_finance_debts"?`/personal-finance?editType=debt&editId=${String(x.id)}#input-debt`:String(table)==="personal_finance_assets"?`/personal-finance?editType=asset&editId=${String(x.id)}#input-asset`:`/personal-finance?editType=transfer&editId=${String(x.id)}#input-transfer`}>Sửa</a></td></tr>)}
             </tbody></table></div>
           </details>)}
         </div>
@@ -239,19 +273,20 @@ export default async function PersonalFinancePage() {
         <p className="mt-1 text-[10px] text-[#445b7d]">Supabase Master Data là canonical runtime. Không xóa cứng taxonomy đã dùng; tắt bằng INACTIVE. Code kỹ thuật được giữ trong database, UI hiển thị tên tiếng Việt.</p>
         {migrationMissing ? <p className="mt-3 rounded bg-amber-50 p-3 text-[10px] font-semibold text-amber-800">HOLD tới khi migration Master Data + RLS PASS.</p> : <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
           <form action={saveFinanceMasterData} className="grid grid-cols-2 gap-2 rounded-lg bg-[#f6f9fd] p-3">
-            <select className={inputClass+" col-span-2"} name="record_id"><option value="">Thêm mới</option>{masterData.map(x=><option key={String(x.id)} value={String(x.id)}>Sửa: {String(x.master_data_type)} · {String(x.name)}</option>)}</select>
-            <select className={inputClass} name="master_data_type" required>{["EXPENSE_CATEGORY","INCOME_CATEGORY","INSTITUTION","PAYMENT_METHOD","INCOME_SOURCE","TRANSACTION_SOURCE"].map(x=><option key={x}>{x}</option>)}</select>
-            <input className={inputClass} name="code" placeholder="Mã canonical" required/>
-            <input className={inputClass+" col-span-2"} name="name" placeholder="Tên hiển thị tiếng Việt" required/>
-            <input className={inputClass} name="parent_code" placeholder="Mã cha (nếu có)"/>
-            <input className={inputClass} name="display_order" type="number" defaultValue="100"/>
-            <input className={inputClass+" col-span-2"} name="source_reference" placeholder="Nguồn / evidence"/>
-            <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_active" defaultChecked/> Đang sử dụng</label>
-            <button className="rounded bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">Thêm danh mục</button>
+            <input type="hidden" name="record_id" value={editMaster ? String(editMaster.id) : ""}/>
+            {editMaster ? <div className="col-span-2 rounded bg-blue-50 p-2 text-[10px] font-semibold text-blue-800">Đang sửa: {String(editMaster.name)} · {String(editMaster.code)} <a href="/personal-finance#master-data-settings" className="ml-2 underline">Hủy sửa</a></div> : null}
+            <select className={inputClass} name="master_data_type" defaultValue={editMaster ? String(editMaster.master_data_type) : "EXPENSE_CATEGORY"} required>{["EXPENSE_CATEGORY","INCOME_CATEGORY","INSTITUTION","PAYMENT_METHOD","INCOME_SOURCE","TRANSACTION_SOURCE"].map(x=><option key={x}>{x}</option>)}</select>
+            <input className={inputClass} name="code" defaultValue={editMaster ? String(editMaster.code) : ""} placeholder="Mã canonical" required/>
+            <input className={inputClass+" col-span-2"} name="name" defaultValue={editMaster ? String(editMaster.name) : ""} placeholder="Tên hiển thị tiếng Việt" required/>
+            <input className={inputClass} name="parent_code" defaultValue={editMaster ? String(editMaster.parent_code ?? "") : ""} placeholder="Mã cha (nếu có)"/>
+            <input className={inputClass} name="display_order" type="number" defaultValue={editMaster ? String(editMaster.display_order ?? 100) : "100"}/>
+            <input className={inputClass+" col-span-2"} name="source_reference" defaultValue={editMaster ? String(editMaster.source_reference ?? "") : ""} placeholder="Nguồn / evidence"/>
+            <label className="text-[10px] text-[#233b61]"><input type="checkbox" name="is_active" defaultChecked={editMaster ? editMaster.is_active === true : true}/> Đang sử dụng</label>
+            <button className="rounded bg-[#1769d2] px-3 py-2 text-[11px] font-bold text-white">{editMaster ? "Lưu thay đổi danh mục" : "Thêm danh mục"}</button>
           </form>
           <div className="max-h-[420px] overflow-auto rounded-lg border border-[#dce8f4]">
             <table className="w-full text-[10px] text-[#243b5f]"><thead className="sticky top-0 bg-[#dfeaf7] text-[#102456]"><tr><th className="p-2 text-left">Loại</th><th className="p-2 text-left">Tên</th><th className="p-2">TT</th><th className="p-2">Bật/tắt</th></tr></thead><tbody>
-              {masterData.map((x)=><tr key={String(x.id)} className="border-t border-[#dce8f4]"><td className="p-2">{String(x.master_data_type)}</td><td className="p-2"><b>{String(x.name)}</b><div className="text-[#6a7e9b]">{String(x.code)}</div></td><td className="p-2 text-center">{String(x.record_status)}</td><td className="p-2"><form action={setFinanceMasterDataActive} className="flex gap-1"><input type="hidden" name="record_id" value={String(x.id)}/><input type="hidden" name="is_active" value={x.is_active?"":"1"}/><input className={inputClass} name="reason" placeholder="Lý do" required/><ConfirmSubmitButton className="rounded bg-[#294b77] px-2 py-1 font-bold text-white" label={x.is_active?"Tắt":"Bật"} message={x.is_active?"Ngừng sử dụng danh mục này? Bản ghi cũ vẫn được giữ nguyên.":"Kích hoạt lại danh mục này?"}/></form></td></tr>)}
+              {masterData.map((x)=><tr key={String(x.id)} className="border-t border-[#dce8f4]"><td className="p-2">{String(x.master_data_type)}</td><td className="p-2"><b>{String(x.name)}</b><div className="text-[#6a7e9b]">{String(x.code)}</div></td><td className="p-2 text-center">{String(x.record_status)}</td><td className="p-2"><a className="mr-2 font-bold text-[#1769d2] underline" href={`/personal-finance?editType=master&editId=${String(x.id)}#master-data-settings`}>Sửa</a><form action={setFinanceMasterDataActive} className="inline-flex gap-1"><input type="hidden" name="record_id" value={String(x.id)}/><input type="hidden" name="is_active" value={x.is_active?"":"1"}/><input className={inputClass} name="reason" placeholder="Lý do" required/><ConfirmSubmitButton className="rounded bg-[#294b77] px-2 py-1 font-bold text-white" label={x.is_active?"Tắt":"Bật"} message={x.is_active?"Ngừng sử dụng danh mục này? Bản ghi cũ vẫn được giữ nguyên.":"Kích hoạt lại danh mục này?"}/></form></td></tr>)}
             </tbody></table>
           </div>
         </div>}

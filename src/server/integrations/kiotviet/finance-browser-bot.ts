@@ -78,6 +78,7 @@ export type FinanceBotSnapshot = {
         sha256?: string;
         capturedAt?: string;
         detail?: string;
+        postClickControlLabels?: string[];
       };
       scrollContainers: Array<{
         tag: string;
@@ -1045,6 +1046,20 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
     const clicked = await clickByText(page, ["Xuất file", "Xuất", "Export"]);
     if (!clicked) throw new Error("Export control could not be clicked.");
     await new Promise((resolve) => setTimeout(resolve, 700));
+    const postClickControlLabels = await page.evaluate(() => {
+      const visible = (el: Element) => {
+        const node = el as HTMLElement;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 2 && rect.height > 2;
+      };
+      return Array.from(document.querySelectorAll("button,a,[role='button'],[role='menuitem'],li,.k-item"))
+        .filter(visible)
+        .map((el) => ((el as HTMLElement).innerText || el.textContent || "").replace(/\s+/g, " ").trim())
+        .filter((label) => /xuất|export|excel|xlsx|csv|tải|download|xác nhận|đồng ý/i.test(label))
+        .filter((label, index, all) => label && all.indexOf(label) === index)
+        .slice(0, 30);
+    }).catch(() => [] as string[]);
     // Some KiotViet builds open an export-format menu after the first click.
     const afterFirstClick = await readdir(dir).catch(() => [] as string[]);
     if (!afterFirstClick.some((name) => !before.has(name) && !name.endsWith(".crdownload"))) {
@@ -1058,7 +1073,7 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
       if (candidates.length) { captured = candidates[0]; break; }
     }
     if (!captured) {
-      const result = { attempted: true, state: "NO_DOWNLOAD" as const, capturedAt: new Date().toISOString(), detail: "Export control clicked but no completed download appeared within 10s." };
+      const result = { attempted: true, state: "NO_DOWNLOAD" as const, capturedAt: new Date().toISOString(), postClickControlLabels, detail: "Export control clicked but no completed download appeared within 10s." };
       await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8");
       return result;
     }
@@ -1073,6 +1088,7 @@ async function captureCashbookExport(page: Page, system: FinanceBotSystem, expor
       sizeBytes: meta.size,
       sha256: createHash("sha256").update(content).digest("hex"),
       capturedAt: new Date().toISOString(),
+      postClickControlLabels,
       detail: "Authenticated KiotViet cashbook export captured in private VPS state; content is not exposed by health endpoint.",
     };
     await writeFile(markerFile, JSON.stringify(result, null, 2), "utf8");

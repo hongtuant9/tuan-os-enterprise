@@ -5,6 +5,7 @@ import {
   runFinanceBotRead,
   type FinanceBotSystem,
 } from "@/server/integrations/kiotviet/finance-browser-bot";
+import { syncKiotVietRevenueRangeToSupabase } from "@/server/finance/kiotviet-supabase-read-model";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,20 @@ export async function POST(req: NextRequest) {
     results.push(await runFinanceBotRead(system, true));
   }
 
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  let revenueSync: { ok: boolean; detail: string } = { ok: false, detail: "not_run" };
+  try {
+    const synced = await syncKiotVietRevenueRangeToSupabase(today, today);
+    revenueSync = { ok: true, detail: `days=${synced.days}` };
+  } catch (error) {
+    revenueSync = { ok: false, detail: error instanceof Error ? error.message : "unknown" };
+  }
+
   const container = getAdminContainer();
   await container.activityLog.record({
     agent: "TCE KiotViet Finance Bot v1",
@@ -47,5 +62,5 @@ export async function POST(req: NextRequest) {
     ).join(" | "),
   }).catch(() => undefined);
 
-  return NextResponse.json({ ok: true, results }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, results, revenueSync }, { headers: { "Cache-Control": "no-store" } });
 }

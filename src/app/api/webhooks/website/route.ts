@@ -21,6 +21,9 @@ type WebsiteInboundPayload = {
   wbraid?: string;
   gaClientId?: string;
   gaSessionId?: string;
+  landingPage?: string;
+  adGroup?: string;
+  ad?: string;
   selfReportedSource?: string;
   referralSource?: string;
 };
@@ -148,6 +151,9 @@ export async function POST(request: Request) {
       wbraid: safeString(payload.wbraid, 256),
       gaClientId: safeString(payload.gaClientId, 128),
       gaSessionId: safeString(payload.gaSessionId, 128),
+      landingPage: safeString(payload.landingPage, 500),
+      adGroup: safeString(payload.adGroup, 180),
+      ad: safeString(payload.ad, 180),
       selfReportedSource: safeString(payload.selfReportedSource, 180),
       referralSource: safeString(payload.referralSource, 180),
       pageEntity,

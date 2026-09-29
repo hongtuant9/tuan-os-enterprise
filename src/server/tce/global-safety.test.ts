@@ -76,3 +76,14 @@ test("recovered runtime tabs expose source-specific freshness metadata",()=>{
   assert.match(data,/Activity Log \+ Sync Source Registry \+ TASK\/APPROVAL runtime/);
   assert.match(data,/Finance Actual chưa đủ coverage\/reconciliation/);
 });
+
+
+test("executive overview exposes freshness and NEED_VERIFY drill-down",()=>{
+  const page=read("src/app/page.tsx");
+  const dashboard=read("src/components/ExecutiveDashboardLive.tsx");
+  assert.match(page,/overviewFreshness/);
+  assert.match(page,/KiotViet Hotel\/F&B direct API \+ TASK-001 \+ APPROVAL-001 \+ L3 Master Data/);
+  assert.match(dashboard,/DataFreshnessBar/);
+  assert.match(dashboard,/Lợi nhuận.*Bấm để xem blocker/);
+  assert.match(dashboard,/Biên lợi nhuận.*Bấm để xem blocker/);
+});

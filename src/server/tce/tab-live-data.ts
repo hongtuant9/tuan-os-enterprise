@@ -24,6 +24,7 @@ import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
+import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type FreshnessStatus } from "@/server/tce/data-freshness";
 
 export type TceTabScreen =
   | "business"
@@ -67,6 +68,19 @@ export type TceTabLiveData = {
   tables: Record<string, string[][]>;
   lists: Record<string, string[]>;
   sourceState: "LIVE" | "PARTIAL" | "NEED_VERIFY";
+  freshness?: {
+    dataThrough: string | null;
+    lastSyncAt: string | null;
+    appRefreshedAt: string;
+    source: string;
+    freshnessStatus: FreshnessStatus;
+    verificationStatus: "VERIFIED" | "NEED_VERIFY" | "HOLD";
+    warning: string | null;
+    expectedRefreshMinutes: number;
+    staleAfterMinutes: number;
+    errorAfterMinutes: number;
+    owner: string;
+  };
 };
 
 const KIOTVIET_EXPENSE_TAXONOMY = [
@@ -307,6 +321,7 @@ function result(
   lists: Record<string, string[]> = {},
   sourceState: TceTabLiveData["sourceState"] = "LIVE",
   verificationGuides: Record<string, TceVerificationGuide> = {},
+  freshness?: TceTabLiveData["freshness"],
 ): TceTabLiveData {
   return {
     generatedAt: new Date().toISOString(),
@@ -317,6 +332,7 @@ function result(
     tables,
     lists,
     sourceState,
+    freshness,
   };
 }
 
@@ -339,7 +355,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     lists: Record<string, string[]> = {},
     sourceState: TceTabLiveData["sourceState"] = "LIVE",
     verificationGuides: Record<string, TceVerificationGuide> = {},
-  ) => result(period, metricValues, metricNotes, tables, lists, sourceState, verificationGuides);
+    freshness?: TceTabLiveData["freshness"],
+  ) => result(period, metricValues, metricNotes, tables, lists, sourceState, verificationGuides, freshness);
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
@@ -1086,7 +1103,41 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
   }
 
   if (screen === "reception") {
-    const dashboard = await container.aiReceptionist.dashboard();
+    const [dashboard, otaCollector] = await Promise.all([
+      container.aiReceptionist.dashboard(),
+      container.syncSources.findByKey("ai_receptionist_ota_email").catch(() => null),
+    ]);
+    const latestDataAt = dashboard.conversations.reduce<string | null>((latest, conversation) => {
+      if (!conversation.lastMessageAt) return latest;
+      if (!latest) return conversation.lastMessageAt;
+      return Date.parse(conversation.lastMessageAt) > Date.parse(latest) ? conversation.lastMessageAt : latest;
+    }, null);
+    const freshnessEval = evaluateFreshness({
+      now,
+      lastSyncAt: otaCollector?.last_synced_at ?? null,
+      lastRecordAt: latestDataAt,
+      sourceStatus: otaCollector?.status ?? null,
+      lastError: otaCollector?.last_error ?? null,
+      policy: AI_RECEPTIONIST_FRESHNESS_POLICY,
+    });
+    const freshnessWarning = freshnessEval.status === "ERROR"
+      ? `OTA Email Collector đang lỗi hoặc quá hạn ${AI_RECEPTIONIST_FRESHNESS_POLICY.errorAfterMs / 60_000} phút. Không coi dữ liệu cũ là hiện tại.`
+      : freshnessEval.status === "STALE"
+        ? `OTA Email Collector chưa sync trong ngưỡng ${AI_RECEPTIONIST_FRESHNESS_POLICY.staleAfterMs / 60_000} phút. Dữ liệu có thể đã cũ.`
+        : null;
+    const freshness: TceTabLiveData["freshness"] = {
+      dataThrough: latestDataAt,
+      lastSyncAt: otaCollector?.last_synced_at ?? null,
+      appRefreshedAt: now.toISOString(),
+      source: "Supabase AI Receptionist · OTA Email Collector + Webhooks",
+      freshnessStatus: freshnessEval.status,
+      verificationStatus: "NEED_VERIFY",
+      warning: freshnessWarning,
+      expectedRefreshMinutes: AI_RECEPTIONIST_FRESHNESS_POLICY.expectedRefreshMs / 60_000,
+      staleAfterMinutes: AI_RECEPTIONIST_FRESHNESS_POLICY.staleAfterMs / 60_000,
+      errorAfterMinutes: AI_RECEPTIONIST_FRESHNESS_POLICY.errorAfterMs / 60_000,
+      owner: AI_RECEPTIONIST_FRESHNESS_POLICY.owner,
+    };
     const periodConversations = dashboard.conversations.filter((conversation) => inPeriod(conversation.lastMessageAt));
     const periodBookings = dashboard.bookings.filter((booking) => inPeriod(booking.createdAt));
     const periodReviews = dashboard.managerReviews.filter((review) => inPeriod(review.createdAt));
@@ -1147,7 +1198,9 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
             .map((message) => message.translatedVi || message.content))
           .slice(0, 12),
       },
-      "LIVE",
+      "NEED_VERIFY",
+      {},
+      freshness,
     );
   }
 

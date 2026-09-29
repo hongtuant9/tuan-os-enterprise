@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh TCE AI Receptionist OTA email collector every 2 minutes
+
+[Timer]
+OnBootSec=75s
+OnUnitActiveSec=2min
+Persistent=true
+RandomizedDelaySec=10
+
+[Install]
+WantedBy=timers.target

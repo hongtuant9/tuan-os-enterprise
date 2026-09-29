@@ -32,6 +32,9 @@ jobs:
       - name: Kiểm tra finance foundation
         run: npm run test:finance-foundation
 
+      - name: Kiểm tra TCE Global UI & Data Safety
+        run: npm run test:tce-safety
+
       - name: Kiểm tra content automation foundation
         run: npm run test:content-automation
 

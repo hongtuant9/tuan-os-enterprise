@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { TceWorkspaceShell } from "@/components/tce/TceShell";
 import MobileMockupScreen from "@/components/tce/MobileMockup";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
-import VerificationHelp, { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/VerificationHelp";
+import VerificationHelp from "@/components/tce/VerificationHelp";
+import { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/verification-guide";
 import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
 
 type ScreenKey =

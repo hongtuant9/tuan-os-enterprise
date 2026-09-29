@@ -49,3 +49,18 @@ test("Business route exposes scoped current-data freshness without static snapsh
   assert.match(data,/KiotViet Hotel \+ F&B · direct authenticated API read \+ Property runtime/);
   assert.match(data,/Không đọc được đầy đủ nguồn KiotViet trực tiếp ở lần tải này\. Không dùng 0 để thay dữ liệu lỗi\./);
 });
+
+
+test("verification fallback helper stays server-safe",()=>{
+  const desktop=read("src/components/tce/ReferenceScreens.tsx");
+  const mobile=read("src/components/tce/MobileMockup.tsx");
+  const client=read("src/components/tce/VerificationHelp.tsx");
+  const helper=read("src/components/tce/verification-guide.ts");
+  assert.match(desktop,/verification-guide/);
+  assert.match(mobile,/verification-guide/);
+  assert.doesNotMatch(desktop,/fallbackVerificationGuide.*VerificationHelp/);
+  assert.doesNotMatch(mobile,/fallbackVerificationGuide.*VerificationHelp/);
+  assert.doesNotMatch(client,/export function fallbackVerificationGuide/);
+  assert.match(helper,/export function fallbackVerificationGuide/);
+  assert.doesNotMatch(helper,/use client/);
+});

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
-import VerificationHelp, { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/VerificationHelp";
+import VerificationHelp from "@/components/tce/VerificationHelp";
+import { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/verification-guide";
 
 export type MobileScreenKey =
   | "business" | "marketing" | "operations" | "reception"

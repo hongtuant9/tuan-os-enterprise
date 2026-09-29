@@ -20,11 +20,16 @@ test("fresh pipeline with old data is FRESH not STALE", () => {
 });
 
 test("stale pipeline is STALE regardless of old records", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(8),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"STALE");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(8),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"STALE");
+  assert.equal(x.pipelineStatus,"STALE");
+  assert.equal(x.dataRecencyStatus,"NO_RECENT_ACTIVITY");
 });
 
 test("pipeline beyond error threshold is ERROR", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(20),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"ERROR");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(20),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"ERROR");
+  assert.equal(x.pipelineStatus,"ERROR");
 });
 
 test("source error is ERROR immediately", () => {

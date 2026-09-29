@@ -51,3 +51,17 @@ export function isAllowedRestrictedTransfer(sourceRoles:string[],purpose:string)
   if(sourceRoles.includes("PERSONAL_SAFETY_ACCOUNT")) return purpose==="EMERGENCY_USE_APPROVED";
   return true;
 }
+
+export function payrollSettlement(input:{grossPayroll:number;salaryAdvance:number;alreadySettledAdvance?:number}){
+  const gross=Math.max(0,Number(input.grossPayroll)||0);
+  const advance=Math.max(0,Number(input.salaryAdvance)||0);
+  const settled=Math.max(0,Number(input.alreadySettledAdvance??0)||0);
+  const outstandingAdvance=Math.max(0,advance-settled);
+  const advanceApplied=Math.min(gross,outstandingAdvance);
+  return {
+    payrollExpense:gross,
+    advanceApplied,
+    payrollPayable:Math.max(0,gross-advanceApplied),
+    remainingAdvance:Math.max(0,outstandingAdvance-gross),
+  };
+}

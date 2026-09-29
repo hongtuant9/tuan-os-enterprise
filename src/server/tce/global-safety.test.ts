@@ -27,3 +27,14 @@ test("AI Receptionist route remains dynamic and canonical-data backed",()=>{
   assert.match(page,/getTceTabLiveData\(\"reception\"/);
   assert.doesNotMatch(page,/static snapshot|mock data/i);
 });
+
+
+test("global engineering guardrail is canonical in execution governance",()=>{
+  const governance=read("src/server/agents/execution-governance.ts");
+  assert.match(governance,/TCE GLOBAL UI & DATA SAFETY STANDARD applies: current-data-first; preserve all non-target modules; regression = 0\./);
+  assert.match(governance,/RULE-01 DATA FRESHNESS & LAST UPDATED/);
+  assert.match(governance,/RULE-02 SCOPED CHANGE & NON-REGRESSION/);
+  for(const item of ["Source of Truth đã đọc","Target scope đã xác định","Non-target modules đã xác định","Baseline snapshot tồn tại","Approval requirement đã xác định"]){
+    assert.match(governance,new RegExp(item));
+  }
+});

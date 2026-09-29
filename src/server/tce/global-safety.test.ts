@@ -86,3 +86,11 @@ test("Business route returns before Finance-only slow dependencies",()=>{
   const businessBlock=live.slice(business,financeOnly);
   assert.doesNotMatch(businessBlock,/fetchHotelCashflowActual|fetchFnbCashflowActual|readFinanceBotSummary|readHospitalityDebtSnapshot|readFinanceCutoverSnapshot/);
 });
+
+
+test("Business current-month view reuses the same KiotViet reads",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  assert.match(live,/const sameAsCurrentMonth = period\.from === monthStart && period\.to === today/);
+  assert.match(live,/const hotelMonthPromise = sameAsCurrentMonth\s*\? hotelPeriodPromise/);
+  assert.match(live,/const fnbMonthPromise = sameAsCurrentMonth\s*\? fnbPeriodPromise/);
+});

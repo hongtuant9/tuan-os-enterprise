@@ -179,7 +179,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   }));
 
   return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Theo dõi tiền thực tế, tiền trên sổ và tiến độ Tự do tài chính." generatedAt={new Date().toISOString()} headerVariant="personal-finance">
-    <div className="space-y-4 p-4 lg:p-5">
+    <div className="space-y-4 p-4 text-[#17233d] [color-scheme:light] lg:p-5">
       {migrationMissing ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] font-semibold text-amber-800">HOLD: Personal Finance production schema chưa đầy đủ. Không suy 0đ từ NO DATA và tạm khóa form ghi dữ liệu cho tới khi migration + RLS PASS.</div> : null}
 
       <PersonalFinanceOperatingDashboard

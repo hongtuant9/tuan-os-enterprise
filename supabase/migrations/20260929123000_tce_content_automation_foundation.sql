@@ -196,3 +196,75 @@ left join public.marketing_content_gate_results g on g.content_variant_id=v.id
 group by v.id;
 
 grant select on public.marketing_content_readiness_v to authenticated;
+
+
+-- Content -> business outcome read model.
+-- Reuses Group 2 attribution authority; utm_content is the canonical Content ID bridge.
+-- Only VERIFIED/DIRECT_VERIFIED events can count as direct business outcomes.
+create or replace view public.marketing_content_outcomes_v
+with (security_invoker = true) as
+with direct as (
+  select
+    utm_content as content_id,
+    count(*) filter (
+      where event_type='directions_click'
+        and verification_status='VERIFIED'
+        and attribution_status='DIRECT_VERIFIED'
+    )::bigint as directions_verified,
+    count(*) filter (
+      where event_type='lead'
+        and lead_id is not null
+        and verification_status='VERIFIED'
+        and attribution_status='DIRECT_VERIFIED'
+    )::bigint as leads_verified,
+    count(*) filter (
+      where event_type='booking'
+        and booking_record_id is not null
+        and verification_status='VERIFIED'
+        and attribution_status='DIRECT_VERIFIED'
+    )::bigint as bookings_verified,
+    coalesce(sum(revenue_amount) filter (
+      where event_type='revenue'
+        and revenue_amount > 0
+        and verification_status='VERIFIED'
+        and attribution_status='DIRECT_VERIFIED'
+    ),0)::numeric(16,2) as direct_verified_revenue
+  from public.marketing_attribution_events
+  where nullif(utm_content,'') is not null
+  group by utm_content
+),
+assisted_revenue as (
+  select
+    x.content_id,
+    coalesce(sum(x.verified_revenue),0)::numeric(16,2) as assisted_verified_revenue
+  from (
+    select distinct
+      a.utm_content as content_id,
+      a.revenue_event_id,
+      a.verified_revenue
+    from public.marketing_assisted_attribution_v a
+    where nullif(a.utm_content,'') is not null
+  ) x
+  group by x.content_id
+)
+select
+  c.content_id,
+  c.brand,
+  c.objective,
+  c.publish_status,
+  c.provider_post_id,
+  coalesce(d.directions_verified,0)::bigint as directions_verified,
+  coalesce(d.leads_verified,0)::bigint as leads_verified,
+  coalesce(d.bookings_verified,0)::bigint as bookings_verified,
+  coalesce(d.direct_verified_revenue,0)::numeric(16,2) as direct_verified_revenue,
+  coalesce(a.assisted_verified_revenue,0)::numeric(16,2) as assisted_verified_revenue,
+  (coalesce(d.direct_verified_revenue,0)+coalesce(a.assisted_verified_revenue,0))::numeric(16,2)
+    as total_verified_attributed_revenue
+from public.marketing_content_items c
+left join direct d on d.content_id=c.content_id
+left join assisted_revenue a on a.content_id=c.content_id;
+
+grant select on public.marketing_content_outcomes_v to authenticated, service_role;
+
+comment on view public.marketing_content_outcomes_v is
+'Fail-closed content outcome surface. Directions/Lead/Booking/Revenue count only verified attribution evidence; engagement is never revenue.';

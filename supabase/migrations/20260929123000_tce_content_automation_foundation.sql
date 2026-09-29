@@ -2,6 +2,34 @@
 -- Scope: Cozy Garden -> Facebook + Instagram MVP.
 -- Safety: read-only/approval-gated by default; no auto-publish is enabled here.
 
+alter table public.marketing_content_items
+  add column if not exists journey_stage text,
+  add column if not exists hook text,
+  add column if not exists language text,
+  add column if not exists asset_ids text[] not null default '{}',
+  add column if not exists tracking_url text,
+  add column if not exists approval_status text not null default 'PENDING',
+  add column if not exists reviewed_by text,
+  add column if not exists last_qa_at timestamptz;
+
+insert into public.sync_sources (
+  key,name,description,sheet_id,sheet_range,supports_incremental,schedule_enabled,schedule_interval_minutes
+) values
+('marketing-asset-index','TCE Marketing — Asset Index','Canonical media asset index for Marketing Content Automation.','1N9Y1FVIm-Q1u2PZ3Mx6DdGj16F55c43SgAOoedfBUUw','ASSET_INDEX!A:N',true,true,15)
+on conflict (key) do update set
+  name=excluded.name,
+  description=excluded.description,
+  sheet_id=excluded.sheet_id,
+  sheet_range=excluded.sheet_range,
+  supports_incremental=excluded.supports_incremental,
+  schedule_enabled=excluded.schedule_enabled,
+  schedule_interval_minutes=excluded.schedule_interval_minutes,
+  updated_at=now();
+
+update public.sync_sources
+set sheet_range='SHADOW_CONTENT_QUEUE!A:AI', updated_at=now()
+where key='marketing-shadow-content';
+
 create table if not exists public.marketing_channel_capabilities (
   channel_id text not null references public.marketing_channels(id) on delete cascade,
   capability text not null check (capability in (
@@ -118,20 +146,20 @@ create index if not exists marketing_content_gate_results_variant_idx
 -- Write remains approval-gated; these rows do not authorize publishing by themselves.
 insert into public.marketing_channel_capabilities
 (channel_id, capability, status, provider, evidence_source, verified_at, metadata) values
-('facebook','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"brand":"Cozy Garden"}'::jsonb),
-('facebook','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"brand":"Cozy Garden"}'::jsonb),
+('facebook','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
+('facebook','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
 ('facebook','WRITE_API','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('facebook','MEDIA_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('facebook','VIDEO_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('facebook','SCHEDULING','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
-('instagram','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"brand":"Cozy Garden"}'::jsonb),
-('instagram','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"brand":"Cozy Garden"}'::jsonb),
+('instagram','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
+('instagram','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
 ('instagram','WRITE_API','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('instagram','MEDIA_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('instagram','VIDEO_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('instagram','SCHEDULING','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
-('google_maps','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"brand":"Cozy Garden"}'::jsonb),
-('google_maps','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"brand":"Cozy Garden"}'::jsonb),
+('google_maps','AUTH','VERIFIED','metricool','Metricool brand settings connection',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
+('google_maps','ANALYTICS','VERIFIED','metricool','Metricool analytics metric catalog',now(),'{"container_label":"Cozy Garden","business_scope":"TCE_MASTER"}'::jsonb),
 ('google_maps','WRITE_API','WRITE_APPROVAL_REQUIRED','metricool','Metricool scheduler supports gmb provider',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('google_maps','MEDIA_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool gmb photo capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),
 ('google_maps','VIDEO_UPLOAD','WRITE_APPROVAL_REQUIRED','metricool','Metricool gmb photo/video capability',now(),'{"publish_mode":"APPROVAL_REQUIRED"}'::jsonb),

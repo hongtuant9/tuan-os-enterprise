@@ -16,7 +16,7 @@ import {
 import { MasterDataSelect } from "./MasterDataSelect";
 import { TransactionMasterFields } from "./TransactionMasterFields";
 import { ConfirmSubmitButton } from "./ConfirmSubmitButton";
-import { FinancialFreedomDashboard } from "./FinancialFreedomDashboard";
+import { PersonalFinanceOperatingDashboard } from "./PersonalFinanceOperatingDashboard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -37,10 +37,6 @@ function fmtDate(value: unknown) {
   return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric",
   }).format(d);
-}
-
-function latest(rows: Row[], field: string) {
-  return rows.map((x) => String(x[field] ?? "")).filter(Boolean).sort().at(-1) || null;
 }
 
 function effectiveStatus(base: unknown, sourceUpdatedAt: unknown, currentMonth: string) {
@@ -94,7 +90,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const editId = firstParam(params.editId);
   const listQuery = firstParam(params.q).trim().toLocaleLowerCase("vi");
   const listStatus = firstParam(params.status).trim();
-  const selectedKpi = firstParam(params.kpi).trim();
+  const requestedMonth = firstParam(params.month).trim();
   const db = await createClient();
   const { data: auth } = await db.auth.getUser();
   if (!auth.user) redirect("/login");
@@ -102,12 +98,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   if (profile?.role !== "owner") return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Khu vực riêng của chủ sở hữu" generatedAt={new Date().toISOString()}><div className="p-6"><div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-700">Bạn không có quyền truy cập dữ liệu Tài chính cá nhân.</div></div></TceWorkspaceShell>;
 
   const raw = db as unknown as SupabaseClient;
-  const now = new Date();
-  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(now) + "-01";
+  const month = /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth + "-01" : "2026-10-01";
   const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
   const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -125,9 +120,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("owner_business_transfers").select("*").order("transfer_date", { ascending: false }).limit(500),
     raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
     raw.rpc("finance_cutover_snapshot"),
+    raw.rpc("finance_operating_snapshot", { p_month: month }),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -144,7 +140,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const historyAssets = (historyAssetRes.data ?? []) as Row[];
   const historyTransfers = (historyTransferRes.data ?? []) as Row[];
   const snapshots = (snapshotsRes.data ?? []) as Row[];
-  const cutover = cutoverRes.data && typeof cutoverRes.data === "object" && !Array.isArray(cutoverRes.data) ? cutoverRes.data as Row : null;
+  const operating = operatingRes.data && typeof operatingRes.data === "object" && !Array.isArray(operatingRes.data) ? operatingRes.data as Row : null;
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -176,46 +172,19 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const filteredAssets = historyAssets.filter(matchesList);
   const filteredTransfers = historyTransfers.filter(matchesList);
 
-  const assetSourceAt = latest([...assets,...accounts],"source_updated_at");
-  const debtSourceAt = latest(debts,"source_updated_at");
-  const txSourceAt = monthly?.source_updated_at ?? latest(transactions,"source_updated_at");
-  const accountUpdatedAt = latest(accounts,"updated_at");
-  const debtUpdatedAt = latest(debts,"updated_at");
-  const assetUpdatedAt = latest([...assets,...accounts],"updated_at");
-
-  const totalAssetsReady = Number(position?.verified_asset_count ?? 0) + Number(position?.verified_account_count ?? 0) > 0
-    && Number(position?.unverified_asset_count ?? 0) === 0 && Number(position?.unverified_account_count ?? 0) === 0;
-  const debtReady = Number(position?.verified_debt_count ?? 0) > 0 && Number(position?.unverified_debt_count ?? 0) === 0;
-  const cashReady = Number(position?.verified_account_count ?? 0) > 0 && Number(position?.unverified_account_count ?? 0) === 0;
-  const emergencyReady = Number(position?.emergency_fund_account_count ?? 0) > 0 && cashReady;
-  const netWorthReady = totalAssetsReady && Number(position?.unverified_debt_count ?? 0) === 0 && position?.net_worth !== null;
-
-  const incomeReady = Number(monthly?.verified_income_count ?? 0) + Number(monthly?.verified_transfer_count ?? 0) > 0
-    && Number(monthly?.unverified_income_count ?? 0) + Number(monthly?.unverified_transfer_count ?? 0) === 0;
-  const expenseReady = Number(monthly?.verified_expense_count ?? 0) > 0 && Number(monthly?.unverified_expense_count ?? 0) === 0;
-  const cashflowReady = Number(monthly?.verified_cashflow_count ?? 0) > 0 && Number(monthly?.unverified_cashflow_count ?? 0) === 0;
-
   const verifiedExpenses = transactions.filter((x) => x.transaction_type === "EXPENSE" && x.verification_status === "VERIFIED");
   const expenseSummary = expenseCategories.slice(0, 8).map((category) => ({
     category: category.name,
     amount: verifiedExpenses.filter((x) => String(x.category_code ?? "") === category.code).reduce((s,x) => s + Number(x.amount ?? 0),0),
   }));
 
-  const assetStatus = totalAssetsReady ? effectiveStatus("VERIFIED",assetSourceAt,month) : "NEED_VERIFY";
-  const debtStatus = debtReady ? effectiveStatus("VERIFIED",debtSourceAt,month) : "NEED_VERIFY";
-  const cashStatus = cashReady ? effectiveStatus("VERIFIED",latest(accounts,"source_updated_at"),month) : "NEED_VERIFY";
-  const emergencyStatus = emergencyReady ? effectiveStatus("VERIFIED",latest(accounts.filter(x=>x.is_emergency_fund),"source_updated_at"),month) : "NEED_VERIFY";
-  const incomeStatus = incomeReady ? effectiveStatus("VERIFIED",txSourceAt,month) : "NEED_VERIFY";
-  const expenseStatus = expenseReady ? effectiveStatus("VERIFIED",txSourceAt,month) : "NEED_VERIFY";
-  const cashflowStatus = cashflowReady ? effectiveStatus("VERIFIED",txSourceAt,month) : "NEED_VERIFY";
-  const netWorthStatus = netWorthReady && assetStatus==="VERIFIED" && debtStatus==="VERIFIED" ? "VERIFIED" : netWorthReady ? "STALE" : "NEED_VERIFY";
-
-  return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="PERSONAL / FAMILY FINANCE · OWNER ONLY · Mỗi số đều có nguồn, cách cập nhật và trạng thái xác minh" generatedAt={new Date().toISOString()}>
+  return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Theo dõi tiền thực tế, tiền trên sổ và tiến độ Tự do tài chính." generatedAt={new Date().toISOString()} headerVariant="personal-finance">
     <div className="space-y-4 p-4 lg:p-5">
       {migrationMissing ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] font-semibold text-amber-800">HOLD: Personal Finance production schema chưa đầy đủ. Không suy 0đ từ NO DATA và tạm khóa form ghi dữ liệu cho tới khi migration + RLS PASS.</div> : null}
 
-      <FinancialFreedomDashboard
+      <PersonalFinanceOperatingDashboard
         month={month}
+        operating={operating}
         position={position}
         monthly={monthly}
         goals={goals}
@@ -223,11 +192,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         transactions={transactions}
         historyTransactions={historyTransactions}
         debts={debts}
-        selectedKpi={selectedKpi}
         migrationMissing={migrationMissing}
-        cutover={cutover}
-        statuses={{ netWorth:netWorthStatus, assets:assetStatus, debt:debtStatus, cash:cashStatus, emergency:emergencyStatus, income:incomeStatus, expense:expenseStatus, cashflow:cashflowStatus }}
-        updated={{ assets:assetUpdatedAt, debt:debtUpdatedAt, account:accountUpdatedAt, transaction:monthly?.last_updated_at }}
       />
 
       <section id="data-source-map" className="rounded-xl border border-[#dce8f4] bg-white p-4">

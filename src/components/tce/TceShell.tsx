@@ -108,10 +108,12 @@ export function TcePageHeader({
   title,
   subtitle,
   generatedAt,
+  variant = "default",
 }: {
   title: string;
   subtitle: string;
   generatedAt: string;
+  variant?: "default" | "personal-finance";
 }) {
   const time = formatHeaderTime(generatedAt);
   const pathname = usePathname();
@@ -157,6 +159,23 @@ export function TcePageHeader({
     ["month", "Tháng"],
     ["year", "Năm"],
   ] as const;
+
+  if (variant === "personal-finance") {
+    const selectedMonth = searchParams.get("month") || "2026-10";
+    const monthLabel = (value: string) => { const [y,m]=value.split("-"); return `Tháng ${Number(m)}/${y}`; };
+    function changeMonth(value: string) { const params=new URLSearchParams(searchParams.toString()); params.set("month",value); router.push(pathname+"?"+params.toString()); }
+    return <header className="border-b border-[#dce7f3] bg-white px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="text-[24px] font-black tracking-[-0.03em] text-[#071b55]">{title}</h1><p className="mt-1 text-[11px] text-[#677da7]">{subtitle}</p></div>
+        <div className="flex items-center gap-4 text-[#122b61]">
+          <label className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#42648f]">▣</span><select value={selectedMonth} onChange={(e)=>changeMonth(e.target.value)} className="min-w-[175px] appearance-none rounded-[7px] border border-[#d1deec] bg-white py-2 pl-8 pr-8 text-[10px] font-bold text-[#29466f] shadow-sm"><option value="2026-10">{monthLabel("2026-10")}</option><option value="2026-11">{monthLabel("2026-11")}</option><option value="2026-12">{monthLabel("2026-12")}</option></select><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#49698f]">⌄</span></label>
+          <span className="relative text-[#274a7d]"><Icon name="bell" className="h-5 w-5" /><span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#f13b47]"/></span>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-[#1478ee] text-[12px] font-black text-white">T</span>
+          <span className="hidden leading-4 lg:block"><span className="block text-[11px] font-bold">Tuấn</span><span className="block text-[8px] text-[#7689a8]">CEO</span></span><Icon name="chevron" className="h-4 w-4" />
+        </div>
+      </div>
+    </header>;
+  }
 
   return (
     <header className="border-b border-[#dce7f3] bg-white px-4 py-[9px] lg:px-5">
@@ -220,17 +239,19 @@ export function TceWorkspaceShell({
   subtitle,
   generatedAt,
   children,
+  headerVariant = "default",
 }: {
   title: string;
   subtitle: string;
   generatedAt: string;
   children: ReactNode;
+  headerVariant?: "default" | "personal-finance";
 }) {
   return (
     <div className="flex min-h-screen bg-[#f5f9fd]">
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-x-hidden">
-        <TcePageHeader title={title} subtitle={subtitle} generatedAt={generatedAt} />
+        <TcePageHeader title={title} subtitle={subtitle} generatedAt={generatedAt} variant={headerVariant} />
         {children}
       </main>
     </div>

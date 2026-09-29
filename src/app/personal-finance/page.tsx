@@ -107,7 +107,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
   const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -124,9 +124,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("personal_finance_assets").select("*").order("updated_at", { ascending: false }).limit(500),
     raw.from("owner_business_transfers").select("*").order("transfer_date", { ascending: false }).limit(500),
     raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
+    raw.rpc("finance_cutover_snapshot"),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -143,6 +144,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const historyAssets = (historyAssetRes.data ?? []) as Row[];
   const historyTransfers = (historyTransferRes.data ?? []) as Row[];
   const snapshots = (snapshotsRes.data ?? []) as Row[];
+  const cutover = cutoverRes.data && typeof cutoverRes.data === "object" && !Array.isArray(cutoverRes.data) ? cutoverRes.data as Row : null;
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -223,6 +225,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         debts={debts}
         selectedKpi={selectedKpi}
         migrationMissing={migrationMissing}
+        cutover={cutover}
         statuses={{ netWorth:netWorthStatus, assets:assetStatus, debt:debtStatus, cash:cashStatus, emergency:emergencyStatus, income:incomeStatus, expense:expenseStatus, cashflow:cashflowStatus }}
         updated={{ assets:assetUpdatedAt, debt:debtUpdatedAt, account:accountUpdatedAt, transaction:monthly?.last_updated_at }}
       />

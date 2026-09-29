@@ -38,3 +38,14 @@ test("global engineering guardrail is canonical in execution governance",()=>{
     assert.match(governance,new RegExp(item));
   }
 });
+
+
+test("Business route exposes scoped current-data freshness without static snapshot",()=>{
+  const page=read("src/app/business/page.tsx");
+  const data=read("src/server/tce/tab-live-data.ts");
+  assert.match(page,/dynamic = "force-dynamic"/);
+  assert.match(page,/getTceTabLiveData\("business"/);
+  assert.match(data,/businessFreshness/);
+  assert.match(data,/KiotViet Hotel \+ F&B · direct authenticated API read \+ Property runtime/);
+  assert.match(data,/Không đọc được đầy đủ nguồn KiotViet trực tiếp ở lần tải này\. Không dùng 0 để thay dữ liệu lỗi\./);
+});

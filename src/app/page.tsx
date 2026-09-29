@@ -200,6 +200,19 @@ function sourceStatus(lastSyncedAt: string | null | undefined, status: string | 
   return age <= 45 * 60 * 1000 ? "online" : "partial";
 }
 
+function latestIso(values: Array<string | null | undefined>) {
+  let latest: string | null = null;
+  let latestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms) || ms <= latestMs) continue;
+    latest = value;
+    latestMs = ms;
+  }
+  return latest;
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -339,6 +352,26 @@ export default async function Home({
   ];
   const verifiedSources = sources.filter((item) => item.status === "online").length;
 
+  const overviewCriticalSyncs = [taskSync, approvalSync, l3Sync];
+  const overviewSyncError = overviewCriticalSyncs.some((source) => source?.status === "error");
+  const overviewLastSyncAt = latestIso(overviewCriticalSyncs.map((source) => source?.last_synced_at));
+  const overviewDirectReadable = [hotel.state, fnb.state].every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
+  const overviewPipeline = overviewDirectReadable && !overviewSyncError ? "LIVE" as const : "ERROR" as const;
+  const overviewDataRecency = overviewDirectReadable ? "CURRENT" as const : overviewLastSyncAt ? "NO_RECENT_ACTIVITY" as const : "NO_DATA" as const;
+  const overviewFreshness = {
+    dataThrough: overviewDirectReadable ? now.toISOString() : overviewLastSyncAt,
+    lastSyncAt: overviewLastSyncAt,
+    appRefreshedAt: now.toISOString(),
+    source: "KiotViet Hotel/F&B direct API + TASK-001 + APPROVAL-001 + L3 Master Data + Supabase runtime",
+    freshnessStatus: overviewPipeline === "LIVE" ? "LIVE" as const : "ERROR" as const,
+    pipelineStatus: overviewPipeline,
+    dataRecencyStatus: overviewDataRecency,
+    verificationStatus: "NEED_VERIFY" as const,
+    warning: overviewPipeline === "ERROR"
+      ? "Một hoặc nhiều nguồn trọng yếu đang lỗi/không đọc được; không thay dữ liệu lỗi bằng 0."
+      : "Revenue direct source đang đọc được; Chi phí/Lợi nhuận/Marketing Actual và một số KPI vận hành vẫn NEED_VERIFY nên toàn dashboard chưa được gắn VERIFIED.",
+  };
+
   const marketingSpendEstimate = selectedHomestayRevenue * 0.03 + cozyRevenue * 0.02;
 
   return (
@@ -347,6 +380,7 @@ export default async function Home({
       <main className="min-w-0 flex-1">
         <ExecutiveDashboardLive
           generatedAt={now.toISOString()}
+          freshness={overviewFreshness}
           period={period}
           periodLabel={bounds.label}
           property={property}

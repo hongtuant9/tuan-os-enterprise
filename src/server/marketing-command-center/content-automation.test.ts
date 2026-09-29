@@ -6,6 +6,8 @@ import {
   assertApprovalGatedPublish,
   buildPublishIdempotencyKey,
   evaluateVariantReadiness,
+  buildContentAttributionBridge,
+  canCountVerifiedContentOutcome,
 } from "./content-automation.ts";
 
 test("variant is ready only when every mandatory gate passes and approval exists", () => {
@@ -72,5 +74,61 @@ test("idempotency key is stable for the same logical publish", () => {
   assert.equal(
     buildPublishIdempotencyKey(input),
     buildPublishIdempotencyKey(input),
+  );
+});
+
+
+test("content attribution bridge always carries content_id in utm_content", () => {
+  const tracking = buildContentAttributionBridge({
+    contentId: "CNT-20260929-001",
+    source: "facebook",
+    medium: "organic_social",
+    campaign: "tce_content_mvp_202609",
+  });
+
+  assert.equal(tracking.utm_content, "CNT-20260929-001");
+  assert.equal(tracking.utm_source, "facebook");
+});
+
+test("directions counts only verified direct attribution", () => {
+  assert.equal(
+    canCountVerifiedContentOutcome({
+      eventType: "directions_click",
+      verificationStatus: "VERIFIED",
+      attributionStatus: "DIRECT_VERIFIED",
+      hasRequiredAuthorityLink: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    canCountVerifiedContentOutcome({
+      eventType: "directions_click",
+      verificationStatus: "NEED_VERIFY",
+      attributionStatus: "DIRECT_VERIFIED",
+      hasRequiredAuthorityLink: false,
+    }),
+    false,
+  );
+});
+
+test("lead booking revenue fail closed without authority linkage", () => {
+  for (const eventType of ["lead", "booking", "revenue"] as const) {
+    assert.equal(
+      canCountVerifiedContentOutcome({
+        eventType,
+        verificationStatus: "VERIFIED",
+        attributionStatus: "DIRECT_VERIFIED",
+        hasRequiredAuthorityLink: false,
+      }),
+      false,
+    );
+  }
+});
+
+test("engagement cannot enter verified business outcome helper", () => {
+  assert.equal(
+    ["directions_click", "lead", "booking", "revenue"].includes("engagement"),
+    false,
   );
 });

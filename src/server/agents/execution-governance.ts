@@ -1,6 +1,25 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-26.v5";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-09-29.v6";
+
+export const TCE_GLOBAL_UI_DATA_SAFETY_STANDARD = {
+  name: "TCE GLOBAL UI & DATA SAFETY STANDARD",
+  guardrail: "TCE GLOBAL UI & DATA SAFETY STANDARD applies: current-data-first; preserve all non-target modules; regression = 0.",
+  rules: {
+    dataFreshness: "RULE-01 DATA FRESHNESS & LAST UPDATED",
+    scopedChange: "RULE-02 SCOPED CHANGE & NON-REGRESSION",
+  },
+  preflight: [
+    "Source of Truth đã đọc.",
+    "TCE GLOBAL UI & DATA SAFETY STANDARD đã đọc.",
+    "Target scope đã xác định.",
+    "Non-target modules đã xác định và PRESERVE_BY_DEFAULT.",
+    "Freshness requirement đã xác định.",
+    "Baseline snapshot tồn tại.",
+    "Backup/rollback requirement đã xác định.",
+    "Approval requirement đã xác định.",
+  ],
+} as const;
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -57,6 +76,9 @@ export const AUTONOMOUS_CONTINUATION_POLICY = {
 } as const;
 
 export const EXECUTION_GOVERNANCE_RULES = [
+  TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.guardrail,
+  "Freshness Status, Data Recency và Verification Status là ba khái niệm độc lập; không dùng một badge VERIFIED để suy ra dữ liệu đang current.",
+  "Mọi thay đổi App/UI/Database/API/Deploy/Data Sync/Automation phải khai báo target scope; mọi non-target module mặc định PRESERVE_BY_DEFAULT và phải có regression evidence trước DONE.",
   "TASK-001 là nguồn task chính thức; Trello là lớp phản chiếu thực thi trực quan, không tạo SSOT cạnh tranh.",
   "Mọi task phải phân rã thành subtask/checklist đủ nhỏ khi bước đó có output, dependency, handoff, gate, blocker hoặc evidence riêng.",
   "Mỗi task/subtask phải có owner/AI Agent, status, deadline, dependency, next action, evidence-to-close và approval level khi áp dụng.",
@@ -98,6 +120,8 @@ export function executionGovernanceInstruction(): string {
   return [
     `Execution governance ${EXECUTION_GOVERNANCE_VERSION}:`,
     `Autonomous continuation: runtime=${AUTONOMOUS_CONTINUATION_POLICY.runtimeAuthority}; checkpoint=${AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority}; session_failure=${AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy}.`,
+    TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.guardrail,
+    `Pre-flight bắt buộc: ${TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.preflight.join(" | ")}`,
     `Observability: each_cycle=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredEachCycle}; pre_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredBeforeMutation}; post_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredAfterMutation}; ui_policy=${AUTONOMOUS_CONTINUATION_POLICY.observability.uiPolicy}.`,
     ...EXECUTION_GOVERNANCE_RULES.map((rule, index) => `${index + 1}) ${rule}`),
     `Trello mirror runtime: ${trelloExecutionMirrorStatus()}.`,

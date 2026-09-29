@@ -389,11 +389,20 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
+    const hotelPeriodPromise = safeHotel(period.from + "T00:00:00", period.to + "T23:59:59");
+    const fnbPeriodPromise = safeFnb(period.from + "T00:00:00", period.to + "T23:59:59");
+    const sameAsCurrentMonth = period.from === monthStart && period.to === today;
+    const hotelMonthPromise = sameAsCurrentMonth
+      ? hotelPeriodPromise
+      : safeHotel(monthStart + "T00:00:00", today + "T23:59:59");
+    const fnbMonthPromise = sameAsCurrentMonth
+      ? fnbPeriodPromise
+      : safeFnb(monthStart + "T00:00:00", today + "T23:59:59");
     const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness] = await Promise.all([
-      safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
-      safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
-      safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
-      safeFnb(monthStart + "T00:00:00", today + "T23:59:59"),
+      hotelPeriodPromise,
+      fnbPeriodPromise,
+      hotelMonthPromise,
+      fnbMonthPromise,
       container.dashboard.stats(),
       readFinanceFoundationReadiness(),
     ]);

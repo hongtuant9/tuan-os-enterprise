@@ -470,6 +470,28 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     financeVerificationGuides["Chi phí vận hành"] = financeVerificationGuides["Chi phí"];
 
     if (screen === "business") {
+      const businessDirectReadStates = [hotelPeriod.state, fnbPeriod.state, hotelMonth.state, fnbMonth.state];
+      const businessPipelineReadable = businessDirectReadStates.every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
+      const businessRevenueVerified = bothTodayVerified && bothMonthVerified;
+      const businessFreshness: TceTabLiveData["freshness"] = {
+        dataThrough: businessPipelineReadable ? now.toISOString() : null,
+        lastSyncAt: businessPipelineReadable ? now.toISOString() : null,
+        appRefreshedAt: now.toISOString(),
+        source: "KiotViet Hotel + F&B · direct authenticated API read + Property runtime",
+        freshnessStatus: businessPipelineReadable ? "LIVE" : "ERROR",
+        pipelineStatus: businessPipelineReadable ? "LIVE" : "ERROR",
+        dataRecencyStatus: businessPipelineReadable ? "CURRENT" : "NO_DATA",
+        verificationStatus: businessRevenueVerified ? "VERIFIED" : "NEED_VERIFY",
+        warning: !businessPipelineReadable
+          ? "Không đọc được đầy đủ nguồn KiotViet trực tiếp ở lần tải này. Không dùng 0 để thay dữ liệu lỗi."
+          : businessRevenueVerified
+            ? null
+            : "Nguồn đang đọc trực tiếp nhưng Revenue verification chưa PASS đầy đủ; kiểm tra duplicate/source ID trước khi dùng cho quyết định.",
+        expectedRefreshMinutes: 0,
+        staleAfterMinutes: 0,
+        errorAfterMinutes: 0,
+        owner: "AI CTO + AI CFO / TCE Business",
+      };
       return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
@@ -530,6 +552,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
         financeVerificationGuides,
+        businessFreshness,
       );
     }
 

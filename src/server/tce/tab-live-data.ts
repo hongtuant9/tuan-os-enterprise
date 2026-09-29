@@ -23,6 +23,7 @@ import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-br
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
+import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
 
 export type TceTabScreen =
   | "business"
@@ -342,7 +343,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
 
   if (screen === "business" || screen === "finance") {
     const monthStart = today.slice(0, 7) + "-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, foundationReadiness] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, foundationReadiness, cutoverSnapshot] = await Promise.all([
       safeHotel(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeFnb(period.from + "T00:00:00", period.to + "T23:59:59"),
       safeHotel(monthStart + "T00:00:00", today + "T23:59:59"),
@@ -354,6 +355,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       readFinanceBotSummary("FNB"),
       readHospitalityDebtSnapshot(),
       readFinanceFoundationReadiness(),
+      screen === "finance" ? readFinanceCutoverSnapshot() : Promise.resolve(null),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -604,6 +606,34 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       row[4],
     ]);
 
+    const cutoverOpeningRows = cutoverSnapshot ? [
+      ["Known Cash/Bank", money(cutoverSnapshot.knownCash), `${cutoverSnapshot.unclassifiedCashCount} tài khoản chưa phân ownership`, cutoverSnapshot.liquidityStatus],
+      ["Business AR", money(cutoverSnapshot.businessAr), "OTA receivables opening", "VERIFIED"],
+      ["Known Business AP", money(cutoverSnapshot.knownBusinessAp), `${cutoverSnapshot.unknownApCount} khoản AP chưa có amount`, cutoverSnapshot.unknownApCount ? "HOLD" : "VERIFIED"],
+      ["Net Opening Liquidity", cutoverSnapshot.netOpeningLiquidity === null ? "NEED VERIFY" : money(cutoverSnapshot.netOpeningLiquidity), "Cash + AR − AP", cutoverSnapshot.liquidityStatus],
+    ] : [["Cutover 30/09/2026","NEED VERIFY","Migration/runtime chưa sẵn sàng","HOLD"]];
+    const cutoverFacilityRows = cutoverSnapshot?.facilities.map((f) => [
+      f.code, f.classification === "CREDIT_FACILITY_UNUSED" ? "CREDIT FACILITY" : "ACTIVE BANK DEBT",
+      money(f.usedPrincipal), money(f.availableCredit), pct(f.rate * 100), money(f.projectedMonthlyInterest),
+      f.maturity ?? "—", f.nextInterestDate ?? "—", f.verificationStatus,
+    ]) ?? [];
+    const cutoverArRows = cutoverSnapshot?.ar.map((x, i) => [
+      String(i+1), x.businessUnit, x.counterparty, money(x.amount ?? 0), x.expectedSettlementDate ?? "NEED VERIFY",
+      x.status, x.verificationStatus,
+    ]) ?? [];
+    const cutoverApRows = cutoverSnapshot?.ap.map((x, i) => [
+      String(i+1), x.businessUnit, x.category ?? "—", x.counterparty, x.amount === null ? "NEED VERIFY" : money(x.amount),
+      x.dueDate ?? "NEED VERIFY", x.status, x.verificationStatus,
+    ]) ?? [];
+    const cutoverPlanRows = cutoverSnapshot?.octoberPlan.map((x) => [
+      String(x.priority), x.domain, x.businessUnit === "NONE" ? "—" : (x.businessUnit ?? "—"), x.name,
+      x.baseline === null ? "—" : money(x.baseline), x.target === null ? "NEED VERIFY" : money(x.target),
+      x.gateStatus, x.verificationStatus, x.reviewCondition ?? "—",
+    ]) ?? [];
+    const cutoverCloseRows = cutoverSnapshot?.monthEndClose.map((x) => [
+      String(x.step), x.description, x.domain, x.dueDate ?? "—", x.status, x.verificationStatus,
+    ]) ?? [];
+
     const profitSourceRows = [
       ...hotelTodayRows.map((row, i) => [
         String(i + 1),
@@ -636,12 +666,14 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
         "Cash Out": cashflowSummary.cashOut === null ? "NEED VERIFY" : money(cashflowSummary.cashOut),
         "Dòng tiền ròng": cashflowSummary.netCashFlow === null ? "NEED VERIFY" : money(cashflowSummary.netCashFlow),
-        "Số dư tiền mặt": cashBalanceActual === null ? "NEED VERIFY" : money(cashBalanceActual),
-        "Công nợ phải thu": "NEED VERIFY",
-        "Công nợ phải trả": "NEED VERIFY",
-        "Nợ vay": debtSnapshot.state === "VERIFIED" && debtSnapshot.principalOutstanding !== null
-          ? money(debtSnapshot.principalOutstanding)
-          : "NEED VERIFY",
+        "Số dư tiền mặt": cutoverSnapshot ? money(cutoverSnapshot.knownCash) : (cashBalanceActual === null ? "NEED VERIFY" : money(cashBalanceActual)),
+        "Công nợ phải thu": cutoverSnapshot ? money(cutoverSnapshot.businessAr) : "NEED VERIFY",
+        "Công nợ phải trả": cutoverSnapshot ? (cutoverSnapshot.unknownApCount ? "NEED VERIFY" : money(cutoverSnapshot.knownBusinessAp)) : "NEED VERIFY",
+        "Nợ vay": cutoverSnapshot
+          ? money(cutoverSnapshot.facilities.reduce((sum, f) => sum + (f.classification === "ACTIVE_BANK_DEBT" ? f.usedPrincipal : 0), 0))
+          : debtSnapshot.state === "VERIFIED" && debtSnapshot.principalOutstanding !== null
+            ? money(debtSnapshot.principalOutstanding)
+            : "NEED VERIFY",
         "Lợi nhuận gộp": "NEED VERIFY",
         "Biên lợi nhuận gộp": "NEED VERIFY",
       },
@@ -655,34 +687,38 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
-        "Số dư tiền mặt": kiotVietFundBalanceCandidate === null
-          ? "NEED VERIFY: chưa có Tồn quỹ authenticated + header reconciliation đủ cho cả Hotel và F&B."
-          : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) +
-            ", nhưng chưa map fund/account để phân biệt Cash on hand và Bank/account balance.",
-        "Công nợ phải thu": arCandidateOutstanding === null
-          ? "NEED VERIFY: invoice AR candidate chưa đủ coverage/anomaly guard."
-          : "NEED VERIFY: KiotViet invoice-outstanding candidate MTD = " + money(arCandidateOutstanding) +
-            " · coverage " + arCandidateCoverage.toFixed(1) +
-            "%. Chưa gồm/đối soát đầy đủ OTA settlement và receivable ngoài invoice.",
-        "Công nợ phải trả": foundationReadiness.ap.structuredOutstandingReady
-          ? "VERIFIED: Purchase Orders Cần trả NCC đã reconcile với Supplier Nợ cần trả hiện tại."
-          : foundationReadiness.ap.purchaseOrdersReadable && foundationReadiness.ap.suppliersReadable
-            ? "NEED VERIFY: KiotViet Nhập hàng + Nhà cung cấp READ_VERIFIED; structured outstanding chưa reconcile."
-            : "NEED VERIFY: source Nhập hàng/Nhà cung cấp chưa READ_VERIFIED đầy đủ.",
-        "Nợ vay": debtSnapshot.state === "VERIFIED"
-          ? "VERIFIED · FIN-HOSPITALITY-001 · đáo hạn " + (debtSnapshot.maturityDate ?? "NEED VERIFY") +
-            " · source updated " + (debtSnapshot.lastSourceUpdate ?? "NEED VERIFY")
-          : debtSnapshot.principalOutstanding !== null
-            ? "NEED VERIFY: FIN-HOSPITALITY-001 có last-known " + money(debtSnapshot.principalOutstanding) +
-              " · xác nhận " + (debtSnapshot.confirmationDate ?? "không rõ ngày") +
-              " · thiếu canonical Last Updated/current statement read-back."
-            : "NEED VERIFY: Authority = FIN-HOSPITALITY-001; runtime read hoặc confirmation chưa PASS.",
+        "Số dư tiền mặt": cutoverSnapshot
+          ? `Opening 30/09 known cash=${money(cutoverSnapshot.knownCash)}; ownership chưa VERIFIED cho ${cutoverSnapshot.unclassifiedCashCount} account nên chưa coi là free cash.`
+          : kiotVietFundBalanceCandidate === null
+            ? "NEED VERIFY: chưa có Tồn quỹ authenticated + header reconciliation đủ cho cả Hotel và F&B."
+            : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) + ", nhưng chưa map fund/account.",
+        "Công nợ phải thu": cutoverSnapshot
+          ? `Opening Business OTA AR 30/09 = ${money(cutoverSnapshot.businessAr)}; không tính Personal cash/income.`
+          : arCandidateOutstanding === null
+            ? "NEED VERIFY: invoice AR candidate chưa đủ coverage/anomaly guard."
+            : "NEED VERIFY: KiotViet invoice-outstanding candidate MTD = " + money(arCandidateOutstanding) + " · coverage " + arCandidateCoverage.toFixed(1) + "%.",
+        "Công nợ phải trả": cutoverSnapshot
+          ? `Opening AP known=${money(cutoverSnapshot.knownBusinessAp)}; còn ${cutoverSnapshot.unknownApCount} nghĩa vụ chưa có amount nên Net Opening Liquidity vẫn HOLD.`
+          : foundationReadiness.ap.structuredOutstandingReady
+            ? "VERIFIED: Purchase Orders Cần trả NCC đã reconcile với Supplier Nợ cần trả hiện tại."
+            : "NEED VERIFY: AP source chưa reconcile đầy đủ.",
+        "Nợ vay": cutoverSnapshot
+          ? "Opening 30/09: chỉ used principal của Active Bank Debt được tính là nợ; unused credit facility không phải asset/debt. Projected interest chỉ để planning."
+          : debtSnapshot.state === "VERIFIED"
+            ? "VERIFIED · FIN-HOSPITALITY-001"
+            : "NEED VERIFY: current bank evidence chưa PASS.",
         "Lợi nhuận gộp": "NEED VERIFY: Gross Profit = Net Revenue − COGS; sold-SKU BOM VERIFIED=" +
           foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
           ", matched COST-001=" + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + ".",
         "Biên lợi nhuận gộp": "NEED VERIFY: chỉ tính khi Gross Profit VERIFIED và COGS coverage đủ.",
       },
       {
+        financeCutoverOpening: cutoverOpeningRows,
+        financeCutoverFacilities: cutoverFacilityRows,
+        financeCutoverAr: cutoverArRows,
+        financeCutoverAp: cutoverApRows,
+        financeOctoberPlan: cutoverPlanRows,
+        financeMonthEndClose: cutoverCloseRows,
         financePeriodCostGroups: costCategoryRows,
         financePeriodCostEvents: cashflowRows,
         financeCostCoverage: [

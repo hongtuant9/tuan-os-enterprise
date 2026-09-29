@@ -956,7 +956,12 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      finance_cutover_snapshot: {
+        Args: Record<string, never>;
+        Returns: Json | null;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

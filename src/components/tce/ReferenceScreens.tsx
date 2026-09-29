@@ -547,6 +547,24 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "finance":
       return (
         <div className="grid grid-cols-12 gap-2">
+          <Section title="Cutover 30/09/2026 — Opening Financial Position" subtitle="01/10/2026 trở đi = Canonical Actual Finance · NO DATA ≠ 0 · chưa đủ AP/ownership thì Net Opening Liquidity giữ HOLD" className="col-span-12 lg:col-span-5 h-[230px]" icon="◫">
+            <DataTable columns={["Chỉ tiêu","Giá trị","Điều kiện","Trạng thái"]} rows={4} data={data?.tables.financeCutoverOpening}/>
+          </Section>
+          <Section title="Credit Facility & Debt Exposure" subtitle="Used principal là debt; available credit không phải asset. Lãi hiển thị là planning exposure, Actual theo bank statement." className="col-span-12 lg:col-span-7 h-[230px]" icon="▣">
+            <DataTable columns={["Facility","Phân loại","Used principal","Available credit","Rate","Lãi/tháng ước tính","Maturity","Next interest","Status"]} rows={2} data={data?.tables.financeCutoverFacilities}/>
+          </Section>
+          <Section title="Business OTA Receivables — Opening 30/09" subtitle="Expedia/Agoda theo Lavender/Ruby; khi nhận tiền AR → Business Cash, không tự thành Personal Income" className="col-span-12 lg:col-span-6 h-[245px]" icon="▤">
+            <DataTable columns={["#","Đơn vị","OTA","Expected","Expected settlement","Status","Verify"]} rows={4} data={data?.tables.financeCutoverAr}/>
+          </Section>
+          <Section title="September Outstanding Payables" subtitle="Khoản chưa biết amount vẫn tồn tại NEED VERIFY; không mặc định 0 và không tính free cash trước khi AP đầy đủ" className="col-span-12 lg:col-span-6 h-[245px]" icon="!">
+            <DataTable columns={["#","Đơn vị","Category","Đối tác","Amount","Due","Payment","Verify"]} rows={9} data={data?.tables.financeCutoverAp}/>
+          </Section>
+          <Section title="October 2026 Operating Plan" subtitle="Ưu tiên: Mandatory obligations → Personal essentials → Interest → Liquidity reserve → Principal reduction → Investment" className="col-span-12 h-[360px]" icon="▮">
+            <DataTable columns={["Priority","Domain","Đơn vị","Plan line","Baseline","Target","Gate","Verify","Review condition"]} rows={12} data={data?.tables.financeOctoberPlan}/>
+          </Section>
+          <Section title="Month-end Close — October 2026" subtitle="13 bước bắt buộc; chỉ PASS khi có evidence và reconciliation" className="col-span-12 h-[360px]" icon="✓">
+            <DataTable columns={["#","Checklist","Domain","Due","Status","Verify"]} rows={13} data={data?.tables.financeMonthEndClose}/>
+          </Section>
           <Section
             id="cost-analysis"
             title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")}

@@ -76,3 +76,13 @@ test("recovered runtime tabs expose source-specific freshness metadata",()=>{
   assert.match(data,/Activity Log \+ Sync Source Registry \+ TASK\/APPROVAL runtime/);
   assert.match(data,/Finance Actual chưa đủ coverage\/reconciliation/);
 });
+
+test("Business route returns before Finance-only slow dependencies",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  const business=live.indexOf('if (screen === "business")');
+  const financeOnly=live.indexOf('const [hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, cutoverSnapshot]');
+  assert.ok(business>0,"business branch missing");
+  assert.ok(financeOnly>business,"Finance-only dependencies must be fetched after Business early return");
+  const businessBlock=live.slice(business,financeOnly);
+  assert.doesNotMatch(businessBlock,/fetchHotelCashflowActual|fetchFnbCashflowActual|readFinanceBotSummary|readHospitalityDebtSnapshot|readFinanceCutoverSnapshot/);
+});

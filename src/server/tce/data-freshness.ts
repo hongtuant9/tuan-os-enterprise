@@ -44,10 +44,10 @@ export function evaluateFreshness(input: {
     return { status: "STALE", pipelineStatus: "STALE", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (syncAgeMs > input.policy.errorAfterMs) {
-    return { status: "ERROR", syncAgeMs, dataAgeMs };
+    return { status: "ERROR", pipelineStatus: "ERROR", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (syncAgeMs > input.policy.staleAfterMs) {
-    return { status: "STALE", syncAgeMs, dataAgeMs };
+    return { status: "STALE", pipelineStatus: "STALE", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (dataAgeMs == null) {
     return { status: "NO_DATA", pipelineStatus: "LIVE", dataRecencyStatus: "NO_DATA", syncAgeMs, dataAgeMs };

@@ -1,4 +1,6 @@
 export type FreshnessStatus = "LIVE" | "FRESH" | "STALE" | "ERROR" | "NO_DATA";
+export type PipelineFreshnessStatus = "LIVE" | "STALE" | "ERROR";
+export type DataRecencyStatus = "CURRENT" | "NO_RECENT_ACTIVITY" | "NO_DATA";
 
 export type FreshnessPolicy = {
   expectedRefreshMs: number;
@@ -9,6 +11,8 @@ export type FreshnessPolicy = {
 
 export type FreshnessEvaluation = {
   status: FreshnessStatus;
+  pipelineStatus: PipelineFreshnessStatus;
+  dataRecencyStatus: DataRecencyStatus;
   syncAgeMs: number | null;
   dataAgeMs: number | null;
 };
@@ -34,24 +38,24 @@ export function evaluateFreshness(input: {
   const sourceStatus = (input.sourceStatus ?? "").toLowerCase();
 
   if (sourceStatus === "error" || Boolean(input.lastError)) {
-    return { status: "ERROR", syncAgeMs, dataAgeMs };
+    return { status: "ERROR", pipelineStatus: "ERROR", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (syncAgeMs == null) {
-    return { status: "STALE", syncAgeMs, dataAgeMs };
+    return { status: "STALE", pipelineStatus: "STALE", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (syncAgeMs > input.policy.errorAfterMs) {
-    return { status: "ERROR", syncAgeMs, dataAgeMs };
+    return { status: "ERROR", pipelineStatus: "ERROR", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (syncAgeMs > input.policy.staleAfterMs) {
-    return { status: "STALE", syncAgeMs, dataAgeMs };
+    return { status: "STALE", pipelineStatus: "STALE", dataRecencyStatus: dataAgeMs == null ? "NO_DATA" : "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
   }
   if (dataAgeMs == null) {
-    return { status: "NO_DATA", syncAgeMs, dataAgeMs };
+    return { status: "NO_DATA", pipelineStatus: "LIVE", dataRecencyStatus: "NO_DATA", syncAgeMs, dataAgeMs };
   }
   if (dataAgeMs <= input.policy.staleAfterMs) {
-    return { status: "LIVE", syncAgeMs, dataAgeMs };
+    return { status: "LIVE", pipelineStatus: "LIVE", dataRecencyStatus: "CURRENT", syncAgeMs, dataAgeMs };
   }
-  return { status: "FRESH", syncAgeMs, dataAgeMs };
+  return { status: "FRESH", pipelineStatus: "LIVE", dataRecencyStatus: "NO_RECENT_ACTIVITY", syncAgeMs, dataAgeMs };
 }
 
 export const AI_RECEPTIONIST_FRESHNESS_POLICY: FreshnessPolicy = {

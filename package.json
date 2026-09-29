@@ -12,7 +12,8 @@
     "test:attribution-foundation": "node --experimental-strip-types --test src/server/marketing-command-center/attribution-foundation.test.ts src/server/marketing-command-center/kiotviet-booking-normalizer.test.ts src/server/marketing-command-center/lead-qualification.test.ts src/server/ai-receptionist/customer-identity.test.ts",
     "seed:users": "node scripts/seed-users.mjs",
     "test:content-automation": "node --experimental-strip-types --test src/server/marketing-command-center/content-automation.test.ts",
-    "test:tce-safety": "node --experimental-strip-types --test src/server/tce/data-freshness.test.ts src/server/tce/global-safety.test.ts"
+    "test:tce-safety": "node --experimental-strip-types --test src/server/tce/data-freshness.test.ts src/server/tce/global-safety.test.ts",
+    "check:tce-diff-scope": "node scripts/check-tce-diff-scope.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

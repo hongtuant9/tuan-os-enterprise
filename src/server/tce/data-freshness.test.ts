@@ -6,19 +6,30 @@ const now = new Date("2026-09-29T07:00:00.000Z");
 const isoAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_000).toISOString();
 
 test("fresh pipeline with recent data is LIVE", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(1),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"LIVE");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(1),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"LIVE");
+  assert.equal(x.pipelineStatus,"LIVE");
+  assert.equal(x.dataRecencyStatus,"CURRENT");
 });
 
 test("fresh pipeline with old data is FRESH not STALE", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(1),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"FRESH");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(1),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"FRESH");
+  assert.equal(x.pipelineStatus,"LIVE");
+  assert.equal(x.dataRecencyStatus,"NO_RECENT_ACTIVITY");
 });
 
 test("stale pipeline is STALE regardless of old records", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(8),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"STALE");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(8),lastRecordAt:isoAgo(180),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"STALE");
+  assert.equal(x.pipelineStatus,"STALE");
+  assert.equal(x.dataRecencyStatus,"NO_RECENT_ACTIVITY");
 });
 
 test("pipeline beyond error threshold is ERROR", () => {
-  assert.equal(evaluateFreshness({now,lastSyncAt:isoAgo(20),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY}).status,"ERROR");
+  const x = evaluateFreshness({now,lastSyncAt:isoAgo(20),lastRecordAt:isoAgo(2),sourceStatus:"idle",policy:AI_RECEPTIONIST_FRESHNESS_POLICY});
+  assert.equal(x.status,"ERROR");
+  assert.equal(x.pipelineStatus,"ERROR");
 });
 
 test("source error is ERROR immediately", () => {

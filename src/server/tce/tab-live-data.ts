@@ -24,7 +24,7 @@ import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
-import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type FreshnessStatus } from "@/server/tce/data-freshness";
+import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type DataRecencyStatus, type FreshnessStatus, type PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
 export type TceTabScreen =
   | "business"
@@ -74,6 +74,8 @@ export type TceTabLiveData = {
     appRefreshedAt: string;
     source: string;
     freshnessStatus: FreshnessStatus;
+    pipelineStatus: PipelineFreshnessStatus;
+    dataRecencyStatus: DataRecencyStatus;
     verificationStatus: "VERIFIED" | "NEED_VERIFY" | "HOLD";
     warning: string | null;
     expectedRefreshMinutes: number;
@@ -1120,17 +1122,21 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       lastError: otaCollector?.last_error ?? null,
       policy: AI_RECEPTIONIST_FRESHNESS_POLICY,
     });
-    const freshnessWarning = freshnessEval.status === "ERROR"
+    const freshnessWarning = freshnessEval.pipelineStatus === "ERROR"
       ? `OTA Email Collector đang lỗi hoặc quá hạn ${AI_RECEPTIONIST_FRESHNESS_POLICY.errorAfterMs / 60_000} phút. Không coi dữ liệu cũ là hiện tại.`
-      : freshnessEval.status === "STALE"
+      : freshnessEval.pipelineStatus === "STALE"
         ? `OTA Email Collector chưa sync trong ngưỡng ${AI_RECEPTIONIST_FRESHNESS_POLICY.staleAfterMs / 60_000} phút. Dữ liệu có thể đã cũ.`
-        : null;
+        : freshnessEval.dataRecencyStatus === "NO_RECENT_ACTIVITY"
+          ? `Pipeline đang cập nhật bình thường; chưa có guest interaction mới kể từ ${latestDataAt ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(latestDataAt)) : "lần ghi nhận gần nhất"}. Không đồng nghĩa collector bị lỗi.`
+          : null;
     const freshness: TceTabLiveData["freshness"] = {
       dataThrough: latestDataAt,
       lastSyncAt: otaCollector?.last_synced_at ?? null,
       appRefreshedAt: now.toISOString(),
       source: "Supabase AI Receptionist · OTA Email Collector + Webhooks",
       freshnessStatus: freshnessEval.status,
+      pipelineStatus: freshnessEval.pipelineStatus,
+      dataRecencyStatus: freshnessEval.dataRecencyStatus,
       verificationStatus: "NEED_VERIFY",
       warning: freshnessWarning,
       expectedRefreshMinutes: AI_RECEPTIONIST_FRESHNESS_POLICY.expectedRefreshMs / 60_000,

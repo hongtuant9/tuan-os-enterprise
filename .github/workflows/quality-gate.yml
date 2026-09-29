@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Lấy source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cài Node.js
         uses: actions/setup-node@v4
@@ -31,6 +33,11 @@ jobs:
 
       - name: Kiểm tra finance foundation
         run: npm run test:finance-foundation
+
+      - name: Kiểm tra TCE Diff Gate
+        run: npm run check:tce-diff-scope
+        env:
+          TCE_DIFF_BASE: origin/${{ github.base_ref }}
 
       - name: Kiểm tra TCE Global UI & Data Safety
         run: npm run test:tce-safety

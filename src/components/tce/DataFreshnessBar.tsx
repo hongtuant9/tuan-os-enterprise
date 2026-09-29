@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { FreshnessStatus } from "@/server/tce/data-freshness";
+import type { DataRecencyStatus, FreshnessStatus, PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
 type Props = {
   dataThrough: string | null;
@@ -10,16 +10,26 @@ type Props = {
   lastSyncAt: string | null;
   source: string;
   freshnessStatus: FreshnessStatus;
+  pipelineStatus: PipelineFreshnessStatus;
+  dataRecencyStatus: DataRecencyStatus;
   verificationStatus: "VERIFIED" | "NEED_VERIFY" | "HOLD";
   warning?: string | null;
 };
 
-const freshnessTone: Record<FreshnessStatus,string> = {
+const pipelineTone: Record<PipelineFreshnessStatus,string> = {
   LIVE: "bg-emerald-100 text-emerald-700",
-  FRESH: "bg-blue-100 text-blue-700",
   STALE: "bg-amber-100 text-amber-800",
   ERROR: "bg-rose-100 text-rose-700",
+};
+const recencyTone: Record<DataRecencyStatus,string> = {
+  CURRENT: "bg-emerald-100 text-emerald-700",
+  NO_RECENT_ACTIVITY: "bg-blue-100 text-blue-700",
   NO_DATA: "bg-slate-100 text-slate-600",
+};
+const recencyLabel: Record<DataRecencyStatus,string> = {
+  CURRENT: "CÓ HOẠT ĐỘNG MỚI",
+  NO_RECENT_ACTIVITY: "CHƯA CÓ HOẠT ĐỘNG MỚI",
+  NO_DATA: "CHƯA CÓ DỮ LIỆU",
 };
 const verificationTone: Record<Props["verificationStatus"],string> = {
   VERIFIED: "bg-emerald-100 text-emerald-700",
@@ -67,7 +77,8 @@ export default function DataFreshnessBar(props: Props) {
         <span><b>Sync gần nhất:</b> {fmt(props.lastSyncAt)}</span>
         <span><b>App cập nhật:</b> {fmt(props.appRefreshedAt)}</span>
         <span><b>Nguồn:</b> {props.source}</span>
-        <span className={`rounded px-2 py-1 font-bold ${freshnessTone[props.freshnessStatus]}`}>Độ mới: {props.freshnessStatus}</span>
+        <span className={`rounded px-2 py-1 font-bold ${pipelineTone[props.pipelineStatus]}`}>Pipeline: {props.pipelineStatus}</span>
+        <span className={`rounded px-2 py-1 font-bold ${recencyTone[props.dataRecencyStatus]}`}>Hoạt động: {recencyLabel[props.dataRecencyStatus]}</span>
         <span className={`rounded px-2 py-1 font-bold ${verificationTone[props.verificationStatus]}`}>Xác minh: {props.verificationStatus}</span>
       </div>
       <button type="button" onClick={refresh} disabled={pending} className="rounded-[6px] border border-[#b9d3f3] bg-white px-3 py-1.5 text-[9px] font-bold text-[#1768df] disabled:opacity-50">{pending ? "Đang nạp…" : "Nạp lại"}</button>

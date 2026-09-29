@@ -87,3 +87,59 @@ export function assertApprovalGatedPublish(input: {
 
   return { allowed: true, reason: "APPROVAL_GATED_READY" } as const;
 }
+
+
+export type ContentOutcomeEventType =
+  | "directions_click"
+  | "lead"
+  | "booking"
+  | "revenue";
+
+export function buildContentAttributionBridge(input: {
+  contentId: string;
+  source: string;
+  medium: string;
+  campaign: string;
+}) {
+  const contentId = input.contentId.trim();
+  const source = input.source.trim();
+  const medium = input.medium.trim();
+  const campaign = input.campaign.trim();
+
+  if (!contentId || !source || !medium || !campaign) {
+    throw new Error("CONTENT_TRACKING_FIELDS_REQUIRED");
+  }
+
+  return {
+    utm_source: source,
+    utm_medium: medium,
+    utm_campaign: campaign,
+    utm_content: contentId,
+  } as const;
+}
+
+export function canCountVerifiedContentOutcome(input: {
+  eventType: ContentOutcomeEventType;
+  verificationStatus: "VERIFIED" | "PARTIAL" | "NEED_VERIFY" | "HOLD";
+  attributionStatus:
+    | "DIRECT_VERIFIED"
+    | "ASSISTED_VERIFIED"
+    | "SELF_REPORTED"
+    | "INFERRED"
+    | "UNATTRIBUTED"
+    | "NEED_VERIFY";
+  hasRequiredAuthorityLink: boolean;
+}) {
+  if (input.verificationStatus !== "VERIFIED") return false;
+
+  if (input.eventType === "directions_click") {
+    return input.attributionStatus === "DIRECT_VERIFIED";
+  }
+
+  if (!input.hasRequiredAuthorityLink) return false;
+
+  return (
+    input.attributionStatus === "DIRECT_VERIFIED" ||
+    input.attributionStatus === "ASSISTED_VERIFIED"
+  );
+}

@@ -204,7 +204,7 @@ group by 1,2;
 create or replace function public.finance_operating_snapshot(p_month date default date '2026-10-01')
 returns jsonb
 language sql security definer set search_path=pg_catalog,public as $$
-with m as (select date_trunc('month',p_month)::date month),
+with m as (select date_trunc('month',p_month)::date as period_month),
 accounts as (
  select *, case when bank_balance is null or book_balance is null then null else bank_balance-book_balance end variance
  from public.finance_accounts where record_status='ACTIVE'
@@ -212,9 +212,9 @@ accounts as (
 fac as (select * from public.finance_credit_facilities where record_status='ACTIVE'),
 open_ar as (select * from public.business_finance_open_items where record_status='ACTIVE' and item_type='AR'),
 open_ap as (select * from public.business_finance_open_items where record_status='ACTIVE' and item_type='AP'),
-tax as (select * from public.finance_tax_positions where period=(select month from m) and business_unit='CONSOLIDATED' limit 1),
-plan as (select * from public.finance_operating_plan_lines where plan_month=(select month from m)),
-pnl as (select * from public.business_finance_pnl_v where month=(select month from m)),
+tax as (select * from public.finance_tax_positions where period=(select period_month from m) and business_unit='CONSOLIDATED' limit 1),
+plan as (select * from public.finance_operating_plan_lines where plan_month=(select period_month from m)),
+pnl as (select * from public.business_finance_pnl_v where month=(select period_month from m)),
 calc as (
  select
    coalesce((select sum(bank_balance) from accounts where 'PERSONAL_OPERATING_ACCOUNT'=any(account_roles) and verification_status='VERIFIED'),0) personal_cash,
@@ -245,7 +245,7 @@ calc as (
  from calc c left join tax on true
 )
 select case when public.is_personal_finance_owner() then jsonb_build_object(
- 'month',(select month from m),
+ 'month',(select period_month from m),
  'cutoverDate','2026-09-30','canonicalActualFrom','2026-10-01',
  'summary',jsonb_build_object(
    'personalCash',d.personal_cash,'emergencyFund',d.emergency_fund,'taxReserve',d.tax_reserve,
@@ -262,8 +262,8 @@ select case when public.is_personal_finance_owner() then jsonb_build_object(
  'ap',(select coalesce(jsonb_agg(jsonb_build_object('businessUnit',business_unit,'category',category_code,'counterparty',counterparty,'amount',amount,'dueDate',due_date,'status',payment_status,'verificationStatus',verification_status) order by business_unit,category_code),'[]'::jsonb) from open_ap),
  'pnl',(select coalesce(jsonb_agg(to_jsonb(p) order by business_unit),'[]'::jsonb) from pnl p),
  'taxPosition',(select to_jsonb(t) from tax t),
- 'latestAllocation',(select to_jsonb(a) from public.finance_allocation_proposals a where proposal_month=(select month from m) and status not in ('SUPERSEDED','CANCELLED') order by updated_at desc limit 1),
- 'closeChecklist',(select coalesce(jsonb_agg(to_jsonb(c) order by step_no),'[]'::jsonb) from public.finance_month_end_close_items c where close_month=(select month from m)),
+ 'latestAllocation',(select to_jsonb(a) from public.finance_allocation_proposals a where proposal_month=(select period_month from m) and status not in ('SUPERSEDED','CANCELLED') order by updated_at desc limit 1),
+ 'closeChecklist',(select coalesce(jsonb_agg(to_jsonb(c) order by step_no),'[]'::jsonb) from public.finance_month_end_close_items c where close_month=(select period_month from m)),
  'plan',(select coalesce(jsonb_agg(to_jsonb(p) order by priority_order,line_code),'[]'::jsonb) from plan p)
 ) else null end from dist d;
 $$;

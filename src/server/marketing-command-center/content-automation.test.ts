@@ -6,7 +6,7 @@ import {
   assertApprovalGatedPublish,
   buildPublishIdempotencyKey,
   evaluateVariantReadiness,
-} from "./content-automation";
+} from "./content-automation.ts";
 
 test("variant is ready only when every mandatory gate passes and approval exists", () => {
   const gateResults = Object.fromEntries(

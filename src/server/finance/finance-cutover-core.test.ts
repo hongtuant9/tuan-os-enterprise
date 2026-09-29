@@ -31,3 +31,28 @@ test("business AR/revenue is never personal income without reconciled bridge",()
 
 test("canonical business unit mapping never guesses unknown Hotel branch",()=>{assert.equal(canonicalBusinessUnit("HOTEL","Lavender Homestay"),"LAVENDER");assert.equal(canonicalBusinessUnit("HOTEL","Ruby Homestay"),"RUBY");assert.equal(canonicalBusinessUnit("HOTEL","Unknown"),"HOSPITALITY_SHARED");assert.equal(canonicalBusinessUnit("FNB","anything"),"COZY_GARDEN");});
 test("canonical finance source key is stable",()=>{assert.equal(canonicalFinanceKey("FNB","INVOICE","123"),"KIOTVIET:FNB:INVOICE:123");});
+
+import { isAllowedRestrictedTransfer, transferPreview, validateAllocation } from "./finance-cutover-core.ts";
+
+test("allocation fails closed until tax and distributable cash are verified",()=>{
+  const x=validateAllocation({ownerDistributableCash:null,taxReserveRequired:null,buckets:{taxReserve:0,personal:0,emergencyFund:0,debtRepayment:0,overdraft401:0,businessReserve:0,other:0}});
+  assert.equal(x.ok,false); assert.equal(x.reason,"GATE_NOT_VERIFIED");
+});
+
+test("allocation protects tax reserve and owner distributable cash",()=>{
+  const b={taxReserve:30,personal:40,emergencyFund:20,debtRepayment:10,overdraft401:20,businessReserve:10,other:0};
+  assert.equal(validateAllocation({ownerDistributableCash:100,taxReserveRequired:30,buckets:b}).ok,true);
+  assert.equal(validateAllocation({ownerDistributableCash:90,taxReserveRequired:30,buckets:b}).reason,"OWNER_DISTRIBUTION_EXCEEDED");
+  assert.equal(validateAllocation({ownerDistributableCash:100,taxReserveRequired:40,buckets:b}).reason,"TAX_RESERVE_SHORTFALL");
+});
+
+test("transfer preview does not mutate and prevents overdraft",()=>{
+  assert.deepEqual(transferPreview({sourceBalance:100,destinationBalance:20,amount:30}),{sourceBefore:100,sourceAfter:70,destinationBefore:20,destinationAfter:50});
+  assert.throws(()=>transferPreview({sourceBalance:10,destinationBalance:0,amount:20}),/INSUFFICIENT/);
+});
+
+test("restricted accounts only allow approved purposes",()=>{
+  assert.equal(isAllowedRestrictedTransfer(["BUSINESS_TAX_RESERVE_ACCOUNT"],"PERSONAL"),false);
+  assert.equal(isAllowedRestrictedTransfer(["BUSINESS_TAX_RESERVE_ACCOUNT"],"TAX_PAYMENT"),true);
+  assert.equal(isAllowedRestrictedTransfer(["PERSONAL_SAFETY_ACCOUNT"],"DEBT_REPAYMENT"),false);
+});

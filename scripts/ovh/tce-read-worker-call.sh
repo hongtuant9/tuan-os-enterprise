@@ -16,6 +16,11 @@ case "$MODE" in
     HEADER="x-tce-kiotviet-inventory-bot-worker-token"
     SALT="kiotviet-inventory-bot-worker-v1"
     ;;
+  reception-ota)
+    ENDPOINT="/api/internal/tce/ota-email/worker"
+    HEADER="x-tce-ota-email-worker-token"
+    SALT="tce-ota-email-worker-v1"
+    ;;
   *)
     echo "[TCE read worker] invalid mode"
     exit 2
@@ -60,20 +65,28 @@ except Exception:
     print(f"[TCE read worker] mode={mode} state=BAD_JSON")
     raise SystemExit(1)
 parts = []
-for item in data.get("results", []) or []:
-    system = item.get("system", "?")
-    state = item.get("state", "?")
-    if mode == "finance":
-        cb = item.get("cashbook") or {}
-        rec = cb.get("reconciliation") or {}
-        parts.append(
-            f"{system}:{state}:rows={item.get('rowCount',0)}:"
-            f"cashbook={cb.get('reportedTotalRows','?')}:"
-            f"reconciled={rec.get('verified',False)}"
-        )
-    else:
-        parts.append(
-            f"{system}:{state}:modules={item.get('verifiedModules',0)}/{item.get('moduleCount',0)}"
-        )
-print(f"[TCE read worker] mode={mode} ok={data.get('ok', False)} " + " | ".join(parts))
+if mode == "reception-ota":
+    print(
+        f"[TCE read worker] mode={mode} ok={data.get('ok', False)} "
+        f"configured={data.get('configured', False)} mailboxes={data.get('mailboxesConfigured',0)} "
+        f"scanned={data.get('scanned',0)} actionable={data.get('actionable',0)} "
+        f"drafted={data.get('drafted',0)} duplicates={data.get('duplicates',0)} failed={data.get('failed',0)}"
+    )
+else:
+    for item in data.get("results", []) or []:
+        system = item.get("system", "?")
+        state = item.get("state", "?")
+        if mode == "finance":
+            cb = item.get("cashbook") or {}
+            rec = cb.get("reconciliation") or {}
+            parts.append(
+                f"{system}:{state}:rows={item.get('rowCount',0)}:"
+                f"cashbook={cb.get('reportedTotalRows','?')}:"
+                f"reconciled={rec.get('verified',False)}"
+            )
+        else:
+            parts.append(
+                f"{system}:{state}:modules={item.get('verifiedModules',0)}/{item.get('moduleCount',0)}"
+            )
+    print(f"[TCE read worker] mode={mode} ok={data.get('ok', False)} " + " | ".join(parts))
 PY

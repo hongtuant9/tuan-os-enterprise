@@ -4,6 +4,7 @@ import { TceWorkspaceShell } from "@/components/tce/TceShell";
 import MobileMockupScreen from "@/components/tce/MobileMockup";
 import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 import VerificationHelp, { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/VerificationHelp";
+import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
 
 type ScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -778,6 +779,7 @@ export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; d
       <div className="hidden md:block">
         <TceWorkspaceShell title={m.title} subtitle={m.subtitle} generatedAt={data?.generatedAt ?? new Date().toISOString()}>
           <div className="mx-auto max-w-[1500px] px-[10px] pb-[10px] pt-[10px]">
+            {data?.freshness ? <DataFreshnessBar {...data.freshness}/> : null}
             {m.detailHref ? <div className="absolute right-4 top-[91px] z-10"><Link href={m.detailHref} className="rounded-[5px] border border-[#b7d3f9] bg-white px-3 py-1 text-[8px] font-bold text-[#1768df]">{m.detailLabel} →</Link></div> : null}
             <div className={"grid gap-2 " + (metrics.length === 7 ? "grid-cols-7" : "grid-cols-6")}>
               {metrics.map((metric) => {

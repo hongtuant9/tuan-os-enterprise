@@ -155,7 +155,7 @@ if [ -f "$CADDY_SOURCE" ]; then
   fi
 fi
 
-for unit in tce-finance-read.service tce-finance-read.timer tce-inventory-read.service tce-inventory-read.timer; do
+for unit in tce-finance-read.service tce-finance-read.timer tce-inventory-read.service tce-inventory-read.timer tce-reception-ota.service tce-reception-ota.timer; do
   source_unit="$APP_ROOT/scripts/ovh/$unit"
   if [ -f "$source_unit" ]; then
     install -m 0644 "$source_unit" "/etc/systemd/system/$unit"
@@ -163,8 +163,8 @@ for unit in tce-finance-read.service tce-finance-read.timer tce-inventory-read.s
 done
 chmod 0755 "$APP_ROOT/scripts/ovh/tce-read-worker-call.sh"
 systemctl daemon-reload
-systemctl enable --now tce-finance-read.timer tce-inventory-read.timer >/dev/null 2>&1 || log "WARN: read-only KiotViet timers could not be enabled"
-systemctl start --no-block tce-finance-read.service tce-inventory-read.service >/dev/null 2>&1 || log "WARN: initial KiotViet read refresh could not be queued"
+systemctl enable --now tce-finance-read.timer tce-inventory-read.timer tce-reception-ota.timer >/dev/null 2>&1 || log "WARN: read-only data timers could not be enabled"
+systemctl start --no-block tce-finance-read.service tce-inventory-read.service tce-reception-ota.service >/dev/null 2>&1 || log "WARN: initial read refresh could not be queued"
 
 printf '%s\n' "$SHA" > "$STATE_DIR/current-sha"
 log "PASS sha=$SHA runtime=$EXPECTED_RUNTIME autopilot=$EXPECTED_AUTOPILOT desktop_dependency=false"

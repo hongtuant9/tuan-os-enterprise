@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { debtExposure, isPersonalIncomeSource, netOpeningLiquidity, projectedMonthlyInterest } from "./finance-cutover-core.ts";
+import { canonicalBusinessUnit, canonicalFinanceKey, debtExposure, isPersonalIncomeSource, netOpeningLiquidity, projectedMonthlyInterest } from "./finance-cutover-core.ts";
 
 test("unused credit facility is not debt and has zero projected interest",()=>{
   assert.equal(debtExposure([{usedPrincipal:0}]),0);
@@ -28,3 +28,6 @@ test("business AR/revenue is never personal income without reconciled bridge",()
   assert.equal(isPersonalIncomeSource("BUSINESS_AR"),false);
   assert.equal(isPersonalIncomeSource("RECONCILED_OWNER_DISTRIBUTION"),true);
 });
+
+test("canonical business unit mapping never guesses unknown Hotel branch",()=>{assert.equal(canonicalBusinessUnit("HOTEL","Lavender Homestay"),"LAVENDER");assert.equal(canonicalBusinessUnit("HOTEL","Ruby Homestay"),"RUBY");assert.equal(canonicalBusinessUnit("HOTEL","Unknown"),"HOSPITALITY_SHARED");assert.equal(canonicalBusinessUnit("FNB","anything"),"COZY_GARDEN");});
+test("canonical finance source key is stable",()=>{assert.equal(canonicalFinanceKey("FNB","INVOICE","123"),"KIOTVIET:FNB:INVOICE:123");});

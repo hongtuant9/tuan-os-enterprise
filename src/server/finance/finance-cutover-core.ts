@@ -15,3 +15,6 @@ export function netOpeningLiquidity(input:{ cash:number; ar:number; knownAp:numb
 export function isPersonalIncomeSource(kind:string) {
   return kind === "PERSONAL_INCOME" || kind === "RECONCILED_OWNER_DISTRIBUTION" || kind === "SALARY_COMPENSATION";
 }
+
+export function canonicalBusinessUnit(system:"HOTEL"|"FNB",branchName:string){if(system==="FNB")return "COZY_GARDEN";const x=branchName.toLowerCase();if(x.includes("lavender"))return "LAVENDER";if(x.includes("ruby"))return "RUBY";return "HOSPITALITY_SHARED";}
+export function canonicalFinanceKey(system:string,kind:string,id:string){return `KIOTVIET:${system}:${kind}:${id}`;}

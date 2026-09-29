@@ -5,6 +5,7 @@ import {
   runFinanceBotRead,
   type FinanceBotSystem,
 } from "@/server/integrations/kiotviet/finance-browser-bot";
+import { syncCanonicalBusinessFinance } from "@/server/finance/canonical-finance-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
   }
 
   const container = getAdminContainer();
+  let canonicalSync: unknown = { state: "NOT_RUN" };
+  try {
+    canonicalSync = await syncCanonicalBusinessFinance(container.db);
+  } catch (error) {
+    canonicalSync = { state: "ERROR", message: error instanceof Error ? error.message : "canonical finance sync failed" };
+  }
   await container.activityLog.record({
     agent: "TCE KiotViet Finance Bot v1",
     unit: "Finance",
@@ -47,5 +54,5 @@ export async function POST(req: NextRequest) {
     ).join(" | "),
   }).catch(() => undefined);
 
-  return NextResponse.json({ ok: true, results }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, results, canonicalSync }, { headers: { "Cache-Control": "no-store" } });
 }

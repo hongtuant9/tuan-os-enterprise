@@ -64,3 +64,15 @@ test("verification fallback helper stays server-safe",()=>{
   assert.match(helper,/export function fallbackVerificationGuide/);
   assert.doesNotMatch(helper,/use client/);
 });
+
+
+test("recovered runtime tabs expose source-specific freshness metadata",()=>{
+  const data=read("src/server/tce/tab-live-data.ts");
+  for(const token of ["financeFreshness","marketingFreshness","operationsFreshness","customerFreshness","hrFreshness","reportsFreshness"]){
+    assert.match(data,new RegExp(token));
+  }
+  assert.match(data,/TASK-001 sync \+ KiotViet Hotel direct runtime/);
+  assert.match(data,/Hospitality CRM canonical profiles \+ AI Receptionist runtime/);
+  assert.match(data,/Activity Log \+ Sync Source Registry \+ TASK\/APPROVAL runtime/);
+  assert.match(data,/Finance Actual chưa đủ coverage\/reconciliation/);
+});

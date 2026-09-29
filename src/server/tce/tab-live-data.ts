@@ -315,6 +315,33 @@ function priorityRank(priority: string) {
   return 2;
 }
 
+function latestIsoValue(values: Array<string | null | undefined>): string | null {
+  let latest: string | null = null;
+  let latestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms) || ms <= latestMs) continue;
+    latestMs = ms;
+    latest = value;
+  }
+  return latest;
+}
+
+function recencyFromTimestamp(now: Date, dataThrough: string | null, currentWithinMs = 24 * 60 * 60_000): DataRecencyStatus {
+  if (!dataThrough) return "NO_DATA";
+  const ts = Date.parse(dataThrough);
+  if (!Number.isFinite(ts)) return "NO_DATA";
+  return now.getTime() - ts <= currentWithinMs ? "CURRENT" : "NO_RECENT_ACTIVITY";
+}
+
+function freshnessStatusFromPipeline(pipeline: PipelineFreshnessStatus, recency: DataRecencyStatus): FreshnessStatus {
+  if (pipeline === "ERROR") return "ERROR";
+  if (pipeline === "STALE") return "STALE";
+  if (recency === "NO_DATA") return "NO_DATA";
+  return recency === "CURRENT" ? "LIVE" : "FRESH";
+}
+
 function result(
   period: TcePeriodResolved,
   metricValues: Record<string, string>,
@@ -701,6 +728,30 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       ],
     ];
 
+    const financeDirectReadable = [hotelPeriod.state, fnbPeriod.state, hotelMonth.state, fnbMonth.state].every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
+    const financeDataThrough = latestIsoValue([
+      financeDirectReadable ? now.toISOString() : null,
+      hotelFinanceBot?.checkedAt ?? null,
+      fnbFinanceBot?.checkedAt ?? null,
+    ]);
+    const financePipeline: PipelineFreshnessStatus = financeDirectReadable ? "LIVE" : "ERROR";
+    const financeRecency = recencyFromTimestamp(now, financeDataThrough, 30 * 60_000);
+    const financeFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: financeDataThrough,
+      lastSyncAt: latestIsoValue([hotelFinanceBot?.checkedAt ?? null, fnbFinanceBot?.checkedAt ?? null]),
+      appRefreshedAt: now.toISOString(),
+      source: "KiotViet Hotel/F&B direct API + Finance Browser VPS + FIN-HOSPITALITY canonical finance",
+      freshnessStatus: freshnessStatusFromPipeline(financePipeline, financeRecency),
+      pipelineStatus: financePipeline,
+      dataRecencyStatus: financeRecency,
+      verificationStatus: foundationReadiness.state === "VERIFIED" ? "VERIFIED" : "NEED_VERIFY",
+      warning: financeDirectReadable
+        ? foundationReadiness.state === "VERIFIED" ? null : "Nguồn đang đọc được nhưng Finance Actual chưa đủ coverage/reconciliation; không suy Cash Out thành Expense hoặc Profit."
+        : "Không đọc được đầy đủ KiotViet direct source ở lần tải này; không thay dữ liệu lỗi bằng 0.",
+      expectedRefreshMinutes: 15, staleAfterMinutes: 30, errorAfterMinutes: 60,
+      owner: "AI CFO + AI CTO / Finance",
+    };
+
     return makeResult(
       {
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
@@ -839,6 +890,7 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       bothTodayVerified ? "PARTIAL" : "NEED_VERIFY",
       { ...financeVerificationGuides, "Biên lợi nhuận gộp": financeVerificationGuides["Biên lợi nhuận"] },
+      financeFreshness,
     );
   }
 
@@ -944,6 +996,33 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       textField(row, "status"),
     ]);
 
+    const marketingConnectorLatest = latestIsoValue(mcc.connectors.map((row) => textField(row, "last_success_at") || null));
+    const marketingDataThrough = latestIsoValue([
+      workbookFreshness.workbookModifiedAt,
+      marketingConnectorLatest,
+      ...mcc.attribution.map((row) => textField(row, "occurred_at") || null),
+      ...periodConversations.map((row) => row.lastMessageAt),
+      ...periodUpsellEvents.map((row) => row.created_at),
+    ]);
+    const marketingPipeline: PipelineFreshnessStatus = workbookFreshness.state === "ERROR" ? "ERROR" : "LIVE";
+    const marketingRecency = recencyFromTimestamp(now, marketingDataThrough);
+    const marketingVerified = mcc.sourceState === "LIVE" && mcc.totals.spendVerified && mcc.totals.reachVerified && mcc.totals.revenueVerified;
+    const marketingFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: marketingDataThrough,
+      lastSyncAt: latestIsoValue([workbookFreshness.lastSyncedAt, marketingConnectorLatest]),
+      appRefreshedAt: now.toISOString(),
+      source: "TCE Marketing Workbook + Marketing Command Center connectors + CRM/AI Receptionist",
+      freshnessStatus: freshnessStatusFromPipeline(marketingPipeline, marketingRecency),
+      pipelineStatus: marketingPipeline,
+      dataRecencyStatus: marketingRecency,
+      verificationStatus: marketingVerified ? "VERIFIED" : "NEED_VERIFY",
+      warning: workbookFreshness.state === "ERROR"
+        ? workbookFreshness.errors.join(" | ") || "Marketing workbook pipeline lỗi."
+        : marketingVerified ? null : "Pipeline đang hoạt động nhưng một hoặc nhiều provider Actual/attribution gate chưa VERIFIED.",
+      expectedRefreshMinutes: 15, staleAfterMinutes: 60, errorAfterMinutes: 180,
+      owner: "AI CMO + AI CTO / Marketing",
+    };
+
     const marketRows = mcc.marketIntelligence.slice(0, 10).map((row, i) => [
       String(i + 1),
       textField(row, "MI_ID", "ID", "Record ID") || "MI-" + String(i + 1),
@@ -1043,20 +1122,40 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         ],
       },
       mcc.sourceState === "LIVE" && mcc.totals.spendVerified && mcc.totals.reachVerified ? "LIVE" : "PARTIAL",
+      {},
+      marketingFreshness,
     );
   }
 
   if (screen === "operations") {
-    const [tasks, properties, hotelToday, hotelAvailability] = await Promise.all([
+    const [tasks, properties, hotelToday, hotelAvailability, taskSource] = await Promise.all([
       container.tasks.list(),
       container.properties.list(),
       safeHotel(today + "T00:00:00", today + "T23:59:59"),
       safeHotelAvailability(today),
+      container.syncSources.findByKey("task-001").catch(() => null),
     ]);
     const open = tasks.filter((t) => t.status !== "done");
     const done = tasks.filter((t) => t.status === "done");
     const overdue = open.filter((t) => isTaskOverdue(t.dueDate, t.status, today));
     const blocked = open.filter((t) => t.status === "blocked");
+    const operationsTaskEval = evaluateFreshness({
+      now, lastSyncAt: taskSource?.last_synced_at ?? null, lastRecordAt: taskSource?.last_synced_at ?? null,
+      sourceStatus: taskSource?.status ?? null, lastError: taskSource?.last_error ?? null,
+      policy: { expectedRefreshMs: Math.max(1, Number(taskSource?.schedule_interval_minutes ?? 15)) * 60_000, staleAfterMs: 60 * 60_000, errorAfterMs: 4 * 60 * 60_000, owner: "AI COO / Operations" },
+    });
+    const operationsDirectReadable = hotelToday.state !== "ERROR" && hotelToday.state !== "UNAVAILABLE" && hotelAvailability.state !== "ERROR";
+    const operationsPipeline: PipelineFreshnessStatus = !operationsDirectReadable || operationsTaskEval.pipelineStatus === "ERROR" ? "ERROR" : operationsTaskEval.pipelineStatus;
+    const operationsDataThrough = latestIsoValue([taskSource?.last_synced_at ?? null, operationsDirectReadable ? now.toISOString() : null]);
+    const operationsRecency = operationsDirectReadable ? "CURRENT" as const : operationsTaskEval.dataRecencyStatus;
+    const operationsFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: operationsDataThrough, lastSyncAt: taskSource?.last_synced_at ?? null, appRefreshedAt: now.toISOString(),
+      source: "TASK-001 sync + KiotViet Hotel direct runtime + Property runtime",
+      freshnessStatus: freshnessStatusFromPipeline(operationsPipeline, operationsRecency), pipelineStatus: operationsPipeline, dataRecencyStatus: operationsRecency,
+      verificationStatus: "NEED_VERIFY",
+      warning: operationsPipeline === "ERROR" ? "TASK/KiotViet runtime có source lỗi; không suy NO DATA thành 0." : "Inventory/attendance chưa đủ canonical runtime nên các KPI liên quan tiếp tục NEED_VERIFY.",
+      expectedRefreshMinutes: Number(taskSource?.schedule_interval_minutes ?? 15), staleAfterMinutes: 60, errorAfterMinutes: 240, owner: "AI COO + AI CTO / Operations",
+    };
     const rows = [...open]
       .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
       .slice(0, 12)
@@ -1124,6 +1223,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         operationsExceptions: [...blocked, ...overdue].slice(0, 8).map((t) => t.title),
       },
       "PARTIAL",
+      {},
+      operationsFreshness,
     );
   }
 
@@ -1245,6 +1346,19 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     ).length;
     const confirmed = periodCustomers.reduce((sum, customer) => sum + customer.verifiedBookingCount, 0);
     const pendingRequests = receptionist.managerReviews.filter((review) => review.status === "pending" && inPeriod(review.createdAt)).length;
+    const customerDataThrough = latestIsoValue([
+      ...customers.map((customer) => customer.lastSeenAt),
+      ...receptionist.managerReviews.map((review) => review.createdAt),
+    ]);
+    const customerRecency = recencyFromTimestamp(now, customerDataThrough);
+    const customerFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: customerDataThrough, lastSyncAt: null, appRefreshedAt: now.toISOString(),
+      source: "Hospitality CRM canonical profiles + AI Receptionist runtime",
+      freshnessStatus: freshnessStatusFromPipeline("LIVE", customerRecency), pipelineStatus: "LIVE", dataRecencyStatus: customerRecency,
+      verificationStatus: "NEED_VERIFY",
+      warning: "CRM runtime đang đọc được; KPI Mức hài lòng vẫn NEED_VERIFY vì chưa có review aggregation canonical.",
+      expectedRefreshMinutes: 0, staleAfterMinutes: 0, errorAfterMinutes: 0, owner: "AI CCO + AI CTO / Customer",
+    };
     const channelNames = [...new Set(periodCustomers.flatMap((customer) => customer.channels))];
     const customerChannels = channelNames.map((channel) => {
       const rows = periodCustomers.filter((customer) => customer.channels.includes(channel));
@@ -1289,13 +1403,27 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {},
       "PARTIAL",
+      {},
+      customerFreshness,
     );
   }
 
   if (screen === "hr") {
-    const [tasks, agents] = await Promise.all([container.tasks.list(), container.agents.list()]);
+    const [tasks, agents, taskSource] = await Promise.all([
+      container.tasks.list(), container.agents.list(), container.syncSources.findByKey("task-001").catch(() => null),
+    ]);
     const hrTasks = tasks.filter((t) => /nhân sự|hr|staff|ca |chấm công|lương|đào tạo/i.test(t.unit + " " + t.title));
     const openHr = hrTasks.filter((t) => t.status !== "done");
+    const hrEval = evaluateFreshness({
+      now, lastSyncAt: taskSource?.last_synced_at ?? null, lastRecordAt: taskSource?.last_synced_at ?? null, sourceStatus: taskSource?.status ?? null, lastError: taskSource?.last_error ?? null,
+      policy: { expectedRefreshMs: Math.max(1, Number(taskSource?.schedule_interval_minutes ?? 15)) * 60_000, staleAfterMs: 60 * 60_000, errorAfterMs: 4 * 60 * 60_000, owner: "AI COO / HR" },
+    });
+    const hrFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: taskSource?.last_synced_at ?? null, lastSyncAt: taskSource?.last_synced_at ?? null, appRefreshedAt: now.toISOString(), source: "TASK-001 HR mirror + AI Agent runtime",
+      freshnessStatus: hrEval.status, pipelineStatus: hrEval.pipelineStatus, dataRecencyStatus: hrEval.dataRecencyStatus, verificationStatus: "NEED_VERIFY",
+      warning: hrEval.pipelineStatus === "LIVE" ? "Employee master / attendance / shift runtime chưa tồn tại; không dùng task count thay headcount/chấm công." : "TASK-001 HR source đang stale/error; không suy dữ liệu nhân sự bằng 0.",
+      expectedRefreshMinutes: Number(taskSource?.schedule_interval_minutes ?? 15), staleAfterMinutes: 60, errorAfterMinutes: 240, owner: "AI COO + AI CTO / HR",
+    };
     return makeResult(
       {
         "Tổng nhân sự": "NEED VERIFY",
@@ -1333,6 +1461,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {},
       "NEED_VERIFY",
+      {},
+      hrFreshness,
     );
   }
 
@@ -1346,6 +1476,16 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     const scheduled = syncSources.filter((s) => Number(s.schedule_interval_minutes ?? 0) > 0).length;
     const errorSources = syncSources.filter((s) => s.status === "error").length;
     const periodLogs = logs.filter((log) => inPeriod(log.timestamp));
+    const reportsLastSync = latestIsoValue(syncSources.map((source) => source.last_synced_at));
+    const reportsDataThrough = latestIsoValue([reportsLastSync, ...logs.map((log) => log.timestamp)]);
+    const reportsPipeline: PipelineFreshnessStatus = errorSources ? "ERROR" : reportsLastSync ? "LIVE" : "STALE";
+    const reportsRecency = recencyFromTimestamp(now, reportsDataThrough);
+    const reportsFreshness: TceTabLiveData["freshness"] = {
+      dataThrough: reportsDataThrough, lastSyncAt: reportsLastSync, appRefreshedAt: now.toISOString(), source: "Activity Log + Sync Source Registry + TASK/APPROVAL runtime",
+      freshnessStatus: freshnessStatusFromPipeline(reportsPipeline, reportsRecency), pipelineStatus: reportsPipeline, dataRecencyStatus: reportsRecency, verificationStatus: "NEED_VERIFY",
+      warning: errorSources ? `${errorSources} sync source đang ERROR; report phải giữ trạng thái nguồn thay vì coi dataset đầy đủ.` : "Report catalog/product analytics/export queue chưa đủ canonical data; các KPI tương ứng tiếp tục NEED_VERIFY.",
+      expectedRefreshMinutes: 15, staleAfterMinutes: 60, errorAfterMinutes: 240, owner: "TUAN OS Reporting + AI CTO",
+    };
     return makeResult(
       {
         "Báo cáo đã tạo": String(periodLogs.length),
@@ -1387,6 +1527,8 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
       },
       {},
       errorSources ? "PARTIAL" : "LIVE",
+      {},
+      reportsFreshness,
     );
   }
 

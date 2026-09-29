@@ -32,7 +32,7 @@ test("business AR/revenue is never personal income without reconciled bridge",()
 test("canonical business unit mapping never guesses unknown Hotel branch",()=>{assert.equal(canonicalBusinessUnit("HOTEL","Lavender Homestay"),"LAVENDER");assert.equal(canonicalBusinessUnit("HOTEL","Ruby Homestay"),"RUBY");assert.equal(canonicalBusinessUnit("HOTEL","Unknown"),"HOSPITALITY_SHARED");assert.equal(canonicalBusinessUnit("FNB","anything"),"COZY_GARDEN");});
 test("canonical finance source key is stable",()=>{assert.equal(canonicalFinanceKey("FNB","INVOICE","123"),"KIOTVIET:FNB:INVOICE:123");});
 
-import { isAllowedRestrictedTransfer, transferPreview, validateAllocation } from "./finance-cutover-core.ts";
+import { isAllowedRestrictedTransfer, payrollSettlement, transferPreview, validateAllocation } from "./finance-cutover-core.ts";
 
 test("allocation fails closed until tax and distributable cash are verified",()=>{
   const x=validateAllocation({ownerDistributableCash:null,taxReserveRequired:null,buckets:{taxReserve:0,personal:0,emergencyFund:0,debtRepayment:0,overdraft401:0,businessReserve:0,other:0}});
@@ -55,4 +55,22 @@ test("restricted accounts only allow approved purposes",()=>{
   assert.equal(isAllowedRestrictedTransfer(["BUSINESS_TAX_RESERVE_ACCOUNT"],"PERSONAL"),false);
   assert.equal(isAllowedRestrictedTransfer(["BUSINESS_TAX_RESERVE_ACCOUNT"],"TAX_PAYMENT"),true);
   assert.equal(isAllowedRestrictedTransfer(["PERSONAL_SAFETY_ACCOUNT"],"DEBT_REPAYMENT"),false);
+});
+
+test("salary advance settles payroll payable without double-counting payroll expense",()=>{
+  assert.deepEqual(payrollSettlement({grossPayroll:45_000_000,salaryAdvance:30_000_000}),{
+    payrollExpense:45_000_000,
+    advanceApplied:30_000_000,
+    payrollPayable:15_000_000,
+    remainingAdvance:0,
+  });
+});
+
+test("salary advance excess remains advance asset and does not create negative payroll payable",()=>{
+  assert.deepEqual(payrollSettlement({grossPayroll:20_000_000,salaryAdvance:35_000_000}),{
+    payrollExpense:20_000_000,
+    advanceApplied:20_000_000,
+    payrollPayable:0,
+    remainingAdvance:15_000_000,
+  });
 });

@@ -289,4 +289,4 @@ values
 on conflict(close_month,checklist_code,business_unit) do nothing;
 
 insert into public.activity_logs(agent,unit,message,type)
-values('TUAN OS','Finance','Financial Operating Model cutover prepared: 30/09/2026 opening position; 01/10/2026 canonical actual. No financial transaction executed. Source DEC-FIN-CUTOVER-20260929-001.','finance_cutover');
+values('TUAN OS','Finance','Financial Operating Model cutover prepared: 30/09/2026 opening position; 01/10/2026 canonical actual. No financial transaction executed. Source DEC-FIN-CUTOVER-20260929-001.','action');

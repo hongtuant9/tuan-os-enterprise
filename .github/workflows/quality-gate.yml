@@ -32,6 +32,9 @@ jobs:
       - name: Kiểm tra finance foundation
         run: npm run test:finance-foundation
 
+      - name: Kiểm tra content automation foundation
+        run: npm run test:content-automation
+
       - name: Kiểm tra build
         run: npm run build
         env:

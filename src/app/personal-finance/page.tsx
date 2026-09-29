@@ -16,6 +16,7 @@ import {
 import { MasterDataSelect } from "./MasterDataSelect";
 import { TransactionMasterFields } from "./TransactionMasterFields";
 import { ConfirmSubmitButton } from "./ConfirmSubmitButton";
+import { FinancialFreedomDashboard } from "./FinancialFreedomDashboard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -55,18 +56,6 @@ function Status({ value }: { value: string }) {
   return <span className={"rounded-full px-2 py-1 text-[10px] font-bold " + cls}>{label}</span>;
 }
 
-function Card(props: {
-  label: string; value: string; source: string; updatedAt?: unknown; sourceUpdatedAt?: unknown;
-  status: string; updateHref: string;
-}) {
-  return <div className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
-    <p className="text-[11px] font-semibold text-[#64799d]">{props.label}</p>
-    <p className="mt-2 text-[24px] font-extrabold tracking-tight text-[#0b2455]">{props.value}</p>
-    <div className="mt-3 flex flex-wrap items-center gap-2"><Status value={props.status} /><span className="text-[9px] text-[#8190a7]">Nguồn: {props.source}</span></div>
-    <p className="mt-1 text-[9px] text-[#95a0b0]">App cập nhật: {fmtDate(props.updatedAt)} · Nguồn cập nhật: {fmtDate(props.sourceUpdatedAt)}</p>
-    <div className="mt-2 flex gap-3 text-[10px] font-semibold"><a href="#data-source-map" className="text-[#1769d2] hover:underline">Xem nguồn</a><a href={props.updateHref} className="text-[#1769d2] hover:underline">Cập nhật dữ liệu</a></div>
-  </div>;
-}
 
 const sourceMap = [
   ["Tài sản ròng","Personal/Family Finance","accounts + non-account assets + debts","owner_finance_position_v","Verified assets − verified liabilities; chỉ hiện khi coverage đủ","Tài khoản / Tài sản / Khoản nợ"],
@@ -105,6 +94,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const editId = firstParam(params.editId);
   const listQuery = firstParam(params.q).trim().toLocaleLowerCase("vi");
   const listStatus = firstParam(params.status).trim();
+  const selectedKpi = firstParam(params.kpi).trim();
   const db = await createClient();
   const { data: auth } = await db.auth.getUser();
   if (!auth.user) redirect("/login");
@@ -114,8 +104,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const raw = db as unknown as SupabaseClient;
   const now = new Date();
   const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(now) + "-01";
+  const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
+  const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -131,9 +123,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("personal_finance_debts").select("*").order("updated_at", { ascending: false }).limit(500),
     raw.from("personal_finance_assets").select("*").order("updated_at", { ascending: false }).limit(500),
     raw.from("owner_business_transfers").select("*").order("transfer_date", { ascending: false }).limit(500),
+    raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -149,6 +142,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const historyDebts = (historyDebtRes.data ?? []) as Row[];
   const historyAssets = (historyAssetRes.data ?? []) as Row[];
   const historyTransfers = (historyTransferRes.data ?? []) as Row[];
+  const snapshots = (snapshotsRes.data ?? []) as Row[];
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -218,16 +212,20 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     <div className="space-y-4 p-4 lg:p-5">
       {migrationMissing ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] font-semibold text-amber-800">HOLD: Personal Finance production schema chưa đầy đủ. Không suy 0đ từ NO DATA và tạm khóa form ghi dữ liệu cho tới khi migration + RLS PASS.</div> : null}
 
-      <section><h2 className="mb-3 text-[15px] font-extrabold text-[#102456]">1. Tổng quan</h2><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card label="Tài sản ròng" value={netWorthStatus==="VERIFIED" ? money(position?.net_worth) : "—"} source="Owner Consolidated View" updatedAt={latest([...assets,...accounts,...debts],"updated_at")} sourceUpdatedAt={latest([...assets,...accounts,...debts],"source_updated_at")} status={netWorthStatus} updateHref="#input-account" />
-        <Card label="Tổng tài sản" value={assetStatus==="VERIFIED" ? money(position?.verified_assets) : "—"} source="Tài khoản + tài sản không trùng lặp" updatedAt={assetUpdatedAt} sourceUpdatedAt={assetSourceAt} status={assetStatus} updateHref="#input-asset" />
-        <Card label="Tổng nợ" value={debtStatus==="VERIFIED" ? money(position?.verified_liabilities) : "—"} source="Personal Finance · Nợ" updatedAt={debtUpdatedAt} sourceUpdatedAt={debtSourceAt} status={debtStatus} updateHref="#input-debt" />
-        <Card label="Tiền khả dụng" value={cashStatus==="VERIFIED" ? money(position?.available_cash) : "—"} source="Tài khoản thanh khoản" updatedAt={accountUpdatedAt} sourceUpdatedAt={latest(accounts,"source_updated_at")} status={cashStatus} updateHref="#input-account" />
-        <Card label="Thu nhập tháng" value={incomeStatus==="VERIFIED" ? money(monthly?.personal_income_actual) : "—"} source="Giao dịch + phân phối thực nhận" updatedAt={monthly?.last_updated_at} sourceUpdatedAt={monthly?.source_updated_at} status={incomeStatus} updateHref="#input-transaction" />
-        <Card label="Chi phí tháng" value={expenseStatus==="VERIFIED" ? money(monthly?.personal_expense_actual) : "—"} source="Giao dịch cá nhân VERIFIED" updatedAt={monthly?.last_updated_at} sourceUpdatedAt={monthly?.source_updated_at} status={expenseStatus} updateHref="#input-transaction" />
-        <Card label="Dòng tiền ròng tháng" value={cashflowStatus==="VERIFIED" ? money(monthly?.personal_net_cash_flow) : "—"} source="Personal + Business↔Personal" updatedAt={monthly?.last_updated_at} sourceUpdatedAt={monthly?.source_updated_at} status={cashflowStatus} updateHref="#input-transaction" />
-        <Card label="Quỹ dự phòng" value={emergencyStatus==="VERIFIED" ? money(position?.emergency_fund) : "—"} source="Tài khoản được đánh dấu Quỹ dự phòng" updatedAt={accountUpdatedAt} sourceUpdatedAt={latest(accounts.filter(x=>x.is_emergency_fund),"source_updated_at")} status={emergencyStatus} updateHref="#input-account" />
-      </div></section>
+      <FinancialFreedomDashboard
+        month={month}
+        position={position}
+        monthly={monthly}
+        goals={goals}
+        snapshots={snapshots}
+        transactions={transactions}
+        historyTransactions={historyTransactions}
+        debts={debts}
+        selectedKpi={selectedKpi}
+        migrationMissing={migrationMissing}
+        statuses={{ netWorth:netWorthStatus, assets:assetStatus, debt:debtStatus, cash:cashStatus, emergency:emergencyStatus, income:incomeStatus, expense:expenseStatus, cashflow:cashflowStatus }}
+        updated={{ assets:assetUpdatedAt, debt:debtUpdatedAt, account:accountUpdatedAt, transaction:monthly?.last_updated_at }}
+      />
 
       <section id="data-source-map" className="rounded-xl border border-[#dce8f4] bg-white p-4">
         <h2 className="text-[14px] font-extrabold text-[#102456]">2. Bản đồ nguồn dữ liệu (Data Source Map)</h2>
@@ -251,19 +249,8 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">7. Tài sản & tài khoản</h2><div className="mt-3 space-y-2">{accounts.map((x,i)=><div key={"a"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.account_type)} · {x.verification_status==="VERIFIED" ? money(x.current_balance) : "—"}</div></div>)}{assets.map((x,i)=><div key={"v"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.asset_type)} · {String(x.valuation_kind)} · {x.verification_status==="VERIFIED" ? money(x.value_amount) : "—"}</div></div>)}{!accounts.length&&!assets.length?<p className="text-[10px] text-slate-500">NO DATA — không đồng nghĩa Tổng tài sản = 0.</p>:null}</div></div>
       </section>
 
-      <section className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">8. Hành trình Tự do tài chính</h2><div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-6">
-        {[
-          ["Tài sản ròng",netWorthStatus==="VERIFIED"?money(position?.net_worth):"—"],
-          ["Quỹ dự phòng",emergencyStatus==="VERIFIED"?money(position?.emergency_fund):"—"],
-          ["Giảm nợ",debtStatus==="VERIFIED"?money(position?.verified_liabilities):"—"],
-          ["Dòng tiền dương",cashflowStatus==="VERIFIED"?money(monthly?.personal_net_cash_flow):"—"],
-          ["Thu nhập bền vững","Theo dõi từ INCOME được đánh dấu bền vững"],
-          ["Mục tiêu tự do tài chính",money(goals.find(x=>x.goal_type==="FINANCIAL_FREEDOM")?.target_amount)],
-        ].map(([label,value],i)=><div key={label} className="rounded-lg bg-[#f5f9fd] p-3 text-center text-[10px]"><b>{i+1}. {label}</b><div className="mt-2 text-[#667b9b]">{value}</div></div>)}
-      </div><p className="mt-3 text-[9px] text-[#8795aa]">Không có Financial Freedom Score. Chỉ dùng Actual VERIFIED/current; dữ liệu cũ hoặc thiếu evidence hiển thị — / CẦN XÁC MINH.</p></section>
-
-      <section className="rounded-xl border border-[#dce8f4] bg-white p-4">
-        <h2 className="text-[14px] font-extrabold text-[#102456]">9. Danh sách dữ liệu & thao tác an toàn</h2>
+            <section id="data-list" className="rounded-xl border border-[#dce8f4] bg-white p-4">
+        <h2 className="text-[14px] font-extrabold text-[#102456]">Chi tiết dữ liệu & thao tác an toàn</h2>
         <p className="mt-1 text-[10px] text-[#445b7d]">Không hard delete. Giao dịch/transfer dùng Hủy; account/asset/debt dùng Ngừng sử dụng/HOLD. Mọi thao tác ghi lý do và audit before/after.</p>
         <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px_auto]" action="/personal-finance">
           <input className={inputClass} name="q" defaultValue={firstParam(params.q)} placeholder="Tìm theo tên, ngày, danh mục, số tiền..."/>

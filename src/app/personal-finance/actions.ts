@@ -300,6 +300,64 @@ export async function saveOwnerBusinessTransfer(form: FormData) {
   revalidatePath("/personal-finance");
 }
 
+
+const FINANCIAL_FREEDOM_KPIS = new Set([
+  "NET_WORTH","TOTAL_DEBT","NET_CASH_FLOW","SUSTAINABLE_INCOME","ESSENTIAL_EXPENSE",
+  "EMERGENCY_FUND","LIQUID_CASH","DEBT_SERVICE_COVERAGE","SAVINGS_RATE"
+]);
+
+export async function saveFinancialFreedomTarget(form: FormData) {
+  const { db, userId } = await ownerContext();
+  const kpiCode = requiredText(form,"kpi_code").toUpperCase();
+  if (!FINANCIAL_FREEDOM_KPIS.has(kpiCode)) throw new Error("KPI không hợp lệ.");
+  const targetLevel = requiredText(form,"target_level").toUpperCase();
+  if (!["LONG_TERM","ANNUAL","MONTHLY"].includes(targetLevel)) throw new Error("Loại mục tiêu không hợp lệ.");
+  const reason = requiredText(form,"reason");
+  const targetAmount = amount(form,"target_amount");
+  const now = nowIso();
+  const currentMonth = new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit"}).format(new Date()) + "-01";
+  let targetPeriod: string | null = null;
+  let targetYear: number | null = null;
+  if (targetLevel === "MONTHLY") {
+    targetPeriod = requiredText(form,"target_period") + "-01";
+    if (targetPeriod < currentMonth) throw new Error("Không được sửa Monthly Target của tháng đã kết thúc. Dùng audit/history để xem mục tiêu cũ.");
+  } else if (targetLevel === "ANNUAL") {
+    targetYear = Number(requiredText(form,"target_year"));
+    const currentYear = Number(currentMonth.slice(0,4));
+    if (!Number.isInteger(targetYear) || targetYear < currentYear || targetYear > currentYear + 20) throw new Error("Năm mục tiêu không hợp lệ.");
+  }
+  let q = db.from("personal_finance_goals").select("*")
+    .eq("status","ACTIVE").eq("kpi_code",kpiCode).eq("target_level",targetLevel);
+  if (targetLevel === "MONTHLY") q = q.eq("target_period",targetPeriod);
+  if (targetLevel === "ANNUAL") q = q.eq("target_year",targetYear);
+  const { data: existing, error: readError } = await q.order("updated_at",{ascending:false}).limit(1).maybeSingle();
+  if (readError) throw new Error(readError.message);
+  const payload = {
+    goal_type:"FINANCIAL_FREEDOM",
+    name:`${kpiCode} · ${targetLevel}`,
+    kpi_code:kpiCode,
+    target_level:targetLevel,
+    target_period:targetPeriod,
+    target_year:targetYear,
+    target_amount:targetAmount,
+    target_unit:"VND",
+    target_date: targetLevel === "MONTHLY" && targetPeriod ? new Date(new Date(targetPeriod+"T00:00:00Z").getUTCFullYear(),new Date(targetPeriod+"T00:00:00Z").getUTCMonth()+1,0).toISOString().slice(0,10) : null,
+    source:APP_SOURCE,
+    source_reference:"Financial Freedom KPI Center · Owner-approved target",
+    source_updated_at:now,
+    verification_status:"VERIFIED",
+    verification_evidence:`Owner approved in Personal Finance UI. Reason: ${reason}`,
+    verified_at:now,
+    status:"ACTIVE",
+    change_reason:reason,
+    updated_by:userId,
+    ...(existing ? {} : {created_by:userId}),
+  };
+  await insertOrUpdate(db,"personal_finance_goals",existing ? String(existing.id) : null,payload);
+  revalidatePath("/personal-finance");
+}
+
+
 export async function saveFinanceMasterData(form: FormData) {
   const { db, userId } = await ownerContext();
   const recordId = optionalText(form, "record_id");

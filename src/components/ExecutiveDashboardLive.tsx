@@ -1,6 +1,7 @@
 import Link from "next/link";
 import RefreshOnView from "./RefreshOnView";
 import MobileExecutiveDashboard from "@/components/tce/MobileExecutiveDashboard";
+import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
 import ExecutiveDashboardFilters, {
   type DashboardPeriodKey,
   type DashboardPropertyKey,
@@ -30,6 +31,17 @@ export type ExecutiveSource = {
 
 export type ExecutiveDashboardProps = {
   generatedAt: string;
+  freshness: {
+    dataThrough: string | null;
+    appRefreshedAt: string;
+    lastSyncAt: string | null;
+    source: string;
+    freshnessStatus: "LIVE" | "FRESH" | "STALE" | "ERROR" | "NO_DATA";
+    pipelineStatus: "LIVE" | "STALE" | "ERROR";
+    dataRecencyStatus: "CURRENT" | "NO_RECENT_ACTIVITY" | "NO_DATA";
+    verificationStatus: "VERIFIED" | "NEED_VERIFY" | "HOLD";
+    warning?: string | null;
+  };
   period: DashboardPeriodKey;
   periodLabel: string;
   property: DashboardPropertyKey;
@@ -299,6 +311,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
   return (
     <>
       <div className="md:hidden">
+        <div className="px-2 pt-2"><DataFreshnessBar {...props.freshness}/></div>
         <MobileExecutiveDashboard {...props} />
       </div>
       <div className="hidden min-h-screen bg-[#f5f9fd] text-[#17315c] md:block">
@@ -323,6 +336,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
           defaultTo={props.periodTo}
         />
       </header>
+      <div className="px-[10px] pt-[10px]"><DataFreshnessBar {...props.freshness}/></div>
 
       <main className="grid grid-cols-12 gap-2 p-[10px]">
         <div className="col-span-12 space-y-2 xl:col-span-7">
@@ -347,8 +361,8 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
                 note={(props.finance.costState === "NEED_VERIFY" ? "Chỉ KiotViet · " : props.finance.costState === "PARTIAL" ? "MỘT PHẦN · " : "") + "Bấm để xem theo nhóm"}
                 href={"/finance?period=" + props.period + "#cost-analysis"}
               />
-              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "CẦN XÁC MINH"} tone="blue" icon="▣" note="Chưa đủ chi phí thực tế để kết luận" />
-              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "CẦN XÁC MINH"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán" />
+              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "CẦN XÁC MINH"} tone="blue" icon="▣" note="Chưa đủ chi phí thực tế để kết luận · Bấm để xem blocker" href={"/finance?period=" + props.period} />
+              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "CẦN XÁC MINH"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán · Bấm để xem blocker" href={"/finance?period=" + props.period} />
             </div>
             <div className="grid grid-cols-[1.75fr_1fr] gap-2 px-3 pb-3">
               <div className="rounded-[7px] border border-[#e0e9f3]">

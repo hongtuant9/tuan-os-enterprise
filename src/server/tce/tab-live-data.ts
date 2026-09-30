@@ -10,6 +10,7 @@ import {
 import {
   fetchFnbCashflowActual,
   fetchHotelCashflowActual,
+  type KiotVietCashflowSnapshot,
 } from "@/server/integrations/kiotviet/cashflow-actual";
 import {
   TCE_KIOTVIET_CASHFLOW_GROUPS,
@@ -53,6 +54,31 @@ export type TcePeriodResolved = {
   to: string;
   elapsedDays: number;
 };
+
+const FINANCE_SOURCE_TIMEOUT_MS = 6_000;
+
+async function financeReadWithTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), FINANCE_SOURCE_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function cashflowTimeoutFallback(source: KiotVietCashflowSnapshot["source"], from: string, to: string): KiotVietCashflowSnapshot {
+  return {
+    source, state: "ERROR", from, to, transactionCount: 0, totalReceipts: 0, totalPayments: 0, rows: [],
+    notes: ["Finance source read exceeded bounded timeout or failed. Route rendered fail-closed; do not interpret as zero cashflow."],
+  };
+}
 
 export type TceVerificationGuide = {
   title: string; status: string; reason: string; verifyWhat: string[]; evidenceRequired: string[]; steps: string[];
@@ -556,13 +582,20 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
     }
 
 
+    const financeFrom = period.from + "T00:00:00";
+    const financeTo = period.to + "T23:59:59";
+    const debtFallback = {
+      state: "NEED_VERIFY" as const, source: "FIN-HOSPITALITY-001" as const, principalOutstanding: null,
+      maturityDate: null, sourceNote: null, lastSourceUpdate: null, confirmationDate: null,
+      reason: "Finance source read exceeded bounded timeout or failed; current debt evidence remains NEED_VERIFY.",
+    };
     const [hotelCashflow, fnbCashflow, hotelFinanceBot, fnbFinanceBot, debtSnapshot, cutoverSnapshot] = await Promise.all([
-      fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
-      fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"),
-      readFinanceBotSummary("HOTEL"),
-      readFinanceBotSummary("FNB"),
-      readHospitalityDebtSnapshot(),
-      readFinanceCutoverSnapshot(),
+      financeReadWithTimeout(fetchHotelCashflowActual(financeFrom, financeTo), cashflowTimeoutFallback("KIOTVIET_HOTEL", financeFrom, financeTo)),
+      financeReadWithTimeout(fetchFnbCashflowActual(financeFrom, financeTo), cashflowTimeoutFallback("KIOTVIET_FNB", financeFrom, financeTo)),
+      financeReadWithTimeout(readFinanceBotSummary("HOTEL"), null),
+      financeReadWithTimeout(readFinanceBotSummary("FNB"), null),
+      financeReadWithTimeout(readHospitalityDebtSnapshot(), debtFallback),
+      financeReadWithTimeout(readFinanceCutoverSnapshot(), null),
     ]);
 
     const cashflowSummary = summarizeCashflow([hotelCashflow, fnbCashflow]);

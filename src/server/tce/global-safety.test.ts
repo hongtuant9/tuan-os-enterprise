@@ -153,3 +153,16 @@ test("TCE tab loader fails closed instead of taking the whole route down",()=>{
   assert.match(loader,/dataRecencyStatus: \"NO_DATA\"/);
   assert.match(loader,/không suy NO DATA thành 0/);
 });
+
+
+test("business dashboard exposes canonical finance stack without fake completion",()=>{
+  const loader=read("src/server/tce/tab-live-data.ts");
+  const ui=read("src/components/tce/ReferenceScreens.tsx");
+  assert.match(loader,/businessFinancialStack/);
+  assert.match(loader,/businessDataGaps/);
+  assert.match(loader,/Business Cash ≠ Revenue ≠ Profit ≠ Owner Distributable Cash/);
+  assert.match(loader,/NEED_VERIFY — COGS chưa PASS/);
+  assert.match(loader,/HOLD — Tax Rule chưa VERIFIED/);
+  assert.match(ui,/Chuỗi tài chính kinh doanh/);
+  assert.match(ui,/Data Gap Register/);
+});

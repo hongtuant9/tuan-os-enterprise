@@ -435,6 +435,12 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Hiệu suất theo nguồn bán" subtitle="So sánh doanh thu, sản lượng và tăng trưởng theo từng kênh" className="col-span-12 h-[260px]" icon="▤">
             <DataTable columns={["#","Nguồn bán","Đặt chỗ / Đơn hàng","Doanh thu","Tỷ trọng","Tăng trưởng","Quyết định"]} rows={6} data={data?.tables.businessChannels}/>
           </Section>
+          <Section title="Chuỗi tài chính kinh doanh" subtitle="Revenue → COGS → Gross Profit → Operating Profit → PBT → Tax → PAT; Cash/AR/AP/Distribution giữ semantic riêng" className="col-span-12" icon="▦">
+            <DataTable columns={["KPI","Giá trị","Nguồn","Cập nhật","Trạng thái","Giải thích"]} data={data?.tables.businessFinancialStack}/>
+          </Section>
+          <Section title="Data Gap Register" subtitle="Chỉ giữ NEED_VERIFY/HOLD khi còn thiếu evidence; mỗi dòng nêu rõ source, owner và next action" className="col-span-12" icon="!">
+            <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Next Action","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
+          </Section>
           <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 h-[260px]" icon="●">
             <div className="grid h-full grid-cols-2 gap-2 p-3">
               {["Dự báo doanh thu tháng","Ngưỡng hòa vốn","Top dịch vụ / mặt hàng","Công nợ cần theo dõi"].map((x)=><div key={x} className="rounded-[7px] border border-[#e6eef6] bg-[#fbfdff] p-3"><b className="text-[9px] text-[#3c5578]">{x}</b><p className="mt-2 text-[18px] font-extrabold text-[#0e2858]">—</p><p className="mt-1 text-[8px] text-[#7c8ea8]">Chưa đủ dữ liệu để kết luận.</p></div>)}

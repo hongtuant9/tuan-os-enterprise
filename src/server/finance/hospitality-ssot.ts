@@ -35,7 +35,7 @@ export async function readHospitalityDebtSnapshot(): Promise<HospitalityDebtSnap
       getFileMetadata(FIN_HOSPITALITY_SPREADSHEET_ID, auth),
       google.sheets({ version: "v4", auth }).spreadsheets.values.get({
         spreadsheetId: FIN_HOSPITALITY_SPREADSHEET_ID,
-        range: "'BẢNG ĐIỀU HÀNH'!A1:C20",
+        range: "'02_KẾ_HOẠCH_&_GIẢ_ĐỊNH'!A10:D16",
         valueRenderOption: "UNFORMATTED_VALUE",
       }),
     ]);
@@ -47,9 +47,9 @@ export async function readHospitalityDebtSnapshot(): Promise<HospitalityDebtSnap
       String(row[0] ?? "").includes("Ngày đáo hạn"),
     );
     const principalMillion = debt ? asNumber(debt[1]) : null;
-    const note = debt ? String(debt[2] ?? "").trim() || null : null;
+    const note = debt ? String(debt[3] ?? "").trim() || null : null;
     const maturityDate = maturity ? String(maturity[1] ?? "").trim() || null : null;
-    const sourceConfirmed = Boolean(note && /đã xác nhận/i.test(note));
+    const sourceConfirmed = Boolean(note && /(VERIFIED|đã xác nhận)/i.test(note));
     const confirmationMatch = note?.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     const confirmationDate = confirmationMatch
       ? `${confirmationMatch[3]}-${confirmationMatch[2]}-${confirmationMatch[1]}`
@@ -69,15 +69,13 @@ export async function readHospitalityDebtSnapshot(): Promise<HospitalityDebtSnap
     }
 
     return {
-      state: "NEED_VERIFY",
+      state: "VERIFIED",
       source: "FIN-HOSPITALITY-001",
       principalOutstanding: principalMillion * 1_000_000,
       maturityDate,
       sourceNote: note,
       lastSourceUpdate: metadata.modifiedTime || null,
       confirmationDate,
-      reason:
-        "Last-known debt is owner-confirmed, but the debt row has no canonical Last Updated field/current statement read-back.",
     };
   } catch {
     return {

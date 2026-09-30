@@ -126,7 +126,7 @@ const META: Record<MobileScreenKey, MobileMeta> = {
       { label: "Doanh thu thuần", value: "—", icon: "D", tone: "blue", delta: "↑" },
       { label: "Chi phí vận hành", value: "—", icon: "C", tone: "red", delta: "↑" },
       { label: "Dòng tiền ròng", value: "—", icon: "R", tone: "green", delta: "↑" },
-      { label: "Số dư tiền mặt", value: "—", icon: "T", tone: "blue", delta: "↑" },
+      { label: "Nguồn tiền cutover", value: "—", icon: "T", tone: "blue", delta: "↑" },
       { label: "Công nợ phải trả", value: "—", icon: "N", tone: "amber", delta: "↓", down: true },
       { label: "Nợ vay", value: "—", icon: "V", tone: "violet", delta: "0%" },
     ],
@@ -541,61 +541,50 @@ function MobileHR({ data }: { data?: TceTabLiveData }) {
 }
 
 function MobileFinance({ data }: { data?: TceTabLiveData }) {
-  const periodCostRows = data?.tables.financePeriodCostGroups?.length
+  const positionRows = data?.tables.financePosition?.length
+    ? data.tables.financePosition.map((r) => [r[0] ?? "—", r[1] ?? "—", r[3] ?? "—"])
+    : [["Nguồn tiền cutover","CẦN XÁC MINH","HOLD"]];
+  const accountRows = data?.tables.financeAccountStructure?.length
+    ? data.tables.financeAccountStructure.map((r) => [r[0] ?? "—", r[1] ?? "—", r[4] ?? "—"])
+    : [["Chưa có cấu trúc tài khoản","—","HOLD"]];
+  const fundRows = data?.tables.financeFundBuckets?.length
+    ? data.tables.financeFundBuckets.map((r) => [r[0] ?? "—", r[1] ?? "—", r[2] ?? "—"])
+    : [["Chưa có dữ liệu quỹ","—","—"]];
+  const costRows = data?.tables.financePeriodCostGroups?.length
     ? data.tables.financePeriodCostGroups.map((r) => [((r[1] ?? "—") + " · " + (r[2] ?? "—")), r[3] ?? "—", r[5] ?? "—"])
-    : [["Chỉ KiotViet","CẦN XÁC MINH","TẠM DỪNG"]];
-  const periodEventRows = data?.tables.financePeriodCostEvents?.length
-    ? data.tables.financePeriodCostEvents.map((r) => [r[1] ?? "—", ((r[2] ?? "—") + " · " + (r[3] ?? "—")), r[5] ?? "—"])
-    : [["—","KiotViet Sổ quỹ chưa có Public API","—"]];
-  const expenseTaxonomyRows = data?.tables.financeExpenseTaxonomy?.length
-    ? data.tables.financeExpenseTaxonomy.map((r) => [((r[0] ?? "") + " " + (r[1] ?? "")), r[3] ?? "—", r[4] ?? "—"])
-    : [["Chưa có chuẩn chi phí","—","—"]];
-  const revenueTaxonomyRows = data?.tables.financeRevenueTaxonomy?.length
-    ? data.tables.financeRevenueTaxonomy.map((r) => [((r[0] ?? "") + " " + (r[2] ?? "")), r[1] ?? "—", r[3] ?? "—"])
-    : [["Chưa có chuẩn doanh thu","—","—"]];
-  const apiRows = data?.tables.financeApiCapabilities?.length
-    ? data.tables.financeApiCapabilities.map((r) => [((r[1] ?? "") + " · " + (r[2] ?? "")), r[4] ?? "—", r[5] ?? "—"])
-    : [["KiotViet API","CẦN XÁC MINH","—"]];
-  const profitRows = data?.tables.financeProfitSources?.length
-    ? data.tables.financeProfitSources.map((r) => [r[1] ?? "—", r[3] ?? "—", r[5] ?? "CẦN XÁC MINH"])
-    : [["Chưa có nguồn lợi nhuận","—","CẦN XÁC MINH"]];
-  const productRows = data?.tables.financeProductProfitReadiness?.length
-    ? data.tables.financeProductProfitReadiness.map((r) => [r[0] ?? "—", r[3] ?? "—", r[4] ?? "—"])
-    : [["Chưa có dữ liệu","CẦN XÁC MINH","Chưa xếp hạng"]];
+    : [["KiotViet","CẦN XÁC MINH","HOLD"]];
 
   return (
     <div className="space-y-[7px] px-[10px] pt-[7px]">
-      <MobileSection title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")} subtitle="Nguồn duy nhất: KiotViet Hotel + KiotViet F&B">
-        <RowTable rows={periodCostRows} cols={3}/>
-        <p className="mt-[5px] text-[6px] text-[#6f83a5]">{data?.tables.financeCostCoverage?.[3]?.[1] ?? "Chi phí qua kết nối: CẦN XÁC MINH"}</p>
+      <MobileSection title="Tổng quan tài chính từ 01/10" subtitle="Cutover 30/09 · không cộng trùng OTA / earmark">
+        <RowTable rows={positionRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="Chi tiết khoản chi từ KiotViet" subtitle="Không dùng Drive/Sheet làm nguồn giao dịch">
-        <RowTable rows={periodEventRows} cols={3}/>
+      <MobileSection title="Cấu trúc tài khoản" subtitle="TKK thu doanh thu · BIDV 888 chi TCE · TPBank 1984 giữ quỹ">
+        <RowTable rows={accountRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="Chuẩn hạng mục CHI KiotViet" subtitle="Nhập đúng module, tránh double count">
-        <RowTable rows={expenseTaxonomyRows} cols={3}/>
+      <MobileSection title="Quỹ & phân bổ" subtitle="Thuế · Thưởng T13 · Dự phòng · Cozy reinvestment · CEO compensation">
+        <RowTable rows={fundRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="Chuẩn hạng mục THU KiotViet" subtitle="Doanh thu phải đi từ hóa đơn / hàng dịch vụ">
-        <RowTable rows={revenueTaxonomyRows} cols={3}/>
+      <MobileSection title="Doanh thu theo mảng" subtitle="Cozy Garden · Lavender · Ruby">
+        <RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[0] ?? "—", r[1] ?? "—", r[3] ?? "—"]) : [["Chưa có dữ liệu","—","HOLD"]]} />
       </MobileSection>
 
-      <MobileSection title="Trạng thái API KiotViet" subtitle="Chỉ đọc; không dùng điểm kết nối API không được hỗ trợ">
-        <RowTable rows={apiRows} cols={3}/>
+      <MobileSection title="OTA đã duyệt thanh toán" subtitle="Cash collection của kỳ trước, không ghi doanh thu lần hai">
+        <RowTable rows={data?.tables.financeCutoverAr?.length ? data.tables.financeCutoverAr.map((r) => [((r[1] ?? "—") + " · " + (r[2] ?? "—")), r[3] ?? "—", r[6] ?? "—"]) : [["Chưa có OTA AR","—","—"]]} />
       </MobileSection>
 
-      <MobileSection title="Nguồn lợi nhuận" subtitle="Doanh thu thực tế từ KiotViet; chi phí giữ trạng thái an toàn khi thiếu dữ liệu">
-        <RowTable rows={profitRows} cols={3}/>
-        <p className="mt-[5px] text-[6px] text-[#6f83a5]">Lợi nhuận chỉ tính khi chi phí đọc được trực tiếp từ KiotViet.</p>
+      <MobileSection title="Nợ & hạn mức" subtitle="Hạn mức chưa dùng không phải tiền">
+        <RowTable rows={data?.tables.financeCutoverFacilities?.length ? data.tables.financeCutoverFacilities.map((r) => [r[0] ?? "—", r[2] ?? "—", r[8] ?? "—"]) : [["Chưa có dữ liệu nợ","—","HOLD"]]} />
       </MobileSection>
 
-      <MobileSection title="Lợi nhuận theo sản phẩm / dịch vụ" subtitle="Chỉ dùng chi tiết hóa đơn và giá vốn từ KiotViet">
-        <RowTable rows={productRows} cols={3}/>
+      <MobileSection title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")} subtitle="Actual từ KiotViet / evidence">
+        <RowTable rows={costRows} cols={3}/>
       </MobileSection>
 
-      <MobileSection title="3 hành động ưu tiên" subtitle="Chuẩn hóa nhập liệu trước khi tự động hóa">
+      <MobileSection title="3 hành động ưu tiên" subtitle="Chỉ việc tác động trực tiếp đến dòng tiền & P&L">
         <div className="space-y-[5px]">
           {(data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]).slice(0,3).map((item, index) => (
             <div key={item} className="flex gap-[7px] rounded-[7px] border border-[#dce7f2] bg-white p-[7px]">
@@ -604,10 +593,6 @@ function MobileFinance({ data }: { data?: TceTabLiveData }) {
             </div>
           ))}
         </div>
-      </MobileSection>
-
-      <MobileSection title="Tình hình theo đơn vị" subtitle="Lavender · Ruby · Cozy Garden">
-        <RowTable rows={data?.tables.financeBranches?.length ? data.tables.financeBranches.map((r) => [r[0] ?? "—",r[1] ?? "—",r[3] ?? "—"]) : [["Chưa có dữ liệu","—","CẦN XÁC MINH"]]} />
       </MobileSection>
     </div>
   );

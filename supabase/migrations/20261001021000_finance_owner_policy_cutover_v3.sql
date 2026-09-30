@@ -99,6 +99,12 @@ update public.finance_operating_plan_lines set
  source='OWNER_DECISION_20261001',formula_note='2,850,413,761 × 5.9% / 12; Actual from bank statement.',updated_at=now()
 where plan_month='2026-10-01' and financial_domain='DEBT' and business_unit='NONE' and line_code='DEBT_INTEREST';
 
+update public.finance_operating_plan_lines set
+ baseline_amount=0,target_amount=0,verification_status='VERIFIED',gate_status='PASS',
+ source='OWNER_DECISION_20261001',line_name='Personal Living Expense — managed outside TCE',
+ formula_note='Từ 01/10/2026: business chuyển CEO Compensation sang TPBank 501; chi tiết sinh hoạt thuộc Personal Finance, không phải TCE OPEX.',updated_at=now()
+where plan_month='2026-10-01' and financial_domain='PERSONAL' and business_unit='NONE' and line_code='PERSONAL_LIVING_EXPENSE';
+
 insert into public.finance_operating_plan_lines
 (plan_month,financial_domain,business_unit,line_code,line_name,priority_order,baseline_amount,target_amount,verification_status,gate_status,source,source_reference,formula_note,review_condition)
 values

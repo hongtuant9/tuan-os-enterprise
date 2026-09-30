@@ -126,7 +126,7 @@ const META: Record<MobileScreenKey, MobileMeta> = {
       { label: "Doanh thu thuần", value: "—", icon: "D", tone: "blue", delta: "↑" },
       { label: "Chi phí vận hành", value: "—", icon: "C", tone: "red", delta: "↑" },
       { label: "Dòng tiền ròng", value: "—", icon: "R", tone: "green", delta: "↑" },
-      { label: "Số dư tiền mặt", value: "—", icon: "T", tone: "blue", delta: "↑" },
+      { label: "Nguồn tiền cutover", value: "—", icon: "T", tone: "blue", delta: "↑" },
       { label: "Công nợ phải trả", value: "—", icon: "N", tone: "amber", delta: "↓", down: true },
       { label: "Nợ vay", value: "—", icon: "V", tone: "violet", delta: "0%" },
     ],

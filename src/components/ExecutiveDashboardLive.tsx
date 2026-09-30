@@ -5,6 +5,8 @@ import ExecutiveDashboardFilters, {
   type DashboardPeriodKey,
   type DashboardPropertyKey,
 } from "@/components/ExecutiveDashboardFilters";
+import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
+import type { DataRecencyStatus, FreshnessStatus, PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
 export type ExecutiveAction = {
   id: string;
@@ -36,7 +38,19 @@ export type ExecutiveDashboardProps = {
   propertyLabel: string;
   periodFrom: string;
   periodTo: string;
+  freshness: {
+    dataThrough: string | null;
+    lastSyncAt: string | null;
+    appRefreshedAt: string;
+    source: string;
+    freshnessStatus: FreshnessStatus;
+    pipelineStatus: PipelineFreshnessStatus;
+    dataRecencyStatus: DataRecencyStatus;
+    verificationStatus: "VERIFIED" | "NEED_VERIFY" | "HOLD";
+    warning?: string | null;
+  };
   revenue: {
+    verified: boolean;
     homestay: number;
     lavender: number;
     ruby: number;
@@ -324,7 +338,8 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
         />
       </header>
 
-      <main className="grid grid-cols-12 gap-2 p-[10px]">
+      <div className="px-[10px] pt-[10px]"><DataFreshnessBar {...props.freshness}/></div>
+      <main className="grid grid-cols-12 gap-2 p-[10px] pt-0">
         <div className="col-span-12 space-y-2 xl:col-span-7">
           <Panel number={1} title="TRUNG TÂM XỬ LÝ – Việc cần Tuấn xử lý" subtitle="Ưu tiên quyết định, giao việc và xử lý việc cần nâng mức" action={<Link href="/ai-manager" className="rounded-[5px] border border-[#acd0fa] px-3 py-1 text-[8px] font-bold text-[#1768df]">Xem tất cả ({props.actionCenter.items.length})</Link>}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
@@ -338,7 +353,7 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
 
           <Panel number={2} title="HOẠT ĐỘNG KINH DOANH" subtitle={"Số liệu thực tế từ KiotViet / nguồn đã xác minh · " + props.propertyLabel + " · " + props.periodLabel}>
             <div className="grid grid-cols-4 gap-2 px-3 pb-2">
-              <Stat label="Doanh thu" value={money(props.revenue.total)} tone="green" icon="▦" note="Số liệu thực tế từ KiotViet · Cập nhật trực tiếp" />
+              <Stat label="Doanh thu" value={props.revenue.verified ? money(props.revenue.total) : "CẦN XÁC MINH"} tone="green" icon="▦" note={props.revenue.verified ? "Số liệu thực tế từ KiotViet · VERIFIED" : "Nguồn chưa đủ verification; không thay bằng 0"} />
               <Stat
                 label="Chi phí đã ghi nhận"
                 value={props.finance.costState === "NEED_VERIFY" ? "CẦN XÁC MINH" : money(props.finance.costEstimate)}

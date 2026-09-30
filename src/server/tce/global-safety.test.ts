@@ -105,3 +105,15 @@ test("production deploy stamps Next deployment identity from git SHA",()=>{
   assert.match(docker,/ENV NEXT_DEPLOYMENT_ID=\$NEXT_DEPLOYMENT_ID/);
   assert.match(deploy,/--build-arg NEXT_DEPLOYMENT_ID="\$SHA"/);
 });
+
+
+test("Executive overview uses Revenue verification and Finance Foundation readiness without cashflow dependency",()=>{
+  const page=read("src/app/page.tsx");
+  const dashboard=read("src/components/ExecutiveDashboardLive.tsx");
+  assert.doesNotMatch(page,/fetchHotelCashflowActual|fetchFnbCashflowActual|summarizeCashflow/);
+  assert.match(page,/readFinanceFoundationReadiness/);
+  assert.match(page,/Expense Actual coverage/);
+  assert.match(page,/const revenueVerified/);
+  assert.match(dashboard,/DataFreshnessBar/);
+  assert.match(dashboard,/props\.revenue\.verified \? money\(props\.revenue\.total\) : "CẦN XÁC MINH"/);
+});

@@ -391,7 +391,7 @@ function result(
   };
 }
 
-export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQuery = {}): Promise<TceTabLiveData> {
+async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQuery = {}): Promise<TceTabLiveData> {
   const container = await getRequestContainer();
   const now = new Date();
   const today = localDateKey(now);
@@ -1748,4 +1748,41 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
   }
 
   return makeResult({}, {}, {}, {}, "NEED_VERIFY");
+}
+
+export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQuery = {}): Promise<TceTabLiveData> {
+  try {
+    return await getTceTabLiveDataUnsafe(screen, query);
+  } catch (error) {
+    const now = new Date();
+    const period = resolveTcePeriod(query, now);
+    const message = error instanceof Error ? error.message : String(error);
+    const sanitized = message.replace(/(token|secret|password|key)=?[^\s]*/gi, "$1=[REDACTED]").slice(0, 240);
+    console.error(`[TCE Tab Loader] screen=${screen} fail-closed: ${sanitized}`);
+    return {
+      generatedAt: now.toISOString(),
+      period,
+      metricValues: {},
+      metricNotes: {},
+      verificationGuides: {},
+      tables: {},
+      lists: { routeErrors: [`${screen}: upstream data source failed; route rendered fail-closed.`] },
+      sourceState: "NEED_VERIFY",
+      freshness: {
+        dataThrough: null,
+        lastSyncAt: null,
+        appRefreshedAt: now.toISOString(),
+        source: `TCE ${screen} runtime sources`,
+        freshnessStatus: "ERROR",
+        pipelineStatus: "ERROR",
+        dataRecencyStatus: "NO_DATA",
+        verificationStatus: "NEED_VERIFY",
+        warning: "Nguồn dữ liệu hoặc server-render đang lỗi. Tab được giữ truy cập fail-closed; không suy NO DATA thành 0. Kiểm tra log/source rồi nạp lại.",
+        expectedRefreshMinutes: 0,
+        staleAfterMinutes: 0,
+        errorAfterMinutes: 0,
+        owner: "AI CTO + chủ sở hữu domain",
+      },
+    };
+  }
 }

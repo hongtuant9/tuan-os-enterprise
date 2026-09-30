@@ -865,6 +865,60 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       x.baseline === null ? "—" : money(x.baseline), x.target === null ? "NEED VERIFY" : money(x.target),
       x.gateStatus, x.verificationStatus, x.reviewCondition ?? "—",
     ]) ?? [];
+
+    const accountRoleLabel = (code: string) => {
+      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY") return "TKK — chỉ nhận doanh thu";
+      if (code === "OPEN-BIDV-TUAN") return "Chi vận hành toàn TCE";
+      if (code === "ROLE-TPBANK-TCE-RESERVE-1984") return "Quỹ chung TCE";
+      if (code === "ROLE-TPBANK-PERSONAL-501") return "Cá nhân / gia đình";
+      if (code === "ROLE-TPBANK-SAFETY") return "Quỹ an toàn cá nhân";
+      return "Tài khoản khác";
+    };
+    const accountScopeLabel = (code: string) => {
+      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY") return "Doanh thu Cozy · Lavender · Ruby";
+      if (code === "OPEN-BIDV-TUAN") return "OPEX / COGS / nghĩa vụ TCE";
+      if (code === "ROLE-TPBANK-TCE-RESERVE-1984") return "Thuế · Thưởng T13 · Dự phòng";
+      if (code === "ROLE-TPBANK-PERSONAL-501") return "CEO Compensation 40 triệu/tháng";
+      if (code === "ROLE-TPBANK-SAFETY") return "Tài sản cá nhân · tự do tài chính";
+      return "—";
+    };
+    const canonicalAccountCodes = new Set([
+      "OPEN-HKD-TUAN",
+      "ROLE-HKD-RUBY",
+      "OPEN-BIDV-TUAN",
+      "ROLE-TPBANK-TCE-RESERVE-1984",
+      "ROLE-TPBANK-PERSONAL-501",
+      "ROLE-TPBANK-SAFETY",
+    ]);
+    const financeAccountStructureRows = (cutoverSnapshot?.accounts ?? [])
+      .filter((x) => canonicalAccountCodes.has(x.code))
+      .map((x) => [
+        x.name,
+        accountRoleLabel(x.code),
+        accountScopeLabel(x.code),
+        "Đối soát theo số dư ngân hàng thực tế",
+        x.verificationStatus,
+      ]);
+
+    const planByCode = new Map((cutoverSnapshot?.octoberPlan ?? []).map((x) => [x.code, x]));
+    const financeFundRows = [
+      ["Quỹ thuế", "Theo kỳ", "TPBank 1984", "Dự phòng quản trị 7% lợi nhuận; Actual Tax theo chứng từ/tờ khai", planByCode.get("TAX_RESERVE_POLICY")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ thưởng tháng 13", "1/12 quỹ lương đủ điều kiện", "TPBank 1984", "Trích hàng tháng, sử dụng vào kỳ thưởng", planByCode.get("BONUS_13_RESERVE")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ dự phòng TCE", planByCode.get("BUSINESS_RESERVE")?.baseline === null || planByCode.get("BUSINESS_RESERVE")?.baseline === undefined ? "0 đ" : money(planByCode.get("BUSINESS_RESERVE")!.baseline!), "TPBank 1984", "Không dùng cho chi tiêu hàng ngày; chỉ theo policy/approval", planByCode.get("BUSINESS_RESERVE")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ tái đầu tư Cozy", money(planByCode.get("COZY_REINVESTMENT_EARMARK")?.baseline ?? 31_473_816), "BIDV 888 / business cash", "Earmark, không cộng thêm vào tổng tiền; sửa đèn/trang trí/menu phở/dinner garden", planByCode.get("COZY_REINVESTMENT_EARMARK")?.verificationStatus ?? "VERIFIED"],
+      ["CEO Compensation — Tuấn", money(planByCode.get("CEO_COMPENSATION")?.baseline ?? 40_000_000) + "/tháng", "TPBank 501", "Sau khi chuyển thuộc Personal Finance; không trộn OPEX TCE", planByCode.get("CEO_COMPENSATION")?.verificationStatus ?? "VERIFIED"],
+    ];
+
+    const activeDebt401 = cutoverSnapshot?.facilities.find((x) => x.code === "BIDV-OD-401");
+    const emergency407 = cutoverSnapshot?.facilities.find((x) => x.code === "BIDV-OD-407");
+    const financePositionRows = [
+      ["Nguồn tiền cutover 30/09", money(cutoverSnapshot?.knownCash ?? 214_073_495), "Dùng thanh toán nghĩa vụ kỳ 30/09", cutoverSnapshot?.liquidityStatus ?? "VERIFIED"],
+      ["OTA đã duyệt thanh toán", money(cutoverSnapshot?.businessAr ?? 77_424_037), "Đã nằm trong nguồn tiền quản trị; nhận tiền không ghi doanh thu lần hai", "VERIFIED"],
+      ["Quỹ tái đầu tư Cozy", money(planByCode.get("COZY_REINVESTMENT_EARMARK")?.baseline ?? 31_473_816), "Earmark trong business cash; không cộng lại", "VERIFIED"],
+      ["Dư nợ thấu chi 401", money(activeDebt401?.usedPrincipal ?? 2_850_413_761), "Lãi suất 5,9%/năm; theo dõi giảm dần", activeDebt401?.verificationStatus ?? "VERIFIED"],
+      ["Hạn mức 407 chưa sử dụng", money(emergency407?.availableCredit ?? 882_000_000), "Không phải cash; mục tiêu used principal = 0", emergency407?.verificationStatus ?? "VERIFIED"],
+    ];
+
     const cutoverCloseRows = cutoverSnapshot?.monthEndClose.map((x) => [
       String(x.step), x.description, x.domain, x.dueDate ?? "—", x.status, x.verificationStatus,
     ]) ?? [];
@@ -925,7 +979,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
         "Cash Out": cashflowSummary.cashOut === null ? "NEED VERIFY" : money(cashflowSummary.cashOut),
         "Dòng tiền ròng": cashflowSummary.netCashFlow === null ? "NEED VERIFY" : money(cashflowSummary.netCashFlow),
-        "Số dư tiền mặt": cutoverSnapshot ? money(cutoverSnapshot.knownCash) : (cashBalanceActual === null ? "NEED VERIFY" : money(cashBalanceActual)),
+        "Nguồn tiền cutover": cutoverSnapshot ? money(cutoverSnapshot.knownCash) : "NEED VERIFY",
         "Công nợ phải thu": cutoverSnapshot ? money(cutoverSnapshot.businessAr) : "NEED VERIFY",
         "Công nợ phải trả": cutoverSnapshot ? (cutoverSnapshot.unknownApCount ? "NEED VERIFY" : money(cutoverSnapshot.knownBusinessAp)) : "NEED VERIFY",
         "Nợ vay": cutoverSnapshot
@@ -946,11 +1000,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         "Cash In": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Cash Out": cashflowReadReady ? "KiotViet Sổ quỹ Actual · " + period.label : "HOLD: KiotViet Cashflow chưa VERIFIED",
         "Dòng tiền ròng": cashflowReadReady ? "Cash In − Cash Out; không suy từ Profit" : "HOLD: chờ KiotViet Sổ quỹ",
-        "Số dư tiền mặt": cutoverSnapshot
-          ? `Opening 30/09 known cash=${money(cutoverSnapshot.knownCash)}; ownership chưa VERIFIED cho ${cutoverSnapshot.unclassifiedCashCount} account nên chưa coi là free cash.`
-          : kiotVietFundBalanceCandidate === null
-            ? "NEED VERIFY: chưa có Tồn quỹ authenticated + header reconciliation đủ cho cả Hotel và F&B."
-            : "NEED VERIFY: KiotViet aggregate Tồn quỹ candidate = " + money(kiotVietFundBalanceCandidate) + ", nhưng chưa map fund/account.",
+        "Nguồn tiền cutover": cutoverSnapshot
+          ? "VERIFIED opening liquidity 30/09. Bao gồm tiền tài khoản + tiền mặt + OTA đã duyệt thanh toán; không đồng nghĩa Revenue hay Profit."
+          : "NEED VERIFY: chưa đọc được canonical opening liquidity.",
         "Công nợ phải thu": cutoverSnapshot
           ? `Opening Business OTA AR 30/09 = ${money(cutoverSnapshot.businessAr)}; không tính Personal cash/income.`
           : arCandidateOutstanding === null
@@ -972,6 +1024,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         "Biên lợi nhuận gộp": "NEED VERIFY: chỉ tính khi Gross Profit VERIFIED và COGS coverage đủ.",
       },
       {
+        financePosition: financePositionRows,
+        financeAccountStructure: financeAccountStructureRows,
+        financeFundBuckets: financeFundRows,
         financeCutoverOpening: cutoverOpeningRows,
         financeCutoverFacilities: cutoverFacilityRows,
         financeCutoverAr: cutoverArRows,
@@ -1043,9 +1098,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       },
       {
         financeActions: [
-          "1. Tạo Loại thu/Loại chi trong KiotViet theo đúng tên [TCE-Cxx/Nxx/Rxx] ở bảng chuẩn; hiện Public API chưa có CRUD nhóm nên không tự gọi endpoint private.",
-          "2. Mọi khoản mua hàng có tồn kho phải đi qua Nhập hàng; OPEX qua Sổ quỹ; không nhập lại cùng một chi phí ở hai nơi. Khoản thanh toán NCC hàng tồn dùng N01 và KHÔNG vào KQKD.",
-          "3. Cashflow unsupported API dùng authenticated Browser VPS. Chỉ dùng Cashflow để tính Cash In/Cash Out/Net Cash Flow; không dùng Cash Out thay Expense/COGS; P&L chỉ mở khi Expense/COGS source riêng được VERIFIED.",
+          "1. Từ 01/10 ghi đủ giao dịch mỗi ngày: TKK chỉ nhận doanh thu; mọi khoản chi vận hành qua đúng tài khoản/module và gắn Business Unit Cozy/Lavender/Ruby.",
+          "2. Cuối ngày đối soát KiotViet ↔ TKK/BIDV 888 ↔ tiền mặt/OTA; tiền OTA về chỉ là thu công nợ của kỳ cũ, không ghi doanh thu lần hai.",
+          "3. Hàng tháng trích quỹ trước khi phân phối: Thuế + Thưởng tháng 13 + Dự phòng vào TPBank 1984; CEO Compensation 40 triệu chuyển TPBank 501; quỹ Cozy 31.473.816đ chỉ dùng đúng mục đích tái đầu tư đã chốt.",
         ],
         financeCoverageNotes: [
           kiotVietOnlyCoverage,

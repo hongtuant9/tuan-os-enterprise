@@ -10,11 +10,7 @@ import {
   fetchHotelRevenueActual,
   type RevenueSnapshot,
 } from "@/server/integrations/kiotviet/revenue-actual";
-import {
-  fetchFnbCashflowActual,
-  fetchHotelCashflowActual,
-} from "@/server/integrations/kiotviet/cashflow-actual";
-import { summarizeCashflow } from "@/server/finance/foundation";
+import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import {
   BUSINESS_TIME_ZONE,
   businessDateKey,
@@ -227,8 +223,7 @@ export default async function Home({
     syncQuery,
     taskQuery,
     syncRecordsQuery,
-    hotelCashflow,
-    fnbCashflow,
+    foundationReadiness,
   ] = await Promise.all([
     safeHotel(bounds.from, bounds.to),
     safeFnb(bounds.from, bounds.to),
@@ -243,8 +238,7 @@ export default async function Home({
       .in("key", ["task-001", "approval-001", "l3-channel-tracking"]),
     container.db.from("tasks").select("id,title,unit,status,priority,due_date,updated_at"),
     container.db.from("sync_records").select("source_key,target_id,data,synced_at").in("source_key", ["task-001", "approval-001"]),
-    fetchHotelCashflowActual(bounds.from, bounds.to),
-    fetchFnbCashflowActual(bounds.from, bounds.to),
+    readFinanceFoundationReadiness(),
   ]);
 
   const managerItems = buildManagerItems(taskQuery.data ?? [], syncRecordsQuery.data ?? []);
@@ -294,17 +288,37 @@ export default async function Home({
       : []),
   ];
 
-  // Cashflow is not P&L: Expense ≠ Cash Out and Revenue ≠ Cash In.
-  // Until an authoritative Expense/COGS layer is VERIFIED, profit and margin must fail closed.
-  const cashflowSummary = summarizeCashflow([hotelCashflow, fnbCashflow]);
+  // P&L guardrail: Cashflow is intentionally NOT a critical render dependency here.
+  // Expense Actual comes from the Finance Foundation evidence map; Cash Out must never substitute for Expense.
   const costRecorded = 0;
   const profitEstimate = 0;
   const marginEstimate = 0;
   const profitVerified = false;
   const costState = "NEED_VERIFY" as const;
-  const costLabel = cashflowSummary.state === "VERIFIED"
-    ? "Cashflow VERIFIED nhưng không được dùng thay Expense Actual"
-    : "Expense Actual chưa VERIFIED; Cashflow đang HOLD/NEED VERIFY";
+  const costLabel = `Expense Actual coverage ${foundationReadiness.expense.coveragePct.toFixed(1)}% · missing=${foundationReadiness.expense.missingRows} · partial=${foundationReadiness.expense.partialRows}. Không dùng Cash Out thay Expense.`;
+  const revenueVerified = property === "cozy"
+    ? fnb.state === "VERIFIED"
+    : property === "lavender" || property === "ruby"
+      ? hotel.state === "VERIFIED"
+      : hotel.state === "VERIFIED" && fnb.state === "VERIFIED";
+  const revenuePipelineReadable = property === "cozy"
+    ? fnb.state !== "ERROR" && fnb.state !== "UNAVAILABLE"
+    : property === "lavender" || property === "ruby"
+      ? hotel.state !== "ERROR" && hotel.state !== "UNAVAILABLE"
+      : [hotel.state, fnb.state].every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
+  const overviewFreshness = {
+    dataThrough: revenuePipelineReadable ? now.toISOString() : null,
+    lastSyncAt: revenuePipelineReadable ? now.toISOString() : null,
+    appRefreshedAt: now.toISOString(),
+    source: "KiotViet Hotel + F&B · direct authenticated API read + canonical runtime",
+    freshnessStatus: revenuePipelineReadable ? "LIVE" as const : "ERROR" as const,
+    pipelineStatus: revenuePipelineReadable ? "LIVE" as const : "ERROR" as const,
+    dataRecencyStatus: revenuePipelineReadable ? "CURRENT" as const : "NO_DATA" as const,
+    verificationStatus: revenueVerified ? "VERIFIED" as const : "NEED_VERIFY" as const,
+    warning: !revenuePipelineReadable
+      ? "Không đọc được đầy đủ nguồn doanh thu trực tiếp ở lần tải này. Không dùng 0 để thay dữ liệu lỗi."
+      : revenueVerified ? null : "Nguồn đang đọc được nhưng Revenue verification chưa PASS đầy đủ.",
+  };
 
   const verifiedBookings = receptionist.metrics.verifiedAiBookings;
   const pendingReviews = receptionist.metrics.pendingManagerReviews;
@@ -353,7 +367,9 @@ export default async function Home({
           propertyLabel={propertyLabel}
           periodFrom={bounds.fromDate}
           periodTo={bounds.toDate}
+          freshness={overviewFreshness}
           revenue={{
+            verified: revenueVerified,
             homestay: selectedHomestayRevenue,
             lavender: lavenderRevenue,
             ruby: rubyRevenue,

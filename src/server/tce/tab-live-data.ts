@@ -571,6 +571,49 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         errorAfterMinutes: 0,
         owner: "AI CTO + AI CFO / TCE Business",
       };
+
+      const financeSummary = businessOperating?.summary ?? null;
+      const openingBusinessCash = financeSummary?.openingBusinessCash ?? null;
+      const bookBusinessCash = financeSummary?.bookBusinessCash ?? null;
+      const otaReceivable = financeSummary?.otaReceivable ?? null;
+      const knownAp = financeSummary?.knownAp ?? null;
+      const unknownApCount = Number(financeSummary?.unknownApCount ?? 0);
+      const ownerDistributableCash = financeSummary?.ownerDistributableCash ?? null;
+      const taxProvision = financeSummary?.taxProvision ?? null;
+      const profitBeforeTax = financeSummary?.profitBeforeTax ?? null;
+      const profitAfterTax = financeSummary?.profitAfterTax ?? null;
+      const employeeAdvances = financeSummary?.employeeAdvancesOutstanding ?? null;
+      const bankReconOpenCount = Number(financeSummary?.bankReconOpenCount ?? 0);
+      const businessUpdatedAt = now.toISOString();
+
+      const businessFinancialStack = [
+        ["Revenue", bothPeriodVerified ? money(periodRevenue) : "—", "KiotViet Hotel + F&B Invoice API", businessUpdatedAt, bothPeriodVerified ? "VERIFIED" : "NEED_VERIFY", bothPeriodVerified ? "Invoice duplicate/source-ID gates PASS." : "Revenue source chưa VERIFIED đầy đủ."],
+        ["COGS", "—", "KiotViet F&B sold SKU × COST-001 BOM", foundationReadiness.checkedAt, "NEED_VERIFY — BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "Sold-SKU mapping " + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "; production-ready BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "."],
+        ["Gross Profit", "—", "Canonical calculation: Revenue − COGS", foundationReadiness.checkedAt, "NEED_VERIFY — COGS chưa PASS", "Không tính số chắc chắn khi COGS coverage chưa đủ."],
+        ["Gross Margin", "—", "Canonical calculation: Gross Profit / Revenue", foundationReadiness.checkedAt, "NEED_VERIFY — Gross Profit chưa PASS", "Derived metric; Revenue=0 thì N/A."],
+        ["Operating Expense", "—", "FIN-HOSPITALITY-001 + authenticated evidence", foundationReadiness.checkedAt, "NEED_VERIFY — coverage " + foundationReadiness.expense.coveragePct.toFixed(1) + "%", foundationReadiness.expense.missingRows + " missing + " + foundationReadiness.expense.partialRows + " partial trên " + foundationReadiness.expense.requiredRows + " dòng bắt buộc."],
+        ["Operating Profit", "—", "Canonical calculation layer", foundationReadiness.checkedAt, "NEED_VERIFY — COGS/Expense chưa PASS", "Không dùng Budget/Estimate thay Actual."],
+        ["Profit Before Tax", profitBeforeTax === null ? "—" : money(profitBeforeTax), "Finance Operating Snapshot", businessUpdatedAt, profitBeforeTax === null ? "NEED_VERIFY — P&L chưa đóng" : "VERIFIED", "Chỉ có giá trị khi Revenue/COGS/OPEX đã đủ canonical Actual."],
+        ["Tax Provision", taxProvision === null ? "—" : money(taxProvision), "Canonical Tax Position", businessUpdatedAt, taxProvision === null ? "HOLD — Tax Rule chưa VERIFIED" : "VERIFIED", "Không mặc định Tax=0."],
+        ["Profit After Tax", profitAfterTax === null ? "—" : money(profitAfterTax), "Finance Operating Snapshot", businessUpdatedAt, profitAfterTax === null ? "HOLD — PBT/Tax chưa PASS" : "VERIFIED", "PBT − Tax Provision."],
+        ["Opening Business Cash 30/09", openingBusinessCash === null ? "—" : money(openingBusinessCash), "Owner-approved Opening Position", businessUpdatedAt, openingBusinessCash === null ? "NEED_VERIFY" : "VERIFIED", "Business Cash ≠ Revenue ≠ Profit ≠ Owner Distributable Cash."],
+        ["Business Cash (Book)", bookBusinessCash === null ? "—" : money(bookBusinessCash), "Finance Operating Snapshot", businessUpdatedAt, bookBusinessCash === null ? "NEED_VERIFY" : bankReconOpenCount > 0 ? "PARTIAL — " + bankReconOpenCount + " bank account cần đối soát" : "VERIFIED", "Book cash là canonical roll-forward; physical bank reconciliation vẫn là gate riêng."],
+        ["OTA Receivable", otaReceivable === null ? "—" : money(otaReceivable), "Business AR opening + settlement ledger", businessUpdatedAt, otaReceivable === null ? "NEED_VERIFY" : "VERIFIED", "Không tính AR vào Personal Cash/Owner Income."],
+        ["Accounts Payable", knownAp === null ? "—" : money(knownAp), "Opening AP + canonical payable ledger", businessUpdatedAt, unknownApCount > 0 ? "NEED_VERIFY — " + unknownApCount + " khoản thiếu amount" : "VERIFIED", "Không suy khoản thiếu amount = 0."],
+        ["Owner Distributable Cash", ownerDistributableCash === null ? "—" : money(ownerDistributableCash), "Finance Operating Distribution Gate", businessUpdatedAt, ownerDistributableCash === null ? "HOLD — Tax/AP/Reserve/P&L chưa PASS" : "VERIFIED", "Chỉ sau obligations + tax + operating reserve; không lấy Revenue/Business Cash thay distribution."],
+      ];
+
+      const businessDataGaps = [
+        ["Expense Actual", foundationReadiness.expense.missingRows + " missing + " + foundationReadiness.expense.partialRows + " partial", "FIN-HOSPITALITY-001 + payroll/utilities/OTA/OPEX evidence", "NEED_VERIFY", "AI CFO + Quản lý cơ sở", "Đóng dòng missing trước, sau đó partial.", "BLOCKING"],
+        ["COGS", "BOM VERIFIED " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "COST-001 + KiotViet F&B sold-SKU", "NEED_VERIFY", "AI CFO + Cost Controller", "Nghiệm thu BOM theo SKU bán thực tế, ưu tiên SKU doanh số cao.", "BLOCKING"],
+        ["Payroll September", employeeAdvances === null ? "Salary Advance canonical tồn tại; final payroll chưa đóng." : "Salary Advance " + money(employeeAdvances) + "; final payroll chưa đóng.", "Payroll close + Salary Advance subledger", "NEED_VERIFY", "Quản lý cơ sở + AI CFO", "01/10 chốt Final Payroll − Salary Advance = Remaining Payroll Payable; không double-count.", "BLOCKING"],
+        ["OTA Commission", "Lavender/Ruby Booking.com opening AP chưa có amount.", "Booking.com statement/invoice + settlement", "NEED_VERIFY", "Quản lý Homestay + AI CFO", "Lấy statement tháng 9 và map đúng Lavender/Ruby.", "BLOCKING"],
+        ["Utilities", "Electricity/Water opening AP chưa có amount.", "Hóa đơn điện/nước + payment evidence", "NEED_VERIFY", "Quản lý cơ sở + AI CFO", "Bổ sung amount/due date theo hóa đơn kỳ tháng 9.", "BLOCKING"],
+        ["Accounts Payable", unknownApCount ? unknownApCount + " open item chưa có amount." : "Structured AP đã đủ amount.", "Opening AP + KiotViet PO/Supplier", unknownApCount ? "NEED_VERIFY" : "VERIFIED", "AI CFO + AI COO", unknownApCount ? "Đóng amount/due date và đối soát paid/unpaid." : "Tiếp tục monthly reconciliation.", unknownApCount ? "BLOCKING" : "NON-BLOCKING"],
+        ["Tax Provision", taxProvision === null ? "Tax Rule chưa VERIFIED." : "Tax Provision đã có canonical value.", "Canonical Tax Rule / Tax Position", taxProvision === null ? "HOLD" : "VERIFIED", "AI CFO + Tax owner", taxProvision === null ? "Xác minh tax rule trước khi tính PAT/Distribution." : "Theo dõi actual tax.", taxProvision === null ? "BLOCKING" : "NON-BLOCKING"],
+        ["Bank vs Book", bankReconOpenCount ? bankReconOpenCount + " account chưa MATCHED." : "Không còn account reconciliation mở.", "Finance Accounts + bank evidence", bankReconOpenCount ? "NEED_VERIFY" : "VERIFIED", "AI CFO + Audit", bankReconOpenCount ? "Đối soát physical balance/routing TK HKD Tuấn + Ruby." : "Duy trì month-end reconcile.", bankReconOpenCount ? "BLOCKING" : "NON-BLOCKING"],
+      ];
+
       return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",

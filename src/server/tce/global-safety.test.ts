@@ -94,3 +94,14 @@ test("Business current-month view reuses the same KiotViet reads",()=>{
   assert.match(live,/const hotelMonthPromise = sameAsCurrentMonth\s*\? hotelPeriodPromise/);
   assert.match(live,/const fnbMonthPromise = sameAsCurrentMonth\s*\? fnbPeriodPromise/);
 });
+
+
+test("production deploy stamps Next deployment identity from git SHA",()=>{
+  const config=read("next.config.mjs");
+  const docker=read("Dockerfile");
+  const deploy=read("scripts/deploy-tce-15-agents-vps.sh");
+  assert.match(config,/deploymentId: process\.env\.NEXT_DEPLOYMENT_ID \|\| undefined/);
+  assert.match(docker,/ARG NEXT_DEPLOYMENT_ID/);
+  assert.match(docker,/ENV NEXT_DEPLOYMENT_ID=\$NEXT_DEPLOYMENT_ID/);
+  assert.match(deploy,/--build-arg NEXT_DEPLOYMENT_ID="\$SHA"/);
+});

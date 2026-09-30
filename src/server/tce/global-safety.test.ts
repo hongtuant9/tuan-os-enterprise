@@ -166,3 +166,12 @@ test("business dashboard exposes canonical finance stack without fake completion
   assert.match(ui,/Chuỗi tài chính kinh doanh/);
   assert.match(ui,/Data Gap Register/);
 });
+
+
+test("overview unresolved business KPI cards drill down to canonical data gaps",()=>{
+  const overview=read("src/components/ExecutiveDashboardLive.tsx");
+  const business=read("src/components/tce/ReferenceScreens.tsx");
+  assert.match(overview,/\/business#business-data-gaps/);
+  assert.match(overview,/props\.finance\.costLabel/);
+  assert.match(business,/id="business-data-gaps"/);
+});

@@ -117,3 +117,11 @@ test("Executive overview uses Revenue verification and Finance Foundation readin
   assert.match(dashboard,/DataFreshnessBar/);
   assert.match(dashboard,/props\.revenue\.verified \? money\(props\.revenue\.total\) : "CẦN XÁC MINH"/);
 });
+
+
+test("Business verification guide does not ask to redo completed sold-SKU mapping",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  assert.match(live,/Sold-SKU mapping PASS/);
+  assert.match(live,/matchedSoldSkuCount === foundationReadiness\.cogs\.soldSkuCount/);
+  assert.doesNotMatch(live,/steps: \["Đóng sold-SKU mapping\."/);
+});

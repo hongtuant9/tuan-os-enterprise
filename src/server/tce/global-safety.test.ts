@@ -125,3 +125,12 @@ test("Business verification guide does not ask to redo completed sold-SKU mappin
   assert.match(live,/matchedSoldSkuCount === foundationReadiness\.cogs\.soldSkuCount/);
   assert.doesNotMatch(live,/steps: \["Đóng sold-SKU mapping\."/);
 });
+
+test("finance route heavy reads are bounded and fail closed",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  assert.match(live,/FINANCE_SOURCE_TIMEOUT_MS\s*=\s*6_000/);
+  assert.match(live,/financeReadWithTimeout\(fetchHotelCashflowActual/);
+  assert.match(live,/financeReadWithTimeout\(fetchFnbCashflowActual/);
+  assert.match(live,/financeReadWithTimeout\(readHospitalityDebtSnapshot/);
+  assert.match(live,/Finance source read exceeded bounded timeout or failed/);
+});

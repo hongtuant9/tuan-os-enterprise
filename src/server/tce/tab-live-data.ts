@@ -670,7 +670,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
               periodRevenue ? pct((periodFnb / periodRevenue) * 100) : "0%",
             ],
           ],
-        },
+          businessFinancialStack,\n          businessDataGaps,\n        },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
         businessVerificationGuides,

@@ -80,6 +80,40 @@ function cashflowTimeoutFallback(source: KiotVietCashflowSnapshot["source"], fro
   };
 }
 
+
+type BusinessOperatingSnapshot = {
+  summary?: {
+    openingBusinessCash?: number | null;
+    bankBusinessCash?: number | null;
+    bookBusinessCash?: number | null;
+    netOpeningLiquidity?: number | null;
+    employeeAdvancesOutstanding?: number | null;
+    employeeAdvanceCount?: number | null;
+    otaReceivable?: number | null;
+    knownAp?: number | null;
+    unknownApCount?: number | null;
+    bankReconOpenCount?: number | null;
+    revenue?: number | null;
+    profitBeforeTax?: number | null;
+    taxProvision?: number | null;
+    profitAfterTax?: number | null;
+    ownerDistributableCash?: number | null;
+    distributionStatus?: string | null;
+  } | null;
+  taxPosition?: { verification_status?: string | null } | null;
+};
+type RpcResult = { data: unknown; error: { message?: string } | null };
+type RpcClient = { rpc: (name: string, args?: Record<string, unknown>) => PromiseLike<RpcResult> };
+async function readBusinessOperatingSnapshot(db: unknown, month: string): Promise<BusinessOperatingSnapshot | null> {
+  try {
+    const { data, error } = await (db as RpcClient).rpc("finance_operating_snapshot", { p_month: month });
+    if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
+    return data as BusinessOperatingSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 export type TceVerificationGuide = {
   title: string; status: string; reason: string; verifyWhat: string[]; currentEvidence?: string[]; blocker?: string; evidenceRequired: string[]; steps: string[];
   owner: string; provider: string; completionCriteria: string[]; nextAction: string; source?: string; severity?: "P0" | "P1" | "P2";
@@ -424,13 +458,15 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const fnbMonthPromise = sameAsCurrentMonth
       ? fnbPeriodPromise
       : safeFnb(monthStart + "T00:00:00", today + "T23:59:59");
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness] = await Promise.all([
+    const businessFinanceMonth = today >= "2026-10-01" ? today.slice(0, 7) + "-01" : "2026-10-01";
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness, businessOperating] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
       fnbMonthPromise,
       container.dashboard.stats(),
       readFinanceFoundationReadiness(),
+      screen === "business" ? readBusinessOperatingSnapshot(container.db, businessFinanceMonth) : Promise.resolve(null),
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;

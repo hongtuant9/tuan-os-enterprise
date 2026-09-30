@@ -143,3 +143,13 @@ test("verification card exposes in-place Data Gap Register fields",()=>{
   assert.match(type,/currentEvidence\?: string\[\]/);
   assert.match(type,/blocker\?: string/);
 });
+
+
+test("TCE tab loader fails closed instead of taking the whole route down",()=>{
+  const loader=read("src/server/tce/tab-live-data.ts");
+  assert.match(loader,/getTceTabLiveDataUnsafe/);
+  assert.match(loader,/screen=\$\{screen\} fail-closed/);
+  assert.match(loader,/freshnessStatus: \"ERROR\"/);
+  assert.match(loader,/dataRecencyStatus: \"NO_DATA\"/);
+  assert.match(loader,/không suy NO DATA thành 0/);
+});

@@ -126,7 +126,7 @@ const meta: Record<ScreenKey, ScreenMeta> = {
       { label: "Doanh thu thuần", value: "—", delta: "↗", note: "Số thực tế theo nguồn", tone: "blue", icon: "▮▮" },
       { label: "Chi phí vận hành", value: "—", delta: "↗", note: "Chỉ khi đủ chứng từ", tone: "red", icon: "▣" },
       { label: "Dòng tiền ròng", value: "—", delta: "↗", note: "Tiền vào − tiền ra", tone: "green", icon: "↗" },
-      { label: "Số dư tiền mặt", value: "—", delta: "↗", note: "Số dư tiền hiện có", tone: "blue", icon: "▣" },
+      { label: "Nguồn tiền cutover", value: "—", delta: "↗", note: "Nguồn tiền quản trị tại 30/09", tone: "blue", icon: "▣" },
       { label: "Công nợ phải trả", value: "—", delta: "↘", note: "Khoản phải trả / nghĩa vụ thanh toán", tone: "amber", icon: "▱" },
       { label: "Nợ vay", value: "—", delta: "↗", note: "KiotViet Sổ quỹ · Cần xác minh", tone: "violet", icon: "▥" },
     ],
@@ -555,177 +555,132 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "finance":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Cutover 30/09/2026 — Opening Financial Position" subtitle="01/10/2026 trở đi = Canonical Actual Finance · NO DATA ≠ 0 · chưa đủ AP/ownership thì Net Opening Liquidity giữ HOLD" className="col-span-12 h-[230px]" icon="◫">
-            <DataTable columns={["Chỉ tiêu","Giá trị","Điều kiện","Trạng thái"]} rows={4} data={data?.tables.financeCutoverOpening}/>
+          <Section
+            title="Tổng quan tài chính từ 01/10/2026"
+            subtitle="Mốc cutover 30/09 · Tách rõ Tiền, Doanh thu, Lợi nhuận, Quỹ và Nợ · không cộng trùng OTA hoặc khoản earmark"
+            className="col-span-12 h-[285px]"
+            icon="◫"
+          >
+            <DataTable
+              columns={["Chỉ tiêu","Giá trị","Cách hiểu / Quy tắc","Trạng thái"]}
+              rows={5}
+              data={data?.tables.financePosition}
+            />
           </Section>
-          <Section title="Credit Facility & Debt Exposure" subtitle="Used principal là debt; available credit không phải asset. Lãi hiển thị là planning exposure, Actual theo bank statement." className="col-span-12 h-[230px]" icon="▣">
-            <DataTable columns={["Facility","Phân loại","Used principal","Available credit","Rate","Lãi/tháng ước tính","Maturity","Next interest","Status"]} rows={2} data={data?.tables.financeCutoverFacilities}/>
+
+          <Section
+            title="Cấu trúc tài khoản chuẩn"
+            subtitle="TKK chỉ nhận doanh thu · BIDV 888 chi vận hành · TPBank 1984 giữ quỹ TCE · TPBank 501 và TPBank 888 thuộc Personal Finance"
+            className="col-span-12 h-[320px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["Tài khoản","Vai trò","Phạm vi","Số dư / cách theo dõi","Trạng thái"]}
+              rows={6}
+              data={data?.tables.financeAccountStructure}
+            />
           </Section>
-          <Section title="Business OTA Receivables — Opening 30/09" subtitle="Expedia/Agoda theo Lavender/Ruby; khi nhận tiền AR → Business Cash, không tự thành Personal Income" className="col-span-12 h-[245px]" icon="▤">
-            <DataTable columns={["#","Đơn vị","OTA","Expected","Expected settlement","Status","Verify"]} rows={4} data={data?.tables.financeCutoverAr}/>
+
+          <Section
+            title="Các quỹ & phân bổ bắt buộc"
+            subtitle="Một tài khoản vật lý TPBank 1984, nhiều quỹ logic trên bảng điều hành; tổng quỹ logic phải đối soát với số dư thật"
+            className="col-span-12 h-[300px]"
+            icon="▮"
+          >
+            <DataTable
+              columns={["Khoản","Mức / chính sách","Nơi giữ","Quy tắc","Trạng thái"]}
+              rows={5}
+              data={data?.tables.financeFundBuckets}
+            />
           </Section>
-          <Section title="September Outstanding Payables" subtitle="Khoản chưa biết amount vẫn tồn tại NEED VERIFY; không mặc định 0 và không tính free cash trước khi AP đầy đủ" className="col-span-12 h-[245px]" icon="!">
-            <DataTable columns={["#","Đơn vị","Category","Đối tác","Amount","Due","Payment","Verify"]} rows={9} data={data?.tables.financeCutoverAp}/>
+
+          <Section
+            title="Doanh thu theo mảng kinh doanh"
+            subtitle="P&L phải phân loại theo Business Unit Cozy Garden · Lavender · Ruby, không theo tài khoản TKK nhận tiền"
+            className="col-span-12 h-[245px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["Mảng / nguồn","Doanh thu","Số hóa đơn","Trạng thái"]}
+              rows={6}
+              data={data?.tables.financeBranches}
+            />
           </Section>
-          <Section title="October 2026 Operating Plan" subtitle="Ưu tiên: Mandatory obligations → Personal essentials → Interest → Liquidity reserve → Principal reduction → Investment" className="col-span-12 h-[360px]" icon="▮">
-            <DataTable columns={["Priority","Domain","Đơn vị","Plan line","Baseline","Target","Gate","Verify","Review condition"]} rows={12} data={data?.tables.financeOctoberPlan}/>
+
+          <Section
+            title="OTA đã duyệt thanh toán"
+            subtitle="Agoda / Expedia là khoản thu tiền của kỳ lưu trú trước; ngày tiền về không làm phát sinh doanh thu lần hai"
+            className="col-span-12 h-[245px]"
+            icon="▤"
+          >
+            <DataTable
+              columns={["#","Đơn vị","OTA","Số tiền","Ngày dự kiến","Trạng thái","Xác minh"]}
+              rows={4}
+              data={data?.tables.financeCutoverAr}
+            />
           </Section>
-          <Section title="Month-end Close — October 2026" subtitle="13 bước bắt buộc; chỉ PASS khi có evidence và reconciliation" className="col-span-12 h-[360px]" icon="✓">
-            <DataTable columns={["#","Checklist","Domain","Due","Status","Verify"]} rows={13} data={data?.tables.financeMonthEndClose}/>
+
+          <Section
+            title="Nợ & hạn mức tín dụng"
+            subtitle="Used principal là nợ; hạn mức chưa sử dụng không phải tài sản/cash"
+            className="col-span-12 h-[220px]"
+            icon="▣"
+          >
+            <DataTable
+              columns={["Facility","Phân loại","Dư nợ","Hạn mức còn lại","Lãi suất","Lãi/tháng ước tính","Đáo hạn","Kỳ lãi tới","Trạng thái"]}
+              rows={2}
+              data={data?.tables.financeCutoverFacilities}
+            />
           </Section>
+
           <Section
             id="cost-analysis"
             title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")}
-            subtitle="Nguồn duy nhất: KiotViet Hotel + KiotViet F&B; không dùng Drive/Sheet làm nguồn giao dịch"
+            subtitle="Actual chỉ lấy từ KiotViet / chứng từ authority; Cash Out không tự động là Expense"
             className="col-span-12 h-[300px]"
             icon="◫"
           >
             <DataTable
-              columns={["#","Đơn vị","Nhóm chi phí","Chi phí đã ghi nhận","Số khoản","Trạng thái bằng chứng","Mức bao phủ"]}
+              columns={["#","Đơn vị","Nhóm chi phí","Đã ghi nhận","Số khoản","Bằng chứng","Bao phủ"]}
               rows={7}
               data={data?.tables.financePeriodCostGroups}
             />
           </Section>
+
           <Section
-            title="Phạm vi dữ liệu chi phí"
-            subtitle="Doanh thu qua API đang hoạt động; chi phí chỉ hiện khi đọc được trực tiếp từ KiotViet"
-            className="col-span-12 h-[300px]"
-            icon="!"
-          >
-            <DataTable
-              columns={["Chỉ tiêu","Giá trị"]}
-              rows={4}
-              data={data?.tables.financeCostCoverage}
-            />
-          </Section>
-          <Section
-            title="Chi tiết khoản chi từ KiotViet"
-            subtitle="Không dựng dữ liệu từ nguồn ngoài; tạm dừng kết luận khi giao diện kết nối công khai chưa cung cấp dữ liệu Sổ quỹ"
+            title="Chi tiết khoản chi đã đọc được"
+            subtitle="Chỉ hiển thị giao dịch có source; khoản chưa đủ bằng chứng giữ NEED VERIFY/HOLD"
             className="col-span-12 h-[250px]"
             icon="▤"
           >
             <DataTable
-              columns={["#","Ngày","Đơn vị","Nhóm","Hạng mục","Số tiền","Trạng thái","Nguồn"]}
+              columns={["#","Ngày","Đơn vị","Nhóm","Hạng mục","Số tiền","KQKD","Nguồn"]}
               rows={8}
               data={data?.tables.financePeriodCostEvents}
             />
           </Section>
-          <Section
-            title="Danh mục Loại thu / Loại chi cần setup trong Sổ quỹ"
-            subtitle="Taxonomy v2 lean: dùng đúng mã [TCE-C/F/H/N/Rxx]; F&B 17 loại chi, Hotel 19 loại chi; không tạo dữ liệu giao dịch song song trong TCE"
-            className="col-span-12 h-[520px]"
-            icon="▤"
-          >
-            <DataTable
-              columns={["Mã","Tên cần tạo","Áp dụng","Thu/Chi","KQKD","Phân loại kế toán","Nhân viên dùng khi","Quy tắc"]}
-              rows={23}
-              data={data?.tables.financeCashflowGroupSetup}
-            />
-          </Section>
-          <Section
-            title="Chuẩn hạng mục CHI trên KiotViet"
-            subtitle="Mỗi khoản chi phải vào đúng module; tránh nhập trùng giữa Nhập hàng, Bảng lương và Sổ quỹ"
-            className="col-span-12 h-[360px]"
-            icon="◫"
-          >
-            <DataTable
-              columns={["Mã","Nhóm chi phí","Áp dụng","Nhập tại KiotViet","Hạch toán KQKD","Nguyên tắc"]}
-              rows={19}
-              data={data?.tables.financeExpenseTaxonomy}
-            />
-          </Section>
-          <Section
-            title="Chuẩn hạng mục THU trên KiotViet"
-            subtitle="Doanh thu bán hàng/dịch vụ phải phát sinh từ hóa đơn; không lập Phiếu thu thủ công trùng doanh thu"
-            className="col-span-12 h-[330px]"
-            icon="▮"
-          >
-            <DataTable
-              columns={["Mã","Hệ thống","Nhóm doanh thu","Ghi nhận tại","Quy tắc phân tích"]}
-              rows={16}
-              data={data?.tables.financeRevenueTaxonomy}
-            />
-          </Section>
-          <Section
-            title="Trạng thái API KiotViet"
-            subtitle="Kiểm tra chỉ đọc đã xác minh trên môi trường vận hành chính thức; không dùng điểm kết nối API mà KiotViet không hỗ trợ"
-            className="col-span-12 h-[330px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["#","Hệ","Đối tượng","Phương thức","Trạng thái","Kết quả"]}
-              rows={11}
-              data={data?.tables.financeApiCapabilities}
-            />
-          </Section>
-          <Section
-            title="Nguồn lợi nhuận"
-            subtitle="Doanh thu lấy trực tiếp từ KiotViet; chi phí/lợi nhuận giữ CẦN XÁC MINH cho tới khi có dữ liệu chi phí từ KiotViet"
-            className="col-span-12 h-[300px]"
-            icon="▮"
-          >
-            <DataTable
-              columns={["#","Nguồn","Loại","Doanh thu","Chi phí","LN ước tính","Biên","Đóng góp","Loại số"]}
-              rows={6}
-              data={data?.tables.financeProfitSources}
-            />
-          </Section>
 
           <Section
-            title="Quy tắc đánh giá chi phí"
-            subtitle="Đạt chuẩn · Theo dõi · Cần tối ưu chỉ được gắn khi có dữ liệu đúng authority"
-            className="col-span-12 h-[300px]"
-            icon="!"
-          >
-            <DataTable
-              columns={["Nhóm","Đạt chuẩn","Theo dõi","Cần tối ưu / Fail closed","Nguồn chuẩn"]}
-              rows={4}
-              data={data?.tables.financeCostControlRules}
-            />
-          </Section>
-          <Section
-            title="Sản phẩm / dịch vụ tạo lợi nhuận"
-            subtitle="Chỉ dùng chi tiết hóa đơn và giá vốn từ KiotViet; không đưa nguồn giao dịch bên ngoài vào kết quả"
-            className="col-span-12 h-[235px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["Nhóm phân tích","Cách tính","Nguồn dữ liệu","Trạng thái","Kết quả"]}
-              rows={5}
-              data={data?.tables.financeProductProfitReadiness}
-            />
-          </Section>
-
-
-          <Section
-            title="Tình hình theo đơn vị"
-            subtitle="Doanh thu thực tế theo Lavender · Ruby · Cozy Garden; không gộp mất cơ sở"
-            className="col-span-12 h-[235px]"
-            icon="▣"
-          >
-            <DataTable columns={["Nguồn","Giá trị","Số hóa đơn","Trạng thái"]} rows={6} data={data?.tables.financeBranches}/>
-          </Section>
-          <Section
-            title="3 hành động tối ưu ưu tiên"
-            subtitle="AI chỉ đưa tối đa 3 hành động; chưa tự thay đổi giá, ngân sách, BOM hoặc chi phí"
-            className="col-span-12 h-[235px]"
+            title="3 hành động tài chính ưu tiên"
+            subtitle="Chỉ giữ các việc ảnh hưởng trực tiếp đến chất lượng dữ liệu, dòng tiền và khả năng chốt P&L"
+            className="col-span-12 h-[220px]"
             icon="!"
           >
             <ListRows items={data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]}/>
           </Section>
 
-          <Section title="Dòng tiền vào – ra" subtitle="Doanh thu, chi phí và dòng tiền ròng; chỉ hiện xu hướng khi có daily-series được xác minh" className="col-span-12 h-[290px]" icon="▮"><BarLineChart/></Section>
-          <Section title="Công nợ & thanh toán" subtitle="Danh sách công nợ phải thu / phải trả với đối tác" className="col-span-12 h-[290px]" icon="▤"><DataTable columns={["#","Đối tác","Loại","Số tiền","Hạn thanh toán","Trạng thái","Hành động"]} rows={8}/></Section>
-          <Section title="Dự báo trả nợ" subtitle="Kế hoạch thanh toán 6 tháng tới" className="col-span-12 h-[290px]" icon="◫"><BarLineChart labels={["T09/26","T10/26","T11/26","T12/26","T01/27","T02/27"]} line={false}/></Section>
-
-          <Section title="Cảnh báo tài chính" subtitle="Chỉ cảnh báo khi có bằng chứng; dữ liệu thiếu giữ trạng thái CẦN XÁC MINH" className="col-span-12 h-[150px]" icon="!">
+          <Section
+            title="Nguyên tắc kiểm soát"
+            subtitle="Áp dụng từ 01/10/2026"
+            className="col-span-12 h-[165px]"
+            icon="✓"
+          >
             <ListRows items={[
-              "Chi phí thực tế chưa đồng bộ đầy đủ: chưa được kết luận nhóm nào vượt chuẩn chỉ từ mô hình.",
-              "Lợi nhuận theo cơ sở hiện là [Ước tính/Mô hình] vì chi phí thực tế chưa đủ.",
-              "Xếp hạng lợi nhuận theo món/hạng phòng chỉ bật khi chi tiết hóa đơn và ánh xạ giá vốn đạt yêu cầu.",
+              "TKK chỉ nhận doanh thu; mọi doanh thu phải gắn đúng Business Unit Cozy/Lavender/Ruby để tính P&L.",
+              "TPBank 1984 là tài khoản quỹ TCE duy nhất: Thuế + Thưởng tháng 13 + Dự phòng; TPBank 888 là quỹ an toàn cá nhân.",
+              "Quỹ tái đầu tư Cozy 31.473.816đ là earmark trong business cash, không cộng thêm vào tổng tiền. CEO Compensation 40 triệu/tháng chuyển TPBank 501 và sau đó thuộc Personal Finance.",
             ]}/>
           </Section>
-          <Section title="Quỹ an toàn / dự phòng" subtitle="" className="col-span-12 h-[150px]" icon="▣"><div className="grid h-full grid-cols-3 gap-2 p-3">{["Dùng ngay","Thanh khoản nhanh","Kỳ hạn"].map(x=><div key={x} className="rounded bg-[#f5f9fe] p-2"><p className="text-[8px] text-[#667fa3]">{x}</p><b className="mt-1 block text-[13px] text-[#132d60]">—</b><small className="mt-1 block text-[7px] text-[#7d8da6]">CẦN XÁC MINH</small></div>)}</div></Section>
         </div>
       );
     case "reports":

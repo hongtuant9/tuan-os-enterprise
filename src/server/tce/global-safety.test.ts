@@ -166,3 +166,13 @@ test("business dashboard exposes canonical finance stack without fake completion
   assert.match(ui,/Chuỗi tài chính kinh doanh/);
   assert.match(ui,/Data Gap Register/);
 });
+
+
+test("proxy recovers reused refresh token without bypassing auth",()=>{
+  const proxy=read("src/proxy.ts");
+  assert.match(proxy,/invalid refresh token\|refresh token\.\*already used\|refresh_token_not_found/i);
+  assert.match(proxy,/reason", "session_expired"/);
+  assert.match(proxy,/maxAge: 0/);
+  assert.match(proxy,/NextResponse\.redirect\(loginUrl\)/);
+  assert.match(proxy,/if \(!user && !isPublicPath\)/);
+});

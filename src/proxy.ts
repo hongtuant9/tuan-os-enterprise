@@ -58,9 +58,26 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const authResult = await supabase.auth.getUser();
+    user = authResult.data.user;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const invalidRefreshToken = /invalid refresh token|refresh token.*already used|refresh_token_not_found/i.test(message);
+    if (!invalidRefreshToken) throw error;
+
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname + request.nextUrl.search);
+    loginUrl.searchParams.set("reason", "session_expired");
+    const redirect = NextResponse.redirect(loginUrl);
+    for (const cookie of request.cookies.getAll()) {
+      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(cookie.name)) {
+        redirect.cookies.set(cookie.name, "", { path: "/", maxAge: 0 });
+      }
+    }
+    return redirect;
+  }
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 

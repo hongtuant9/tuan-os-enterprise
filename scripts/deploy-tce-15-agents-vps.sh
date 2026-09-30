@@ -63,6 +63,7 @@ done
 
 log "Building image $IMAGE"
 docker build --pull \
+  --build-arg NEXT_DEPLOYMENT_ID="$SHA" \
   --secret id=next_public_env,src="$BUILD_PUBLIC_ENV" \
   -t "$IMAGE" .
 

@@ -134,3 +134,12 @@ test("finance route heavy reads are bounded and fail closed",()=>{
   assert.match(live,/financeReadWithTimeout\(readHospitalityDebtSnapshot/);
   assert.match(live,/Finance source read exceeded bounded timeout or failed/);
 });
+
+
+test("verification card exposes in-place Data Gap Register fields",()=>{
+  const modal=read("src/components/tce/VerificationHelp.tsx");
+  const type=read("src/components/tce/verification-guide.ts");
+  for(const label of ["Thiếu gì / cần xác minh gì?","Nguồn authority","Evidence hiện có","Blocker hiện tại","Next action","Khi nào được VERIFIED?"]) assert.match(modal,new RegExp(label.replace(/[?]/g,"\\?")));
+  assert.match(type,/currentEvidence\?: string\[\]/);
+  assert.match(type,/blocker\?: string/);
+});

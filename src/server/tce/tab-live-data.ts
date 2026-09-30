@@ -81,7 +81,7 @@ function cashflowTimeoutFallback(source: KiotVietCashflowSnapshot["source"], fro
 }
 
 export type TceVerificationGuide = {
-  title: string; status: string; reason: string; verifyWhat: string[]; evidenceRequired: string[]; steps: string[];
+  title: string; status: string; reason: string; verifyWhat: string[]; currentEvidence?: string[]; blocker?: string; evidenceRequired: string[]; steps: string[];
   owner: string; provider: string; completionCriteria: string[]; nextAction: string; source?: string; severity?: "P0" | "P1" | "P2";
 };
 
@@ -477,6 +477,13 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Chi phí": { title: "Chi phí thực tế", status: "CẦN XÁC MINH", severity: "P0",
           reason: `Expense Actual coverage ${foundationReadiness.expense.coveragePct.toFixed(1)}%; missing=${foundationReadiness.expense.missingRows}; partial=${foundationReadiness.expense.partialRows}. Source Map đã ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows}.`,
           verifyWhat: ["Actual Expense theo business unit/category/kỳ.", "Khoản nào là P&L Expense, khoản nào chỉ là Cash Out/non-P&L."],
+          currentEvidence: [
+            `FIN Source Map đã đủ ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows} dòng bắt buộc.`,
+            `Đã đóng ${Math.max(0, foundationReadiness.expense.requiredRows - foundationReadiness.expense.missingRows - foundationReadiness.expense.partialRows)}/${foundationReadiness.expense.requiredRows} dòng Actual; còn ${foundationReadiness.expense.missingRows} missing + ${foundationReadiness.expense.partialRows} partial.`,
+            "F&B Cashbook đã reconcile nhưng Cash Out trả NCC hàng tồn kho là non-P&L; không dùng thay Expense.",
+            "Cozy Google Ads đã có 2 payment evidence tháng 9, tổng Cash Paid 3.000.000đ; P&L còn chờ rule VAT net/gross.",
+          ],
+          blocker: `Expense coverage mới ${foundationReadiness.expense.coveragePct.toFixed(1)}%; payroll/utilities/OTA/OPEX còn thiếu hoặc partial, nên không được tính Profit.`,
           evidenceRequired: ["Payroll/chấm công đã chốt.", "Hóa đơn/chứng từ utilities, OTA commission, supplier/OPEX đúng kỳ.", "KiotViet authenticated source + source transaction ID khi có."],
           steps: ["Đóng các dòng missing trước.", "Đối chiếu category/business unit.", "Loại non-P&L khỏi Expense.", "Chạy reconciliation và coverage."],
           owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + kế toán/lương", source: "FIN-HOSPITALITY-001 + KiotViet authenticated runtime + evidence gốc",
@@ -485,6 +492,12 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
         "Lợi nhuận gộp": { title: "Lợi nhuận gộp", status: "CẦN XÁC MINH", severity: "P0",
           reason: `Revenue đã có nhưng COGS sold-SKU chưa đủ: BOM VERIFIED ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; COST-001 match ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}.`,
           verifyWhat: ["COGS cho từng SKU thực bán.", "BOM/định lượng/giá nguyên liệu đủ authority."],
+          currentEvidence: [
+            `Sold-SKU mapping PASS ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount} (${foundationReadiness.cogs.soldSkuCoveragePct.toFixed(1)}%).`,
+            `BOM production-ready hiện ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount} sold SKU (${foundationReadiness.cogs.soldSkuBomReadyPct.toFixed(1)}%).`,
+            `Nguyên liệu đã đối chiếu ${foundationReadiness.cogs.verifiedIngredients}/${foundationReadiness.cogs.ingredientCount} (${foundationReadiness.cogs.ingredientCoveragePct.toFixed(1)}%).`,
+          ],
+          blocker: "Mapping SKU đã PASS; blocker thật là nghiệm thu BOM/định lượng/giá nguyên liệu cho SKU thực bán. Không dùng purchase amount hoặc % giả định thay COGS.",
           evidenceRequired: ["KiotViet F&B sold-SKU/invoice detail.", "COST-001 BOM/COGS VERIFIED.", "Homestay direct-cost definition theo FIN-HOSPITALITY-001."],
           steps: [foundationReadiness.cogs.matchedSoldSkuCount === foundationReadiness.cogs.soldSkuCount ? `Sold-SKU mapping PASS ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; không cần xử lý mapping thêm.` : `Đóng ${foundationReadiness.cogs.soldSkuCount - foundationReadiness.cogs.matchedSoldSkuCount} sold-SKU còn thiếu mapping.`, "Nghiệm thu BOM ưu tiên SKU có doanh số.", "Tính COGS từ verified unit COGS.", "Reconcile coverage trước Gross Profit."],
           owner: "AI CFO + AI COO/Cost Controller", provider: "Quản lý Cozy/Bếp/Bar + quản lý Homestay", source: "KiotViet Actual sales × COST-001 / FIN-HOSPITALITY-001",
@@ -492,7 +505,12 @@ export async function getTceTabLiveData(screen: TceTabScreen, query: TcePeriodQu
           nextAction: `Mapping hiện ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; tiếp tục nghiệm thu BOM cho ${foundationReadiness.cogs.soldSkuCount - foundationReadiness.cogs.verifiedSoldSkuCount} sold SKU chưa VERIFIED.` },
         "Biên lợi nhuận": { title: "Biên lợi nhuận", status: "CẦN XÁC MINH", severity: "P0",
           reason: "Chỉ tính khi Gross Profit và COGS coverage đã VERIFIED.",
-          verifyWhat: ["Gross Profit VERIFIED.", "Net Revenue đúng kỳ và denominator > 0."], evidenceRequired: ["Revenue reconciliation PASS.", "COGS reconciliation PASS."],
+          verifyWhat: ["Gross Profit VERIFIED.", "Net Revenue đúng kỳ và denominator > 0."],
+          currentEvidence: [
+            `Revenue period/month đã ${businessRevenueVerified ? "VERIFIED" : "NEED_VERIFY"}.`,
+            `COGS sold-SKU BOM production-ready ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}.`,
+          ],
+          blocker: "Gross Margin là derived metric; không có blocker riêng ngoài Gross Profit/COGS. Khi upstream chưa PASS thì phải giữ NEED_VERIFY.", evidenceRequired: ["Revenue reconciliation PASS.", "COGS reconciliation PASS."],
           steps: ["Đóng COGS blocker.", "Tính Gross Profit.", "Tính Gross Margin = Gross Profit / Net Revenue × 100."],
           owner: "AI CFO", provider: "Không cần chứng từ riêng ngoài Revenue/COGS đã VERIFIED", source: "Canonical Finance Calculation Layer",
           completionCriteria: ["Gross Profit VERIFIED.", "COGS coverage PASS."], nextAction: "Tự chuyển VERIFIED sau khi Gross Profit/COGS đạt gate." },

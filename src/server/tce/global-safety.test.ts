@@ -175,3 +175,13 @@ test("overview unresolved business KPI cards drill down to canonical data gaps",
   assert.match(overview,/props\.finance\.costLabel/);
   assert.match(business,/id="business-data-gaps"/);
 });
+
+
+test("proxy recovers reused refresh token without bypassing auth",()=>{
+  const proxy=read("src/proxy.ts");
+  assert.match(proxy,/invalid refresh token\|refresh token\.\*already used\|refresh_token_not_found/i);
+  assert.match(proxy,/reason", "session_expired"/);
+  assert.match(proxy,/maxAge: 0/);
+  assert.match(proxy,/NextResponse\.redirect\(loginUrl\)/);
+  assert.match(proxy,/if \(!user && !isPublicPath\)/);
+});

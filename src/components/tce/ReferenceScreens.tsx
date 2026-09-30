@@ -438,7 +438,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Chuỗi tài chính kinh doanh" subtitle="Revenue → COGS → Gross Profit → Operating Profit → PBT → Tax → PAT; Cash/AR/AP/Distribution giữ semantic riêng" className="col-span-12" icon="▦">
             <DataTable columns={["KPI","Giá trị","Nguồn","Cập nhật","Trạng thái","Giải thích"]} data={data?.tables.businessFinancialStack}/>
           </Section>
-          <Section title="Data Gap Register" subtitle="Chỉ giữ NEED_VERIFY/HOLD khi còn thiếu evidence; mỗi dòng nêu rõ source, owner và next action" className="col-span-12" icon="!">
+          <Section id="business-data-gaps" title="Data Gap Register" subtitle="Chỉ giữ NEED_VERIFY/HOLD khi còn thiếu evidence; mỗi dòng nêu rõ source, owner và next action" className="col-span-12" icon="!">
             <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Next Action","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
           </Section>
           <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 h-[260px]" icon="●">

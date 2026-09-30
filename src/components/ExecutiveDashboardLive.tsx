@@ -359,11 +359,11 @@ export default function ExecutiveDashboardLive(props: ExecutiveDashboardProps) {
                 value={props.finance.costState === "NEED_VERIFY" ? "CẦN XÁC MINH" : money(props.finance.costEstimate)}
                 tone="red"
                 icon="▥"
-                note={(props.finance.costState === "NEED_VERIFY" ? "Chỉ KiotViet · " : props.finance.costState === "PARTIAL" ? "MỘT PHẦN · " : "") + "Bấm để xem theo nhóm"}
+                note={props.finance.costLabel}
                 href={"/finance?period=" + props.period + "#cost-analysis"}
               />
-              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "CẦN XÁC MINH"} tone="blue" icon="▣" note="Chưa đủ chi phí thực tế để kết luận" />
-              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "CẦN XÁC MINH"} tone="amber" icon="⌕" note="Không suy diễn từ chi phí dự toán" />
+              <Stat label="Lợi nhuận" value={props.finance.profitVerified ? money(props.finance.profitEstimate) : "CẦN XÁC MINH"} tone="blue" icon="▣" note={props.finance.profitVerified ? "Canonical Actual đã PASS." : "COGS/Expense Actual chưa đủ; xem Data Gap Register."} href={props.finance.profitVerified ? undefined : "/business#business-data-gaps"} />
+              <Stat label="Biên lợi nhuận" value={props.finance.profitVerified ? props.finance.marginEstimate.toFixed(1).replace(".",",")+"%" : "CẦN XÁC MINH"} tone="amber" icon="⌕" note={props.finance.profitVerified ? "Gross Margin từ Actual đã VERIFIED." : "Derived KPI; không suy từ Forecast/Cash Out. Xem blocker COGS/Expense."} href={props.finance.profitVerified ? undefined : "/business#business-data-gaps"} />
             </div>
             <div className="grid grid-cols-1 gap-4 px-4 pb-4">
               <div className="rounded-[7px] border border-[#e0e9f3]">

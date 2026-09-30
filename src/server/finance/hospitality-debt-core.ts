@@ -69,7 +69,7 @@ export function summarizeCanonicalDebtFacilities(rows: CanonicalDebtFacilityRow[
     };
   }
 
-  const principalOutstanding = principals.reduce((sum, value) => sum + (value ?? 0), 0);
+  const principalOutstanding = principals.reduce<number>((sum, value) => sum + (value ?? 0), 0);
   const activeCodes = usedRows.map((row) => String(row.facility_code ?? "").trim()).filter(Boolean);
   return {
     state: "VERIFIED",

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/supabase/types";
 
 const SYNC_KEY = "telegram-operations-group";
 
@@ -132,8 +133,8 @@ export async function handleSupplyCallback(input: {
   if (conversationError) throw conversationError;
   if (!conversation) return { ok: false as const, reason: "conversation_not_found" as const };
 
-  const metadata = conversation.metadata && typeof conversation.metadata === "object" && !Array.isArray(conversation.metadata)
-    ? { ...(conversation.metadata as Record<string, unknown>) }
+  const metadata: { [key: string]: Json | undefined } = conversation.metadata && typeof conversation.metadata === "object" && !Array.isArray(conversation.metadata)
+    ? { ...(conversation.metadata as { [key: string]: Json | undefined }) }
     : {};
   const actor = actorLabel(input.from);
   const now = new Date().toISOString();

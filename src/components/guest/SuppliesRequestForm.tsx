@@ -82,7 +82,9 @@ export default function SuppliesRequestForm({
       <div className="mx-auto max-w-xl">
         <div className="rounded-3xl border border-[#d9d3c4] bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6a7f72]">Tam Coc Experience</p>
-          <h1 className="mt-2 text-3xl font-semibold">Need Supplies</h1>
+          <p className="mt-1 text-base font-semibold text-[#173c2b]">{property}</p>
+          <p className="mt-0.5 text-[11px] text-[#87938c]">Your stay / Nơi lưu trú của bạn</p>
+          <h1 className="mt-4 text-3xl font-semibold">Need Supplies</h1>
           <p className="mt-1 text-sm text-[#718077]">Yêu cầu thêm vật dụng</p>
           <p className="mt-3 text-sm text-[#607068]">Send your request directly to reception.</p>
           <p className="mt-0.5 text-xs text-[#87938c]">Gửi yêu cầu trực tiếp tới lễ tân.</p>

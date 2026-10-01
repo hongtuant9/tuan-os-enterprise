@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findRoomSupplyContext } from "@/server/hospitality/room-supply-qr";
-import { sendSupplyRequestToTelegram } from "@/server/notifications/telegram-operations";
+import { sendSupplyRequestToTelegram } from "@/server/notifications/telegram-operations-compact";
 
 export const dynamic = "force-dynamic";
 

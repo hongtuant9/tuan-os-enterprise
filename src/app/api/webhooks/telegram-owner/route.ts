@@ -7,7 +7,7 @@ import {
   buildSupplyCallbackMessage,
   getTelegramOperationsChatId,
   handleSupplyCallback,
-} from "@/server/notifications/telegram-operations";
+} from "@/server/notifications/telegram-operations-compact";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +61,7 @@ async function answerCallback(callbackQueryId: string, text: string) {
 async function editMessage(chatId: string | number, messageId: number, text: string, state: string, reviewId: string) {
   const replyMarkup = state === "DONE"
     ? { inline_keyboard: [] }
-    : { inline_keyboard: [[{ text: "✅ Done / Hoàn thành", callback_data: `supply_done:${reviewId}` }]] };
+    : { inline_keyboard: [[{ text: "✅ Hoàn thành", callback_data: `supply_done:${reviewId}` }]] };
   await telegram("editMessageText", {
     chat_id: chatId,
     message_id: messageId,
@@ -126,11 +126,11 @@ export async function POST(req: NextRequest) {
 
     await answerCallback(
       callbackId,
-      result.state === "DONE" ? "Marked as completed / Đã hoàn thành" : "Task accepted / Đã nhận việc"
+      result.state === "DONE" ? "Đã hoàn thành" : "Đã nhận việc"
     );
 
     if (messageId != null) {
-      const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor);
+      const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor, result.stateAt);
       await editMessage(chatId, messageId, text, result.state, reviewId);
     }
 

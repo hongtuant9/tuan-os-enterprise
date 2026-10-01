@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     await answerCallback(
-      callback.id,
+      callbackId,
       result.state === "DONE" ? "Marked as completed / Đã hoàn thành" : "Task accepted / Đã nhận việc"
     );
 

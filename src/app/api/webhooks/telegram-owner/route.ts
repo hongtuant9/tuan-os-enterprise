@@ -45,6 +45,15 @@ async function reply(chatId: string | number, text: string) {
   await telegram("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true });
 }
 
+async function isGroupCreator(chatId: string | number, userId: string) {
+  try {
+    const result = await telegram("getChatMember", { chat_id: chatId, user_id: userId }) as { result?: { status?: string } } | null;
+    return result?.result?.status === "creator";
+  } catch {
+    return false;
+  }
+}
+
 async function answerCallback(callbackQueryId: string, text: string) {
   await telegram("answerCallbackQuery", { callback_query_id: callbackQueryId, text, show_alert: false });
 }
@@ -142,8 +151,9 @@ export async function POST(req: NextRequest) {
       await reply(chatId, "Please run /bind_ops inside the Telegram group you want to use for TCE Operations.\nVui lòng chạy /bind_ops trong nhóm Telegram vận hành.");
       return NextResponse.json({ ok: true, ignored: "bind_not_group" });
     }
-    if (!ownerChatId || senderId !== ownerChatId) {
-      await reply(chatId, "Only the TCE Owner can bind this group.\nChỉ Owner TCE được phép liên kết nhóm này.");
+    const ownerAuthorized = Boolean(ownerChatId && senderId === ownerChatId) || await isGroupCreator(chatId, senderId);
+    if (!ownerAuthorized) {
+      await reply(chatId, "Only the TCE Owner or Telegram group creator can bind this group.\nChỉ Owner TCE hoặc người tạo nhóm Telegram được phép liên kết nhóm này.");
       return NextResponse.json({ ok: true, ignored: "bind_non_owner" });
     }
     await bindTelegramOperationsGroup(chatId);

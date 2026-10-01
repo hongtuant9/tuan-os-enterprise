@@ -172,6 +172,8 @@ export async function handleSupplyCallback(input: { reviewId: string; action: "a
 
     metadata.request_status = "ACKNOWLEDGED";
     metadata.acknowledged_by = actor;
+    metadata.acknowledged_by_telegram_id = input.from?.id == null ? null : String(input.from.id);
+    metadata.acknowledged_by_username = input.from?.username || null;
     metadata.acknowledged_at = now;
 
     const { error } = await db.from("ai_conversations").update({ metadata }).eq("id", conversation.id);
@@ -195,6 +197,8 @@ export async function handleSupplyCallback(input: { reviewId: string; action: "a
 
   metadata.request_status = "DONE";
   metadata.completed_by = actor;
+  metadata.completed_by_telegram_id = input.from?.id == null ? null : String(input.from.id);
+  metadata.completed_by_username = input.from?.username || null;
   metadata.completed_at = now;
 
   const { error } = await db.from("ai_conversations")

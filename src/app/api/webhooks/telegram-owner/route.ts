@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 
   if (update.callback_query?.id && update.callback_query.data) {
     const callback = update.callback_query;
-    const callbackId = callback.id;
+    const callbackId = callback.id!;
     const chatId = callback.message?.chat?.id;
     const messageId = callback.message?.message_id;
     const configuredOpsChatId = await getTelegramOperationsChatId().catch(() => "");

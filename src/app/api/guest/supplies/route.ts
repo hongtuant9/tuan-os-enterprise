@@ -67,9 +67,8 @@ export async function POST(request: Request) {
         external_conversation_id: `qr-supplies:${requestId}`,
         customer_name: `Khách phòng ${room.room}`,
         language: "vi",
-        intent: "need_supplies",
-        status: "active",
-        mode: "guest_supplies",
+        intent: "guest_message",
+        status: "needs_manager",
         last_message_at: now,
         metadata: {
           request_id: requestId,
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
 
     const { error: reviewError } = await db.from("ai_manager_reviews").insert({
       conversation_id: conversation.id,
-      review_type: "guest_supplies",
+      review_type: "service_request",
       title: `Yêu cầu vật dụng · ${room.property} · ${room.room}`,
       guest_request: requestText,
       reason: "Khách gửi yêu cầu trực tiếp từ QR trong phòng.",
@@ -105,7 +104,7 @@ export async function POST(request: Request) {
         requested_at: now,
       },
       recommendation: "Lễ tân xác nhận yêu cầu và chuyển buồng phòng/giao vật dụng. Khi đổi khăn, thu lại khăn bẩn tương ứng.",
-      risk_level: "low",
+      risk_level: "medium",
       status: "pending",
     });
 

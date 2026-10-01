@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
 
   if (update.callback_query?.id && update.callback_query.data) {
     const callback = update.callback_query;
+    console.log("[telegram-ops] callback_received", { data: callback.data, chatId: callback.message?.chat?.id, messageId: callback.message?.message_id, fromId: callback.from?.id });
     const callbackId = callback.id!;
     const callbackData = callback.data!;
     const chatId = callback.message?.chat?.id;
@@ -118,23 +119,33 @@ export async function POST(req: NextRequest) {
 
     const action = match[1].toLowerCase() as "ack" | "done";
     const reviewId = match[2];
-    const result = await handleSupplyCallback({ reviewId, action, from: callback.from });
-    if (!result.ok) {
-      await answerCallback(callbackId, "Request not found.");
-      return NextResponse.json({ ok: true, ignored: result.reason });
+    try {
+      const result = await handleSupplyCallback({ reviewId, action, from: callback.from });
+      if (!result.ok) {
+        console.warn("[telegram-ops] callback_review_not_found", { reviewId, action, reason: result.reason });
+        await answerCallback(callbackId, "Không tìm thấy yêu cầu này.");
+        return NextResponse.json({ ok: true, ignored: result.reason });
+      }
+
+      await answerCallback(callbackId, result.state === "DONE" ? "Đã hoàn thành" : "Đã nhận việc");
+      console.log("[telegram-ops] callback_runtime_updated", { reviewId, action, state: result.state, actor: result.actor, stateAt: result.stateAt });
+
+      if (messageId != null) {
+        try {
+          const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor, result.stateAt);
+          await editMessage(chatId, messageId, text, result.state, reviewId);
+          console.log("[telegram-ops] callback_message_updated", { reviewId, action, state: result.state, messageId });
+        } catch (editError) {
+          console.error("[telegram-ops] callback_message_update_failed", { reviewId, action, messageId, error: editError instanceof Error ? editError.message : String(editError) });
+        }
+      }
+
+      return NextResponse.json({ ok: true, action, state: result.state });
+    } catch (callbackError) {
+      console.error("[telegram-ops] callback_failed", { reviewId, action, error: callbackError instanceof Error ? callbackError.message : String(callbackError) });
+      try { await answerCallback(callbackId, "Không thể xử lý, vui lòng thử lại."); } catch {}
+      return NextResponse.json({ ok: false, error: "callback_failed" }, { status: 200 });
     }
-
-    await answerCallback(
-      callbackId,
-      result.state === "DONE" ? "Đã hoàn thành" : "Đã nhận việc"
-    );
-
-    if (messageId != null) {
-      const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor, result.stateAt);
-      await editMessage(chatId, messageId, text, result.state, reviewId);
-    }
-
-    return NextResponse.json({ ok: true, action, state: result.state });
   }
 
   const chatId = update.message?.chat?.id;

@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     const { data: recent } = await db
       .from("ai_conversations")
       .select("id")
-      .eq("channel", "qr_room")
-      .contains("metadata", { room_token: token })
+      .eq("channel", "website")
+      .contains("metadata", { room_token: token, source: "QR_ROOM" })
       .gte("created_at", recentSince)
       .limit(5);
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     const { data: conversation, error: conversationError } = await db
       .from("ai_conversations")
       .insert({
-        channel: "qr_room",
+        channel: "website",
         external_conversation_id: `qr-supplies:${requestId}`,
         customer_name: `Khách phòng ${room.room}`,
         language: "vi",

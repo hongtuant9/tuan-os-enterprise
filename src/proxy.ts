@@ -16,13 +16,10 @@ const PUBLIC_PATHS = [
   "/lavender/feedback",
   "/ruby/review",
   "/ruby/feedback",
+  "/guest/supplies",
   "/zalo_verifierVFIbDv_oTHD5vU0de-rp8M3JndgCfHqaCZaq.html",
 ];
 
-// API routes authenticate themselves (see src/server/auth/api-auth.ts) since
-// they accept either a dashboard session *or* an x-api-key service caller
-// (n8n, webhooks) — a caller with no cookies must not be redirected/401'd
-// here before the route gets a chance to check for an API key.
 function isApiPath(pathname: string) {
   return pathname.startsWith("/api/");
 }
@@ -32,7 +29,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Nothing to enforce until a Supabase project is actually wired up.
   if (!isSupabaseConfigured()) {
     return NextResponse.next();
   }

@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
   if (update.callback_query?.id && update.callback_query.data) {
     const callback = update.callback_query;
     const callbackId = callback.id!;
+    const callbackData = callback.data!;
     const chatId = callback.message?.chat?.id;
     const messageId = callback.message?.message_id;
     const configuredOpsChatId = await getTelegramOperationsChatId().catch(() => "");
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ignored: "callback_non_ops_group" });
     }
 
-    const match = callback.data.match(/^supply_(ack|done):([0-9a-f-]{36})$/i);
+    const match = callbackData.match(/^supply_(ack|done):([0-9a-f-]{36})$/i);
     if (!match) {
       await answerCallback(callbackId, "Unsupported action.");
       return NextResponse.json({ ok: true, ignored: "unsupported_callback" });

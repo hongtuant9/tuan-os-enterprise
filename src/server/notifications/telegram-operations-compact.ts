@@ -67,7 +67,7 @@ function messageText(input: SupplyRequestMessage, state: State = "NEW", actor?: 
 
   let status = "Đang chờ phục vụ";
   if (state === "ACKNOWLEDGED") status = `${actor || "Nhân viên"} _ đang làm${stateAt ? ` (${time(stateAt)})` : ""}`;
-  if (state === "DONE") status = `Hoàn thành${stateAt ? ` (${time(stateAt)})` : ""}`;
+  if (state === "DONE") status = `Hoàn thành${stateAt ? ` (${time(stateAt)})` : ""}${actor ? ` - ${actor}` : ""}`;
 
   return [
     `🏠 ${shortProperty(input.property)} | ${shortRoom(input.room)}`,

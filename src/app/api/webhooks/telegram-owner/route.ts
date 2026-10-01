@@ -91,17 +91,18 @@ export async function POST(req: NextRequest) {
 
   if (update.callback_query?.id && update.callback_query.data) {
     const callback = update.callback_query;
+    const callbackId = callback.id;
     const chatId = callback.message?.chat?.id;
     const messageId = callback.message?.message_id;
     const configuredOpsChatId = await getTelegramOperationsChatId().catch(() => "");
     if (chatId == null || !configuredOpsChatId || String(chatId) !== configuredOpsChatId) {
-      await answerCallback(callback.id, "This group is not the active TCE Operations group.");
+      await answerCallback(callbackId, "This group is not the active TCE Operations group.");
       return NextResponse.json({ ok: true, ignored: "callback_non_ops_group" });
     }
 
     const match = callback.data.match(/^supply_(ack|done):([0-9a-f-]{36})$/i);
     if (!match) {
-      await answerCallback(callback.id, "Unsupported action.");
+      await answerCallback(callbackId, "Unsupported action.");
       return NextResponse.json({ ok: true, ignored: "unsupported_callback" });
     }
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
     const reviewId = match[2];
     const result = await handleSupplyCallback({ reviewId, action, from: callback.from });
     if (!result.ok) {
-      await answerCallback(callback.id, "Request not found.");
+      await answerCallback(callbackId, "Request not found.");
       return NextResponse.json({ ok: true, ignored: result.reason });
     }
 

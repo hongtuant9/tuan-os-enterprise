@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findRoomSupplyContext } from "@/server/hospitality/room-supply-qr";
+import { sendSupplyRequestToTelegram } from "@/server/notifications/telegram-operations";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
     if (conversationError || !conversation) throw conversationError ?? new Error("CONVERSATION_INSERT_FAILED");
 
-    const { error: reviewError } = await db.from("ai_manager_reviews").insert({
+    const { data: review, error: reviewError } = await db.from("ai_manager_reviews").insert({
       conversation_id: conversation.id,
       review_type: "service_request",
       title: `Yêu cầu vật dụng · ${room.property} · ${room.room}`,
@@ -101,14 +102,15 @@ export async function POST(request: Request) {
         room: room.room,
         property: room.property,
         items,
+        note: note || null,
         requested_at: now,
       },
       recommendation: "Lễ tân xác nhận yêu cầu và chuyển buồng phòng/giao vật dụng. Khi đổi khăn, thu lại khăn bẩn tương ứng.",
       risk_level: "medium",
       status: "pending",
-    });
+    }).select("id").single();
 
-    if (reviewError) {
+    if (reviewError || !review) {
       await db.from("ai_conversations").update({
         metadata: {
           request_id: requestId,
@@ -125,10 +127,26 @@ export async function POST(request: Request) {
           reception_queue_status: "ERROR",
         },
       }).eq("id", conversation.id);
-      throw reviewError;
+      throw reviewError ?? new Error("REVIEW_INSERT_FAILED");
     }
 
-    return NextResponse.json({ ok: true, requestId, room: room.room, property: room.property });
+    let telegramSent = false;
+    try {
+      const telegram = await sendSupplyRequestToTelegram({
+        reviewId: review.id,
+        requestId,
+        property: room.property,
+        room: room.room,
+        items,
+        note: note || null,
+        requestedAt: now,
+      });
+      telegramSent = telegram.sent;
+    } catch (telegramError) {
+      console.error("[guest-supplies][telegram]", telegramError);
+    }
+
+    return NextResponse.json({ ok: true, requestId, room: room.room, property: room.property, telegramSent });
   } catch (error) {
     console.error("[guest-supplies]", error);
     return NextResponse.json({ ok: false, error: "REQUEST_FAILED" }, { status: 500 });

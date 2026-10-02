@@ -154,7 +154,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     };
   }
 
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const today = localDate();
   const targetBranch = normalizeBranch(parsed.target);
   const targetBookingCode = /^DP\d+$/i.test(parsed.target) ? parsed.target.toUpperCase() : "";
@@ -242,7 +242,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     .eq("source_key", "housekeeping_room_setup")
     .in("external_id", setupKeys);
 
-  const setupMap = new Map<string, Record<string, Json | undefined>>((setupRows || []).map((x: any) => [String(x.external_id), asRecord(x.data as Json)]));
+  const setupMap = new Map<string, Record<string, Json | undefined>>((setupRows || []).map((x) => [String(x.external_id), asRecord(x.data as Json)]));
 
   const actualIds = roomMeta.map((x) => `${booking.source_booking_code}|${x.room}`);
   const { data: previousActualRows } = await db
@@ -250,7 +250,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     .select("external_id,data")
     .eq("source_key", "room_actual_occupancy")
     .in("external_id", actualIds);
-  const actualMap = new Map<string, Record<string, Json | undefined>>((previousActualRows || []).map((x: any) => [String(x.external_id), asRecord(x.data as Json)]));
+  const actualMap = new Map<string, Record<string, Json | undefined>>((previousActualRows || []).map((x) => [String(x.external_id), asRecord(x.data as Json)]));
 
   const now = new Date().toISOString();
   const actor = actorName(input.actor);
@@ -390,7 +390,7 @@ export async function attachRoomAllocationTelegramEvidence(input: {
   chatId: string | number;
   messageId: number;
 }) {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const { data: review, error } = await db
     .from("ai_manager_reviews")
     .select("conversation_id,evidence")

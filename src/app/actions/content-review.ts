@@ -11,6 +11,25 @@ import { runMarketingCommandCenterCycle } from "@/server/marketing-command-cente
 
 type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
+type DbError = { message?: string } | null;
+type DbResult = { data?: unknown; error?: DbError };
+type Query = PromiseLike<DbResult> & {
+  select(columns?: string): Query;
+  eq(column: string, value: unknown): Query;
+  maybeSingle(): Promise<DbResult>;
+  insert(values: unknown): Query;
+};
+type UntypedDb = { from(name: string): Query };
+type Row = Record<string, unknown>;
+
+function dbOf(value: unknown): UntypedDb {
+  return value as UntypedDb;
+}
+
+function obj(value: unknown): Row {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
+}
+
 type ContentDraft = {
   draftVi: string;
   facebookVariant: string;
@@ -75,12 +94,15 @@ export async function saveMarketingContentDraft(
   try {
     const session = await requireManager();
     const admin = getAdminContainer();
-    const { data: content, error } = await admin.db
+    const contentResult = await dbOf(admin.db)
       .from("marketing_content_items")
       .select("content_id,publish_status")
       .eq("content_id", contentId)
       .maybeSingle();
-    if (error || !content) return { ok: false, error: error?.message ?? "Không tìm thấy nội dung runtime." };
+    const content = obj(contentResult.data);
+    if (contentResult.error || !clean(content.content_id)) {
+      return { ok: false, error: contentResult.error?.message ?? "Không tìm thấy nội dung runtime." };
+    }
 
     const publishStatus = clean(content.publish_status).toUpperCase();
     if (/SCHEDULED|PUBLISHED|FB_SCHEDULED/.test(publishStatus)) {
@@ -139,16 +161,17 @@ export async function requestAiContentRevision(
     if (cleanInstruction.length > 3000) return { ok: false, error: "Yêu cầu điều chỉnh quá dài (tối đa 3.000 ký tự)." };
 
     const admin = getAdminContainer();
-    const { data: content } = await admin.db
+    const contentResult = await dbOf(admin.db)
       .from("marketing_content_items")
       .select("content_id,brand,format,publish_status,verification_status")
       .eq("content_id", contentId)
       .maybeSingle();
-    if (!content) return { ok: false, error: "Không tìm thấy nội dung runtime." };
+    const content = obj(contentResult.data);
+    if (!clean(content.content_id)) return { ok: false, error: "Không tìm thấy nội dung runtime." };
 
     const now = new Date().toISOString();
     const key = `CONTENT_REVISION:${contentId}:${Date.now()}`;
-    const { error } = await admin.db.from("marketing_recommendations").insert({
+    const insertResult = await dbOf(admin.db).from("marketing_recommendations").insert({
       recommendation_key: key,
       category: "CONTENT",
       severity: "ACTION",
@@ -169,7 +192,7 @@ export async function requestAiContentRevision(
       generated_at: now,
       expires_at: null,
     });
-    if (error) return { ok: false, error: error.message };
+    if (insertResult.error) return { ok: false, error: insertResult.error.message ?? "Không thể tạo yêu cầu AI." };
 
     await admin.activityLog.record({
       agent: session.email ?? session.userId,

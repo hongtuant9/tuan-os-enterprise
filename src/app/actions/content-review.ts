@@ -36,6 +36,7 @@ type ContentDraft = {
   draftVi: string;
   facebookVariant: string;
   instagramVariant: string;
+  googleBusinessVariant: string;
   tripadvisorVariant: string;
 };
 
@@ -66,7 +67,7 @@ async function getWorkbookId() {
 }
 
 async function findContentRow(workbookId: string, contentId: string, auth: Awaited<ReturnType<GoogleOAuthTokenStore["getSystemAuthorizedClientForSheetsWrite"]>>) {
-  const values = await getSheetValues(workbookId, `${q(CONTENT_TAB)}!A1:AJ${MAX_ROWS}`, auth);
+  const values = await getSheetValues(workbookId, `${q(CONTENT_TAB)}!A1:AK${MAX_ROWS}`, auth);
   const rowIndex = values.findIndex((row, index) => index > 0 && clean(row[0]) === contentId);
   if (rowIndex < 0) throw new Error("Không tìm thấy Content ID trong SHADOW_CONTENT_QUEUE.");
   return { rowNumber: rowIndex + 1, row: values[rowIndex] ?? [], header: values[0] ?? [] };
@@ -78,6 +79,7 @@ function snapshot(row: unknown[]): ContentDraft {
     facebookVariant: clean(row[22]),
     instagramVariant: clean(row[23]),
     tripadvisorVariant: clean(row[35]),
+    googleBusinessVariant: clean(row[36]),
   };
 }
 
@@ -85,7 +87,8 @@ function equalDraft(a: ContentDraft, b: ContentDraft) {
   return a.draftVi === b.draftVi &&
     a.facebookVariant === b.facebookVariant &&
     a.instagramVariant === b.instagramVariant &&
-    a.tripadvisorVariant === b.tripadvisorVariant;
+    a.tripadvisorVariant === b.tripadvisorVariant &&
+    a.googleBusinessVariant === b.googleBusinessVariant;
 }
 
 function rowContext(row: unknown[]) {
@@ -121,6 +124,7 @@ async function writeCanonicalDraft(input: {
     setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!W${found.rowNumber}`, input.draft.facebookVariant, input.auth),
     setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!X${found.rowNumber}`, input.draft.instagramVariant, input.auth),
     setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!AJ${found.rowNumber}`, input.draft.tripadvisorVariant, input.auth),
+    setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!AK${found.rowNumber}`, input.draft.googleBusinessVariant, input.auth),
   ]);
   const verify = await findContentRow(input.workbookId, input.contentId, input.auth);
   if (!equalDraft(snapshot(verify.row), input.draft)) {
@@ -165,12 +169,16 @@ export async function saveMarketingContentDraft(
     if (clean(found.header[35]) !== "TRIPADVISOR_VARIANT") {
       await setSheetValue(workbookId, `${q(CONTENT_TAB)}!AJ1`, "TRIPADVISOR_VARIANT", auth);
     }
+    if (clean(found.header[36]) !== "GOOGLE_BUSINESS_VARIANT") {
+      await setSheetValue(workbookId, `${q(CONTENT_TAB)}!AK1`, "GOOGLE_BUSINESS_VARIANT", auth);
+    }
 
     await Promise.all([
       setSheetValue(workbookId, `${q(CONTENT_TAB)}!F${found.rowNumber}`, next.draftVi, auth),
       setSheetValue(workbookId, `${q(CONTENT_TAB)}!W${found.rowNumber}`, next.facebookVariant, auth),
       setSheetValue(workbookId, `${q(CONTENT_TAB)}!X${found.rowNumber}`, next.instagramVariant, auth),
       setSheetValue(workbookId, `${q(CONTENT_TAB)}!AJ${found.rowNumber}`, next.tripadvisorVariant, auth),
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!AK${found.rowNumber}`, next.googleBusinessVariant, auth),
     ]);
 
     const verify = await findContentRow(workbookId, contentId, auth);
@@ -332,6 +340,7 @@ export async function applyAiContentRevision(
       draftVi: clean(generated.draftVi),
       facebookVariant: clean(generated.facebookVariant),
       instagramVariant: clean(generated.instagramVariant),
+      googleBusinessVariant: clean(generated.googleBusinessVariant),
       tripadvisorVariant: clean(generated.tripadvisorVariant),
     };
     const originalObj = obj(evidence.current_content);
@@ -339,6 +348,7 @@ export async function applyAiContentRevision(
       draftVi: clean(originalObj.draftVi),
       facebookVariant: clean(originalObj.facebookVariant),
       instagramVariant: clean(originalObj.instagramVariant),
+      googleBusinessVariant: clean(originalObj.googleBusinessVariant),
       tripadvisorVariant: clean(originalObj.tripadvisorVariant),
     };
 

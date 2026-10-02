@@ -83,6 +83,7 @@ function revisionView(requestRow: Row) {
       draftVi: s(generated.draftVi),
       facebookVariant: s(generated.facebookVariant),
       instagramVariant: s(generated.instagramVariant),
+      googleBusinessVariant: s(generated.googleBusinessVariant),
       tripadvisorVariant: s(generated.tripadvisorVariant),
       rationale: s(generated.rationale),
       mediaDirection: s(generated.mediaDirection),
@@ -126,6 +127,7 @@ export default async function ContentReviewPage({
     draftVi: pick(source, ["DRAFT_VI", "Draft VI"]) || s(metadata.draft_vi),
     facebookVariant: pick(source, ["FACEBOOK_VARIANT", "Facebook Variant"]),
     instagramVariant: pick(source, ["INSTAGRAM_VARIANT", "Instagram Variant"]),
+    googleBusinessVariant: pick(source, ["GOOGLE_BUSINESS_VARIANT", "Google Business Variant"]),
     tripadvisorVariant: pick(source, ["TRIPADVISOR_VARIANT", "Tripadvisor Variant"]),
   };
   const assets = parseAssets(pick(source, ["ASSET_IDS", "Asset IDs"]));
@@ -156,7 +158,7 @@ export default async function ContentReviewPage({
 
   return (
     <main className="min-h-screen bg-[#f4f7fb] px-4 py-6 md:px-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-[1500px]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <Link href="/marketing" className="text-sm font-bold text-[#1768df] hover:underline">← Quay lại Tiếp thị</Link>
@@ -185,6 +187,7 @@ export default async function ContentReviewPage({
           pillar={s(content.pillar)}
           format={s(content.format)}
           channel={s(content.channel_id) || "Đa kênh / kế hoạch"}
+          serviceLine={pick(source, ["SERVICE_LINE", "Service Line"])}
           assets={assets}
           revisions={revisions}
           history={history}

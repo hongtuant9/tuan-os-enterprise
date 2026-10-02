@@ -12,6 +12,11 @@ import {
   buildMorningDepartmentMessage,
   handleMorningDepartmentCallback,
 } from "@/server/notifications/telegram-morning-operations";
+import {
+  bindTelegramOperatorGroup,
+  getTelegramOperatorChatId,
+  handleTelegramOperatorReply,
+} from "@/server/notifications/telegram-operator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,9 +95,11 @@ async function editMorningMessage(chatId: string | number, messageId: number, te
 
 type TelegramUpdate = {
   message?: {
+    message_id?: number;
     text?: string;
     chat?: { id?: number | string; type?: string; title?: string };
     from?: { id?: number | string; username?: string; first_name?: string; last_name?: string };
+    reply_to_message?: { message_id?: number; text?: string };
   };
   callback_query?: {
     id?: string;
@@ -188,6 +195,32 @@ export async function POST(req: NextRequest) {
   const chatType = update.message?.chat?.type || "";
   const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 
+  if (/^\/bind_operator\b/i.test(text)) {
+    const isGroup = chatType === "group" || chatType === "supergroup";
+    if (!isGroup) {
+      await reply(chatId, "Vui lòng chạy /bind_operator trong nhóm “Tuấn & Quản Lý Vận Hành_ AI Agent Opreator”.");
+      return NextResponse.json({ ok: true, ignored: "bind_operator_not_group" });
+    }
+    const ownerAuthorized = Boolean(ownerChatId && senderId === ownerChatId) || await isGroupCreator(chatId, senderId);
+    if (!ownerAuthorized) {
+      await reply(chatId, "Chỉ Tuấn hoặc người tạo nhóm được phép liên kết nhóm AI Agent Operator.");
+      return NextResponse.json({ ok: true, ignored: "bind_operator_non_owner" });
+    }
+    await bindTelegramOperatorGroup(chatId, update.message?.chat?.title || null);
+    await reply(chatId, [
+      "✅ TUAN OS — AI AGENT OPERATOR CONNECTED",
+      "Nhóm này là kênh Human-in-the-loop chính thức.",
+      "",
+      "Quy tắc:",
+      "• TUAN OS sẽ hỏi khi runtime thiếu dữ liệu cần Owner xác nhận.",
+      "• Tuấn Reply trực tiếp đúng câu hỏi.",
+      "• Chỉ reply của Owner mới được ghi VERIFIED vào canonical runtime.",
+      "• Tin nhắn rời không gắn câu hỏi sẽ không tự biến thành fact.",
+      "• Approval tài chính/security vẫn theo Approval Gate riêng.",
+    ].join("\n"));
+    return NextResponse.json({ ok: true, operatorBound: true });
+  }
+
   if (/^\/bind_ops\b/i.test(text)) {
     const isGroup = chatType === "group" || chatType === "supergroup";
     if (!isGroup) {
@@ -214,6 +247,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, bound: true });
   }
 
+  const operatorChatId = await getTelegramOperatorChatId().catch(() => "");
+  const replyToMessageId = update.message?.reply_to_message?.message_id;
+  if (operatorChatId && String(chatId) === operatorChatId && replyToMessageId && text) {
+    try {
+      const result = await handleTelegramOperatorReply({
+        chatId,
+        replyToMessageId,
+        text,
+        actor: update.message?.from,
+        ownerTelegramId: ownerChatId,
+      });
+      if (result.ok) {
+        const shownValue = result.valueNumeric != null
+          ? new Intl.NumberFormat("vi-VN").format(Number(result.valueNumeric))
+          : result.valueText || "Đã ghi nhận";
+        await reply(chatId, [
+          "✅ TUAN OS — ĐÃ XÁC NHẬN DỮ LIỆU",
+          `Đơn vị: ${result.businessUnit}`,
+          `Trường: ${result.fieldCode}`,
+          `Giá trị: ${shownValue}`,
+          result.effectiveFrom ? `Hiệu lực: ${result.effectiveFrom}` : "",
+          "Nguồn: OWNER_TELEGRAM → Supabase canonical runtime",
+        ].filter(Boolean).join("\n"));
+        return NextResponse.json({ ok: true, operatorFact: result.questionCode });
+      }
+      if (result.reason === "owner_confirmation_required") {
+        await reply(chatId, "Đã nhận phản hồi của quản lý. Dữ liệu chưa được VERIFIED; cần Tuấn Reply trực tiếp câu hỏi để xác nhận.");
+        return NextResponse.json({ ok: true, operatorFact: "NEED_OWNER_CONFIRMATION" });
+      }
+      if (result.reason === "parse_failed") {
+        await reply(chatId, "Tôi chưa đọc chắc được giá trị. Tuấn vui lòng trả lời ngắn gọn theo đúng đơn vị được hỏi, ví dụ: “10 triệu/tháng”.");
+        return NextResponse.json({ ok: true, operatorFact: "PARSE_FAILED" });
+      }
+    } catch (error) {
+      console.error("[telegram-operator] reply_failed", { error: error instanceof Error ? error.message : String(error) });
+      return NextResponse.json({ ok: false, error: "operator_reply_failed" }, { status: 200 });
+    }
+  }
+
   if (String(chatId) !== ownerChatId) {
     return NextResponse.json({ ok: true, ignored: "non_owner_chat" });
   }
@@ -226,16 +298,19 @@ export async function POST(req: NextRequest) {
       "/approvals — mở Approval Center",
       "/ack <TASK_ID> — ghi nhận Tuấn đã thấy cảnh báo; không tự approve mutation",
       "",
-      "Để tạo nhóm vận hành: tạo Telegram Group, thêm @tuanosenterprise_bot, rồi chính Owner gửi /bind_ops trong group.",
+      "Nhóm AI Agent Operator: thêm @tuanosenterprise_bot rồi Owner gửi /bind_operator trong đúng nhóm.",
+      "Nhóm vận hành QR/phòng (nếu dùng riêng): /bind_ops.",
       "",
       "L3/financial/security vẫn phải approve tại hệ thống chính thức.",
     ].join("\n"));
   } else if (/^\/status\b/i.test(text)) {
     const status = telegramOwnerChannelStatus();
     const opsChatId = await getTelegramOperationsChatId().catch(() => "");
+    const operatorChatId = await getTelegramOperatorChatId().catch(() => "");
     await reply(chatId, [
       "TUAN OS — Owner Channel",
       `Telegram Owner: ${status.enabled ? "ACTIVE" : "HOLD"}`,
+      `AI Agent Operator Group: ${operatorChatId ? "ACTIVE" : "NOT BOUND"}`,
       `TCE Operations Group: ${opsChatId ? "ACTIVE" : "NOT BOUND"}`,
       "Runtime: VPS_ONLY",
       "Window dependency: NO",

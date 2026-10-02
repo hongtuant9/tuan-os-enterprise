@@ -442,6 +442,9 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section title="Chi phí thực tế" subtitle={"Actual đến hiện tại · nguồn trực tiếp KiotViet Hotel/F&B · kỳ " + (data?.period.label ?? "Hôm nay")} className="col-span-12" icon="▥">
             <DataTable columns={["#","Nhóm chi phí","Đã ghi nhận","Số khoản","Trạng thái","Nguồn","Ghi chú"]} data={data?.tables.businessActualExpenses}/>
           </Section>
+          <Section title="Bảng quản trị chi phí CEO" subtitle="Dự kiến vs Actual KiotViet · 3 cơ sở × 8 nhóm · cảnh báo theo mức sử dụng ngân sách" className="col-span-12" icon="◎">
+            <DataTable columns={["Cơ sở","Nhóm","Chi phí dự kiến","Chi phí thực tế","Chênh lệch","% sử dụng ngân sách","Cảnh báo","Nguồn kế hoạch","Evidence Actual"]} data={data?.tables.businessCostControl}/>
+          </Section>
           <Section title="Cơ cấu doanh thu theo cơ sở" subtitle={"Tỷ trọng doanh thu · " + (data?.period.label ?? "Hôm nay")} className="col-span-12 h-[345px]" icon="◔">
             {(() => {
               const rows = data?.tables.businessMonthBranches ?? [];

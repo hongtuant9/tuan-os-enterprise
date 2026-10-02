@@ -23,7 +23,7 @@ import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
-import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
+import { resolveExpenseCode, summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
 import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type DataRecencyStatus, type FreshnessStatus, type PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
@@ -638,6 +638,118 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           ];
         });
 
+      type CostControlUnit = "LAVENDER" | "RUBY" | "COZY_GARDEN";
+      type CostControlGroup = "Payroll" | "Điện" | "Nước" | "Software" | "Marketing" | "OTA" | "COGS" | "Khác";
+      const controlUnits: Array<{ code: CostControlUnit; label: string }> = [
+        { code: "LAVENDER", label: "Lavender" },
+        { code: "RUBY", label: "Ruby" },
+        { code: "COZY_GARDEN", label: "Cozy Garden" },
+      ];
+      const controlGroups: CostControlGroup[] = ["Payroll", "Điện", "Nước", "Software", "Marketing", "OTA", "COGS", "Khác"];
+      const codeToControlGroup: Record<string, CostControlGroup> = {
+        C01: "Payroll", C02: "Điện", C03: "Nước", C04: "Software", C06: "Marketing", H01: "OTA",
+        C05: "Khác", C07: "Khác", C08: "Khác", C09: "Khác", C10: "Khác", C11: "Khác", F01: "Khác", H02: "Khác", H03: "Khác",
+      };
+      const hotelBranchToUnit = new Map<string, CostControlUnit>();
+      for (const branch of hotelPeriod.branchBreakdown) {
+        const name = (branch.branchName || "").toLowerCase();
+        if (branch.branchId && name.includes("lavender")) hotelBranchToUnit.set(branch.branchId, "LAVENDER");
+        if (branch.branchId && name.includes("ruby")) hotelBranchToUnit.set(branch.branchId, "RUBY");
+      }
+      const actualByUnitGroup = new Map<string, number>();
+      const actualCountByUnitGroup = new Map<string, number>();
+      let unresolvedHotelActualRows = 0;
+      for (const snapshot of businessExpenseSnapshots.filter((item) => item.state === "VERIFIED")) {
+        for (const row of snapshot.rows) {
+          if (row.isReceipt !== false) continue;
+          const expenseCode = resolveExpenseCode(row.cashFlowGroupName || row.cashFlowGroupId || "");
+          if (!expenseCode) continue;
+          const group = codeToControlGroup[expenseCode];
+          if (!group) continue;
+          const unit: CostControlUnit | null = snapshot.source === "KIOTVIET_FNB"
+            ? "COZY_GARDEN"
+            : hotelBranchToUnit.get(row.branchId) ?? null;
+          if (!unit) {
+            unresolvedHotelActualRows += 1;
+            continue;
+          }
+          const key = `${unit}|${group}`;
+          actualByUnitGroup.set(key, (actualByUnitGroup.get(key) ?? 0) + Math.max(0, row.amount));
+          actualCountByUnitGroup.set(key, (actualCountByUnitGroup.get(key) ?? 0) + 1);
+        }
+      }
+      const periodRevenueByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: hotelTodayByName.get("lavender homestay")?.revenue ?? 0,
+        RUBY: hotelTodayByName.get("ruby homestay")?.revenue ?? 0,
+        COZY_GARDEN: periodFnb,
+      };
+      const planByUnitGroup = new Map<string, { amount: number | null; display: string; status: string; source: string; note: string }>();
+      const planLines = businessOperating?.plan ?? [];
+      const setFixedPlan = (unit: CostControlUnit, group: CostControlGroup, lineCode: string) => {
+        const row = planLines.find((item) => item.business_unit === unit && item.line_code === lineCode);
+        const raw = row?.target_amount ?? row?.baseline_amount ?? null;
+        if (raw === null) return;
+        planByUnitGroup.set(`${unit}|${group}`, { amount: Number(raw), display: money(Number(raw)), status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: row?.formula_note ?? "Planning baseline" });
+      };
+      setFixedPlan("LAVENDER", "Điện", "PLAN_EXP_ELECTRICITY");
+      setFixedPlan("RUBY", "Điện", "PLAN_EXP_ELECTRICITY");
+      setFixedPlan("COZY_GARDEN", "Điện", "PLAN_EXP_ELECTRICITY");
+      setFixedPlan("COZY_GARDEN", "Software", "PLAN_EXP_SOFTWARE_COZY");
+      const homestaySoftware = planLines.find((item) => item.business_unit === "HOSPITALITY_SHARED" && item.line_code === "PLAN_EXP_SOFTWARE_HOMESTAY");
+      if (homestaySoftware && (homestaySoftware.target_amount ?? homestaySoftware.baseline_amount) !== null) {
+        for (const unit of ["LAVENDER", "RUBY"] as CostControlUnit[]) {
+          planByUnitGroup.set(`${unit}|Software`, { amount: null, display: "CẦN XÁC MINH", status: "NEED_VERIFY", source: homestaySoftware.source_reference ?? "FIN-HOSPITALITY-001", note: "Có baseline Homestay dùng chung nhưng chưa có rule phân bổ Lavender/Ruby; không chia 50/50." });
+        }
+      }
+      const setRevenueRatioPlan = (unit: CostControlUnit, group: CostControlGroup, lineCode: string) => {
+        const row = planLines.find((item) => item.business_unit === unit && item.line_code === lineCode);
+        const ratio = Number(row?.target_amount ?? row?.baseline_amount ?? Number.NaN);
+        if (!Number.isFinite(ratio)) return;
+        const revenue = periodRevenueByUnit[unit];
+        const amount = revenue * ratio;
+        planByUnitGroup.set(`${unit}|${group}`, { amount, display: `${money(amount)} (${pct(ratio * 100)} DT Actual)`, status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: `Ngân sách kỳ = ${pct(ratio * 100)} × Revenue Actual cùng kỳ.` });
+      };
+      setRevenueRatioPlan("COZY_GARDEN", "COGS", "PLAN_EXP_COGS_GUARDRAIL");
+      setRevenueRatioPlan("COZY_GARDEN", "Payroll", "PLAN_EXP_PAYROLL_GUARDRAIL");
+      setRevenueRatioPlan("COZY_GARDEN", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
+
+      const actualSourceReadyForUnit = (unit: CostControlUnit) => unit === "COZY_GARDEN"
+        ? businessFnbExpense?.state === "VERIFIED"
+        : businessHotelExpense?.state === "VERIFIED" && unresolvedHotelActualRows === 0;
+      const costControlRows: string[][] = [];
+      for (const unit of controlUnits) {
+        for (const group of controlGroups) {
+          const key = `${unit.code}|${group}`;
+          const plan = planByUnitGroup.get(key);
+          const actualReady = group === "COGS" ? false : actualSourceReadyForUnit(unit.code);
+          const actual = group === "COGS" ? null : (actualByUnitGroup.get(key) ?? (actualReady ? 0 : null));
+          const planAmount = plan?.amount ?? null;
+          const variance = planAmount !== null && actual !== null ? planAmount - actual : null;
+          const usage = planAmount !== null && planAmount > 0 && actual !== null ? (actual / planAmount) * 100 : null;
+          let alert = "CẦN XÁC MINH";
+          if (group === "COGS") {
+            alert = `CẦN XÁC MINH — BOM ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}`;
+          } else if (!plan) {
+            alert = "CẦN XÁC MINH — chưa có kế hoạch chuẩn";
+          } else if (!actualReady) {
+            alert = "CẦN XÁC MINH — KiotViet chưa tách đủ theo cơ sở";
+          } else if (usage !== null) {
+            alert = usage > 100 ? "VƯỢT NGÂN SÁCH" : usage >= 85 ? "CẢNH BÁO ≥85%" : "TRONG NGÂN SÁCH";
+          }
+          costControlRows.push([
+            unit.label,
+            group,
+            plan?.display ?? "CẦN XÁC MINH",
+            actual === null ? "CẦN XÁC MINH" : money(actual),
+            variance === null ? "—" : money(variance),
+            usage === null ? "—" : pct(usage),
+            alert,
+            plan?.source ?? "FIN-HOSPITALITY-001 / chưa có dòng kế hoạch",
+            group === "COGS" ? "Actual COGS chưa mở: cần KiotViet sold-SKU + production-ready BOM." : `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet`,
+          ]);
+        }
+      }
+
       const financeSummary = businessOperating?.summary ?? null;
       const openingBusinessCash = financeSummary?.openingBusinessCash ?? null;
       const bookBusinessCash = financeSummary?.bookBusinessCash ?? null;
@@ -753,6 +865,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           ],
           businessPlannedExpenses: planExpenseRows,
           businessActualExpenses: businessExpenseActualRows,
+          businessCostControl: costControlRows,
           businessFinancialStack,
           businessDataGaps,
           businessDecisionSnapshot,

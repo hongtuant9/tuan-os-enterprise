@@ -47,7 +47,7 @@ const meta: Record<ScreenKey, ScreenMeta> = {
     metrics: [
       { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "So với hôm qua", tone: "blue", icon: "▮▮" },
       { label: "Doanh thu tháng", value: "—", delta: "↗", note: "So với tháng trước", tone: "green", icon: "▦" },
-      { label: "Chi phí", value: "—", delta: "↗", note: "Số thực tế khi đã xác minh", tone: "red", icon: "▥" },
+      { label: "Chi phí", value: "—", delta: "↗", note: "Actual trực tiếp từ KiotViet", tone: "red", icon: "▥" },
       { label: "Lợi nhuận gộp", value: "—", delta: "↗", note: "Không kết luận khi thiếu giá vốn", tone: "amber", icon: "⌕" },
       { label: "Biên lợi nhuận", value: "—", delta: "↗", note: "Theo báo cáo lãi lỗ đã xác minh", tone: "violet", icon: "◷" },
       { label: "Công suất phòng", value: "—", delta: "↗", note: "Hệ thống quản lý phòng / KiotViet Hotel", tone: "teal", icon: "▰" },
@@ -418,11 +418,11 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "business":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Revenue dùng runtime; Cost/Profit chỉ mở khi cổng xác minh PASS"} className="col-span-12 h-[345px]" icon="▮">
+          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Chi phí tách rõ Kế hoạch và Actual KiotViet"} className="col-span-12 h-[345px]" icon="▮">
             <div className="grid h-full grid-cols-3 gap-3 p-4">
               {[
                 ["Doanh thu kỳ đang xem", data?.metricValues["Doanh thu hôm nay"] ?? "—", data?.metricNotes["Doanh thu hôm nay"] ?? "KiotViet Actual"],
-                ["Chi phí thực tế", data?.metricValues["Chi phí"] ?? "—", data?.metricNotes["Chi phí"] ?? "FIN-HOSPITALITY-001"],
+                ["Chi phí thực tế", data?.metricValues["Chi phí"] ?? "—", data?.metricNotes["Chi phí"] ?? "KiotViet trực tiếp"],
                 ["Lợi nhuận gộp", data?.metricValues["Lợi nhuận gộp"] ?? "—", data?.metricNotes["Lợi nhuận gộp"] ?? "Doanh thu − Giá vốn"],
               ].map(([label,value,note]) => (
                 <div key={label} className="rounded-[9px] border border-[#dfe9f4] bg-gradient-to-br from-white to-[#f5f9fd] p-4">
@@ -435,6 +435,12 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
                 <b className="text-[#173964]">Nguyên tắc:</b> số chưa đủ bằng chứng vẫn phải hiển thị đầy đủ blocker, nguồn cần, owner và hành động tiếp theo ở <b>Data Gap Register</b>; không thay bằng 0, ước tính hoặc tỷ lệ giả định.
               </div>
             </div>
+          </Section>
+          <Section title="Chi phí dự kiến" subtitle="Theo Kế hoạch & Giả định trong FIN-HOSPITALITY-001 · Chỉ dùng Budget/Forecast, không ghi đè Actual" className="col-span-12" icon="▤">
+            <DataTable columns={["#","Đơn vị","Hạng mục","Mức kế hoạch","Trạng thái","Nguồn","Quy tắc sử dụng"]} data={data?.tables.businessPlannedExpenses}/>
+          </Section>
+          <Section title="Chi phí thực tế" subtitle={"Actual đến hiện tại · nguồn trực tiếp KiotViet Hotel/F&B · kỳ " + (data?.period.label ?? "Hôm nay")} className="col-span-12" icon="▥">
+            <DataTable columns={["#","Nhóm chi phí","Đã ghi nhận","Số khoản","Trạng thái","Nguồn","Ghi chú"]} data={data?.tables.businessActualExpenses}/>
           </Section>
           <Section title="Cơ cấu doanh thu theo cơ sở" subtitle={"Tỷ trọng doanh thu · " + (data?.period.label ?? "Hôm nay")} className="col-span-12 h-[345px]" icon="◔">
             {(() => {

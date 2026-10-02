@@ -8,6 +8,7 @@ type Draft = {
   draftVi: string;
   facebookVariant: string;
   instagramVariant: string;
+  googleBusinessVariant: string;
   tripadvisorVariant: string;
 };
 
@@ -71,6 +72,7 @@ export default function ContentReviewEditor({
       {field("draftVi", "Bản nháp chuẩn", "Nội dung gốc / định hướng")}
       {field("facebookVariant", "Facebook", "Platform variant")}
       {field("instagramVariant", "Instagram", "Platform variant")}
+      {field("googleBusinessVariant", "Google Business", "Local intent / factual")}
       {field("tripadvisorVariant", "Tripadvisor", "Owner content / caption")}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -144,6 +146,7 @@ export default function ContentReviewEditor({
                       ["Bản nháp chuẩn", revision.generated.draftVi],
                       ["Facebook", revision.generated.facebookVariant],
                       ["Instagram", revision.generated.instagramVariant],
+                      ["Google Business", revision.generated.googleBusinessVariant],
                       ["Tripadvisor", revision.generated.tripadvisorVariant],
                     ] as const).map(([label, value]) => (
                       <div key={label} className="grid gap-2 md:grid-cols-[120px_1fr]">

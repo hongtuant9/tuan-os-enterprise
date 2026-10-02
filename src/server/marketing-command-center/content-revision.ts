@@ -5,6 +5,7 @@ export type ContentRevisionDraft = {
   draftVi: string;
   facebookVariant: string;
   instagramVariant: string;
+  googleBusinessVariant: string;
   tripadvisorVariant: string;
   rationale: string;
   mediaDirection: string;
@@ -73,6 +74,7 @@ export async function generateContentRevision(input: {
     draftVi: string;
     facebookVariant: string;
     instagramVariant: string;
+    googleBusinessVariant: string;
     tripadvisorVariant: string;
   };
 }): Promise<ContentRevisionDraft> {
@@ -90,10 +92,11 @@ export async function generateContentRevision(input: {
     "Use specific human context rather than generic praise. Prefer observation, useful context, gentle invitation and a low-pressure CTA.",
     "Facebook target length: roughly 130-220 words unless the owner instruction clearly asks otherwise.",
     "Instagram target length: roughly 70-140 words, image-led and natural, not a compressed advertisement.",
+    "Google Business Profile target: factual, local-intent oriented, roughly 60-120 words; no unsupported rating/review/promotion/offer claims.",
     "Tripadvisor owner-content caption: factual, restrained, roughly 35-80 words, no rating/review manipulation.",
     "DRAFT_VI is an internal Vietnamese editorial draft/angle, not necessarily customer-facing.",
-    "If customer-facing language is EN, write Facebook/Instagram/Tripadvisor variants in natural English.",
-    "Return JSON only with keys: draftVi, facebookVariant, instagramVariant, tripadvisorVariant, rationale, mediaDirection.",
+    "If customer-facing language is EN, write Facebook/Instagram/Google Business/Tripadvisor variants in natural English.",
+    "Return JSON only with keys: draftVi, facebookVariant, instagramVariant, googleBusinessVariant, tripadvisorVariant, rationale, mediaDirection.",
     "mediaDirection must describe how to improve the EXISTING ORIGINAL asset only: crop/light/color/cleanup/composition/text-overlay guidance. Do not invent a new property/location/product or materially falsify the scene.",
   ].join("\n");
 
@@ -152,11 +155,12 @@ export async function generateContentRevision(input: {
     draftVi: s(parsed.draftVi),
     facebookVariant: s(parsed.facebookVariant),
     instagramVariant: s(parsed.instagramVariant),
+    googleBusinessVariant: s(parsed.googleBusinessVariant),
     tripadvisorVariant: s(parsed.tripadvisorVariant),
     rationale: s(parsed.rationale),
     mediaDirection: s(parsed.mediaDirection),
   };
-  if (!result.draftVi && !result.facebookVariant && !result.instagramVariant && !result.tripadvisorVariant) {
+  if (!result.draftVi && !result.facebookVariant && !result.instagramVariant && !result.googleBusinessVariant && !result.tripadvisorVariant) {
     throw new Error("AI_REWRITE_EMPTY: AI không trả về bản nháp hợp lệ.");
   }
   return result;

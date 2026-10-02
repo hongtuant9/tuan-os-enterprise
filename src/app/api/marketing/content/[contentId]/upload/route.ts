@@ -13,17 +13,18 @@ export const dynamic = "force-dynamic";
 
 const CONTENT_TAB = "SHADOW_CONTENT_QUEUE";
 const MAX_ROWS = 300;
-const FALLBACK_TCE_FOLDER_ID = "18fizqgHODrjF4UQQQYFf8FAiM7iPEIRI";
+const MEDIA_LIBRARY_FOLDERS = {
+  EXPERIENCE: "1tyy8PhTOLMCwK2mkSNKgm2PDjrWMxkj6",
+  COZY_GARDEN: "1cRd-duz3eGh7d0ekak44bUC_a5gCIgVs",
+  LAVENDER: "1PguwKr3YFVwX-nFD-pJD3Knef8J397FN",
+  RUBY: "1yJVDm9aVBay58-pw3-S6lw9oba3568BF",
+} as const;
 
 function q(name: string) {
   return `'${name.replaceAll("'", "''")}'`;
 }
 function clean(value: unknown) {
   return String(value ?? "").trim();
-}
-function firstDriveFileId(assetIds: string) {
-  const match = assetIds.match(/\|\s*Drive\s+([A-Za-z0-9_-]{10,})/i);
-  return match?.[1] || "";
 }
 
 export async function POST(req: NextRequest) {
@@ -51,23 +52,21 @@ export async function POST(req: NextRequest) {
     if (!source?.sheet_id) return NextResponse.json({ error: "canonical_workbook_missing" }, { status: 500 });
 
     const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
-    const values = await getSheetValues(source.sheet_id, `${q(CONTENT_TAB)}!A1:AJ${MAX_ROWS}`, auth);
+    const values = await getSheetValues(source.sheet_id, `${q(CONTENT_TAB)}!A1:AK${MAX_ROWS}`, auth);
     const rowIndex = values.findIndex((row, index) => index > 0 && clean(row[0]) === contentId);
     if (rowIndex < 0) return NextResponse.json({ error: "content_not_found" }, { status: 404 });
     const row = values[rowIndex] ?? [];
     const existingAssets = clean(row[18]);
-    const seedFileId = firstDriveFileId(existingAssets);
+    const serviceLine = clean(row[14]).toUpperCase();
+    const parentId = serviceLine.includes("COZY")
+      ? MEDIA_LIBRARY_FOLDERS.COZY_GARDEN
+      : serviceLine.includes("LAVENDER")
+        ? MEDIA_LIBRARY_FOLDERS.LAVENDER
+        : serviceLine.includes("RUBY")
+          ? MEDIA_LIBRARY_FOLDERS.RUBY
+          : MEDIA_LIBRARY_FOLDERS.EXPERIENCE;
 
     const drive = google.drive({ version: "v3", auth });
-    let parentId = FALLBACK_TCE_FOLDER_ID;
-    if (seedFileId) {
-      try {
-        const meta = await drive.files.get({ fileId: seedFileId, fields: "parents" });
-        if (meta.data.parents?.[0]) parentId = meta.data.parents[0];
-      } catch {
-        // Fail closed to known TCE folder; do not block upload because an older asset lost access.
-      }
-    }
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const created = await drive.files.create({
@@ -101,7 +100,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       file: { id: fileId, name: file.name, mimeType: file.type },
-      message: "Upload Drive + canonical attach + read-back PASS",
+      libraryFolderId: parentId,
+      message: "Upload vào Owner-approved TCE media library + canonical attach + read-back PASS",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "upload_error";

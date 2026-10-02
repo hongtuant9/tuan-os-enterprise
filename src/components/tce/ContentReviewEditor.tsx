@@ -20,6 +20,7 @@ export default function ContentReviewEditor({
   publishStatus: string;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
+  const [baseline, setBaseline] = useState<Draft>(initial);
   const [instruction, setInstruction] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -60,7 +61,8 @@ export default function ContentReviewEditor({
           disabled={locked || pending}
           onClick={() => startTransition(async () => {
             setMessage("");
-            const result = await saveMarketingContentDraft(contentId, draft, initial);
+            const result = await saveMarketingContentDraft(contentId, draft, baseline);
+            if (result.ok) setBaseline({ ...draft });
             setMessage(result.ok ? result.message : result.error);
           })}
           className="rounded-lg bg-[#1768df] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#0f5ac5] disabled:cursor-not-allowed disabled:bg-[#a9bad2]"

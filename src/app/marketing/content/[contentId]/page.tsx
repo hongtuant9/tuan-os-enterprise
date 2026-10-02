@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminContainer } from "@/server/container";
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
-import ContentReviewEditor from "@/components/tce/ContentReviewEditor";
+import ContentReviewWorkbench from "@/components/tce/ContentReviewWorkbench";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -108,7 +108,7 @@ export default async function ContentReviewPage({
       .eq("category", "CONTENT")
       .contains("evidence", { content_id: contentId })
       .order("generated_at", { ascending: false })
-      .limit(8),
+      .limit(30),
   ]);
   const content = row(contentResult.data);
   if (!s(content.content_id)) notFound();
@@ -129,10 +129,22 @@ export default async function ContentReviewPage({
     tripadvisorVariant: pick(source, ["TRIPADVISOR_VARIANT", "Tripadvisor Variant"]),
   };
   const assets = parseAssets(pick(source, ["ASSET_IDS", "Asset IDs"]));
-  const revisions = revisionRequests.map(revisionView);
+  const revisions = revisionRequests
+    .filter((requestRow) => s(row(requestRow.evidence).revision_status) && s(row(requestRow.evidence).revision_status) !== "SNAPSHOT")
+    .map(revisionView);
+  const ownerNoteRow = revisionRequests.find((requestRow) => s(requestRow.recommendation_key) === `CONTENT_NOTE:${contentId}`);
+  const ownerNote = s(row(ownerNoteRow?.evidence).note);
+  const history = revisionRequests.map((requestRow) => ({
+    key: s(requestRow.recommendation_key),
+    title: s(requestRow.title),
+    summary: s(requestRow.summary),
+    status: s(requestRow.status),
+    revisionStatus: s(row(requestRow.evidence).revision_status),
+    generatedAt: s(requestRow.generated_at),
+  }));
   const qaMedia = pick(source, ["QA_MEDIA", "QA Media"]) || "NEED VERIFY";
-  const note = pick(source, ["NOTE", "Note"]);
-  const providerSync = providerSyncState(s(content.publish_status), note);
+  const canonicalNote = pick(source, ["NOTE", "Note"]);
+  const providerSync = providerSyncState(s(content.publish_status), canonicalNote);
   const latestAssetAudit = revisions.find((revision) => revision.assetAudit.status)?.assetAudit;
   const originalAssetStatus = qaMedia.toUpperCase() === "PASS" ? "VERIFIED / READY" : qaMedia;
   const creativeDraftStatus = latestAssetAudit?.status
@@ -164,70 +176,27 @@ export default async function ContentReviewPage({
           <div><p className="text-xs text-[#7a8da8]">Kênh runtime</p><b className="mt-1 block text-sm text-[#173964]">{s(content.channel_id) || "Đa kênh / kế hoạch"}</b></div>
         </div>
 
-        <section className="mb-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
-            <h2 className="text-base font-extrabold text-[#10285a]">Trạng thái asset</h2>
-            <div className="mt-3 space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Ảnh/video gốc</span><b className="text-[#29486f]">{originalAssetStatus}</b></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Creative draft</span><b className="text-[#29486f]">{creativeDraftStatus}</b></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Asset đang scheduled</span><b className="text-[#29486f]">{scheduledAssetStatus}</b></div>
-            </div>
-            {latestAssetAudit ? (
-              <div className="mt-3 rounded-lg bg-[#f6f9fc] px-3 py-2 text-xs leading-5 text-[#617895]">
-                <b>{latestAssetAudit.sourceAsset || "Asset audit"}</b>
-                {latestAssetAudit.strength ? <div className="mt-1">{latestAssetAudit.strength}</div> : null}
-                {latestAssetAudit.editScope ? <div className="mt-1"><b>Phạm vi chỉnh:</b> {latestAssetAudit.editScope}</div> : null}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
-            <h2 className="text-base font-extrabold text-[#10285a]">Đồng bộ provider</h2>
-            <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-              <span className="text-[#6f83a1]">Trạng thái</span>
-              <b className="text-[#29486f]">{providerSync.status}</b>
-            </div>
-            <p className="mt-2 text-sm leading-6 text-[#657b9d]">{providerSync.detail}</p>
-            {note ? (
-              <details className="mt-3">
-                <summary className="cursor-pointer text-xs font-bold text-[#1768df]">Xem bằng chứng provider/canonical</summary>
-                <div className="mt-2 whitespace-pre-wrap rounded-lg bg-[#f6f9fc] px-3 py-2 text-xs leading-5 text-[#617895]">{note}</div>
-              </details>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="mb-5 rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-extrabold text-[#10285a]">Hình ảnh / video minh hoạ</h2>
-              <p className="mt-1 text-sm text-[#7185a4]">Asset gốc đang gắn với Content Queue. Creative AI phải dùng asset này làm nền tảng và chờ Owner duyệt trước khi thay thế.</p>
-            </div>
-            <span className="rounded bg-[#eef4fb] px-2 py-1 text-xs font-bold text-[#557195]">{assets.length} asset</span>
-          </div>
-          {assets.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {assets.map((asset, index) => (
-                <div key={asset.fileId || index} className="overflow-hidden rounded-xl border border-[#dce8f4] bg-[#f8fbff]">
-                  {asset.fileId ? (
-                    asset.type === "video"
-                      ? <video controls className="aspect-video w-full bg-black object-contain" src={`/api/marketing/assets/${asset.fileId}`} />
-                      : <img className="aspect-[4/3] w-full object-cover" src={`/api/marketing/assets/${asset.fileId}`} alt={asset.name || "TCE asset"} />
-                  ) : <div className="flex aspect-[4/3] items-center justify-center p-4 text-sm text-[#7b8da8]">Chưa có Drive file ID để preview.</div>}
-                  <div className="p-3">
-                    <b className="text-sm text-[#173964]">{asset.name}</b>
-                    {asset.fileId ? <a className="mt-1 block text-xs font-bold text-[#1768df] hover:underline" href={`https://drive.google.com/file/d/${asset.fileId}/view`} target="_blank" rel="noreferrer">Mở ảnh gốc trên Drive ↗</a> : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : <div className="rounded-lg border border-dashed border-[#ccd9e8] p-5 text-sm text-[#7a8da8]">Bài này chưa có ASSET_IDS trong Content Queue. Media = NEED VERIFY.</div>}
-        </section>
-
-        <section className="rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
-          <ContentReviewEditor contentId={contentId} initial={initial} publishStatus={s(content.publish_status)} revisions={revisions} />
-        </section>
-
+        <ContentReviewWorkbench
+          contentId={contentId}
+          initial={initial}
+          publishStatus={s(content.publish_status)}
+          verificationStatus={s(content.verification_status)}
+          brand={s(content.brand)}
+          pillar={s(content.pillar)}
+          format={s(content.format)}
+          channel={s(content.channel_id) || "Đa kênh / kế hoạch"}
+          assets={assets}
+          revisions={revisions}
+          history={history}
+          ownerNote={ownerNote}
+          assetStatus={{
+            original: originalAssetStatus,
+            creative: creativeDraftStatus,
+            scheduled: scheduledAssetStatus,
+            audit: latestAssetAudit || null,
+          }}
+          providerSync={providerSync}
+        />
 
       </div>
     </main>

@@ -14,6 +14,7 @@ import {
 } from "@/server/notifications/telegram-morning-operations";
 import {
   bindTelegramOperatorGroup,
+  ensureFinanceOperatorQuestions,
   getTelegramOperatorChatId,
   handleTelegramOperatorReply,
 } from "@/server/notifications/telegram-operator";
@@ -207,6 +208,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ignored: "bind_operator_non_owner" });
     }
     await bindTelegramOperatorGroup(chatId, update.message?.chat?.title || null);
+    const seeded = await ensureFinanceOperatorQuestions().catch(() => ({ checked: false, sent: 0 }));
     await reply(chatId, [
       "✅ TUAN OS — AI AGENT OPERATOR CONNECTED",
       "Nhóm này là kênh Human-in-the-loop chính thức.",
@@ -217,6 +219,8 @@ export async function POST(req: NextRequest) {
       "• Chỉ reply của Owner mới được ghi VERIFIED vào canonical runtime.",
       "• Tin nhắn rời không gắn câu hỏi sẽ không tự biến thành fact.",
       "• Approval tài chính/security vẫn theo Approval Gate riêng.",
+      "",
+      `Câu hỏi dữ liệu khởi tạo ngay sau liên kết: ${seeded.sent}`,
     ].join("\n"));
     return NextResponse.json({ ok: true, operatorBound: true });
   }

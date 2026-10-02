@@ -64,8 +64,9 @@ export async function handleMorningDepartmentCallback(input: {
   if (!review) return { ok: false as const, reason: "review_not_found" as const };
 
   const evidence = asRecord(review.evidence as Json);
-  if (String(evidence.source || "") !== "MORNING_BRIEF_DEPARTMENT") {
-    return { ok: false as const, reason: "not_morning_department_task" as const };
+  const taskSource = String(evidence.source || "");
+  if (!["MORNING_BRIEF_DEPARTMENT", "HOUSEKEEPING_ALLOCATION_ADJUSTMENT"].includes(taskSource)) {
+    return { ok: false as const, reason: "unsupported_department_task" as const };
   }
 
   const { data: conversation, error: conversationError } = await db

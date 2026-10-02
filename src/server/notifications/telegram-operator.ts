@@ -201,16 +201,9 @@ export async function handleTelegramOperatorReply(input: {
   const now = new Date().toISOString();
   const sourceReference = `telegram:${String(input.chatId)}:${input.replyToMessageId}:reply_by:${actorId}`;
 
-  const { data: currentFacts, error: currentError } = await db.from("operator_confirmed_facts")
-    .select("id")
-    .eq("domain", question.domain)
-    .eq("business_unit", question.business_unit)
-    .eq("field_code", question.field_code)
-    .eq("record_status", "ACTIVE")
-    .is("effective_from", question.effective_from == null ? null : undefined);
-  if (currentError) throw currentError;
+  let currentFacts: Array<{ id: string }> = [];
   if (question.effective_from != null) {
-    const { data: sameEffective, error } = await db.from("operator_confirmed_facts")
+    const { data, error } = await db.from("operator_confirmed_facts")
       .select("id")
       .eq("domain", question.domain)
       .eq("business_unit", question.business_unit)
@@ -218,17 +211,23 @@ export async function handleTelegramOperatorReply(input: {
       .eq("effective_from", question.effective_from)
       .eq("record_status", "ACTIVE");
     if (error) throw error;
-    for (const row of sameEffective ?? []) {
-      await db.from("operator_confirmed_facts")
-        .update({ record_status: "SUPERSEDED", superseded_at: now, updated_at: now })
-        .eq("id", row.id);
-    }
+    currentFacts = data ?? [];
   } else {
-    for (const row of currentFacts ?? []) {
-      await db.from("operator_confirmed_facts")
-        .update({ record_status: "SUPERSEDED", superseded_at: now, updated_at: now })
-        .eq("id", row.id);
-    }
+    const { data, error } = await db.from("operator_confirmed_facts")
+      .select("id")
+      .eq("domain", question.domain)
+      .eq("business_unit", question.business_unit)
+      .eq("field_code", question.field_code)
+      .is("effective_from", null)
+      .eq("record_status", "ACTIVE");
+    if (error) throw error;
+    currentFacts = data ?? [];
+  }
+  for (const row of currentFacts) {
+    const { error } = await db.from("operator_confirmed_facts")
+      .update({ record_status: "SUPERSEDED", superseded_at: now, updated_at: now })
+      .eq("id", row.id);
+    if (error) throw error;
   }
 
   const { data: fact, error: factError } = await db.from("operator_confirmed_facts")

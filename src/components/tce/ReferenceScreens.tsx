@@ -305,6 +305,10 @@ function DataTable({ columns, data }: { columns: string[]; rows?: number; data?:
             <tr key={r}>
               {columns.map((col, i) => {
                 const raw = String(row[i] ?? "—");
+                if (raw.startsWith("LINK:")) {
+                  const [href, label = "Mở"] = raw.slice(5).split("|", 2);
+                  return <td key={col + i} className="whitespace-normal break-words px-3 py-3 leading-5"><Link href={href} className="inline-flex items-center rounded-md border border-[#bad8ff] bg-[#edf6ff] px-3 py-1.5 text-[12px] font-bold text-[#1768df] hover:bg-[#dfefff]">{label}</Link></td>;
+                }
                 const display = viDisplay(raw);
                 const unresolved = /NEED[_ ]VERIFY|CẦN XÁC MINH|HOLD|TẠM DỪNG|CHƯA ĐẦY ĐỦ/i.test(raw + " " + display);
                 return <td key={col + i} className="whitespace-normal break-words px-3 py-3 leading-5" title={display}>{unresolved ? <span className="inline-flex items-center gap-1"><span>{display}</span><VerificationHelp compact guide={fallbackVerificationGuide(`${col} — ${row[1] ?? row[0] ?? "Dữ liệu"}`, raw)} /></span> : display}</td>;
@@ -512,7 +516,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
             <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Trạng thái","Mục tiêu","Xác minh"]} data={data?.tables.marketingCampaigns}/>
           </Section>
           <Section title="Lịch nội dung & xuất bản" subtitle="Lập kế hoạch → Kiểm tra chất lượng → Đã lên lịch → Đã xuất bản; không tự xuất bản khi chưa được phê duyệt" className="col-span-12 h-[250px]" icon="♟">
-            <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Xác minh"]} data={data?.tables.marketingContent}/>
+            <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Xác minh","Hành động"]} data={data?.tables.marketingContent}/>
           </Section>
 
           <Section title="Đối chiếu nguồn – Nguồn → Khách tiềm năng → Đặt chỗ → Doanh thu" subtitle="Đối chiếu đường dẫn, khách hàng, hội thoại và đặt chỗ; tránh đếm trùng chuyển đổi từ nhà cung cấp" className="col-span-12 h-[240px]" icon="↗">

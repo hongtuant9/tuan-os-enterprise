@@ -401,49 +401,82 @@ function genericRows(payload: unknown): Array<Record<string, unknown>> {
   return value.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
 }
 
-async function safeBusinessOccupancy(from: string, to: string): Promise<BusinessOccupancySnapshot> {
+async function safeBusinessOccupancy(
+  db: Awaited<ReturnType<typeof getRequestContainer>>["db"],
+  from: string,
+  to: string,
+): Promise<BusinessOccupancySnapshot> {
   try {
-    const client = new KiotVietHotelClient();
-    if (!client.isConfigured()) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0, note: "KiotViet Hotel chưa cấu hình." };
-    const branchResult = await client.listBranches();
-    if (!branchResult.ok) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: `Không đọc được KiotViet branches HTTP ${branchResult.status}.` };
-    const branchRows = genericRows(branchResult.data);
-    const lavenderBranch = branchRows.find((row) => String(row.branchName ?? row.name ?? "").toLowerCase().includes("lavender"));
-    const rubyBranch = branchRows.find((row) => String(row.branchName ?? row.name ?? "").toLowerCase().includes("ruby"));
-    const lavenderId = String(lavenderBranch?.id ?? "");
-    const rubyId = String(rubyBranch?.id ?? "");
-    if (!lavenderId || !rubyId) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0, note: "Không map được branch Lavender/Ruby từ KiotViet." };
+    const earliest = await db.from("hospitality_bookings")
+      .select("check_in")
+      .eq("source_system", "KIOTVIET_HOTEL")
+      .not("check_in", "is", null)
+      .order("check_in", { ascending: true })
+      .limit(1);
+    if (earliest.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được coverage booking runtime." };
+    const earliestDate = String(genericRows(earliest)[0]?.check_in ?? "") || null;
+    if (!earliestDate || earliestDate > from) {
+      return {
+        state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0,
+        note: earliestDate ? `Booking runtime hiện có coverage từ ${earliestDate}; kỳ lọc bắt đầu ${from} nên chưa đủ dữ liệu occupancy.` : "Booking runtime chưa có coverage occupancy.",
+      };
+    }
 
-    const dates: string[] = [];
-    for (let date = from; date <= to && dates.length < 366; date = addDateDays(date, 1)) dates.push(date);
-    if (!dates.length || dates.at(-1) !== to) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: dates.length, note: "Khoảng thời gian vượt giới hạn 366 ngày." };
-    let lavAvailable = 0;
-    let rubyAvailable = 0;
-    let verifiedDays = 0;
-    const concurrency = 16;
-    for (let i = 0; i < dates.length; i += concurrency) {
-      const batch = await Promise.all(dates.slice(i, i + concurrency).map((date) => safeHotelAvailability(date)));
-      for (const day of batch) {
-        if (day.state !== "VERIFIED" || day.byBranchId[lavenderId] === undefined || day.byBranchId[rubyId] === undefined) continue;
-        verifiedDays += 1;
-        lavAvailable += Math.max(0, day.byBranchId[lavenderId] ?? 0);
-        rubyAvailable += Math.max(0, day.byBranchId[rubyId] ?? 0);
+    const toExclusive = addDateDays(to, 1);
+    const result = await db.from("hospitality_bookings")
+      .select("check_in,check_out,room_count,room_names,booking_status,verification_status")
+      .eq("source_system", "KIOTVIET_HOTEL")
+      .eq("verification_status", "VERIFIED")
+      .in("booking_status", ["CONFIRMED", "COMPLETED"])
+      .lt("check_in", toExclusive)
+      .gt("check_out", from);
+    if (result.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được booking runtime cho occupancy." };
+
+    const dayMs = 86_400_000;
+    const days = Math.max(0, Math.round((Date.parse(toExclusive + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) / dayMs));
+    if (days <= 0) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0, note: "Kỳ occupancy không hợp lệ." };
+
+    let lavenderRoomNights = 0;
+    let rubyRoomNights = 0;
+    let unresolved = 0;
+    for (const row of genericRows(result)) {
+      const checkIn = String(row.check_in ?? "");
+      const checkOut = String(row.check_out ?? "");
+      if (!checkIn || !checkOut || checkOut <= checkIn) { unresolved += 1; continue; }
+      const overlapStart = Math.max(Date.parse(checkIn + "T00:00:00Z"), Date.parse(from + "T00:00:00Z"));
+      const overlapEnd = Math.min(Date.parse(checkOut + "T00:00:00Z"), Date.parse(toExclusive + "T00:00:00Z"));
+      const nights = Math.max(0, Math.round((overlapEnd - overlapStart) / dayMs));
+      if (nights <= 0) continue;
+      const roomNames = Array.isArray(row.room_names) ? row.room_names.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      const roomCount = Math.max(0, Number(row.room_count ?? 0));
+      if (!roomNames.length || roomCount > roomNames.length) unresolved += 1;
+      for (const roomName of roomNames) {
+        if (/_la$/i.test(roomName)) lavenderRoomNights += nights;
+        else if (/(double|dobule|twin)$/i.test(roomName)) rubyRoomNights += nights;
+        else unresolved += 1;
       }
     }
-    if (verifiedDays !== dates.length) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: dates.length, note: `Availability coverage ${verifiedDays}/${dates.length} ngày.` };
-    // Canonical L3 inventory: Lavender 7 rooms; Ruby 6 rooms.
-    const lavCapacity = 7 * dates.length;
-    const rubyCapacity = 6 * dates.length;
-    const clamp = (value: number) => Math.max(0, Math.min(100, value));
-    const lavender = clamp((1 - lavAvailable / lavCapacity) * 100);
-    const ruby = clamp((1 - rubyAvailable / rubyCapacity) * 100);
-    const combined = clamp((1 - (lavAvailable + rubyAvailable) / (lavCapacity + rubyCapacity)) * 100);
-    return { state: "VERIFIED", lavender, ruby, combined, days: dates.length, note: `KiotViet room-class daily availability × canonical inventory (Lavender 7, Ruby 6), ${dates.length} ngày.` };
+    if (unresolved > 0) {
+      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: `${unresolved} booking/room chưa map được Lavender/Ruby; occupancy giữ fail-closed.` };
+    }
+
+    const lavenderCapacity = 7 * days;
+    const rubyCapacity = 6 * days;
+    if (lavenderRoomNights > lavenderCapacity || rubyRoomNights > rubyCapacity) {
+      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: "Occupied room-nights vượt canonical capacity; cần đối chiếu booking overlap/room mapping." };
+    }
+    const lavender = lavenderCapacity > 0 ? lavenderRoomNights / lavenderCapacity * 100 : null;
+    const ruby = rubyCapacity > 0 ? rubyRoomNights / rubyCapacity * 100 : null;
+    const combinedCapacity = lavenderCapacity + rubyCapacity;
+    const combined = combinedCapacity > 0 ? (lavenderRoomNights + rubyRoomNights) / combinedCapacity * 100 : null;
+    return {
+      state: "VERIFIED", lavender, ruby, combined, days,
+      note: `KiotViet Hotel booking runtime room-nights × canonical inventory L3 (Lavender 7, Ruby 6), ${days} ngày.`,
+    };
   } catch {
-    return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được occupancy source." };
+    return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được occupancy runtime." };
   }
 }
-
 
 function priorityRank(priority: string) {
   if (priority === "high" || priority === "P0") return 0;
@@ -547,7 +580,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const businessFnbMonthExpensePromise = screen === "business"
       ? (sameAsCurrentMonth ? businessFnbExpensePromise : financeReadWithTimeout(fetchFnbCashflowActual(monthStart + "T00:00:00", today + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", monthStart, today)))
       : Promise.resolve(null);
-    const occupancyPromise = screen === "business" ? safeBusinessOccupancy(period.from, period.to) : Promise.resolve(null);
+    const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
     const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessHotelExpense, businessFnbExpense, businessHotelMonthExpense, businessFnbMonthExpense, businessOccupancy] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
@@ -599,21 +632,6 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       const businessPipelineReadable = businessDirectReadStates.every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
       const businessRevenueVerified = bothTodayVerified && bothMonthVerified;
       const businessVerificationGuides: Record<string, TceVerificationGuide> = {
-        "Chi phí": { title: "Chi phí thực tế", status: "CẦN XÁC MINH", severity: "P0",
-          reason: `Expense Actual coverage ${foundationReadiness.expense.coveragePct.toFixed(1)}%; missing=${foundationReadiness.expense.missingRows}; partial=${foundationReadiness.expense.partialRows}. Source Map đã ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows}.`,
-          verifyWhat: ["Actual Expense theo business unit/category/kỳ.", "Khoản nào là P&L Expense, khoản nào chỉ là Cash Out/non-P&L."],
-          currentEvidence: [
-            `FIN Source Map đã đủ ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows} dòng bắt buộc.`,
-            `Đã đóng ${Math.max(0, foundationReadiness.expense.requiredRows - foundationReadiness.expense.missingRows - foundationReadiness.expense.partialRows)}/${foundationReadiness.expense.requiredRows} dòng Actual; còn ${foundationReadiness.expense.missingRows} missing + ${foundationReadiness.expense.partialRows} partial.`,
-            "F&B Cashbook đã reconcile nhưng Cash Out trả NCC hàng tồn kho là non-P&L; không dùng thay Expense.",
-            "Cozy Google Ads đã có 2 payment evidence tháng 9, tổng Cash Paid 3.000.000đ; P&L còn chờ rule VAT net/gross.",
-          ],
-          blocker: `Expense coverage mới ${foundationReadiness.expense.coveragePct.toFixed(1)}%; payroll/utilities/OTA/OPEX còn thiếu hoặc partial, nên không được tính Profit.`,
-          evidenceRequired: ["Payroll/chấm công đã chốt.", "Hóa đơn/chứng từ utilities, OTA commission, supplier/OPEX đúng kỳ.", "KiotViet authenticated source + source transaction ID khi có."],
-          steps: ["Đóng các dòng missing trước.", "Đối chiếu category/business unit.", "Loại non-P&L khỏi Expense.", "Chạy reconciliation và coverage."],
-          owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + kế toán/lương", source: "KiotViet Hotel/F&B direct authenticated runtime; FIN-HOSPITALITY-001 chỉ là Planning/Taxonomy",
-          completionCriteria: ["Actual Expense coverage = 100% hoặc approved exception.", "Không duplicate Nhập hàng/Bảng lương/Sổ quỹ."],
-          nextAction: `Đóng ${foundationReadiness.expense.missingRows} dòng missing và ${foundationReadiness.expense.partialRows} dòng partial theo Source Map.` },
         "Lợi nhuận gộp": { title: "Lợi nhuận gộp", status: "CẦN XÁC MINH", severity: "P0",
           reason: `Revenue đã có nhưng COGS sold-SKU chưa đủ: BOM VERIFIED ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; COST-001 match ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}.`,
           verifyWhat: ["COGS cho từng SKU thực bán.", "BOM/định lượng/giá nguyên liệu đủ authority."],
@@ -640,7 +658,6 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           owner: "AI CFO", provider: "Không cần chứng từ riêng ngoài Revenue/COGS đã VERIFIED", source: "Canonical Finance Calculation Layer",
           completionCriteria: ["Gross Profit VERIFIED.", "COGS coverage PASS."], nextAction: "Tự chuyển VERIFIED sau khi Gross Profit/COGS đạt gate." },
       };
-      businessVerificationGuides["Chi phí vận hành"] = businessVerificationGuides["Chi phí"];
       const businessFreshness: TceTabLiveData["freshness"] = {
         dataThrough: businessPipelineReadable ? now.toISOString() : null,
         lastSyncAt: businessPipelineReadable ? now.toISOString() : null,

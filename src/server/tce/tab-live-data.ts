@@ -695,6 +695,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       setFixedPlan("LAVENDER", "Điện & Nước", "PLAN_EXP_UTILITIES");
       setFixedPlan("RUBY", "Điện & Nước", "PLAN_EXP_UTILITIES");
       setFixedPlan("COZY_GARDEN", "Điện & Nước", "PLAN_EXP_UTILITIES");
+      setFixedPlan("LAVENDER", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
+      setFixedPlan("RUBY", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
+      setFixedPlan("LAVENDER", "Khác", "PLAN_EXP_OTHER");
+      setFixedPlan("RUBY", "Khác", "PLAN_EXP_OTHER");
+      setFixedPlan("COZY_GARDEN", "Khác", "PLAN_EXP_OTHER");
       setFixedPlan("COZY_GARDEN", "Software", "PLAN_EXP_SOFTWARE_COZY");
       const homestayRevenueTotal = periodRevenueByUnit.LAVENDER + periodRevenueByUnit.RUBY;
       const allocateSharedByRevenue = (group: CostControlGroup, lineCode: string) => {
@@ -792,6 +797,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           let state = "ĐANG THEO DÕI";
           if (!plan) state = "CHƯA THIẾT LẬP KẾ HOẠCH";
           else if (managementValue === null) state = "CHỜ DỮ LIỆU KIOTVIET";
+          else if (monthlyPlan === 0 && managementValue > 0) state = "PHÁT SINH NGOÀI KẾ HOẠCH";
+          else if (monthlyPlan === 0 && managementValue === 0) state = "CHƯA PHÁT SINH";
           else if (usage !== null && usage > 100) state = "VƯỢT KẾ HOẠCH";
           else if (usage !== null && usage >= 85) state = "SẮP CHẠM KẾ HOẠCH";
           else if (actual !== null && actual > 0) state = "ĐÃ CÓ ACTUAL";

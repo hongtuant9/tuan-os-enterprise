@@ -152,7 +152,7 @@ export async function handleMorningDepartmentCallback(input: {
 
   const { error: convError } = await db
     .from("ai_conversations")
-    .update({ metadata, status: "closed", outcome: "MORNING_DEPARTMENT_DONE", last_message_at: now })
+    .update({ metadata, status: "closed", last_message_at: now })
     .eq("id", conversation.id);
   if (convError) throw convError;
 

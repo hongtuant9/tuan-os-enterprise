@@ -22,6 +22,7 @@ const MANAGED_SOURCES = new Set([
   "marketing-channel-plan",
   "marketing-action-plan",
   "marketing-market-intelligence",
+  "cozy-bom-baseline",
 ]);
 
 function workerToken(): string | null {

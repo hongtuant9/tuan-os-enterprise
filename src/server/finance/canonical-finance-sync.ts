@@ -107,6 +107,7 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
   const sourceStates: Array<{ system: "HOTEL" | "FNB"; kind: "cashflow" | "purchase_orders"; state: string; expected: number; fetched: number }> = [];
   let excludedNonPnl = 0;
   let unmappedPnl = 0;
+  let heldReview = 0;
 
   for (const system of ["HOTEL", "FNB"] as const) {
     const snapshot = await readKiotVietActualRange(system, from, to);
@@ -146,6 +147,8 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
       for (const row of snapshot.purchaseOrderRows) {
         const unit = actualBusinessUnit(system, row);
         if (unit === "HOSPITALITY_SHARED") { unmappedPnl += 1; continue; }
+        const purchaseVerification = system === "HOTEL" ? "NEED_VERIFY" : "VERIFIED";
+        if (purchaseVerification !== "VERIFIED") heldReview += 1;
         writes.push({
           external_key: canonicalFinanceSourceKey(system, "PURCHASE_ORDER", row.id),
           transaction_date: row.date,
@@ -158,7 +161,7 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
           source_document: row.code || row.id,
           source_reference: row.id,
           payment_status: "NEED_VERIFY",
-          verification_status: "VERIFIED",
+          verification_status: purchaseVerification,
           source: system === "FNB" ? "KIOTVIET_FNB_PURCHASE_ORDER_WEB_API" : "KIOTVIET_HOTEL_PURCHASE_ORDER_WEB_API",
           record_status: "ACTIVE",
           updated_at: new Date().toISOString(),
@@ -208,7 +211,7 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
     state: verifiedSources === sourceStates.length && unmappedPnl === 0 ? "VERIFIED" : "PARTIAL",
     dryRun: Boolean(options.dryRun),
     from, to, sourceStates, upserted: options.dryRun ? 0 : writes.length, candidateRows: writes.length,
-    excludedNonPnl, unmappedPnl, previewByUnitCategory,
+    excludedNonPnl, unmappedPnl, heldReview, previewByUnitCategory,
   };
 }
 

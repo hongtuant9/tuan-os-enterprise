@@ -787,7 +787,7 @@ export async function savePlatformMediaRendition(
       .select("recommendation_key,evidence")
       .eq("recommendation_key", key)
       .maybeSingle();
-    const current = row(existing.data);
+    const current = obj(existing.data);
     const payload = {
       content_id: contentId,
       platform,

@@ -8,6 +8,10 @@ import {
   getTelegramOperationsChatId,
   handleSupplyCallback,
 } from "@/server/notifications/telegram-operations-compact";
+import {
+  buildMorningDepartmentMessage,
+  handleMorningDepartmentCallback,
+} from "@/server/notifications/telegram-morning-operations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +75,19 @@ async function editMessage(chatId: string | number, messageId: number, text: str
   });
 }
 
+async function editMorningMessage(chatId: string | number, messageId: number, text: string, state: string, reviewId: string) {
+  const replyMarkup = state === "DONE"
+    ? { inline_keyboard: [] }
+    : { inline_keyboard: [[{ text: "🏁 Hoàn thành", callback_data: `morning_done:${reviewId}` }]] };
+  await telegram("editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup,
+  });
+}
+
 type TelegramUpdate = {
   message?: {
     text?: string;
@@ -111,38 +128,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ignored: "callback_non_ops_group" });
     }
 
-    const match = callbackData.match(/^supply_(ack|done):([0-9a-f-]{36})$/i);
-    if (!match) {
-      await answerCallback(callbackId, "Unsupported action.");
+    const supplyMatch = callbackData.match(/^supply_(ack|done):([0-9a-f-]{36})$/i);
+    const morningMatch = callbackData.match(/^morning_(ack|done):([0-9a-f-]{36})$/i);
+    if (!supplyMatch && !morningMatch) {
+      await answerCallback(callbackId, "Thao tác không được hỗ trợ.");
       return NextResponse.json({ ok: true, ignored: "unsupported_callback" });
     }
 
+    const match = supplyMatch ?? morningMatch!;
     const action = match[1].toLowerCase() as "ack" | "done";
     const reviewId = match[2];
+    const callbackKind = supplyMatch ? "supply" : "morning";
+
     try {
-      const result = await handleSupplyCallback({ reviewId, action, from: callback.from });
+      const result = callbackKind === "supply"
+        ? await handleSupplyCallback({ reviewId, action, from: callback.from })
+        : await handleMorningDepartmentCallback({ reviewId, action, from: callback.from });
+
       if (!result.ok) {
-        console.warn("[telegram-ops] callback_review_not_found", { reviewId, action, reason: result.reason });
-        await answerCallback(callbackId, "Không tìm thấy yêu cầu này.");
+        console.warn("[telegram-ops] callback_review_not_found", { reviewId, action, callbackKind, reason: result.reason });
+        await answerCallback(callbackId, "Không tìm thấy công việc này.");
         return NextResponse.json({ ok: true, ignored: result.reason });
       }
 
-      await answerCallback(callbackId, result.state === "DONE" ? "Đã hoàn thành" : "Đã nhận việc");
-      console.log("[telegram-ops] callback_runtime_updated", { reviewId, action, state: result.state, actor: result.actor, stateAt: result.stateAt });
+      await answerCallback(
+        callbackId,
+        result.state === "DONE" ? "Đã hoàn thành" : callbackKind === "morning" ? "Đã xác nhận" : "Đã nhận việc"
+      );
+      console.log("[telegram-ops] callback_runtime_updated", { reviewId, action, callbackKind, state: result.state, actor: result.actor, stateAt: result.stateAt });
 
       if (messageId != null) {
         try {
-          const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor, result.stateAt);
-          await editMessage(chatId, messageId, text, result.state, reviewId);
-          console.log("[telegram-ops] callback_message_updated", { reviewId, action, state: result.state, messageId });
+          if (callbackKind === "supply") {
+            const text = await buildSupplyCallbackMessage(reviewId, result.state, result.actor, result.stateAt);
+            await editMessage(chatId, messageId, text, result.state, reviewId);
+          } else {
+            const text = await buildMorningDepartmentMessage(reviewId, result.state, result.actor, result.stateAt);
+            await editMorningMessage(chatId, messageId, text, result.state, reviewId);
+          }
+          console.log("[telegram-ops] callback_message_updated", { reviewId, action, callbackKind, state: result.state, messageId });
         } catch (editError) {
-          console.error("[telegram-ops] callback_message_update_failed", { reviewId, action, messageId, error: editError instanceof Error ? editError.message : String(editError) });
+          console.error("[telegram-ops] callback_message_update_failed", { reviewId, action, callbackKind, messageId, error: editError instanceof Error ? editError.message : String(editError) });
         }
       }
 
-      return NextResponse.json({ ok: true, action, state: result.state });
+      return NextResponse.json({ ok: true, action, callbackKind, state: result.state });
     } catch (callbackError) {
-      console.error("[telegram-ops] callback_failed", { reviewId, action, error: callbackError instanceof Error ? callbackError.message : String(callbackError) });
+      console.error("[telegram-ops] callback_failed", { reviewId, action, callbackKind, error: callbackError instanceof Error ? callbackError.message : String(callbackError) });
       try { await answerCallback(callbackId, "Không thể xử lý, vui lòng thử lại."); } catch {}
       return NextResponse.json({ ok: false, error: "callback_failed" }, { status: 200 });
     }

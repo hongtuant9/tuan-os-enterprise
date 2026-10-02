@@ -14,6 +14,7 @@ const SNAPSHOT_RECONCILE_SOURCES = new Set([
   "marketing-channel-plan",
   "marketing-action-plan",
   "marketing-market-intelligence",
+  "cozy-bom-baseline",
 ]);
 
 export class SyncRunner {

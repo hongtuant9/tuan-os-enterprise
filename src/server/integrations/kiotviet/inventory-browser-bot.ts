@@ -80,7 +80,7 @@ let browserMutex: Promise<unknown> = Promise.resolve();
 
 const MODULES: Record<InventoryBotSystem, InventoryModuleDefinition[]> = {
   FNB: [
-    { id: "PRODUCTS", label: "Danh sách hàng hóa", path: (r) => `https://fnb.kiotviet.vn/${encodeURIComponent(r)}/man/#/WareHouse` },
+    { id: "PRODUCTS", label: "Món / BOM", path: (r) => `https://fnb.kiotviet.vn/${encodeURIComponent(r)}/man/#/Products` },
     { id: "STOCK_TAKES", label: "Kiểm kho", path: (r) => `https://fnb.kiotviet.vn/${encodeURIComponent(r)}/man/#/StockTakes` },
     { id: "PURCHASE_ORDERS", label: "Nhập hàng", path: (r) => `https://fnb.kiotviet.vn/${encodeURIComponent(r)}/man/#/PurchaseOrder` },
     { id: "SUPPLIERS", label: "Nhà cung cấp", path: (r) => `https://fnb.kiotviet.vn/${encodeURIComponent(r)}/man/#/Suppliers` },

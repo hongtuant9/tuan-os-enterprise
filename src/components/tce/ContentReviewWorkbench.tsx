@@ -7,8 +7,11 @@ import {
   createContentSnapshot,
   requestAiContentRevision,
   requestMediaCreative,
+  requestPlatformImageCreative,
   saveContentOwnerNote,
   saveMarketingContentDraft,
+  savePlatformMediaRendition,
+  type PlatformMediaKey,
 } from "@/app/actions/content-review";
 
 type Draft = {
@@ -34,6 +37,16 @@ type Revision = {
   generated: Draft & { rationale: string; mediaDirection: string };
 };
 type Asset = { name: string; fileId: string; type: string };
+type PlatformMediaRendition = {
+  platform: string;
+  fileId: string;
+  fileName: string;
+  sourceFileId: string;
+  aspectRatio: string;
+  targetWidth: number;
+  targetHeight: number;
+  mediaStatus: string;
+};
 type History = {
   key: string;
   title: string;
@@ -82,6 +95,54 @@ const LIBRARIES: Library[] = [
     url: "https://drive.google.com/drive/folders/1yJVDm9aVBay58-pw3-S6lw9oba3568BF",
   },
 ];
+
+const MEDIA_PROFILES: Record<
+  PlatformMediaKey,
+  {
+    label: string;
+    width: number;
+    height: number;
+    ratio: string;
+    previewAspect: string;
+  }
+> = {
+  facebook: {
+    label: "Facebook Feed",
+    width: 1080,
+    height: 1350,
+    ratio: "4:5",
+    previewAspect: "4 / 5",
+  },
+  instagram: {
+    label: "Instagram Feed",
+    width: 1080,
+    height: 1350,
+    ratio: "4:5",
+    previewAspect: "4 / 5",
+  },
+  google_business: {
+    label: "Google Business",
+    width: 1200,
+    height: 900,
+    ratio: "4:3",
+    previewAspect: "4 / 3",
+  },
+  tripadvisor: {
+    label: "Tripadvisor",
+    width: 1200,
+    height: 900,
+    ratio: "4:3",
+    previewAspect: "4 / 3",
+  },
+};
+
+function mediaKeyForPlatform(platform: Platform): PlatformMediaKey | null {
+  if (platform === "facebookVariant") return "facebook";
+  if (platform === "instagramVariant") return "instagram";
+  if (platform === "googleBusinessVariant") return "google_business";
+  if (platform === "tripadvisorVariant") return "tripadvisor";
+  return null;
+}
 
 const PLATFORM_META: Array<{
   key: Platform;
@@ -142,6 +203,7 @@ export default function ContentReviewWorkbench(props: {
   assets: Asset[];
   revisions: Revision[];
   history: History[];
+  platformMedia: PlatformMediaRendition[];
   ownerNote: string;
   assetStatus: {
     original: string;
@@ -164,6 +226,7 @@ export default function ContentReviewWorkbench(props: {
     assets,
     revisions,
     history,
+    platformMedia,
     ownerNote,
     assetStatus,
     providerSync,
@@ -179,6 +242,7 @@ export default function ContentReviewWorkbench(props: {
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [renditionBusy, setRenditionBusy] = useState(false);
 
   const locked = /SCHEDULED|PUBLISHED|FB_SCHEDULED/i.test(publishStatus);
   const latest =
@@ -188,6 +252,29 @@ export default function ContentReviewWorkbench(props: {
     ) ||
     revisions[0];
   const selected = assets[selectedAsset] || assets[0];
+  const activeMediaKey = mediaKeyForPlatform(platform);
+  const activeMediaProfile = activeMediaKey
+    ? MEDIA_PROFILES[activeMediaKey]
+    : null;
+  const platformRenditions = activeMediaKey
+    ? platformMedia.filter((item) => item.platform === activeMediaKey)
+    : [];
+  const previewMediaKey: PlatformMediaKey = activeMediaKey || "facebook";
+  const previewMediaProfile = MEDIA_PROFILES[previewMediaKey];
+  const previewAssets = assets.slice(0, 4).map((asset) => {
+    const rendition = platformMedia.find(
+      (item) =>
+        item.platform === previewMediaKey && item.sourceFileId === asset.fileId,
+    );
+    return rendition
+      ? {
+          ...asset,
+          fileId: rendition.fileId,
+          name: rendition.fileName || asset.name,
+          rendition,
+        }
+      : { ...asset, rendition: null as PlatformMediaRendition | null };
+  });
   const activeLibrary =
     LIBRARIES.find((library) => libraryMatches(serviceLine, library)) ||
     LIBRARIES[0];
@@ -288,7 +375,9 @@ export default function ContentReviewWorkbench(props: {
       if (result.ok) router.refresh();
     });
 
-  const mediaRequest = (action: "EDIT_IMAGE_AI" | "CREATE_IMAGE_AI" | "CREATE_SHORT_VIDEO") =>
+  const mediaRequest = (
+    action: "EDIT_IMAGE_AI" | "CREATE_IMAGE_AI" | "CREATE_SHORT_VIDEO",
+  ) =>
     startTransition(async () => {
       const result = await requestMediaCreative(contentId, action, instruction);
       setMessage(result.ok ? result.message : result.error);
@@ -318,6 +407,133 @@ export default function ContentReviewWorkbench(props: {
       if (inputRef.current) inputRef.current.value = "";
     }
   }
+
+  async function createPlatformRendition() {
+    if (!selected?.fileId || selected.type === "video") {
+      setMessage("Hãy chọn một ảnh gốc trước khi tạo rendition theo nền tảng.");
+      return;
+    }
+    if (!activeMediaKey || !activeMediaProfile) {
+      setMessage(
+        "Hãy chọn Facebook, Instagram, Google Business hoặc Tripadvisor trước.",
+      );
+      return;
+    }
+    setRenditionBusy(true);
+    setMessage("");
+    try {
+      const sourceResponse = await fetch(
+        `/api/marketing/assets/${selected.fileId}`,
+        { credentials: "include" },
+      );
+      if (!sourceResponse.ok) throw new Error("Không đọc được ảnh gốc.");
+      const sourceBlob = await sourceResponse.blob();
+      const bitmap = await createImageBitmap(sourceBlob);
+      const canvas = document.createElement("canvas");
+      canvas.width = activeMediaProfile.width;
+      canvas.height = activeMediaProfile.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Trình duyệt không hỗ trợ canvas.");
+      const targetRatio = activeMediaProfile.width / activeMediaProfile.height;
+      const sourceRatio = bitmap.width / bitmap.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = bitmap.width;
+      let sh = bitmap.height;
+      if (sourceRatio > targetRatio) {
+        sw = bitmap.height * targetRatio;
+        sx = (bitmap.width - sw) / 2;
+      } else if (sourceRatio < targetRatio) {
+        sh = bitmap.width / targetRatio;
+        sy = (bitmap.height - sh) / 2;
+      }
+      ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const renditionBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) =>
+            blob
+              ? resolve(blob)
+              : reject(new Error("Không tạo được file rendition.")),
+          "image/jpeg",
+          0.92,
+        );
+      });
+      const safeBase =
+        selected.name
+          .replace(/\.[^.]+$/, "")
+          .replace(/[^A-Za-z0-9_-]+/g, "_")
+          .slice(0, 60) || "asset";
+      const fileName = `${contentId}_${activeMediaKey}_${activeMediaProfile.width}x${activeMediaProfile.height}_${safeBase}.jpg`;
+      const form = new FormData();
+      form.set("contentId", contentId);
+      form.set("attachToCanonical", "false");
+      form.set(
+        "file",
+        new File([renditionBlob], fileName, { type: "image/jpeg" }),
+      );
+      const uploadResponse = await fetch(
+        `/api/marketing/content/${encodeURIComponent(contentId)}/upload`,
+        {
+          method: "POST",
+          body: form,
+          credentials: "include",
+        },
+      );
+      const uploadPayload = await uploadResponse.json();
+      if (!uploadResponse.ok)
+        throw new Error(uploadPayload?.error || "Upload rendition thất bại.");
+      const saved = await savePlatformMediaRendition(
+        contentId,
+        activeMediaKey,
+        {
+          fileId: uploadPayload.file.id,
+          fileName,
+          sourceFileId: selected.fileId,
+          aspectRatio: activeMediaProfile.ratio,
+          targetWidth: activeMediaProfile.width,
+          targetHeight: activeMediaProfile.height,
+        },
+      );
+      if (!saved.ok) throw new Error(saved.error);
+      setMessage(
+        `Đã tạo ${activeMediaProfile.label} ${activeMediaProfile.width}×${activeMediaProfile.height} từ ảnh gốc. Chưa provider sync.`,
+      );
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Không tạo được rendition theo nền tảng.",
+      );
+    } finally {
+      setRenditionBusy(false);
+    }
+  }
+
+  const requestPlatformAiImage = () => {
+    if (!selected?.fileId || selected.type === "video") {
+      setMessage("Hãy chọn ảnh gốc trước khi yêu cầu AI chỉnh ảnh.");
+      return;
+    }
+    if (!activeMediaKey || !activeMediaProfile) {
+      setMessage("Hãy chọn một kênh cụ thể trước khi yêu cầu AI chỉnh ảnh.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await requestPlatformImageCreative(
+        contentId,
+        activeMediaKey,
+        selected.fileId,
+        activeMediaProfile.ratio,
+        activeMediaProfile.width,
+        activeMediaProfile.height,
+        instruction,
+      );
+      setMessage(result.ok ? result.message : result.error);
+      if (result.ok) router.refresh();
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -516,6 +732,84 @@ export default function ContentReviewWorkbench(props: {
             </button>
           </div>
 
+          <div className="mt-4 rounded-xl border border-[#dce8f4] bg-[#f8fbff] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <b className="text-sm text-[#244c77]">
+                  Chuẩn ảnh theo nền tảng
+                </b>
+                <p className="mt-1 text-[11px] text-[#7185a4]">
+                  Crop/resize từ ảnh gốc; không làm thay đổi ảnh gốc.
+                </p>
+              </div>
+              {activeMediaProfile ? (
+                <span className="rounded bg-white px-2 py-1 text-[11px] font-bold text-[#1768df]">
+                  {activeMediaProfile.label} · {activeMediaProfile.width}×
+                  {activeMediaProfile.height} · {activeMediaProfile.ratio}
+                </span>
+              ) : (
+                <span className="rounded bg-white px-2 py-1 text-[11px] font-bold text-[#7d8fa8]">
+                  Chọn một kênh để tối ưu ảnh
+                </span>
+              )}
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                disabled={
+                  !activeMediaProfile ||
+                  !selected?.fileId ||
+                  selected.type === "video" ||
+                  renditionBusy
+                }
+                onClick={createPlatformRendition}
+                className="rounded-lg bg-[#1768df] px-3 py-2 text-xs font-bold text-white disabled:bg-[#a9bad2]"
+              >
+                {renditionBusy
+                  ? "Đang tạo rendition..."
+                  : "Chuẩn hoá kích thước ảnh này"}
+              </button>
+              <button
+                disabled={
+                  !activeMediaProfile ||
+                  !selected?.fileId ||
+                  selected.type === "video" ||
+                  pending
+                }
+                onClick={requestPlatformAiImage}
+                className="rounded-lg border border-[#8cbcf5] bg-white px-3 py-2 text-xs font-bold text-[#1768df] disabled:text-[#9cadc2]"
+              >
+                AI làm đẹp cho kênh này
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#617793] sm:grid-cols-4">
+              {Object.entries(MEDIA_PROFILES).map(([key, profile]) => {
+                const count = platformMedia.filter(
+                  (item) => item.platform === key,
+                ).length;
+                return (
+                  <div
+                    key={key}
+                    className={`rounded-lg border p-2 ${activeMediaKey === key ? "border-[#69a9f7] bg-white" : "border-[#dce8f4] bg-[#fbfdff]"}`}
+                  >
+                    <b>{profile.label}</b>
+                    <div>
+                      {profile.width}×{profile.height} · {profile.ratio}
+                    </div>
+                    <div
+                      className={
+                        count ? "font-bold text-[#27845a]" : "text-[#8a9ab0]"
+                      }
+                    >
+                      {count
+                        ? `${count} rendition READY`
+                        : "Chưa tạo rendition"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between">
               <b className="text-sm text-[#244c77]">Nguồn media chuẩn TCE</b>
@@ -672,13 +966,20 @@ export default function ContentReviewWorkbench(props: {
 
       <section className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-extrabold text-[#10285a]">
-            5. Xem trước theo kênh
-          </h2>
-          <span className="text-xs text-[#7386a3]">
-            Preview lấy trực tiếp từ editor — chưa public
+          <div>
+            <h2 className="text-base font-extrabold text-[#10285a]">
+              5. Xem trước trên điện thoại
+            </h2>
+            <p className="mt-1 text-xs text-[#7386a3]">
+              Mobile-first preview · ưu tiên hành vi thực tế của phần lớn khách
+              truy cập.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#e8f7ef] px-3 py-1 text-[11px] font-extrabold text-[#23704c]">
+            MOBILE-FIRST · 95%
           </span>
         </div>
+
         <div className="mt-3 flex gap-1 overflow-x-auto border-b border-[#e5edf6]">
           {PLATFORM_META.filter((item) => item.key !== "draftVi").map(
             (item) => (
@@ -692,66 +993,240 @@ export default function ContentReviewWorkbench(props: {
             ),
           )}
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="rounded-xl border border-[#dce8f4] bg-[#fafcff] p-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1768df] text-sm font-bold text-white">
-                TCE
+
+        <div className="mt-5 grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
+          <div className="flex justify-center">
+            <div className="w-full max-w-[390px] overflow-hidden rounded-[34px] border-[8px] border-[#172033] bg-white shadow-2xl">
+              <div className="flex items-center justify-between bg-[#172033] px-5 py-2 text-[10px] font-bold text-white">
+                <span>9:41</span>
+                <span>●●● ︱ 100%</span>
               </div>
-              <div>
-                <b className="text-sm text-[#173964]">
-                  {brand || "Tam Coc Experience"}
-                </b>
-                <div className="text-[11px] text-[#7a8da8]">
-                  {PLATFORM_META.find((item) => item.key === platform)?.label}
+              <div className="border-b border-[#e8edf4] bg-white px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1768df] text-xs font-extrabold text-white">
+                      TCE
+                    </div>
+                    <div>
+                      <b className="block text-[13px] text-[#162b4d]">
+                        {brand || "Tam Coc Experience"}
+                      </b>
+                      <span className="text-[10px] text-[#7c8da5]">
+                        {PLATFORM_META.find((item) => item.key === platform)
+                          ?.label || "Facebook"}{" "}
+                        · Mobile preview
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-lg text-[#607894]">•••</span>
                 </div>
               </div>
-            </div>
-            <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#304e70]">
-              {platform === "draftVi"
-                ? draft.draftVi
-                : draft[platform] || "Chưa có nội dung cho kênh này."}
-            </div>
-            {assets.length ? (
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {assets.slice(0, 4).map((asset, index) =>
-                  asset.type === "video" ? (
-                    <video
-                      key={asset.fileId || index}
-                      controls
-                      className={`${index === 0 && assets.length > 2 ? "sm:col-span-2" : ""} max-h-[420px] w-full rounded-lg bg-black object-contain`}
-                      src={`/api/marketing/assets/${asset.fileId}`}
-                    />
-                  ) : (
-                    <img
-                      key={asset.fileId || index}
-                      className={`${index === 0 && assets.length > 2 ? "sm:col-span-2" : ""} aspect-[4/3] w-full rounded-lg object-cover`}
-                      src={`/api/marketing/assets/${asset.fileId}`}
-                      alt={asset.name}
-                    />
-                  ),
+
+              <div className="max-h-[720px] overflow-y-auto bg-white">
+                {previewMediaKey === "instagram" ? (
+                  <>
+                    <div className="flex snap-x snap-mandatory overflow-x-auto">
+                      {previewAssets.map((asset, index) =>
+                        asset.type === "video" ? (
+                          <video
+                            key={asset.fileId || index}
+                            controls
+                            className="w-full shrink-0 snap-center bg-black object-contain"
+                            style={{
+                              aspectRatio: previewMediaProfile.previewAspect,
+                            }}
+                            src={`/api/marketing/assets/${asset.fileId}`}
+                          />
+                        ) : (
+                          <img
+                            key={asset.fileId || index}
+                            className="w-full shrink-0 snap-center object-cover"
+                            style={{
+                              aspectRatio: previewMediaProfile.previewAspect,
+                            }}
+                            src={`/api/marketing/assets/${asset.fileId}`}
+                            alt={asset.name}
+                          />
+                        ),
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 text-xl">
+                      <span>♡ ◯ ↗</span>
+                      <span>▢</span>
+                    </div>
+                    <div className="px-4 pb-4 text-[12px] leading-5 text-[#1f3048]">
+                      <b>{brand || "Tam Coc Experience"}</b>{" "}
+                      <span className="whitespace-pre-wrap">
+                        {draft.instagramVariant ||
+                          "Chưa có nội dung Instagram."}
+                      </span>
+                    </div>
+                  </>
+                ) : previewMediaKey === "facebook" ? (
+                  <>
+                    <div className="whitespace-pre-wrap px-4 py-3 text-[12px] leading-5 text-[#1f3048]">
+                      {draft.facebookVariant || "Chưa có nội dung Facebook."}
+                    </div>
+                    <div className="flex snap-x snap-mandatory overflow-x-auto">
+                      {previewAssets.map((asset, index) =>
+                        asset.type === "video" ? (
+                          <video
+                            key={asset.fileId || index}
+                            controls
+                            className="w-full shrink-0 snap-center bg-black object-contain"
+                            style={{
+                              aspectRatio: previewMediaProfile.previewAspect,
+                            }}
+                            src={`/api/marketing/assets/${asset.fileId}`}
+                          />
+                        ) : (
+                          <img
+                            key={asset.fileId || index}
+                            className="w-full shrink-0 snap-center object-cover"
+                            style={{
+                              aspectRatio: previewMediaProfile.previewAspect,
+                            }}
+                            src={`/api/marketing/assets/${asset.fileId}`}
+                            alt={asset.name}
+                          />
+                        ),
+                      )}
+                    </div>
+                    <div className="border-t border-[#eef2f7] px-4 py-3 text-center text-[11px] font-bold text-[#536b89]">
+                      ♡ Thích &nbsp;&nbsp; ◯ Bình luận &nbsp;&nbsp; ↗ Chia sẻ
+                    </div>
+                  </>
+                ) : previewMediaKey === "google_business" ? (
+                  <>
+                    <div className="px-4 py-3">
+                      <b className="text-[14px] text-[#18345a]">
+                        {brand || "Cozy Garden Tam Coc"}
+                      </b>
+                      <div className="mt-1 text-[10px] text-[#7488a3]">
+                        Google Business Profile
+                      </div>
+                    </div>
+                    <div className="flex snap-x snap-mandatory overflow-x-auto">
+                      {previewAssets.map((asset, index) => (
+                        <img
+                          key={asset.fileId || index}
+                          className="w-full shrink-0 snap-center object-cover"
+                          style={{
+                            aspectRatio: previewMediaProfile.previewAspect,
+                          }}
+                          src={`/api/marketing/assets/${asset.fileId}`}
+                          alt={asset.name}
+                        />
+                      ))}
+                    </div>
+                    <div className="px-4 py-4">
+                      <div className="whitespace-pre-wrap text-[12px] leading-5 text-[#263e5d]">
+                        {draft.googleBusinessVariant ||
+                          "Chưa có nội dung Google Business."}
+                      </div>
+                      <button className="mt-3 w-full rounded-full bg-[#1768df] py-2 text-[11px] font-bold text-white">
+                        Chỉ đường
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="px-4 py-3">
+                      <b className="text-[14px] text-[#18345a]">
+                        {brand || "Tam Coc Experience"}
+                      </b>
+                      <div className="mt-1 text-[10px] text-[#7488a3]">
+                        Tripadvisor · Tam Coc
+                      </div>
+                    </div>
+                    <div className="flex snap-x snap-mandatory overflow-x-auto">
+                      {previewAssets.map((asset, index) => (
+                        <img
+                          key={asset.fileId || index}
+                          className="w-full shrink-0 snap-center object-cover"
+                          style={{
+                            aspectRatio: previewMediaProfile.previewAspect,
+                          }}
+                          src={`/api/marketing/assets/${asset.fileId}`}
+                          alt={asset.name}
+                        />
+                      ))}
+                    </div>
+                    <div className="whitespace-pre-wrap px-4 py-4 text-[12px] leading-5 text-[#263e5d]">
+                      {draft.tripadvisorVariant ||
+                        "Chưa có nội dung Tripadvisor."}
+                    </div>
+                  </>
                 )}
               </div>
-            ) : null}
+              <div className="mx-auto my-2 h-1 w-28 rounded-full bg-[#172033]" />
+            </div>
           </div>
-          <div className="rounded-xl border border-[#dce8f4] p-4 text-xs leading-5 text-[#617793]">
-            <b className="text-sm text-[#244c77]">Trạng thái dữ liệu</b>
-            <div className="mt-3 space-y-2">
-              <div>
-                <b>Canonical:</b>{" "}
-                {locked ? "LOCKED — scheduled/published" : "EDITABLE"}
+
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[#dce8f4] bg-[#fafcff] p-4 text-xs leading-5 text-[#617793]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <b className="text-sm text-[#244c77]">
+                  Ảnh dùng cho preview hiện tại
+                </b>
+                <span className="rounded bg-white px-2 py-1 font-bold text-[#1768df]">
+                  {previewMediaProfile.width}×{previewMediaProfile.height} ·{" "}
+                  {previewMediaProfile.ratio}
+                </span>
               </div>
-              <div>
-                <b>Media source:</b> {activeLibrary.label}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {assets.slice(0, 4).map((asset) => {
+                  const rendition = platformMedia.find(
+                    (item) =>
+                      item.platform === previewMediaKey &&
+                      item.sourceFileId === asset.fileId,
+                  );
+                  return (
+                    <div
+                      key={asset.fileId}
+                      className="rounded-lg border border-[#e1e9f3] bg-white p-3"
+                    >
+                      <b className="block truncate text-[#314e70]">
+                        {asset.name}
+                      </b>
+                      <div className="mt-1">
+                        {rendition
+                          ? `Rendition: ${rendition.targetWidth}×${rendition.targetHeight} · ${rendition.mediaStatus}`
+                          : "Đang preview bằng crop từ ảnh gốc"}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <b>Asset:</b> {assetStatus.original}
-              </div>
-              <div>
-                <b>Provider:</b> {providerSync.status}
-              </div>
-              <div>
-                <b>Service line:</b> {serviceLine || "TCE / Experience"}
+              <p className="mt-3 text-[11px] text-[#7b8da5]">
+                Preview dùng object-cover theo đúng tỷ lệ nền tảng. Khi bấm
+                “Chuẩn hoá kích thước ảnh này”, hệ thống tạo file JPEG thật và
+                lưu mapping platform → source asset → rendition.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-[#dce8f4] p-4 text-xs leading-5 text-[#617793]">
+              <b className="text-sm text-[#244c77]">Trạng thái dữ liệu</b>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <b>Canonical:</b>{" "}
+                  {locked ? "LOCKED — scheduled/published" : "EDITABLE"}
+                </div>
+                <div>
+                  <b>Media source:</b> {activeLibrary.label}
+                </div>
+                <div>
+                  <b>Asset:</b> {assetStatus.original}
+                </div>
+                <div>
+                  <b>Provider:</b> {providerSync.status}
+                </div>
+                <div>
+                  <b>Service line:</b> {serviceLine || "TCE / Experience"}
+                </div>
+                <div>
+                  <b>AI image:</b> REVIEW_REQUIRED trước khi active
+                </div>
               </div>
             </div>
           </div>

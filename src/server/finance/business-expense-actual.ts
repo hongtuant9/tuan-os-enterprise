@@ -19,6 +19,7 @@ export type BusinessExpenseActualSnapshot = {
   unitTotals: Record<ExpenseActualUnit, number>;
   unitGroupTotals: Record<string, number>;
   sourceCoverage: Record<string, { ready: boolean; from: string | null; to: string | null; status: string }>;
+  heldRows: Array<{ date: string; unit: ExpenseActualUnit | "UNKNOWN"; source: string; sourceDocument: string; status: string }>;
 };
 
 const SOURCE_KEYS = {
@@ -97,27 +98,42 @@ export async function readBusinessExpenseActual(
   const txResult = await db.from("business_finance_transactions")
     .select("transaction_date,business_unit,category_code,amount,source,source_document,verification_status,record_status")
     .in("source", TRANSACTION_SOURCES)
-    .eq("verification_status", "VERIFIED")
     .eq("record_status", "ACTIVE")
     .gte("transaction_date", from)
     .lte("transaction_date", to) as unknown as DbResult;
   const rows: BusinessExpenseActualSnapshot["rows"] = [];
+  const heldRows: BusinessExpenseActualSnapshot["heldRows"] = [];
+  const heldUnits = new Set<ExpenseActualUnit>();
   if (!txResult.error) {
     for (const row of objectRows(txResult.data)) {
-      const unit = String(row.business_unit ?? "") as ExpenseActualUnit;
+      const rawUnit = String(row.business_unit ?? "");
+      const source = String(row.source ?? "");
+      const sourceDocument = String(row.source_document ?? "");
+      const status = String(row.verification_status ?? "NEED_VERIFY");
+      const unit = (["LAVENDER", "RUBY", "COZY_GARDEN"] as string[]).includes(rawUnit) ? rawUnit as ExpenseActualUnit : null;
+      if (status !== "VERIFIED") {
+        if (unit) heldUnits.add(unit);
+        else if (source.includes("HOTEL")) { heldUnits.add("LAVENDER"); heldUnits.add("RUBY"); }
+        else if (source.includes("FNB")) heldUnits.add("COZY_GARDEN");
+        heldRows.push({ date: String(row.transaction_date ?? ""), unit: unit ?? "UNKNOWN", source, sourceDocument, status });
+        continue;
+      }
       const group = CATEGORY_TO_GROUP[String(row.category_code ?? "")];
       const amount = Number(row.amount ?? 0);
-      if (!(["LAVENDER", "RUBY", "COZY_GARDEN"] as string[]).includes(unit) || !group || !Number.isFinite(amount) || amount < 0) continue;
+      if (!unit || !group || !Number.isFinite(amount) || amount < 0) continue;
       rows.push({
-        date: String(row.transaction_date ?? ""), unit, group, amount,
-        source: String(row.source ?? ""), sourceDocument: String(row.source_document ?? ""),
+        date: String(row.transaction_date ?? ""), unit, group, amount, source, sourceDocument,
       });
     }
   }
 
   const hotelReady = coverage[SOURCE_KEYS.HOTEL_CASHFLOW].ready && coverage[SOURCE_KEYS.HOTEL_PURCHASE].ready;
   const fnbReady = coverage[SOURCE_KEYS.FNB_CASHFLOW].ready && coverage[SOURCE_KEYS.FNB_PURCHASE].ready;
-  const unitReady: Record<ExpenseActualUnit, boolean> = { LAVENDER: hotelReady, RUBY: hotelReady, COZY_GARDEN: fnbReady };
+  const unitReady: Record<ExpenseActualUnit, boolean> = {
+    LAVENDER: hotelReady && !heldUnits.has("LAVENDER"),
+    RUBY: hotelReady && !heldUnits.has("RUBY"),
+    COZY_GARDEN: fnbReady && !heldUnits.has("COZY_GARDEN"),
+  };
   const unitTotals: Record<ExpenseActualUnit, number> = { LAVENDER: 0, RUBY: 0, COZY_GARDEN: 0 };
   const unitGroupTotals: Record<string, number> = {};
   for (const row of rows) {
@@ -125,5 +141,5 @@ export async function readBusinessExpenseActual(
     const key = `${row.unit}|${row.group}`;
     unitGroupTotals[key] = (unitGroupTotals[key] ?? 0) + row.amount;
   }
-  return { from, to, rows, unitReady, unitTotals, unitGroupTotals, sourceCoverage: coverage };
+  return { from, to, rows, unitReady, unitTotals, unitGroupTotals, sourceCoverage: coverage, heldRows };
 }

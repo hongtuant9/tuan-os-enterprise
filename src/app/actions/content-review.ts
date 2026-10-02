@@ -368,3 +368,143 @@ export async function applyAiContentRevision(
     return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
   }
 }
+
+
+export async function saveContentOwnerNote(
+  contentId: string,
+  note: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const value = clean(note);
+    if (value.length > 3000) return { ok: false, error: "Ghi chú tối đa 3.000 ký tự." };
+    const admin = getAdminContainer();
+    const key = `CONTENT_NOTE:${contentId}`;
+    const existing = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .select("recommendation_key,evidence")
+      .eq("recommendation_key", key)
+      .maybeSingle();
+    const current = obj(existing.data);
+    const evidence = obj(current.evidence);
+    const payload = {
+      content_id: contentId,
+      note: value,
+      updated_at: new Date().toISOString(),
+      updated_by: session.email ?? session.userId,
+      source: "CEO Content Review UI",
+    };
+    if (clean(current.recommendation_key)) {
+      const result = await dbOf(admin.db).from("marketing_recommendations").update({
+        summary: value || "Owner note cleared",
+        evidence: { ...evidence, ...payload },
+        status: "ACKNOWLEDGED",
+      }).eq("recommendation_key", key);
+      if (result.error) return { ok: false, error: result.error.message ?? "Không lưu được ghi chú." };
+    } else {
+      const result = await dbOf(admin.db).from("marketing_recommendations").insert({
+        recommendation_key: key,
+        category: "CONTENT",
+        severity: "INFO",
+        title: `Ghi chú Owner — ${contentId}`,
+        summary: value || "Owner note",
+        evidence: payload,
+        recommended_action: "Dùng ghi chú này làm context cho lần review/rewrite tiếp theo. Không tự public mutation.",
+        action_class: "SAFE_INTERNAL",
+        approval_required: false,
+        approval_id: null,
+        status: "ACKNOWLEDGED",
+        generated_at: new Date().toISOString(),
+        expires_at: null,
+      });
+      if (result.error) return { ok: false, error: result.error.message ?? "Không lưu được ghi chú." };
+    }
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return { ok: true, message: "Đã lưu ghi chú của Owner." };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
+  }
+}
+
+export async function createContentSnapshot(
+  contentId: string,
+  draft: ContentDraft,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const key = `CONTENT_SNAPSHOT:${contentId}:${Date.now()}`;
+    const result = await dbOf(admin.db).from("marketing_recommendations").insert({
+      recommendation_key: key,
+      category: "CONTENT",
+      severity: "INFO",
+      title: `Phiên bản lưu — ${contentId}`,
+      summary: "Snapshot thủ công từ Content Review Workbench",
+      evidence: {
+        content_id: contentId,
+        revision_status: "SNAPSHOT",
+        snapshot: draft,
+        created_at: new Date().toISOString(),
+        created_by: session.email ?? session.userId,
+        source: "CEO Content Review UI",
+      },
+      recommended_action: "Dùng snapshot để tham chiếu/khôi phục nội dung khi cần. Không tự public mutation.",
+      action_class: "SAFE_INTERNAL",
+      approval_required: false,
+      approval_id: null,
+      status: "COMPLETED",
+      generated_at: new Date().toISOString(),
+      expires_at: null,
+    });
+    if (result.error) return { ok: false, error: result.error.message ?? "Không tạo được phiên bản." };
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return { ok: true, message: "Đã tạo một phiên bản lưu của nội dung hiện tại." };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
+  }
+}
+
+export async function requestMediaCreative(
+  contentId: string,
+  action: "EDIT_IMAGE_AI" | "CREATE_SHORT_VIDEO",
+  instruction: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const cleanInstruction = clean(instruction);
+    const admin = getAdminContainer();
+    const key = `MEDIA_CREATIVE:${contentId}:${action}:${Date.now()}`;
+    const title = action === "EDIT_IMAGE_AI"
+      ? `Yêu cầu chỉnh ảnh AI — ${contentId}`
+      : `Yêu cầu tạo video ngắn — ${contentId}`;
+    const result = await dbOf(admin.db).from("marketing_recommendations").insert({
+      recommendation_key: key,
+      category: "CONTENT",
+      severity: "ACTION",
+      title,
+      summary: cleanInstruction || (action === "EDIT_IMAGE_AI"
+        ? "Chỉnh asset gốc theo guardrail: tự nhiên, sạch, chuyên nghiệp, không làm sai hiện trạng."
+        : "Tạo video ngắn từ asset gốc hiện có; không thêm claim/scene sai hiện trạng."),
+      evidence: {
+        content_id: contentId,
+        media_action: action,
+        requested_by: session.email ?? session.userId,
+        requested_at: new Date().toISOString(),
+        source: "CEO Content Review UI",
+        creative_status: "REVIEW_REQUIRED",
+      },
+      recommended_action: "AI Creative Agent tạo draft từ asset gốc; Owner duyệt trước khi thay media canonical/provider.",
+      action_class: "SAFE_INTERNAL",
+      approval_required: false,
+      approval_id: null,
+      status: "OPEN",
+      generated_at: new Date().toISOString(),
+      expires_at: null,
+    });
+    if (result.error) return { ok: false, error: result.error.message ?? "Không tạo được yêu cầu media." };
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return { ok: true, message: "Đã tạo yêu cầu creative ở trạng thái REVIEW_REQUIRED." };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
+  }
+}

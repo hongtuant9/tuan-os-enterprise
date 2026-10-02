@@ -30,7 +30,7 @@ function botToken() {
 }
 
 export async function getTelegramOperatorChatId() {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const { data, error } = await db.from("sync_sources")
     .select("last_cursor")
     .eq("key", OPERATOR_SYNC_KEY)
@@ -40,7 +40,7 @@ export async function getTelegramOperatorChatId() {
 }
 
 export async function bindTelegramOperatorGroup(chatId: string | number, title?: string | null) {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const now = new Date().toISOString();
   const { error } = await db.from("sync_sources").upsert({
     key: OPERATOR_SYNC_KEY,
@@ -114,7 +114,7 @@ async function telegramSend(chatId: string, body: Record<string, unknown>) {
 }
 
 export async function createAndSendOperatorQuestion(input: OperatorQuestionInput) {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const chatId = await getTelegramOperatorChatId();
   if (!chatId) return { sent: false as const, reason: "operator_group_not_bound" as const };
 
@@ -178,7 +178,7 @@ export async function handleTelegramOperatorReply(input: {
   actor?: TelegramMessageActor;
   ownerTelegramId: string;
 }) {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const actorId = input.actor?.id == null ? "" : String(input.actor.id);
   const ownerConfirmed = Boolean(input.ownerTelegramId && actorId === input.ownerTelegramId);
 
@@ -282,7 +282,7 @@ export async function handleTelegramOperatorReply(input: {
 }
 
 export async function ensureFinanceOperatorQuestions() {
-  const db = createAdminClient() as any;
+  const db = createAdminClient();
   const chatId = await getTelegramOperatorChatId();
   if (!chatId) return { checked: true, sent: 0, skipped: "operator_group_not_bound" as const };
 

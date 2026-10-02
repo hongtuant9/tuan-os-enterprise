@@ -109,11 +109,27 @@ test("Business property filter stays scoped and period-aware",()=>{
   assert.match(page,/property\?: string/);
   assert.match(live,/selectedUnitCodes/);
   assert.match(live,/businessUnitOverview/);
-  assert.match(live,/Tháng hiện tại \(MTD\), không dùng số tích lũy nhiều tháng/);
-  assert.match(live,/Booking\.com Revenue Actual × 20%/);
+  assert.match(live,/Tháng hiện tại \(MTD\)\. Actual chỉ lấy từ KiotViet/);
+  assert.match(live,/Booking\.com Revenue Actual của kỳ lọc × 20%/);
   assert.match(live,/payrollMonthlyByUnit/);
   assert.match(live,/softwareMonthlyByUnit/);
   assert.match(live,/safeBusinessOccupancy/);
+});
+
+test("Business Actual never substitutes plan or estimate",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  const screen=read("src/components/tce/ReferenceScreens.tsx");
+  const cashflow=read("src/server/integrations/kiotviet/cashflow-actual.ts");
+  assert.match(live,/selectedActualExpenseReady/);
+  assert.match(live,/selectedActualExpense === null \? "CHƯA ĐỦ DỮ LIỆU ACTUAL"/);
+  assert.match(live,/Actual chỉ từ KiotViet/);
+  assert.match(live,/monthlyAllocation\(payrollMonthlyByUnit/);
+  assert.doesNotMatch(live,/selectedManagementCost/);
+  assert.doesNotMatch(live,/selectedManagementProfit/);
+  assert.match(screen,/Actual KiotViet · đúng kỳ; không lấy Budget\/Estimate thay Actual/);
+  assert.match(screen,/Dự kiến kỳ lọc/);
+  assert.match(cashflow,/browserSnapshotCoversRequestedRange/);
+  assert.match(cashflow,/if \(!browserSnapshotCoversRequestedRange/);
 });
 
 test("production deploy stamps Next deployment identity from git SHA",()=>{

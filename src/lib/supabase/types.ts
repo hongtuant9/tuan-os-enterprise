@@ -321,6 +321,54 @@ export interface Database {
         };
         Relationships: [];
       };
+      telegram_operator_questions: {
+        Row: {
+          id: string; question_code: string; domain: string; business_unit: string; field_code: string; question_text: string;
+          expected_type: string; unit: string | null; effective_from: string | null; allowed_confirmer: string; status: string;
+          telegram_chat_id: string | null; telegram_message_id: number | null; asked_at: string | null; answered_at: string | null;
+          answered_by_telegram_id: string | null; answer_raw_text: string | null; answer_value_text: string | null;
+          answer_value_numeric: number | null; answer_value_date: string | null; verification_status: string; source: string;
+          source_reference: string | null; metadata: Json; created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; question_code: string; domain: string; business_unit: string; field_code: string; question_text: string;
+          expected_type: string; unit?: string | null; effective_from?: string | null; allowed_confirmer?: string; status?: string;
+          telegram_chat_id?: string | null; telegram_message_id?: number | null; asked_at?: string | null; answered_at?: string | null;
+          answered_by_telegram_id?: string | null; answer_raw_text?: string | null; answer_value_text?: string | null;
+          answer_value_numeric?: number | null; answer_value_date?: string | null; verification_status?: string; source?: string;
+          source_reference?: string | null; metadata?: Json; created_at?: string; updated_at?: string;
+        };
+        Update: {
+          id?: string; question_code?: string; domain?: string; business_unit?: string; field_code?: string; question_text?: string;
+          expected_type?: string; unit?: string | null; effective_from?: string | null; allowed_confirmer?: string; status?: string;
+          telegram_chat_id?: string | null; telegram_message_id?: number | null; asked_at?: string | null; answered_at?: string | null;
+          answered_by_telegram_id?: string | null; answer_raw_text?: string | null; answer_value_text?: string | null;
+          answer_value_numeric?: number | null; answer_value_date?: string | null; verification_status?: string; source?: string;
+          source_reference?: string | null; metadata?: Json; created_at?: string; updated_at?: string;
+        };
+        Relationships: [];
+      };
+      operator_confirmed_facts: {
+        Row: {
+          id: string; question_id: string | null; domain: string; business_unit: string; field_code: string; effective_from: string | null;
+          unit: string | null; value_text: string | null; value_numeric: number | null; value_date: string | null;
+          verification_status: string; authority: string; source: string; source_reference: string; confirmed_by_telegram_id: string | null;
+          confirmed_at: string; superseded_at: string | null; record_status: string; metadata: Json; created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; question_id?: string | null; domain: string; business_unit: string; field_code: string; effective_from?: string | null;
+          unit?: string | null; value_text?: string | null; value_numeric?: number | null; value_date?: string | null;
+          verification_status: string; authority?: string; source?: string; source_reference: string; confirmed_by_telegram_id?: string | null;
+          confirmed_at?: string; superseded_at?: string | null; record_status?: string; metadata?: Json; created_at?: string; updated_at?: string;
+        };
+        Update: {
+          id?: string; question_id?: string | null; domain?: string; business_unit?: string; field_code?: string; effective_from?: string | null;
+          unit?: string | null; value_text?: string | null; value_numeric?: number | null; value_date?: string | null;
+          verification_status?: string; authority?: string; source?: string; source_reference?: string; confirmed_by_telegram_id?: string | null;
+          confirmed_at?: string; superseded_at?: string | null; record_status?: string; metadata?: Json; created_at?: string; updated_at?: string;
+        };
+        Relationships: [];
+      };
       sync_sources: {
         Row: {
           id: string;

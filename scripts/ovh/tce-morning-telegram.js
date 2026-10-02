@@ -232,7 +232,7 @@ function buildFrontDeskLines(d, ota, x) {
     lines.push("   • Sau khi xác minh, báo kết quả ngay trong nhóm để Bếp phục vụ.");
   } else lines.push("   • Không có");
   lines.push("");
-  lines.push("✅ Hoàn thành khi: OTA đã phản hồi; check-in/check-out đã rà soát; yêu cầu đầu ca đã xử lý/được giao; mục ăn sáng cần xác minh đã chốt.");
+  lines.push("6) Nếu khách đổi người giữa các phòng khi check-in: kiểm tra sức chứa → chốt phân bổ thực tế → dùng /phanphong <Lavender|Ruby|DPxxxxxx> 103=3 201=2. Bot sẽ báo delta cho Buồng phòng.");\n  lines.push("");\n  lines.push("✅ Hoàn thành khi: OTA đã phản hồi; check-in/check-out đã rà soát; yêu cầu đầu ca đã xử lý/được giao; mục ăn sáng cần xác minh đã chốt; mọi thay đổi phân bổ phòng đã ghi nhận.");
   return lines;
 }
 

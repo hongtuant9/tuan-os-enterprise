@@ -232,9 +232,14 @@ test("Business Expense Actual pipeline is KiotViet-backed, range-scoped and fail
   assert.match(reader,/KIOTVIET_HOTEL_CASHBOOK_WEB_API/);
   assert.match(reader,/KIOTVIET_FNB_PURCHASE_ORDER_WEB_API/);
   assert.match(reader,/range\.from <= from && range\.to >= to/);
+  assert.match(reader,/status !== "VERIFIED"/);
+  assert.match(reader,/heldUnits/);
   assert.match(canonical,/syncCanonicalExpenseActualRange/);
   assert.match(canonical,/options: \{ dryRun\?: boolean \}/);
   assert.match(canonical,/previewByUnitCategory/);
+  assert.match(canonical,/system === "HOTEL" \? "NEED_VERIFY" : "VERIFIED"/);
+  assert.match(canonical,/heldReview/);
+  assert.match(canonical,/unmappedPnl === 0 && heldReview === 0/);
   assert.match(bot,/UsedForFinancialReporting/);
   assert.match(bot,/Status eq 3/);
   assert.match(bot,/cashflowRows\.length === raw\.cashExpected/);

@@ -101,7 +101,7 @@ else:
             f"[TCE read worker] mode={mode} ok={data.get('ok', False)} state={x.get('state','?')} "
             f"dry_run={x.get('dryRun',False)} range={x.get('from','?')}..{x.get('to','?')} "
             f"candidate_rows={x.get('candidateRows',0)} upserted={x.get('upserted',0)} "
-            f"excluded_non_pnl={x.get('excludedNonPnl',0)} unmapped_pnl={x.get('unmappedPnl',0)} "
+            f"excluded_non_pnl={x.get('excludedNonPnl',0)} unmapped_pnl={x.get('unmappedPnl',0)} held_review={x.get('heldReview',0)} "
             f"sources=[{states}] preview=[{preview_text}]"
         )
         raise SystemExit(0)

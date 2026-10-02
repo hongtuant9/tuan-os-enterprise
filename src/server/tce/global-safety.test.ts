@@ -96,6 +96,26 @@ test("Business current-month view reuses the same KiotViet reads",()=>{
 });
 
 
+
+
+test("Business property filter stays scoped and period-aware",()=>{
+  const shell=read("src/components/tce/TceShell.tsx");
+  const screen=read("src/components/tce/ReferenceScreens.tsx");
+  const page=read("src/app/business/page.tsx");
+  const live=read("src/server/tce/tab-live-data.ts");
+  assert.match(shell,/enablePropertyFilter/);
+  assert.match(shell,/params\.set\("property", value\)/);
+  assert.match(screen,/enablePropertyFilter=\{screen === "business"\}/);
+  assert.match(page,/property\?: string/);
+  assert.match(live,/selectedUnitCodes/);
+  assert.match(live,/businessUnitOverview/);
+  assert.match(live,/Tháng hiện tại \(MTD\), không dùng số tích lũy nhiều tháng/);
+  assert.match(live,/Booking\.com Revenue Actual × 20%/);
+  assert.match(live,/payrollMonthlyByUnit/);
+  assert.match(live,/softwareMonthlyByUnit/);
+  assert.match(live,/safeBusinessOccupancy/);
+});
+
 test("production deploy stamps Next deployment identity from git SHA",()=>{
   const config=read("next.config.mjs");
   const docker=read("Dockerfile");
@@ -164,7 +184,7 @@ test("business dashboard exposes canonical finance stack without fake completion
   assert.match(loader,/NEED_VERIFY — COGS chưa PASS/);
   assert.match(loader,/HOLD — Tax Rule chưa VERIFIED/);
   assert.match(ui,/Chuỗi tài chính kinh doanh/);
-  assert.match(ui,/Data Gap Register/);
+  assert.match(ui,/Nguồn thiếu & nơi cần cập nhật/);
 });
 
 

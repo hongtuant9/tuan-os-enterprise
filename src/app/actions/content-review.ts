@@ -198,7 +198,7 @@ export async function requestAiContentRevision(
       agent: session.email ?? session.userId,
       unit: "Marketing",
       message: `Requested AI content revision for ${contentId}: ${cleanInstruction.slice(0, 180)}`,
-      type: "task",
+      type: "action",
     });
 
     revalidatePath("/marketing");

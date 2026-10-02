@@ -8,8 +8,9 @@ import { hasMinimumRole } from "@/server/auth/roles";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 import { getSheetValues, setSheetValue } from "@/server/integrations/google/drive-client";
 import { runMarketingCommandCenterCycle } from "@/server/marketing-command-center/cycle";
+import { generateContentRevision, type ContentRevisionDraft } from "@/server/marketing-command-center/content-revision";
 
-type ActionResult = { ok: true; message: string } | { ok: false; error: string };
+type ActionResult = { ok: true; message: string; revisionReady?: boolean } | { ok: false; error: string };
 
 type DbError = { message?: string } | null;
 type DbResult = { data?: unknown; error?: DbError };
@@ -18,6 +19,7 @@ type Query = PromiseLike<DbResult> & {
   eq(column: string, value: unknown): Query;
   maybeSingle(): Promise<DbResult>;
   insert(values: unknown): Query;
+  update(values: unknown): Query;
 };
 type UntypedDb = { from(name: string): Query };
 type Row = Record<string, unknown>;
@@ -84,6 +86,46 @@ function equalDraft(a: ContentDraft, b: ContentDraft) {
     a.facebookVariant === b.facebookVariant &&
     a.instagramVariant === b.instagramVariant &&
     a.tripadvisorVariant === b.tripadvisorVariant;
+}
+
+function rowContext(row: unknown[]) {
+  return {
+    brand: clean(row[1]),
+    pillar: clean(row[2]),
+    objective: clean(row[3]),
+    format: clean(row[4]),
+    cta: clean(row[6]),
+    source: clean(row[7]),
+    verification: clean(row[8]),
+    serviceLine: clean(row[14]),
+    journeyStage: clean(row[15]),
+    hook: clean(row[16]),
+    language: clean(row[17]) || "EN",
+  };
+}
+
+async function writeCanonicalDraft(input: {
+  workbookId: string;
+  contentId: string;
+  draft: ContentDraft;
+  expected?: ContentDraft;
+  auth: Awaited<ReturnType<GoogleOAuthTokenStore["getSystemAuthorizedClientForSheetsWrite"]>>;
+}) {
+  const found = await findContentRow(input.workbookId, input.contentId, input.auth);
+  const current = snapshot(found.row);
+  if (input.expected && !equalDraft(current, input.expected)) {
+    throw new Error("CONFLICT: Nội dung canonical đã thay đổi. Hãy tải lại trang trước khi áp dụng.");
+  }
+  await Promise.all([
+    setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!F${found.rowNumber}`, input.draft.draftVi, input.auth),
+    setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!W${found.rowNumber}`, input.draft.facebookVariant, input.auth),
+    setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!X${found.rowNumber}`, input.draft.instagramVariant, input.auth),
+    setSheetValue(input.workbookId, `${q(CONTENT_TAB)}!AJ${found.rowNumber}`, input.draft.tripadvisorVariant, input.auth),
+  ]);
+  const verify = await findContentRow(input.workbookId, input.contentId, input.auth);
+  if (!equalDraft(snapshot(verify.row), input.draft)) {
+    throw new Error("Read-back sau ghi không khớp. Không xác nhận áp dụng thành công.");
+  }
 }
 
 export async function saveMarketingContentDraft(
@@ -169,22 +211,31 @@ export async function requestAiContentRevision(
     const content = obj(contentResult.data);
     if (!clean(content.content_id)) return { ok: false, error: "Không tìm thấy nội dung runtime." };
 
+    const workbookId = await getWorkbookId();
+    const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const found = await findContentRow(workbookId, contentId, auth);
+    const current = snapshot(found.row);
+    const context = rowContext(found.row);
+
     const now = new Date().toISOString();
     const key = `CONTENT_REVISION:${contentId}:${Date.now()}`;
+    const baseEvidence = {
+      content_id: contentId,
+      requested_by: session.email ?? session.userId,
+      current_publish_status: content.publish_status,
+      verification_status: content.verification_status,
+      source: "CEO Content Review UI",
+      revision_status: "GENERATING",
+      current_content: current,
+    };
     const insertResult = await dbOf(admin.db).from("marketing_recommendations").insert({
       recommendation_key: key,
       category: "CONTENT",
       severity: "ACTION",
       title: `Điều chỉnh bài viết ${contentId}`,
       summary: cleanInstruction,
-      evidence: {
-        content_id: contentId,
-        requested_by: session.email ?? session.userId,
-        current_publish_status: content.publish_status,
-        verification_status: content.verification_status,
-        source: "CEO Content Review UI",
-      },
-      recommended_action: "AI Marketing Manager rà soát canonical source, viết lại platform variant theo yêu cầu Owner, chạy lại 8 QA gates và không public mutation nếu approval/provider sync chưa PASS.",
+      evidence: baseEvidence,
+      recommended_action: "AI Marketing Manager tạo bản rewrite theo Social Content Standard; Owner review/diff trước khi apply. Không tự public mutation.",
       action_class: "SAFE_INTERNAL",
       approval_required: false,
       approval_id: null,
@@ -194,16 +245,125 @@ export async function requestAiContentRevision(
     });
     if (insertResult.error) return { ok: false, error: insertResult.error.message ?? "Không thể tạo yêu cầu AI." };
 
-    await admin.activityLog.record({
-      agent: session.email ?? session.userId,
-      unit: "Marketing",
-      message: `Requested AI content revision for ${contentId}: ${cleanInstruction.slice(0, 180)}`,
-      type: "action",
-    });
+    try {
+      const revision = await generateContentRevision({
+        contentId,
+        instruction: cleanInstruction,
+        ...context,
+        current,
+      });
+      const updateResult = await dbOf(admin.db).from("marketing_recommendations").update({
+        evidence: {
+          ...baseEvidence,
+          revision_status: "REVIEW_READY",
+          generated_revision: revision,
+          generated_at: new Date().toISOString(),
+        },
+        recommended_action: "Owner review bản AI. Nếu bài chưa scheduled/published: có thể Apply vào canonical. Nếu đã scheduled/published: chỉ review, provider sync phải qua luồng riêng.",
+      }).eq("recommendation_key", key);
+      if (updateResult.error) throw new Error(updateResult.error.message ?? "Không lưu được bản AI rewrite.");
+
+      await admin.activityLog.record({
+        agent: "AI Marketing Manager",
+        unit: "Marketing",
+        message: `Generated review-ready content revision for ${contentId}`,
+        type: "action",
+      });
+
+      revalidatePath("/marketing");
+      revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+      return { ok: true, revisionReady: true, message: "AI đã tạo bản viết lại. Xem phần “Bản AI đề xuất” để so sánh và duyệt." };
+    } catch (error) {
+      const safeError = error instanceof Error ? error.message.slice(0, 300) : "AI runtime error";
+      await dbOf(admin.db).from("marketing_recommendations").update({
+        evidence: {
+          ...baseEvidence,
+          revision_status: "HOLD_AI_RUNTIME",
+          ai_error: safeError,
+        },
+      }).eq("recommendation_key", key);
+
+      revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+      return {
+        ok: true,
+        revisionReady: false,
+        message: `Đã ghi yêu cầu nhưng AI chưa tạo được bản rewrite: ${safeError}`,
+      };
+    }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
+  }
+}
+
+export async function applyAiContentRevision(
+  contentId: string,
+  recommendationKey: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+
+    const contentResult = await dbOf(admin.db)
+      .from("marketing_content_items")
+      .select("content_id,publish_status")
+      .eq("content_id", contentId)
+      .maybeSingle();
+    const content = obj(contentResult.data);
+    if (!clean(content.content_id)) return { ok: false, error: "Không tìm thấy nội dung runtime." };
+
+    const publishStatus = clean(content.publish_status).toUpperCase();
+    if (/SCHEDULED|PUBLISHED|FB_SCHEDULED/.test(publishStatus)) {
+      return { ok: false, error: "Bài đã scheduled/published. Không thể Apply trực tiếp; cần đồng bộ lại provider schedule theo approval riêng." };
+    }
+
+    const recResult = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .select("recommendation_key,evidence")
+      .eq("recommendation_key", recommendationKey)
+      .maybeSingle();
+    const rec = obj(recResult.data);
+    const evidence = obj(rec.evidence);
+    const generated = obj(evidence.generated_revision);
+    if (clean(evidence.content_id) !== contentId || clean(evidence.revision_status) !== "REVIEW_READY") {
+      return { ok: false, error: "Bản AI chưa ở trạng thái REVIEW_READY." };
+    }
+
+    const draft: ContentDraft = {
+      draftVi: clean(generated.draftVi),
+      facebookVariant: clean(generated.facebookVariant),
+      instagramVariant: clean(generated.instagramVariant),
+      tripadvisorVariant: clean(generated.tripadvisorVariant),
+    };
+    const originalObj = obj(evidence.current_content);
+    const expected: ContentDraft = {
+      draftVi: clean(originalObj.draftVi),
+      facebookVariant: clean(originalObj.facebookVariant),
+      instagramVariant: clean(originalObj.instagramVariant),
+      tripadvisorVariant: clean(originalObj.tripadvisorVariant),
+    };
+
+    const workbookId = await getWorkbookId();
+    const auth = await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    await writeCanonicalDraft({ workbookId, contentId, draft, expected, auth });
+
+    const syncSummary = await admin.sync.run("marketing-shadow-content", "manual", session.email ?? session.userId);
+    if (syncSummary.status === "failed") {
+      return { ok: false, error: "Workbook đã cập nhật nhưng runtime sync thất bại: " + (syncSummary.errorMessage || "unknown error") };
+    }
+    await runMarketingCommandCenterCycle(new Date());
+
+    await dbOf(admin.db).from("marketing_recommendations").update({
+      evidence: {
+        ...evidence,
+        revision_status: "APPLIED_CANONICAL",
+        applied_at: new Date().toISOString(),
+        applied_by: session.email ?? session.userId,
+      },
+    }).eq("recommendation_key", recommendationKey);
 
     revalidatePath("/marketing");
     revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
-    return { ok: true, message: "Đã gửi yêu cầu cho AI Marketing Manager. Bài sẽ không tự xuất bản chỉ vì có yêu cầu này." };
+    return { ok: true, message: "Đã áp dụng bản AI vào Workbook canonical và read-back PASS." };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Lỗi không xác định" };
   }

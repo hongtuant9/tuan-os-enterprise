@@ -208,7 +208,7 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
   }
   const verifiedSources = sourceStates.filter((item) => item.state === "VERIFIED").length;
   return {
-    state: verifiedSources === sourceStates.length && unmappedPnl === 0 ? "VERIFIED" : "PARTIAL",
+    state: verifiedSources === sourceStates.length && unmappedPnl === 0 && heldReview === 0 ? "VERIFIED" : "PARTIAL",
     dryRun: Boolean(options.dryRun),
     from, to, sourceStates, upserted: options.dryRun ? 0 : writes.length, candidateRows: writes.length,
     excludedNonPnl, unmappedPnl, heldReview, previewByUnitCategory,

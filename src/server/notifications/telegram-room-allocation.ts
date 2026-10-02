@@ -169,7 +169,8 @@ export async function recordRoomAllocation(input: AllocationInput) {
   if (activeError) throw activeError;
 
   const requestedNumbers = new Set(parsed.allocations.map((x) => x.roomDisplay));
-  const activeRows = (active || []) as BookingRow[];\n  const candidates = activeRows.filter((booking: BookingRow) => {
+  const activeRows = (active || []) as BookingRow[];
+  const candidates = activeRows.filter((booking: BookingRow) => {
     if (targetBookingCode && booking.source_booking_code !== targetBookingCode) return false;
     const rooms = Array.isArray(booking.room_names) ? booking.room_names.map(String) : [];
     const filtered = targetBranch ? rooms.filter((room) => branchFromRoom(room) === targetBranch) : rooms;

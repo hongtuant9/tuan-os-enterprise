@@ -46,6 +46,35 @@ function pick(data: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
+function parseAssets(value: string) {
+  return value.split(/[;\n]+/).map((part) => part.trim()).filter(Boolean).map((part) => {
+    const match = part.match(/^(.*?)\s*\|\s*Drive\s+([A-Za-z0-9_-]{10,})$/i);
+    if (match) return { name: match[1].trim(), fileId: match[2], type: /\.(mp4|mov|webm)$/i.test(match[1]) ? "video" : "image" };
+    return { name: part, fileId: "", type: /\.(mp4|mov|webm)$/i.test(part) ? "video" : "image" };
+  });
+}
+
+function revisionView(requestRow: Row) {
+  const evidence = row(requestRow.evidence);
+  const generated = row(evidence.generated_revision);
+  return {
+    key: s(requestRow.recommendation_key),
+    title: s(requestRow.title),
+    summary: s(requestRow.summary),
+    status: s(requestRow.status),
+    revisionStatus: s(evidence.revision_status),
+    aiError: s(evidence.ai_error),
+    generated: {
+      draftVi: s(generated.draftVi),
+      facebookVariant: s(generated.facebookVariant),
+      instagramVariant: s(generated.instagramVariant),
+      tripadvisorVariant: s(generated.tripadvisorVariant),
+      rationale: s(generated.rationale),
+      mediaDirection: s(generated.mediaDirection),
+    },
+  };
+}
+
 export default async function ContentReviewPage({
   params,
 }: {
@@ -60,7 +89,7 @@ export default async function ContentReviewPage({
   const [contentResult, recordsResult, revisionResult] = await Promise.all([
     db.from("marketing_content_items").select("*").eq("content_id", contentId).maybeSingle(),
     db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-shadow-content").limit(500),
-    db.from("marketing_recommendations").select("title,summary,status,generated_at,evidence")
+    db.from("marketing_recommendations").select("recommendation_key,title,summary,status,generated_at,evidence")
       .eq("category", "CONTENT")
       .contains("evidence", { content_id: contentId })
       .order("generated_at", { ascending: false })
@@ -84,6 +113,8 @@ export default async function ContentReviewPage({
     instagramVariant: pick(source, ["INSTAGRAM_VARIANT", "Instagram Variant"]),
     tripadvisorVariant: pick(source, ["TRIPADVISOR_VARIANT", "Tripadvisor Variant"]),
   };
+  const assets = parseAssets(pick(source, ["ASSET_IDS", "Asset IDs"]));
+  const revisions = revisionRequests.map(revisionView);
 
   return (
     <main className="min-h-screen bg-[#f4f7fb] px-4 py-6 md:px-8">
@@ -107,24 +138,38 @@ export default async function ContentReviewPage({
           <div><p className="text-xs text-[#7a8da8]">Kênh runtime</p><b className="mt-1 block text-sm text-[#173964]">{s(content.channel_id) || "Đa kênh / kế hoạch"}</b></div>
         </div>
 
-        <section className="rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
-          <ContentReviewEditor contentId={contentId} initial={initial} publishStatus={s(content.publish_status)} />
+        <section className="mb-5 rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-extrabold text-[#10285a]">Hình ảnh / video minh hoạ</h2>
+              <p className="mt-1 text-sm text-[#7185a4]">Asset gốc đang gắn với Content Queue. Creative AI phải dùng asset này làm nền tảng và chờ Owner duyệt trước khi thay thế.</p>
+            </div>
+            <span className="rounded bg-[#eef4fb] px-2 py-1 text-xs font-bold text-[#557195]">{assets.length} asset</span>
+          </div>
+          {assets.length ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {assets.map((asset, index) => (
+                <div key={asset.fileId || index} className="overflow-hidden rounded-xl border border-[#dce8f4] bg-[#f8fbff]">
+                  {asset.fileId ? (
+                    asset.type === "video"
+                      ? <video controls className="aspect-video w-full bg-black object-contain" src={`/api/marketing/assets/${asset.fileId}`} />
+                      : <img className="aspect-[4/3] w-full object-cover" src={`/api/marketing/assets/${asset.fileId}`} alt={asset.name || "TCE asset"} />
+                  ) : <div className="flex aspect-[4/3] items-center justify-center p-4 text-sm text-[#7b8da8]">Chưa có Drive file ID để preview.</div>}
+                  <div className="p-3">
+                    <b className="text-sm text-[#173964]">{asset.name}</b>
+                    {asset.fileId ? <a className="mt-1 block text-xs font-bold text-[#1768df] hover:underline" href={`https://drive.google.com/file/d/${asset.fileId}/view`} target="_blank" rel="noreferrer">Mở ảnh gốc trên Drive ↗</a> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <div className="rounded-lg border border-dashed border-[#ccd9e8] p-5 text-sm text-[#7a8da8]">Bài này chưa có ASSET_IDS trong Content Queue. Media = NEED VERIFY.</div>}
         </section>
 
-        <section className="mt-5 rounded-xl border border-[#dce8f4] bg-white p-5">
-          <h2 className="text-base font-extrabold text-[#10285a]">Yêu cầu AI gần đây</h2>
-          <div className="mt-3 divide-y divide-[#edf2f7]">
-            {revisionRequests.length ? revisionRequests.map((requestRow, index) => (
-              <div key={index} className="py-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <b className="text-[#29486f]">{s(requestRow.title)}</b>
-                  <span className="rounded bg-[#eef4fb] px-2 py-1 text-xs font-bold text-[#557195]">{s(requestRow.status)}</span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap leading-6 text-[#657b9d]">{s(requestRow.summary)}</p>
-              </div>
-            )) : <p className="py-4 text-sm text-[#7a8da8]">Chưa có yêu cầu điều chỉnh AI cho bài này.</p>}
-          </div>
+        <section className="rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
+          <ContentReviewEditor contentId={contentId} initial={initial} publishStatus={s(content.publish_status)} revisions={revisions} />
         </section>
+
+
       </div>
     </main>
   );

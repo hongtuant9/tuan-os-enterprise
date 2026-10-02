@@ -1,6 +1,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/supabase/types";
 import {
   runInventoryBotRead,
   type InventoryBotSystem,
@@ -46,6 +48,26 @@ export async function POST(req: NextRequest) {
     results.push(await runInventoryBotRead(system));
   }
 
+  const db = createAdminClient();
+  const persistedAt = new Date().toISOString();
+  for (const item of results) {
+    const { error } = await db.from("sync_records").upsert({
+      source_key: "kiotviet_inventory_bot_snapshot",
+      external_id: `${item.system}:latest`,
+      target_table: null,
+      target_id: null,
+      data: JSON.parse(JSON.stringify(item)) as Json,
+      synced_at: item.checkedAt || persistedAt,
+      updated_at: persistedAt,
+    }, { onConflict: "source_key,external_id" });
+    if (error) {
+      console.error("[kiotviet-inventory] snapshot_persist_failed", {
+        system: item.system,
+        code: error.code,
+      });
+    }
+  }
+
   const container = getAdminContainer();
   await container.activityLog.record({
     agent: "TCE KiotViet Inventory Bot v1",
@@ -60,7 +82,8 @@ export async function POST(req: NextRequest) {
         const modules = item.modules
           .map((module) => `${module.id}=${module.state}:${module.rowCount}`)
           .join(",");
-        return `${item.system}: state=${item.state} modules=${item.verifiedModules}/${item.moduleCount} [${modules}]`;
+        const detail = item.detail.replace(/\s+/g, " ").slice(0, 220);
+        return `${item.system}: state=${item.state} modules=${item.verifiedModules}/${item.moduleCount} [${modules}] detail=${detail}`;
       })
       .join(" | "),
   }).catch(() => undefined);

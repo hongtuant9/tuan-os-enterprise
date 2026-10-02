@@ -6,6 +6,8 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { reconcileCashbookTotals } from "@/server/finance/foundation";
+import { KiotVietFnbClient } from "./fnb-client";
+import { KiotVietHotelClient } from "./hotel-client";
 import { parseCashbookRowText } from "@/server/finance/cashbook-row-parser";
 import {
   cashflowGroupDisplayName,
@@ -24,6 +26,42 @@ export type FinanceBotState =
   | "SETUP_VERIFIED"
   | "CREATE_READY"
   | "ERROR";
+
+export type KiotVietActualRangeRow = {
+  system: FinanceBotSystem;
+  kind: "CASHFLOW" | "PURCHASE_ORDER";
+  id: string;
+  code: string;
+  branchId: string;
+  branchName: string;
+  date: string;
+  amount: number;
+  cashFlowGroupId?: string;
+  cashFlowGroupName?: string;
+  flowType?: number | null;
+  usedForFinancialReporting?: boolean | null;
+  method?: string;
+  partnerName?: string;
+  description?: string;
+  status?: string;
+  supplierName?: string;
+};
+
+export type KiotVietActualRangeSnapshot = {
+  system: FinanceBotSystem;
+  state: "VERIFIED" | "HOLD_CONFIG" | "HOLD_MFA" | "HOLD_UI_CHANGED" | "ERROR";
+  from: string;
+  to: string;
+  checkedAt: string;
+  branches: Array<{ id: string; name: string }>;
+  cashflowRows: KiotVietActualRangeRow[];
+  purchaseOrderRows: KiotVietActualRangeRow[];
+  cashflowExpectedRows: number;
+  cashflowFetchedRows: number;
+  purchaseExpectedRows: number;
+  purchaseFetchedRows: number;
+  notes: string[];
+};
 
 export type FinanceBotSnapshot = {
   system: FinanceBotSystem;
@@ -1546,6 +1584,197 @@ export async function readFinanceBotSummary(system: FinanceBotSystem): Promise<F
   } catch {
     return null;
   }
+}
+
+
+function objectRows(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const root = payload as Record<string, unknown>;
+  if (Array.isArray(root.data)) return root.data.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+  if (Array.isArray(root.Data)) return root.Data.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+  const result = root.result;
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const nested = result as Record<string, unknown>;
+    if (Array.isArray(nested.data)) return nested.data.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+    if (Array.isArray(nested.Data)) return nested.Data.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+  }
+  return [];
+}
+
+function isoDateOnly(value: unknown): string {
+  const match = String(value ?? "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}
+
+async function actualRangeBranches(system: FinanceBotSystem): Promise<Array<{ id: string; name: string }>> {
+  try {
+    const client = system === "FNB" ? new KiotVietFnbClient() : new KiotVietHotelClient();
+    if (!client.isConfigured()) return [];
+    const response = await client.listBranches();
+    if (!response.ok) return [];
+    return objectRows(response.data)
+      .map((row) => ({
+        id: String(row.id ?? row.Id ?? "").trim(),
+        name: String(row.branchName ?? row.name ?? row.Name ?? "").trim(),
+      }))
+      .filter((row) => row.id && row.name);
+  } catch {
+    return [];
+  }
+}
+
+export async function readKiotVietActualRange(
+  system: FinanceBotSystem,
+  from: string,
+  to: string,
+): Promise<KiotVietActualRangeSnapshot> {
+  return withLock(async () => {
+    const checkedAt = new Date().toISOString();
+    const cleanFrom = from.slice(0, 10);
+    const cleanTo = to.slice(0, 10);
+    const fail = (state: KiotVietActualRangeSnapshot["state"], note: string): KiotVietActualRangeSnapshot => ({
+      system, state, from: cleanFrom, to: cleanTo, checkedAt, branches: [], cashflowRows: [], purchaseOrderRows: [],
+      cashflowExpectedRows: 0, cashflowFetchedRows: 0, purchaseExpectedRows: 0, purchaseFetchedRows: 0, notes: [note],
+    });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(cleanTo) || cleanFrom > cleanTo) {
+      return fail("ERROR", "Invalid date range.");
+    }
+    if (!flag("TCE_KIOTVIET_FINANCE_BOT_ENABLED")) return fail("HOLD_CONFIG", "Finance Bot disabled.");
+
+    const branches = await actualRangeBranches(system);
+    if (!branches.length) return fail("HOLD_CONFIG", "KiotViet branch list unavailable.");
+
+    let browser: Browser;
+    try { browser = await launch(system); }
+    catch (error) { return fail("ERROR", error instanceof Error ? error.message : "Browser launch failed."); }
+    try {
+      const page = await browser.newPage();
+      const auth = await login(page, system);
+      if (!auth.ok) return fail(auth.state === "HOLD_MFA" ? "HOLD_MFA" : "HOLD_CONFIG", auth.detail ?? "KiotViet login failed.");
+      const visible = await goCashbook(page, system);
+      if (!visible) return fail("HOLD_UI_CHANGED", "KiotViet cashbook page not detected.");
+
+      const raw = await page.evaluate(async ({ systemName, sourceBranches, rangeFrom, rangeTo }) => {
+        type AnyRow = Record<string, unknown>;
+        const parse = async (url: string) => {
+          const response = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
+          const text = await response.text();
+          let data: unknown = null;
+          try { data = JSON.parse(text); } catch { /* fail below */ }
+          if (!response.ok || !data || typeof data !== "object") throw new Error(`KiotViet Web API HTTP ${response.status}: ${url.split("?")[0]}`);
+          return data as Record<string, unknown>;
+        };
+        const rowsOf = (payload: Record<string, unknown>): AnyRow[] => {
+          const direct = payload.Data ?? payload.data;
+          if (Array.isArray(direct)) return direct.filter((row): row is AnyRow => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+          const nested = payload.result;
+          if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+            const arr = (nested as Record<string, unknown>).Data ?? (nested as Record<string, unknown>).data;
+            if (Array.isArray(arr)) return arr.filter((row): row is AnyRow => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+          }
+          return [];
+        };
+        const totalOf = (payload: Record<string, unknown>, fallback: number) => {
+          const n = Number(payload.Total ?? payload.total);
+          if (Number.isFinite(n)) return n;
+          const nested = payload.result;
+          if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+            const v = Number((nested as Record<string, unknown>).Total ?? (nested as Record<string, unknown>).total);
+            if (Number.isFinite(v)) return v;
+          }
+          return fallback;
+        };
+        const nextDate = (() => {
+          const d = new Date(`${rangeTo}T00:00:00+07:00`);
+          d.setDate(d.getDate() + 1);
+          const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        })();
+        const groupsPayload = await parse(`/api/cashflow/groups?${systemName === "FNB" ? "ExcludeDeleted=true" : "excludeDeleted=true"}`);
+        const groups = rowsOf(groupsPayload);
+        const cashflow: AnyRow[] = [];
+        const purchase: AnyRow[] = [];
+        let cashExpected = 0;
+        let purchaseExpected = 0;
+        for (const branch of sourceBranches) {
+          let skip = 0;
+          for (let pageIndex = 0; pageIndex < 200; pageIndex += 1) {
+            const fromStamp = `${rangeFrom}T00:00:00${systemName === "FNB" ? "+07:00" : ""}`;
+            const toStamp = `${nextDate}T00:00:00${systemName === "FNB" ? "+07:00" : ""}`;
+            const filter = `(BranchId eq ${branch.id} and (TransDate ge datetime'${fromStamp}' and TransDate lt datetime'${toStamp}') and Status eq 0)`;
+            const qs = new URLSearchParams({ pageNumber: "1", pageSize: "1000", "$top": "1000", "$skip": String(skip), includeTotal: "true", includeBranch: "true", includeUser: "true", "$filter": filter });
+            const payload = await parse(`/api/cashflow?${qs.toString()}`);
+            const batch = rowsOf(payload).filter((row) => Number(row.Id ?? row.id ?? 0) !== -1);
+            const total = totalOf(payload, skip + batch.length);
+            cashExpected += pageIndex === 0 ? total : 0;
+            cashflow.push(...batch.map((row) => ({ ...row, __branchName: branch.name })));
+            skip += batch.length;
+            if (!batch.length || skip >= total || batch.length < 1000) break;
+          }
+
+          skip = 0;
+          for (let pageIndex = 0; pageIndex < 200; pageIndex += 1) {
+            const fromStamp = `${rangeFrom}T00:00:00${systemName === "FNB" ? "+07:00" : ""}`;
+            const toStamp = `${nextDate}T00:00:00${systemName === "FNB" ? "+07:00" : ""}`;
+            const filter = `(BranchId eq ${branch.id} and Status eq 3 and (PurchaseDate ge datetime'${fromStamp}' and PurchaseDate lt datetime'${toStamp}'))`;
+            const qs = new URLSearchParams({ ForSummaryRow: "true", expensesOthersIds: "", "$filter": filter, "$top": "1000", "$skip": String(skip) });
+            for (const include of ["Branch", "Total", "PaidAmount", "TotalQuantity", "TotalProductType", "SubTotal", "Supplier", "User", "User1"]) qs.append("Includes", include);
+            const payload = await parse(`/api/purchaseOrders?${qs.toString()}`);
+            const batch = rowsOf(payload).filter((row) => Number(row.Id ?? row.id ?? 0) !== -1);
+            const total = totalOf(payload, skip + batch.length);
+            purchaseExpected += pageIndex === 0 ? total : 0;
+            purchase.push(...batch.map((row) => ({ ...row, __branchName: branch.name })));
+            skip += batch.length;
+            if (!batch.length || skip >= total || batch.length < 1000) break;
+          }
+        }
+        return { groups, cashflow, purchase, cashExpected, purchaseExpected };
+      }, { systemName: system, sourceBranches: branches, rangeFrom: cleanFrom, rangeTo: cleanTo });
+
+      const groupMap = new Map<number, Record<string, unknown>>();
+      for (const group of raw.groups) groupMap.set(Number(group.Id ?? group.id), group);
+      const cashflowRows: KiotVietActualRangeRow[] = raw.cashflow.map((row) => {
+        const group = groupMap.get(Number(row.CashFlowGroupId ?? row.cashFlowGroupId));
+        const flowType = Number(group?.FlowType ?? group?.flowType ?? group?.Type ?? group?.type);
+        const usedRaw = row.UsedForFinancialReporting ?? row.usedForFinancialReporting ?? group?.UsedForFinancialReporting ?? group?.usedForFinancialReporting;
+        const used = usedRaw === true || usedRaw === 1 || usedRaw === "1" || usedRaw === "true" ? true : usedRaw === false || usedRaw === 0 || usedRaw === "0" || usedRaw === "false" ? false : null;
+        return {
+          system, kind: "CASHFLOW" as const, id: String(row.Id ?? row.id ?? ""), code: String(row.Code ?? row.code ?? ""),
+          branchId: String(row.BranchId ?? row.branchId ?? ""), branchName: String(row.Branch ?? row.branchName ?? row.__branchName ?? ""),
+          date: isoDateOnly(row.TransDate ?? row.transDate), amount: Math.abs(Number(row.Amount ?? row.amount ?? 0) || 0),
+          cashFlowGroupId: String(row.CashFlowGroupId ?? row.cashFlowGroupId ?? ""),
+          cashFlowGroupName: String(group?.Name ?? group?.name ?? row.CashGroup ?? row.cashFlowGroupName ?? ""),
+          flowType: Number.isFinite(flowType) ? flowType : null, usedForFinancialReporting: used,
+          method: String(row.Method ?? row.method ?? ""), partnerName: String(row.PartnerName ?? row.partnerName ?? ""),
+          description: String(row.Description ?? row.description ?? ""), status: String(row.StatusValue ?? row.statusValue ?? row.Status ?? row.status ?? ""),
+        };
+      }).filter((row) => row.id && row.date && row.amount >= 0);
+      const purchaseOrderRows: KiotVietActualRangeRow[] = raw.purchase.map((row) => ({
+        system, kind: "PURCHASE_ORDER" as const, id: String(row.Id ?? row.id ?? ""), code: String(row.Code ?? row.code ?? ""),
+        branchId: String(row.BranchId ?? row.branchId ?? ""), branchName: String((row.Branch && typeof row.Branch === "object" && !Array.isArray(row.Branch) ? (row.Branch as Record<string, unknown>).Name : row.Branch) ?? row.branchName ?? row.__branchName ?? ""),
+        date: isoDateOnly(row.PurchaseDate ?? row.purchaseDate), amount: Math.abs(Number(row.Total ?? row.total ?? 0) || 0),
+        status: String(row.StatusValue ?? row.statusValue ?? row.Status ?? row.status ?? ""),
+        supplierName: String((row.Supplier && typeof row.Supplier === "object" && !Array.isArray(row.Supplier) ? (row.Supplier as Record<string, unknown>).Name : row.Supplier) ?? row.SupplierName ?? row.supplierName ?? ""),
+      })).filter((row) => row.id && row.date && row.amount >= 0);
+
+      const cashOk = cashflowRows.length === raw.cashExpected;
+      const purchaseOk = purchaseOrderRows.length === raw.purchaseExpected;
+      return {
+        system, state: cashOk && purchaseOk ? "VERIFIED" : "ERROR", from: cleanFrom, to: cleanTo, checkedAt, branches,
+        cashflowRows, purchaseOrderRows, cashflowExpectedRows: raw.cashExpected, cashflowFetchedRows: cashflowRows.length,
+        purchaseExpectedRows: raw.purchaseExpected, purchaseFetchedRows: purchaseOrderRows.length,
+        notes: [
+          `Authenticated KiotViet Web API range ${cleanFrom}..${cleanTo}.`,
+          `Cashflow reconciliation ${cashflowRows.length}/${raw.cashExpected}.`,
+          `Purchase Order reconciliation ${purchaseOrderRows.length}/${raw.purchaseExpected}; only Status=3 (Đã nhập hàng) is Actual.`,
+        ],
+      };
+    } catch (error) {
+      return fail("ERROR", error instanceof Error ? error.message : "KiotViet actual range read failed.");
+    } finally {
+      await browser.close().catch(() => undefined);
+    }
+  });
 }
 
 export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy = false): Promise<FinanceBotSnapshot> {

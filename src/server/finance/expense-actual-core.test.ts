@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractTceCode, resolveExpenseCode, summarizeExpenseActualRows } from "./expense-actual-core.ts";
+import { extractTceCode, resolveBusinessExpenseGroup, resolveExpenseCode, summarizeExpenseActualRows } from "./expense-actual-core.ts";
 
 test("expense mapper excludes non-P&L cash out", () => {
   const result = summarizeExpenseActualRows([
@@ -62,4 +62,21 @@ test("legacy supplier-payment label maps to N01 and is excluded from P&L", () =>
   assert.equal(result.groups.length, 0);
   assert.equal(result.excludedNonPnlRows, 1);
   assert.equal(result.unknownExpenseRows, 0);
+});
+
+
+test("business expense control maps HS and CZ production taxonomies", () => {
+  assert.equal(resolveBusinessExpenseGroup("[HS-P01] Lương & nhân công"), "Payroll");
+  assert.equal(resolveBusinessExpenseGroup("[HS-P02] Hoa hồng OTA"), "OTA");
+  assert.equal(resolveBusinessExpenseGroup("[HS-P06] Điện, nước & tiện ích"), "Điện & Nước");
+  assert.equal(resolveBusinessExpenseGroup("[HS-P08] Phần mềm PMS / Channel Manager"), "Software");
+  assert.equal(resolveBusinessExpenseGroup("[CZ-P01] Nguyên liệu bếp ngoài phiếu nhập hàng"), "Nguyên liệu / Mua hàng");
+  assert.equal(resolveBusinessExpenseGroup("[CZ-P04] Lương & nhân công"), "Payroll");
+  assert.equal(resolveBusinessExpenseGroup("[CZ-P08] Marketing, quảng cáo & khuyến mãi"), "Marketing");
+});
+
+test("business expense control excludes explicit non-P&L TCE groups", () => {
+  assert.equal(resolveBusinessExpenseGroup("[TCE-N01] Thanh toán NCC hàng tồn kho"), null);
+  assert.equal(resolveBusinessExpenseGroup("[TCE-N02] CAPEX - Mua tài sản"), null);
+  assert.equal(resolveBusinessExpenseGroup("[TCE-N03] Trả gốc vay"), null);
 });

@@ -221,3 +221,22 @@ test("proxy recovers reused refresh token without bypassing auth",()=>{
   assert.match(proxy,/NextResponse\.redirect\(loginUrl\)/);
   assert.match(proxy,/if \(!user && !isPublicPath\)/);
 });
+
+
+test("Business Expense Actual pipeline is KiotViet-backed, range-scoped and fail-closed",()=>{
+  const live=read("src/server/tce/tab-live-data.ts");
+  const canonical=read("src/server/finance/canonical-finance-sync.ts");
+  const reader=read("src/server/finance/business-expense-actual.ts");
+  const bot=read("src/server/integrations/kiotviet/finance-browser-bot.ts");
+  assert.match(live,/readBusinessExpenseActual\(container\.db, period\.from, period\.to\)/);
+  assert.match(reader,/KIOTVIET_HOTEL_CASHBOOK_WEB_API/);
+  assert.match(reader,/KIOTVIET_FNB_PURCHASE_ORDER_WEB_API/);
+  assert.match(reader,/range\.from <= from && range\.to >= to/);
+  assert.match(canonical,/syncCanonicalExpenseActualRange/);
+  assert.match(canonical,/options: \{ dryRun\?: boolean \}/);
+  assert.match(canonical,/previewByUnitCategory/);
+  assert.match(bot,/UsedForFinancialReporting/);
+  assert.match(bot,/Status eq 3/);
+  assert.match(bot,/cashflowRows\.length === raw\.cashExpected/);
+  assert.match(bot,/purchaseOrderRows\.length === raw\.purchaseExpected/);
+});

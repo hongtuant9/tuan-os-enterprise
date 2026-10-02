@@ -15,6 +15,16 @@ type RoomAllocation = {
   guests: number;
 };
 
+type BookingRow = {
+  source_booking_code: string | null;
+  check_in: string;
+  check_out: string;
+  adults: number | null;
+  children: number | null;
+  room_names: Json | null;
+  booking_status: string | null;
+};
+
 function actorName(from?: Actor) {
   if (!from) return "Nhân viên";
   const name = [from.first_name, from.last_name].filter(Boolean).join(" ").trim();
@@ -159,7 +169,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
   if (activeError) throw activeError;
 
   const requestedNumbers = new Set(parsed.allocations.map((x) => x.roomDisplay));
-  const candidates = (active || []).filter((booking) => {
+  const activeRows = (active || []) as BookingRow[];\n  const candidates = activeRows.filter((booking: BookingRow) => {
     if (targetBookingCode && booking.source_booking_code !== targetBookingCode) return false;
     const rooms = Array.isArray(booking.room_names) ? booking.room_names.map(String) : [];
     const filtered = targetBranch ? rooms.filter((room) => branchFromRoom(room) === targetBranch) : rooms;
@@ -231,7 +241,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     .eq("source_key", "housekeeping_room_setup")
     .in("external_id", setupKeys);
 
-  const setupMap = new Map((setupRows || []).map((x) => [String(x.external_id), asRecord(x.data as Json)]));
+  const setupMap = new Map((setupRows || []).map((x: any) => [String(x.external_id), asRecord(x.data as Json)]));
 
   const actualIds = roomMeta.map((x) => `${booking.source_booking_code}|${x.room}`);
   const { data: previousActualRows } = await db
@@ -239,7 +249,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     .select("external_id,data")
     .eq("source_key", "room_actual_occupancy")
     .in("external_id", actualIds);
-  const actualMap = new Map((previousActualRows || []).map((x) => [String(x.external_id), asRecord(x.data as Json)]));
+  const actualMap = new Map((previousActualRows || []).map((x: any) => [String(x.external_id), asRecord(x.data as Json)]));
 
   const now = new Date().toISOString();
   const actor = actorName(input.actor);

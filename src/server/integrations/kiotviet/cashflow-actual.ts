@@ -145,6 +145,32 @@ function browserDateToEpoch(value: string) {
   return Date.parse(`${yyyy}-${mm}-${dd}T${hh}:${min}:00+07:00`);
 }
 
+
+function localDateKeyAt(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+export function browserSnapshotCoversRequestedRange(periodLabel: string | null, checkedAt: string, from: string, to: string) {
+  const label = String(periodLabel ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  const checkedDate = localDateKeyAt(checkedAt);
+  if (!checkedDate) return false;
+  if (label.includes("thang nay")) {
+    const monthStart = checkedDate.slice(0, 7) + "-01";
+    return from >= monthStart && to <= checkedDate;
+  }
+  if (label.includes("hom nay")) return from === checkedDate && to === checkedDate;
+  const dates = [...String(periodLabel ?? "").matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)]
+    .map((match) => `${match[3]}-${match[2]}-${match[1]}`);
+  if (dates.length >= 2) return from >= dates[0] && to <= dates[1];
+  return false;
+}
+
 async function browserCashflowFallback(
   system: FinanceBotSystem,
   source: KiotVietCashflowSnapshot["source"],
@@ -157,6 +183,7 @@ async function browserCashflowFallback(
   const checkedAt = Date.parse(snapshot.checkedAt);
   if (!Number.isFinite(checkedAt) || Date.now() - checkedAt > 30 * 60 * 1000) return null;
   if (!snapshot.cashbook.paginationComplete || !snapshot.cashbook.reconciliation?.verified) return null;
+  if (!browserSnapshotCoversRequestedRange(snapshot.cashbook.periodLabel, snapshot.checkedAt, from.slice(0, 10), to.slice(0, 10))) return null;
 
   const fromMs = businessRangeEpoch(from, "start");
   const toMs = businessRangeEpoch(to, "end");

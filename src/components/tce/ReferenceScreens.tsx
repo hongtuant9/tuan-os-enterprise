@@ -46,8 +46,8 @@ const meta: Record<ScreenKey, ScreenMeta> = {
     subtitle: "Nguồn chuẩn: KiotViet Hotel/F&B | FIN-HOSPITALITY-001 | COST-001 | Finance Runtime | Lavender · Ruby · Cozy Garden",
     metrics: [
       { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "Actual từ KiotViet", tone: "blue", icon: "▮▮" },
-      { label: "Chi phí", value: "—", delta: "↗", note: "Chi phí điều hành đến hiện tại", tone: "red", icon: "▥" },
-      { label: "Lợi nhuận ước tính", value: "—", delta: "↗", note: "Doanh thu − chi phí điều hành", tone: "amber", icon: "⌕" },
+      { label: "Chi phí", value: "—", delta: "↗", note: "Actual chỉ từ KiotViet", tone: "red", icon: "▥" },
+      { label: "Lợi nhuận ước tính", value: "—", delta: "↗", note: "Doanh thu Actual − Chi phí Actual", tone: "amber", icon: "⌕" },
       { label: "Công suất phòng", value: "—", delta: "↗", note: "Property runtime", tone: "teal", icon: "▰" },
     ],
   },
@@ -379,7 +379,12 @@ function Donut({
 }
 
 function SignedBarChart({ rows = [] }: { rows?: string[][] }) {
-  const parsed = rows.map((row) => ({ label: row[0] ?? "—", display: row[1] ?? "—", value: Number(row[2] ?? 0) || 0 }));
+  const parsed = rows.flatMap((row) => {
+    const raw = String(row[2] ?? "").trim();
+    if (!raw) return [];
+    const value = Number(raw);
+    return Number.isFinite(value) ? [{ label: row[0] ?? "—", display: row[1] ?? "—", value }] : [];
+  });
   const maxAbs = Math.max(1, ...parsed.map((row) => Math.abs(row.value)));
   return (
     <div className="flex min-h-[245px] flex-col justify-center gap-4 px-4 py-5">
@@ -468,11 +473,11 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
                 {(() => { const rows=data?.tables.businessRevenueBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Doanh thu hôm nay"]??"—"} sub={data?.period.label ?? "Kỳ lọc"} items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
               </div>
               <div className="min-h-[290px] rounded-[9px] border border-[#e2ebf5] bg-white">
-                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Chi phí theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Cùng kỳ: recurring allocation + Booking forecast + Actual KiotViet</p></div>
-                {(() => { const rows=data?.tables.businessCostBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Chi phí"]??"—"} sub={data?.period.label ?? "Kỳ lọc"} items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Chi phí thực tế theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Actual KiotViet · đúng kỳ; không lấy Budget/Estimate thay Actual</p></div>
+                {(() => { const rows=data?.tables.businessCostBranches??[]; const raw=rows.map(r=>Number(r[3]??"")); const total=raw.filter(Number.isFinite).reduce((a,b)=>a+b,0); const values=rows.map(r=>r[2]??"—"); const shares=raw.map(v=>Number.isFinite(v)&&total>0?v/total*100:0); return <Donut center={data?.metricValues["Chi phí"]??"—"} sub={data?.period.label ?? "Kỳ lọc"} items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
               </div>
               <div className="min-h-[290px] rounded-[9px] border border-[#e2ebf5] bg-white">
-                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Lợi nhuận theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Doanh thu − chi phí quản trị cùng kỳ; thanh âm/dương giữ đúng dấu</p></div>
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Kết quả thực tế theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Doanh thu Actual − Chi phí Actual KiotViet cùng kỳ; thiếu coverage thì không suy số</p></div>
                 <SignedBarChart rows={data?.tables.businessProfitBranches}/>
               </div>
             </div>
@@ -480,8 +485,8 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           <Section title="Tổng quan theo cơ sở — Tháng hiện tại" subtitle="Chỉ dùng số tháng hiện tại (MTD), không cộng dồn nhiều tháng" className="col-span-12" icon="◫">
             <DataTable columns={["Cơ sở","Hóa đơn tháng","Doanh thu tháng","Chi phí tháng (MTD)","Kết quả quản trị tháng","Ghi chú"]} data={data?.tables.businessUnitOverview}/>
           </Section>
-          <Section title="Kế hoạch và tiến độ chi phí" subtitle="Kế hoạch tháng vs chi phí quản trị tháng hiện tại · Actual KiotViet thay estimate khi có" className="col-span-12" icon="▤">
-            <DataTable columns={["Cơ sở","Nhóm chi phí","Kế hoạch tháng","Đến hiện tại","Chênh lệch","% ngân sách","Trạng thái","Nguồn / cách tính"]} data={data?.tables.businessCostPlanProgress}/>
+          <Section title="Kế hoạch và tiến độ chi phí" subtitle={"Dự kiến theo đúng kỳ lọc " + (data?.period.label ?? "") + " vs Actual KiotViet; hai lớp dữ liệu không trộn lẫn"} className="col-span-12" icon="▤">
+            <DataTable columns={["Cơ sở","Nhóm chi phí","Dự kiến kỳ lọc","Actual KiotViet","Actual − Dự kiến","% so dự kiến","Trạng thái","Nguồn / cách tính"]} data={data?.tables.businessCostPlanProgress}/>
           </Section>
         </div>
       );

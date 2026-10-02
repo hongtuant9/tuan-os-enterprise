@@ -476,7 +476,7 @@ export async function createContentSnapshot(
 
 export async function requestMediaCreative(
   contentId: string,
-  action: "EDIT_IMAGE_AI" | "CREATE_SHORT_VIDEO",
+  action: "EDIT_IMAGE_AI" | "CREATE_IMAGE_AI" | "CREATE_SHORT_VIDEO",
   instruction: string,
 ): Promise<ActionResult> {
   try {
@@ -486,7 +486,9 @@ export async function requestMediaCreative(
     const key = `MEDIA_CREATIVE:${contentId}:${action}:${Date.now()}`;
     const title = action === "EDIT_IMAGE_AI"
       ? `Yêu cầu chỉnh ảnh AI — ${contentId}`
-      : `Yêu cầu tạo video ngắn — ${contentId}`;
+      : action === "CREATE_IMAGE_AI"
+        ? `Yêu cầu tạo ảnh AI — ${contentId}`
+        : `Yêu cầu tạo video ngắn — ${contentId}`;
     const result = await dbOf(admin.db).from("marketing_recommendations").insert({
       recommendation_key: key,
       category: "CONTENT",
@@ -494,7 +496,9 @@ export async function requestMediaCreative(
       title,
       summary: cleanInstruction || (action === "EDIT_IMAGE_AI"
         ? "Chỉnh asset gốc theo guardrail: tự nhiên, sạch, chuyên nghiệp, không làm sai hiện trạng."
-        : "Tạo video ngắn từ asset gốc hiện có; không thêm claim/scene sai hiện trạng."),
+        : action === "CREATE_IMAGE_AI"
+          ? "Tạo một creative draft mới dựa trên asset thật đã chọn; giữ đúng địa điểm/không gian/sản phẩm, không bịa tiện nghi hoặc cảnh quan."
+          : "Tạo video ngắn từ asset gốc hiện có; không thêm claim/scene sai hiện trạng."),
       evidence: {
         content_id: contentId,
         media_action: action,

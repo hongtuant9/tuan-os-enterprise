@@ -45,12 +45,10 @@ const meta: Record<ScreenKey, ScreenMeta> = {
     title: "Kinh doanh – Doanh thu, lợi nhuận & nghĩa vụ tài chính",
     subtitle: "Nguồn chuẩn: KiotViet Hotel/F&B | FIN-HOSPITALITY-001 | COST-001 | Finance Runtime | Lavender · Ruby · Cozy Garden",
     metrics: [
-      { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "So với hôm qua", tone: "blue", icon: "▮▮" },
-      { label: "Doanh thu tháng", value: "—", delta: "↗", note: "So với tháng trước", tone: "green", icon: "▦" },
-      { label: "Chi phí", value: "—", delta: "↗", note: "Actual trực tiếp từ KiotViet", tone: "red", icon: "▥" },
-      { label: "Lợi nhuận gộp", value: "—", delta: "↗", note: "Không kết luận khi thiếu giá vốn", tone: "amber", icon: "⌕" },
-      { label: "Biên lợi nhuận", value: "—", delta: "↗", note: "Theo báo cáo lãi lỗ đã xác minh", tone: "violet", icon: "◷" },
-      { label: "Công suất phòng", value: "—", delta: "↗", note: "Hệ thống quản lý phòng / KiotViet Hotel", tone: "teal", icon: "▰" },
+      { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "Actual từ KiotViet", tone: "blue", icon: "▮▮" },
+      { label: "Chi phí", value: "—", delta: "↗", note: "Chi phí điều hành đến hiện tại", tone: "red", icon: "▥" },
+      { label: "Lợi nhuận ước tính", value: "—", delta: "↗", note: "Doanh thu − chi phí điều hành", tone: "amber", icon: "⌕" },
+      { label: "Công suất phòng", value: "—", delta: "↗", note: "Property runtime", tone: "teal", icon: "▰" },
     ],
   },
   marketing: {
@@ -413,66 +411,57 @@ function TileGrid({ items, columns = 3 }: { items: string[]; columns?: number })
   );
 }
 
-function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
+function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; data?: TceTabLiveData; businessView?: "main" | "data-control" }) {
   switch (screen) {
-    case "business":
+    case "business": {
+      if (businessView === "data-control") {
+        return (
+          <div className="grid grid-cols-12 gap-2">
+            <div className="col-span-12 flex items-center justify-between rounded-[10px] border border-[#d8e5f3] bg-white px-4 py-3">
+              <div><b className="text-[13px] text-[#102a5c]">Nguồn dữ liệu & Kiểm soát</b><p className="mt-1 text-[9px] text-[#7186a5]">Dùng để truy vết nguồn, blocker và nơi cần cập nhật. Không phải màn hình điều hành hằng ngày.</p></div>
+              <Link href="/business" className="rounded-[6px] bg-[#2375ee] px-4 py-2 text-[9px] font-bold text-white">← Quay lại Kinh doanh</Link>
+            </div>
+            <Section title="Chuỗi tài chính kinh doanh" subtitle="Revenue → COGS → Gross Profit → Operating Profit → PBT → Tax → PAT; Cash/AR/AP giữ semantic riêng" className="col-span-12" icon="▦">
+              <DataTable columns={["KPI","Giá trị","Nguồn","Cập nhật","Trạng thái","Giải thích"]} data={data?.tables.businessFinancialStack}/>
+            </Section>
+            <Section id="business-data-gaps" title="Nguồn thiếu & nơi cần cập nhật" subtitle="Mỗi dòng cho biết thiếu gì, nguồn nào cần bổ sung, ai chịu trách nhiệm và hành động tiếp theo" className="col-span-12" icon="!">
+              <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Cần cập nhật","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
+            </Section>
+            <Section title="Mức độ hoàn thiện dữ liệu" subtitle="Theo dõi độ đầy đủ của dữ liệu trước khi dùng cho báo cáo tài chính chốt kỳ" className="col-span-12 h-[210px]" icon="✓">
+              <DataTable columns={["Nhóm","Tổng mục","Đã xác minh","Cần xác minh","Tạm dừng","Kết luận"]} data={data?.tables.businessCompletionSummary}/>
+            </Section>
+            <Section title="Ảnh chụp quyết định tài chính" subtitle="Nguồn tiền, phải thu, phải trả, thuế và tiền có thể phân phối" className="col-span-12 h-[300px]" icon="●">
+              <DataTable columns={["Chỉ số","Giá trị","Trạng thái","Nguồn","Hành động / Giới hạn sử dụng"]} data={data?.tables.businessDecisionSnapshot}/>
+            </Section>
+          </div>
+        );
+      }
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Chi phí tách rõ Kế hoạch và Actual KiotViet"} className="col-span-12 h-[345px]" icon="▮">
-            <div className="grid h-full grid-cols-3 gap-3 p-4">
-              {[
-                ["Doanh thu kỳ đang xem", data?.metricValues["Doanh thu hôm nay"] ?? "—", data?.metricNotes["Doanh thu hôm nay"] ?? "KiotViet Actual"],
-                ["Chi phí thực tế", data?.metricValues["Chi phí"] ?? "—", data?.metricNotes["Chi phí"] ?? "KiotViet trực tiếp"],
-                ["Lợi nhuận gộp", data?.metricValues["Lợi nhuận gộp"] ?? "—", data?.metricNotes["Lợi nhuận gộp"] ?? "Doanh thu − Giá vốn"],
-              ].map(([label,value,note]) => (
-                <div key={label} className="rounded-[9px] border border-[#dfe9f4] bg-gradient-to-br from-white to-[#f5f9fd] p-4">
-                  <p className="text-[11px] font-semibold text-[#527099]">{label}</p>
-                  <p className="mt-3 text-[24px] font-extrabold tracking-[-0.03em] text-[#0c2455]">{viDisplay(value)}</p>
-                  <p className="mt-3 text-[9px] leading-4 text-[#7388a7]">{viDisplay(note)}</p>
-                </div>
-              ))}
-              <div className="col-span-3 rounded-[8px] border border-[#e6edf5] bg-white p-3 text-[9px] leading-4 text-[#5d7595]">
-                <b className="text-[#173964]">Nguyên tắc:</b> số chưa đủ bằng chứng vẫn phải hiển thị đầy đủ blocker, nguồn cần, owner và hành động tiếp theo ở <b>Data Gap Register</b>; không thay bằng 0, ước tính hoặc tỷ lệ giả định.
+          <div className="col-span-12 flex justify-end">
+            <Link href="/business?view=data-control" className="rounded-[6px] border border-[#b8d2f5] bg-white px-4 py-2 text-[9px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Nguồn dữ liệu & Kiểm soát →</Link>
+          </div>
+          <Section title="Cơ cấu Doanh thu và Chi phí theo cơ sở" subtitle={"Số điều hành đến hiện tại · " + (data?.period.label ?? "Tháng")} className="col-span-12" icon="◔">
+            <div className="grid gap-2 p-3 xl:grid-cols-2">
+              <div className="min-h-[300px] rounded-[9px] border border-[#e2ebf5] bg-white">
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Cơ cấu doanh thu</b><p className="mt-1 text-[8px] text-[#7a8da8]">Actual từ KiotViet</p></div>
+                {(() => { const rows=data?.tables.businessMonthBranches??[]; const values=rows.map(r=>r[3]??"—"); const shares=rows.map(r=>Number((r[4]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Doanh thu hôm nay"]??"—"} sub="Tổng doanh thu" items={rows.map(r=>r[1]??"Cơ sở")} values={values} shares={shares}/>; })()}
+              </div>
+              <div className="min-h-[300px] rounded-[9px] border border-[#e2ebf5] bg-white">
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Cơ cấu chi phí điều hành</b><p className="mt-1 text-[8px] text-[#7a8da8]">Payroll/Utilities lũy kế + Actual KiotViet, không cộng trùng</p></div>
+                {(() => { const rows=data?.tables.businessCostBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Chi phí"]??"—"} sub="Tổng chi phí đến hiện tại" items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
               </div>
             </div>
           </Section>
-          <Section title="Chi phí dự kiến" subtitle="Theo Kế hoạch & Giả định trong FIN-HOSPITALITY-001 · Chỉ dùng Budget/Forecast, không ghi đè Actual" className="col-span-12" icon="▤">
-            <DataTable columns={["#","Đơn vị","Hạng mục","Mức kế hoạch","Trạng thái","Nguồn","Quy tắc sử dụng"]} data={data?.tables.businessPlannedExpenses}/>
+          <Section title="Kế hoạch và tiến độ chi phí" subtitle="Theo từng cơ sở và nhóm chi phí · kế hoạch tháng so với chi phí điều hành đến hiện tại" className="col-span-12" icon="▤">
+            <DataTable columns={["Cơ sở","Nhóm chi phí","Kế hoạch tháng","Đến hiện tại","Chênh lệch","% ngân sách","Trạng thái","Nguồn / cách tính"]} data={data?.tables.businessCostPlanProgress}/>
           </Section>
-          <Section title="Chi phí thực tế" subtitle={"Actual đến hiện tại · nguồn trực tiếp KiotViet Hotel/F&B · kỳ " + (data?.period.label ?? "Hôm nay")} className="col-span-12" icon="▥">
-            <DataTable columns={["#","Nhóm chi phí","Đã ghi nhận","Số khoản","Trạng thái","Nguồn","Ghi chú"]} data={data?.tables.businessActualExpenses}/>
-          </Section>
-          <Section title="Bảng quản trị chi phí CEO" subtitle="Dự kiến vs Actual KiotViet · 3 cơ sở × 8 nhóm · cảnh báo theo mức sử dụng ngân sách" className="col-span-12" icon="◎">
-            <DataTable columns={["Cơ sở","Nhóm","Chi phí dự kiến","Chi phí thực tế","Chênh lệch","% sử dụng ngân sách","Cảnh báo","Nguồn kế hoạch","Evidence Actual"]} data={data?.tables.businessCostControl}/>
-          </Section>
-          <Section title="Cơ cấu doanh thu theo cơ sở" subtitle={"Tỷ trọng doanh thu · " + (data?.period.label ?? "Hôm nay")} className="col-span-12 h-[345px]" icon="◔">
-            {(() => {
-              const rows = data?.tables.businessMonthBranches ?? [];
-              const values = rows.map((row) => row[3] ?? "—");
-              const shares = rows.map((row) => Number((row[4] ?? "0").replace("%", "").replace(",", ".")) || 0);
-              return <Donut center={data?.metricValues["Doanh thu hôm nay"] ?? "—"} sub={"Tổng doanh thu · " + (data?.period.label ?? "Hôm nay")} items={rows.length ? rows.map((row) => row[1] ?? "Cơ sở") : ["Lavender Homestay","Ruby Homestay","Cozy Garden"]} values={values} shares={shares}/>;
-            })()}
-          </Section>
-          <Section title="Tình hình theo cơ sở" subtitle="" className="col-span-12 h-[345px]" icon="◫">
-            <DataTable columns={["#","Cơ sở","Hóa đơn","Doanh thu","Nguồn"]} rows={5} data={data?.tables.businessBranches}/>
-          </Section>
-          <Section title="Hiệu suất theo nguồn bán" subtitle="So sánh doanh thu, sản lượng và tăng trưởng theo từng kênh" className="col-span-12 h-[260px]" icon="▤">
-            <DataTable columns={["#","Nguồn bán","Đặt chỗ / Đơn hàng","Doanh thu","Tỷ trọng","Tăng trưởng","Quyết định"]} rows={6} data={data?.tables.businessChannels}/>
-          </Section>
-          <Section title="Chuỗi tài chính kinh doanh" subtitle="Revenue → COGS → Gross Profit → Operating Profit → PBT → Tax → PAT; Cash/AR/AP/Distribution giữ semantic riêng" className="col-span-12" icon="▦">
-            <DataTable columns={["KPI","Giá trị","Nguồn","Cập nhật","Trạng thái","Giải thích"]} data={data?.tables.businessFinancialStack}/>
-          </Section>
-          <Section id="business-data-gaps" title="Data Gap Register" subtitle="Chỉ giữ NEED_VERIFY/HOLD khi còn thiếu evidence; mỗi dòng nêu rõ source, owner và next action" className="col-span-12" icon="!">
-            <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Next Action","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
-          </Section>
-          <Section title="Mức độ hoàn thiện dữ liệu kinh doanh" subtitle="Mỗi trạng thái Cần xác minh phải có nguồn, owner, next action và ảnh hưởng rõ ràng" className="col-span-12 h-[210px]" icon="✓">
-            <DataTable columns={["Nhóm","Tổng mục","Đã xác minh","Cần xác minh","Tạm dừng","Kết luận"]} data={data?.tables.businessCompletionSummary}/>
-          </Section>
-          <Section title="Ảnh chụp quyết định tài chính" subtitle="Các số phục vụ quyết định tiền mặt/nghĩa vụ; không đánh đồng Doanh thu, Tiền mặt, Lợi nhuận và Tiền có thể phân phối" className="col-span-12 h-[300px]" icon="●">
-            <DataTable columns={["Chỉ số","Giá trị","Trạng thái","Nguồn","Hành động / Giới hạn sử dụng"]} data={data?.tables.businessDecisionSnapshot}/>
+          <Section title="Tổng quan theo cơ sở" subtitle="Doanh thu và chi phí điều hành để theo dõi cơ sở nào đang cần chú ý" className="col-span-12 h-[300px]" icon="◫">
+            <DataTable columns={["Cơ sở","Hóa đơn","Doanh thu","Chi phí đến hiện tại","Chênh lệch quản trị","Ghi chú"]} data={data?.tables.businessUnitOverview}/>
           </Section>
         </div>
       );
+    }
     case "marketing": {
       const funnelRows = data?.tables.marketingFunnel ?? [
         ["Tiếp cận","CẦN XÁC MINH"],["Lượt nhấp","CẦN XÁC MINH"],["Khách hàng tiềm năng","0"],["Đặt chỗ","0"],["Doanh thu","0 đ"],
@@ -745,7 +734,7 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
   }
 }
 
-export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
+export default function ReferenceScreen({ screen, data, businessView = "main" }: { screen: ScreenKey; data?: TceTabLiveData; businessView?: "main" | "data-control" }) {
   const m = meta[screen];
   const metrics = m.metrics.map((metric) => {
     const value = data?.metricValues[metric.label] ?? metric.value;
@@ -776,7 +765,7 @@ export default function ReferenceScreen({ screen, data }: { screen: ScreenKey; d
               })}
             </div>
             <div className="mt-4">
-              <Board screen={screen} data={data}/>
+              <Board screen={screen} data={data} businessView={businessView}/>
             </div>
           </div>
         </TceWorkspaceShell>

@@ -750,6 +750,67 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         }
       }
 
+      const daysInCurrentMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
+      const currentDayOfMonth = Number(today.slice(8, 10));
+      const monthToDateRatio = period.key === "month" ? Math.min(1, Math.max(0, currentDayOfMonth / daysInCurrentMonth)) : 1;
+      const managementCostByUnit = new Map<CostControlUnit, number>();
+      const planProgressRows: string[][] = [];
+      for (const unit of controlUnits) {
+        let unitTotal = 0;
+        for (const group of controlGroups) {
+          const key = `${unit.code}|${group}`;
+          const plan = planByUnitGroup.get(key);
+          const actualReady = group === "COGS" ? false : actualSourceReadyForUnit(unit.code);
+          const actual = group === "COGS" ? null : (actualByUnitGroup.get(key) ?? (actualReady ? 0 : null));
+          const monthlyPlan = plan?.amount ?? null;
+          const shouldAccrue = group === "Payroll" || group === "Điện" || group === "Nước";
+          const accruedPlan = monthlyPlan !== null && shouldAccrue ? monthlyPlan * monthToDateRatio : null;
+          const managementValue = actual !== null && actual > 0
+            ? actual
+            : accruedPlan !== null ? accruedPlan
+            : actual;
+          if (managementValue !== null) unitTotal += managementValue;
+          const variance = monthlyPlan !== null && managementValue !== null ? monthlyPlan - managementValue : null;
+          const usage = monthlyPlan !== null && monthlyPlan > 0 && managementValue !== null ? (managementValue / monthlyPlan) * 100 : null;
+          let state = "ĐANG THEO DÕI";
+          if (!plan) state = "CHƯA THIẾT LẬP KẾ HOẠCH";
+          else if (managementValue === null) state = "CHỜ DỮ LIỆU KIOTVIET";
+          else if (usage !== null && usage > 100) state = "VƯỢT KẾ HOẠCH";
+          else if (usage !== null && usage >= 85) state = "SẮP CHẠM KẾ HOẠCH";
+          else if (actual !== null && actual > 0) state = "ĐÃ CÓ ACTUAL";
+          else if (accruedPlan !== null) state = "TẠM TÍNH THEO NGÀY";
+          const sourceRule = !plan
+            ? "Cần bổ sung tại FIN-HOSPITALITY-001 → Kế hoạch & Giả định"
+            : actual !== null && actual > 0
+              ? `KiotViet Actual thay estimate · ${actualCountByUnitGroup.get(key) ?? 0} khoản`
+              : accruedPlan !== null
+                ? `${plan.source} · lũy kế ${currentDayOfMonth}/${daysInCurrentMonth} ngày`
+                : `${plan.source} · ${plan.note}`;
+          planProgressRows.push([
+            unit.label, group, plan?.display ?? "CHƯA THIẾT LẬP",
+            managementValue === null ? "CHƯA CÓ" : money(managementValue),
+            variance === null ? "—" : money(variance), usage === null ? "—" : pct(usage), state, sourceRule,
+          ]);
+        }
+        managementCostByUnit.set(unit.code, unitTotal);
+      }
+      const managementCostTotal = [...managementCostByUnit.values()].reduce((sum, value) => sum + value, 0);
+      const estimatedManagementProfit = bothPeriodVerified ? periodRevenue - managementCostTotal : null;
+      const costBranchRows = controlUnits.map((unit) => {
+        const amount = managementCostByUnit.get(unit.code) ?? 0;
+        return [unit.label, unit.code, money(amount), managementCostTotal > 0 ? pct((amount / managementCostTotal) * 100) : "0%"] ;
+      });
+      const branchSummaryByUnit: Record<CostControlUnit, { invoices: number; revenue: number }> = {
+        LAVENDER: { invoices: hotelTodayByName.get("lavender homestay")?.invoiceCount ?? 0, revenue: hotelTodayByName.get("lavender homestay")?.revenue ?? 0 },
+        RUBY: { invoices: hotelTodayByName.get("ruby homestay")?.invoiceCount ?? 0, revenue: hotelTodayByName.get("ruby homestay")?.revenue ?? 0 },
+        COZY_GARDEN: { invoices: fnbPeriod.invoiceCount, revenue: periodFnb },
+      };
+      const businessUnitOverview = controlUnits.map((unit) => {
+        const revenue = branchSummaryByUnit[unit.code].revenue;
+        const cost = managementCostByUnit.get(unit.code) ?? 0;
+        return [unit.label, String(branchSummaryByUnit[unit.code].invoices), money(revenue), money(cost), money(revenue - cost), "Số quản trị đến hiện tại; chưa phải P&L chốt tháng."];
+      });
+
       const financeSummary = businessOperating?.summary ?? null;
       const openingBusinessCash = financeSummary?.openingBusinessCash ?? null;
       const bookBusinessCash = financeSummary?.bookBusinessCash ?? null;
@@ -812,9 +873,10 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
 
       return makeResult(
         {
-          "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
-          "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
-          "Chi phí": businessExpenseActualTotal > 0 ? money(businessExpenseActualTotal) : businessExpenseSourceState === "VERIFIED" ? money(0) : "NEED VERIFY",
+          "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "CHƯA CÓ DỮ LIỆU",
+          "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "CHƯA CÓ DỮ LIỆU",
+          "Chi phí": money(managementCostTotal),
+          "Lợi nhuận ước tính": estimatedManagementProfit === null ? "CHƯA CÓ DỮ LIỆU" : money(estimatedManagementProfit),
           "Lợi nhuận gộp": "NEED VERIFY",
           "Biên lợi nhuận": "NEED VERIFY",
           "Công suất phòng": pct(stats.averageOccupancy),
@@ -822,7 +884,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": `Actual trực tiếp từ KiotViet · ${businessExpenseSourceState}. Đã map P&L ${money(businessExpenseActualTotal)}; ${businessExpenseActual.unknownExpenseRows} khoản chưa map; ${businessExpenseActual.excludedNonPnlRows} khoản non-P&L đã loại.`,
+          "Chi phí": `Chi phí điều hành đến hiện tại: estimate lũy kế Payroll/Điện/Nước khi có baseline + Actual KiotViet; Actual thay estimate, không cộng chồng.`,
+          "Lợi nhuận ước tính": "Doanh thu Actual − Chi phí điều hành đến hiện tại. Đây là số quản trị, chưa phải lợi nhuận chốt kế toán.",
           "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " +
             foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
             "; matched COST-001 " + foundationReadiness.cogs.matchedSoldSkuCount + "/" +
@@ -866,6 +929,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           businessPlannedExpenses: planExpenseRows,
           businessActualExpenses: businessExpenseActualRows,
           businessCostControl: costControlRows,
+          businessCostPlanProgress: planProgressRows,
+          businessCostBranches: costBranchRows,
+          businessUnitOverview,
           businessFinancialStack,
           businessDataGaps,
           businessDecisionSnapshot,

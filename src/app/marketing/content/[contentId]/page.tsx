@@ -54,9 +54,18 @@ function parseAssets(value: string) {
   });
 }
 
+function providerSyncState(publishStatus: string, note: string) {
+  const scheduled = /SCHEDULED|PUBLISHED/i.test(publishStatus);
+  const readBackRecorded = /Metricool|provider=PENDING|uuid=|FB scheduled|read-back/i.test(note);
+  if (!scheduled) return { status: "NOT_SCHEDULED", detail: "Chưa có provider mutation cần đồng bộ." };
+  if (readBackRecorded) return { status: "READ_BACK_RECORDED", detail: "Đã có bằng chứng lịch/provider trong canonical note. Nội dung mới không được coi đã sync nếu chưa cập nhật provider lại." };
+  return { status: "NEED_VERIFY", detail: "Có trạng thái scheduled/published nhưng chưa đủ provider read-back evidence trong canonical source." };
+}
+
 function revisionView(requestRow: Row) {
   const evidence = row(requestRow.evidence);
   const generated = row(evidence.generated_revision);
+  const assetAudit = row(evidence.asset_audit);
   return {
     key: s(requestRow.recommendation_key),
     title: s(requestRow.title),
@@ -64,6 +73,12 @@ function revisionView(requestRow: Row) {
     status: s(requestRow.status),
     revisionStatus: s(evidence.revision_status),
     aiError: s(evidence.ai_error),
+    assetAudit: {
+      status: s(assetAudit.status),
+      sourceAsset: s(assetAudit.source_asset),
+      strength: s(assetAudit.strength),
+      editScope: s(assetAudit.edit_scope),
+    },
     generated: {
       draftVi: s(generated.draftVi),
       facebookVariant: s(generated.facebookVariant),
@@ -115,6 +130,17 @@ export default async function ContentReviewPage({
   };
   const assets = parseAssets(pick(source, ["ASSET_IDS", "Asset IDs"]));
   const revisions = revisionRequests.map(revisionView);
+  const qaMedia = pick(source, ["QA_MEDIA", "QA Media"]) || "NEED VERIFY";
+  const note = pick(source, ["NOTE", "Note"]);
+  const providerSync = providerSyncState(s(content.publish_status), note);
+  const latestAssetAudit = revisions.find((revision) => revision.assetAudit.status)?.assetAudit;
+  const originalAssetStatus = qaMedia.toUpperCase() === "PASS" ? "VERIFIED / READY" : qaMedia;
+  const creativeDraftStatus = latestAssetAudit?.status
+    ? `${latestAssetAudit.status} / REVIEW_REQUIRED`
+    : "NOT_CREATED";
+  const scheduledAssetStatus = /SCHEDULED|PUBLISHED/i.test(s(content.publish_status))
+    ? (providerSync.status === "READ_BACK_RECORDED" ? "PROVIDER_SCHEDULE_RECORDED" : "NEED VERIFY")
+    : "NOT_SCHEDULED";
 
   return (
     <main className="min-h-screen bg-[#f4f7fb] px-4 py-6 md:px-8">
@@ -137,6 +163,39 @@ export default async function ContentReviewPage({
           <div><p className="text-xs text-[#7a8da8]">Định dạng</p><b className="mt-1 block text-sm text-[#173964]">{s(content.format) || "—"}</b></div>
           <div><p className="text-xs text-[#7a8da8]">Kênh runtime</p><b className="mt-1 block text-sm text-[#173964]">{s(content.channel_id) || "Đa kênh / kế hoạch"}</b></div>
         </div>
+
+        <section className="mb-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
+            <h2 className="text-base font-extrabold text-[#10285a]">Trạng thái asset</h2>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Ảnh/video gốc</span><b className="text-[#29486f]">{originalAssetStatus}</b></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Creative draft</span><b className="text-[#29486f]">{creativeDraftStatus}</b></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-[#6f83a1]">Asset đang scheduled</span><b className="text-[#29486f]">{scheduledAssetStatus}</b></div>
+            </div>
+            {latestAssetAudit ? (
+              <div className="mt-3 rounded-lg bg-[#f6f9fc] px-3 py-2 text-xs leading-5 text-[#617895]">
+                <b>{latestAssetAudit.sourceAsset || "Asset audit"}</b>
+                {latestAssetAudit.strength ? <div className="mt-1">{latestAssetAudit.strength}</div> : null}
+                {latestAssetAudit.editScope ? <div className="mt-1"><b>Phạm vi chỉnh:</b> {latestAssetAudit.editScope}</div> : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-[#dce8f4] bg-white p-4 shadow-sm">
+            <h2 className="text-base font-extrabold text-[#10285a]">Đồng bộ provider</h2>
+            <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+              <span className="text-[#6f83a1]">Trạng thái</span>
+              <b className="text-[#29486f]">{providerSync.status}</b>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#657b9d]">{providerSync.detail}</p>
+            {note ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-bold text-[#1768df]">Xem bằng chứng provider/canonical</summary>
+                <div className="mt-2 whitespace-pre-wrap rounded-lg bg-[#f6f9fc] px-3 py-2 text-xs leading-5 text-[#617895]">{note}</div>
+              </details>
+            ) : null}
+          </div>
+        </section>
 
         <section className="mb-5 rounded-xl border border-[#dce8f4] bg-white p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

@@ -109,11 +109,13 @@ export function TcePageHeader({
   subtitle,
   generatedAt,
   variant = "default",
+  enablePropertyFilter = false,
 }: {
   title: string;
   subtitle: string;
   generatedAt: string;
   variant?: "default" | "personal-finance";
+  enablePropertyFilter?: boolean;
 }) {
   const time = formatHeaderTime(generatedAt);
   const pathname = usePathname();
@@ -132,6 +134,13 @@ export function TcePageHeader({
   const [customOpen, setCustomOpen] = useState(activePeriod === "custom");
   const [customFrom, setCustomFrom] = useState(searchParams.get("from") || generatedDate);
   const [customTo, setCustomTo] = useState(searchParams.get("to") || generatedDate);
+  const selectedProperty = searchParams.get("property") || "all";
+  function changeProperty(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "all") params.delete("property"); else params.set("property", value);
+    const query = params.toString();
+    router.push(query ? pathname + "?" + query : pathname);
+  }
 
   function periodHref(key: "today" | "7d" | "month" | "year") {
     const params = new URLSearchParams(searchParams.toString());
@@ -217,9 +226,20 @@ export function TcePageHeader({
         >
           Tùy chọn
         </button>
-        <span title="Bộ lọc cơ sở đang được nối riêng" aria-disabled="true" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-[#f8fafc] px-3 py-[6px] text-[10px] font-semibold text-[#8796ac]">
-          Tất cả cơ sở <Icon name="chevron" className="h-4 w-4" />
-        </span>
+        {enablePropertyFilter ? (
+          <label className="relative ml-3">
+            <select value={selectedProperty} onChange={(event)=>changeProperty(event.target.value)} className="min-w-[190px] appearance-none rounded-[4px] border border-[#d5e1ef] bg-white px-3 py-[6px] pr-8 text-[10px] font-semibold text-[#48658d]">
+              <option value="all">Tất cả cơ sở</option>
+              <option value="homestay">Lavender + Ruby</option>
+              <option value="lavender">Lavender</option>
+              <option value="ruby">Ruby</option>
+              <option value="cozy">Cozy Garden</option>
+            </select>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"><Icon name="chevron" className="h-4 w-4" /></span>
+          </label>
+        ) : (
+          <span title="Bộ lọc cơ sở chưa áp dụng cho màn này" aria-disabled="true" className="ml-3 flex min-w-[190px] items-center justify-between rounded-[4px] border border-[#d5e1ef] bg-[#f8fafc] px-3 py-[6px] text-[10px] font-semibold text-[#8796ac]">Tất cả cơ sở <Icon name="chevron" className="h-4 w-4" /></span>
+        )}
       </div>
       {customOpen ? (
         <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
@@ -240,18 +260,20 @@ export function TceWorkspaceShell({
   generatedAt,
   children,
   headerVariant = "default",
+  enablePropertyFilter = false,
 }: {
   title: string;
   subtitle: string;
   generatedAt: string;
   children: ReactNode;
   headerVariant?: "default" | "personal-finance";
+  enablePropertyFilter?: boolean;
 }) {
   return (
     <div className="flex min-h-screen bg-[#f5f9fd]">
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-x-hidden">
-        <TcePageHeader title={title} subtitle={subtitle} generatedAt={generatedAt} variant={headerVariant} />
+        <TcePageHeader title={title} subtitle={subtitle} generatedAt={generatedAt} variant={headerVariant} enablePropertyFilter={enablePropertyFilter} />
         {children}
       </main>
     </div>

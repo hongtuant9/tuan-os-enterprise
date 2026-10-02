@@ -45,6 +45,7 @@ export type TcePeriodQuery = {
   period?: string;
   from?: string;
   to?: string;
+  property?: string;
 };
 
 export type TcePeriodResolved = {
@@ -381,6 +382,102 @@ async function safeHotelAvailability(dateKey: string): Promise<HotelAvailability
   }
 }
 
+type BusinessOccupancySnapshot = {
+  state: "VERIFIED" | "NEED_VERIFY" | "ERROR";
+  lavender: number | null;
+  ruby: number | null;
+  combined: number | null;
+  days: number;
+  note: string;
+};
+
+function genericRows(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const root = payload as Record<string, unknown>;
+  const nested = root.result && typeof root.result === "object" && !Array.isArray(root.result)
+    ? root.result as Record<string, unknown>
+    : root;
+  const value = Array.isArray(nested.data) ? nested.data : Array.isArray(root.data) ? root.data : [];
+  return value.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
+}
+
+async function safeBusinessOccupancy(
+  db: Awaited<ReturnType<typeof getRequestContainer>>["db"],
+  from: string,
+  to: string,
+): Promise<BusinessOccupancySnapshot> {
+  try {
+    const earliest = await db.from("hospitality_bookings")
+      .select("check_in")
+      .eq("source_system", "KIOTVIET_HOTEL")
+      .not("check_in", "is", null)
+      .order("check_in", { ascending: true })
+      .limit(1);
+    if (earliest.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được coverage booking runtime." };
+    const earliestDate = String(genericRows(earliest)[0]?.check_in ?? "") || null;
+    if (!earliestDate || earliestDate > from) {
+      return {
+        state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0,
+        note: earliestDate ? `Booking runtime hiện có coverage từ ${earliestDate}; kỳ lọc bắt đầu ${from} nên chưa đủ dữ liệu occupancy.` : "Booking runtime chưa có coverage occupancy.",
+      };
+    }
+
+    const toExclusive = addDateDays(to, 1);
+    const result = await db.from("hospitality_bookings")
+      .select("check_in,check_out,room_count,room_names,booking_status,verification_status")
+      .eq("source_system", "KIOTVIET_HOTEL")
+      .eq("verification_status", "VERIFIED")
+      .in("booking_status", ["CONFIRMED", "COMPLETED"])
+      .lt("check_in", toExclusive)
+      .gt("check_out", from);
+    if (result.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được booking runtime cho occupancy." };
+
+    const dayMs = 86_400_000;
+    const days = Math.max(0, Math.round((Date.parse(toExclusive + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) / dayMs));
+    if (days <= 0) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0, note: "Kỳ occupancy không hợp lệ." };
+
+    let lavenderRoomNights = 0;
+    let rubyRoomNights = 0;
+    let unresolved = 0;
+    for (const row of genericRows(result)) {
+      const checkIn = String(row.check_in ?? "");
+      const checkOut = String(row.check_out ?? "");
+      if (!checkIn || !checkOut || checkOut <= checkIn) { unresolved += 1; continue; }
+      const overlapStart = Math.max(Date.parse(checkIn + "T00:00:00Z"), Date.parse(from + "T00:00:00Z"));
+      const overlapEnd = Math.min(Date.parse(checkOut + "T00:00:00Z"), Date.parse(toExclusive + "T00:00:00Z"));
+      const nights = Math.max(0, Math.round((overlapEnd - overlapStart) / dayMs));
+      if (nights <= 0) continue;
+      const roomNames = Array.isArray(row.room_names) ? row.room_names.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      const roomCount = Math.max(0, Number(row.room_count ?? 0));
+      if (!roomNames.length || roomCount > roomNames.length) unresolved += 1;
+      for (const roomName of roomNames) {
+        if (/_la$/i.test(roomName)) lavenderRoomNights += nights;
+        else if (/(double|dobule|twin)$/i.test(roomName)) rubyRoomNights += nights;
+        else unresolved += 1;
+      }
+    }
+    if (unresolved > 0) {
+      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: `${unresolved} booking/room chưa map được Lavender/Ruby; occupancy giữ fail-closed.` };
+    }
+
+    const lavenderCapacity = 7 * days;
+    const rubyCapacity = 6 * days;
+    if (lavenderRoomNights > lavenderCapacity || rubyRoomNights > rubyCapacity) {
+      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: "Occupied room-nights vượt canonical capacity; cần đối chiếu booking overlap/room mapping." };
+    }
+    const lavender = lavenderCapacity > 0 ? lavenderRoomNights / lavenderCapacity * 100 : null;
+    const ruby = rubyCapacity > 0 ? rubyRoomNights / rubyCapacity * 100 : null;
+    const combinedCapacity = lavenderCapacity + rubyCapacity;
+    const combined = combinedCapacity > 0 ? (lavenderRoomNights + rubyRoomNights) / combinedCapacity * 100 : null;
+    return {
+      state: "VERIFIED", lavender, ruby, combined, days,
+      note: `KiotViet Hotel booking runtime room-nights × canonical inventory L3 (Lavender 7, Ruby 6), ${days} ngày.`,
+    };
+  } catch {
+    return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được occupancy runtime." };
+  }
+}
+
 function priorityRank(priority: string) {
   if (priority === "high" || priority === "P0") return 0;
   if (priority === "medium" || priority === "P1") return 1;
@@ -477,16 +574,25 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const businessFnbExpensePromise = screen === "business"
       ? financeReadWithTimeout(fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", period.from, period.to))
       : Promise.resolve(null);
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness, businessOperating, businessHotelExpense, businessFnbExpense] = await Promise.all([
+    const businessHotelMonthExpensePromise = screen === "business"
+      ? (sameAsCurrentMonth ? businessHotelExpensePromise : financeReadWithTimeout(fetchHotelCashflowActual(monthStart + "T00:00:00", today + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_HOTEL", monthStart, today)))
+      : Promise.resolve(null);
+    const businessFnbMonthExpensePromise = screen === "business"
+      ? (sameAsCurrentMonth ? businessFnbExpensePromise : financeReadWithTimeout(fetchFnbCashflowActual(monthStart + "T00:00:00", today + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", monthStart, today)))
+      : Promise.resolve(null);
+    const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessHotelExpense, businessFnbExpense, businessHotelMonthExpense, businessFnbMonthExpense, businessOccupancy] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
       fnbMonthPromise,
-      container.dashboard.stats(),
       readFinanceFoundationReadiness(),
       screen === "business" ? readBusinessOperatingSnapshot(container.db, businessFinanceMonth) : Promise.resolve(null),
       businessHotelExpensePromise,
       businessFnbExpensePromise,
+      businessHotelMonthExpensePromise,
+      businessFnbMonthExpensePromise,
+      occupancyPromise,
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -521,30 +627,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       const row = hotelTodayByName.get(name.toLowerCase());
       return { name: "Hotel · " + name, invoices: row?.invoiceCount ?? 0, revenue: row?.revenue ?? 0, source: "KiotViet Hotel" };
     });
-    const cozyTodayRows = fnbToday.branchBreakdown.length
-      ? fnbToday.branchBreakdown.map((b) => ({ name: "F&B · " + (b.branchName || "Cozy Garden"), invoices: b.invoiceCount, revenue: b.revenue, source: "KiotViet F&B" }))
-      : [{ name: "F&B · Cozy Garden", invoices: 0, revenue: 0, source: "KiotViet F&B" }];
-    const branchRows = [...hotelTodayRows, ...cozyTodayRows];
     if (screen === "business") {
       const businessDirectReadStates = [hotelPeriod.state, fnbPeriod.state, hotelMonth.state, fnbMonth.state];
       const businessPipelineReadable = businessDirectReadStates.every((state) => state !== "ERROR" && state !== "UNAVAILABLE");
       const businessRevenueVerified = bothTodayVerified && bothMonthVerified;
       const businessVerificationGuides: Record<string, TceVerificationGuide> = {
-        "Chi phí": { title: "Chi phí thực tế", status: "CẦN XÁC MINH", severity: "P0",
-          reason: `Expense Actual coverage ${foundationReadiness.expense.coveragePct.toFixed(1)}%; missing=${foundationReadiness.expense.missingRows}; partial=${foundationReadiness.expense.partialRows}. Source Map đã ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows}.`,
-          verifyWhat: ["Actual Expense theo business unit/category/kỳ.", "Khoản nào là P&L Expense, khoản nào chỉ là Cash Out/non-P&L."],
-          currentEvidence: [
-            `FIN Source Map đã đủ ${foundationReadiness.expense.sourceMappedRows}/${foundationReadiness.expense.requiredRows} dòng bắt buộc.`,
-            `Đã đóng ${Math.max(0, foundationReadiness.expense.requiredRows - foundationReadiness.expense.missingRows - foundationReadiness.expense.partialRows)}/${foundationReadiness.expense.requiredRows} dòng Actual; còn ${foundationReadiness.expense.missingRows} missing + ${foundationReadiness.expense.partialRows} partial.`,
-            "F&B Cashbook đã reconcile nhưng Cash Out trả NCC hàng tồn kho là non-P&L; không dùng thay Expense.",
-            "Cozy Google Ads đã có 2 payment evidence tháng 9, tổng Cash Paid 3.000.000đ; P&L còn chờ rule VAT net/gross.",
-          ],
-          blocker: `Expense coverage mới ${foundationReadiness.expense.coveragePct.toFixed(1)}%; payroll/utilities/OTA/OPEX còn thiếu hoặc partial, nên không được tính Profit.`,
-          evidenceRequired: ["Payroll/chấm công đã chốt.", "Hóa đơn/chứng từ utilities, OTA commission, supplier/OPEX đúng kỳ.", "KiotViet authenticated source + source transaction ID khi có."],
-          steps: ["Đóng các dòng missing trước.", "Đối chiếu category/business unit.", "Loại non-P&L khỏi Expense.", "Chạy reconciliation và coverage."],
-          owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + kế toán/lương", source: "KiotViet Hotel/F&B direct authenticated runtime; FIN-HOSPITALITY-001 chỉ là Planning/Taxonomy",
-          completionCriteria: ["Actual Expense coverage = 100% hoặc approved exception.", "Không duplicate Nhập hàng/Bảng lương/Sổ quỹ."],
-          nextAction: `Đóng ${foundationReadiness.expense.missingRows} dòng missing và ${foundationReadiness.expense.partialRows} dòng partial theo Source Map.` },
         "Lợi nhuận gộp": { title: "Lợi nhuận gộp", status: "CẦN XÁC MINH", severity: "P0",
           reason: `Revenue đã có nhưng COGS sold-SKU chưa đủ: BOM VERIFIED ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}; COST-001 match ${foundationReadiness.cogs.matchedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}.`,
           verifyWhat: ["COGS cho từng SKU thực bán.", "BOM/định lượng/giá nguyên liệu đủ authority."],
@@ -571,7 +658,6 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           owner: "AI CFO", provider: "Không cần chứng từ riêng ngoài Revenue/COGS đã VERIFIED", source: "Canonical Finance Calculation Layer",
           completionCriteria: ["Gross Profit VERIFIED.", "COGS coverage PASS."], nextAction: "Tự chuyển VERIFIED sau khi Gross Profit/COGS đạt gate." },
       };
-      businessVerificationGuides["Chi phí vận hành"] = businessVerificationGuides["Chi phí"];
       const businessFreshness: TceTabLiveData["freshness"] = {
         dataThrough: businessPipelineReadable ? now.toISOString() : null,
         lastSyncAt: businessPipelineReadable ? now.toISOString() : null,
@@ -592,52 +678,6 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         owner: "AI CTO + AI CFO / TCE Business",
       };
 
-      const businessExpenseSnapshots = [businessHotelExpense, businessFnbExpense].filter((snapshot): snapshot is KiotVietCashflowSnapshot => Boolean(snapshot));
-      const businessVerifiedExpenseRows = businessExpenseSnapshots
-        .filter((snapshot) => snapshot.state === "VERIFIED")
-        .flatMap((snapshot) => snapshot.rows);
-      const businessExpenseActual = summarizeExpenseActualRows(businessVerifiedExpenseRows.map((row) => ({
-        id: row.id,
-        transDate: row.transDate,
-        amount: row.amount,
-        isReceipt: row.isReceipt,
-        groupLabel: row.cashFlowGroupName || row.cashFlowGroupId || "",
-        status: row.status,
-      })));
-      const businessExpenseSourceState = businessExpenseSnapshots.length === 2 && businessExpenseSnapshots.every((snapshot) => snapshot.state === "VERIFIED")
-        ? "VERIFIED"
-        : businessExpenseSnapshots.some((snapshot) => snapshot.state === "VERIFIED") ? "PARTIAL" : "HOLD";
-      const businessExpenseActualTotal = businessExpenseActual.directMappedAmount;
-      const businessExpenseActualRows = businessExpenseActual.groups.map((group, i) => [
-        String(i + 1),
-        `[TCE-${group.code}] ${group.canonicalCategory}`,
-        money(group.amount),
-        String(group.transactionCount),
-        group.verificationStatus,
-        "KiotViet trực tiếp",
-        group.note,
-      ]);
-      if (!businessExpenseActualRows.length) {
-        businessExpenseActualRows.push(["—", "Chưa có khoản chi P&L đọc trực tiếp đủ điều kiện", "—", "0", businessExpenseSourceState, "KiotViet Hotel/F&B", "Không suy chi phí = 0 khi nguồn chưa đủ."]);
-      }
-      const planExpenseRows = (businessOperating?.plan ?? [])
-        .filter((row) => String(row.line_code ?? "").startsWith("PLAN_EXP_"))
-        .map((row, i) => {
-          const code = String(row.line_code ?? "");
-          const raw = row.target_amount ?? row.baseline_amount;
-          const isRatio = code.includes("GUARDRAIL") || code.includes("MARKETING_BASELINE");
-          const value = raw === null || raw === undefined ? "—" : isRatio ? pct(Number(raw) * 100) + " doanh thu" : money(Number(raw));
-          return [
-            String(i + 1),
-            row.business_unit === "HOSPITALITY_SHARED" ? "Dùng chung Hospitality" : String(row.business_unit ?? "—").replace("COZY_GARDEN", "Cozy Garden").replace("LAVENDER", "Lavender").replace("RUBY", "Ruby"),
-            row.line_name ?? code,
-            value,
-            row.verification_status ?? "ESTIMATED",
-            row.source_reference ?? row.source ?? "FIN-HOSPITALITY-001",
-            row.formula_note ?? "Planning only; không dùng thay Actual.",
-          ];
-        });
-
       type CostControlUnit = "LAVENDER" | "RUBY" | "COZY_GARDEN";
       type CostControlGroup = "Payroll" | "Điện & Nước" | "Software" | "Marketing" | "OTA" | "Nguyên liệu / Mua hàng" | "Khác";
       const controlUnits: Array<{ code: CostControlUnit; label: string }> = [
@@ -646,194 +686,269 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         { code: "COZY_GARDEN", label: "Cozy Garden" },
       ];
       const controlGroups: CostControlGroup[] = ["Payroll", "Điện & Nước", "Software", "Marketing", "OTA", "Nguyên liệu / Mua hàng", "Khác"];
+      const requestedProperty = String(query.property ?? "all").toLowerCase();
+      const selectedUnitCodes: CostControlUnit[] = requestedProperty === "lavender"
+        ? ["LAVENDER"]
+        : requestedProperty === "ruby"
+          ? ["RUBY"]
+          : requestedProperty === "cozy"
+            ? ["COZY_GARDEN"]
+            : requestedProperty === "homestay"
+              ? ["LAVENDER", "RUBY"]
+              : ["LAVENDER", "RUBY", "COZY_GARDEN"];
+      const selectedUnitSet = new Set<CostControlUnit>(selectedUnitCodes);
       const codeToControlGroup: Record<string, CostControlGroup> = {
         C01: "Payroll", C02: "Điện & Nước", C03: "Điện & Nước", C04: "Software", C06: "Marketing", H01: "OTA",
         N01: "Nguyên liệu / Mua hàng", F02: "Nguyên liệu / Mua hàng",
         C05: "Khác", C07: "Khác", C08: "Khác", C09: "Khác", C10: "Khác", C11: "Khác", F01: "Khác", H02: "Khác", H03: "Khác",
       };
-      const hotelBranchToUnit = new Map<string, CostControlUnit>();
-      for (const branch of hotelPeriod.branchBreakdown) {
-        const name = (branch.branchName || "").toLowerCase();
-        if (branch.branchId && name.includes("lavender")) hotelBranchToUnit.set(branch.branchId, "LAVENDER");
-        if (branch.branchId && name.includes("ruby")) hotelBranchToUnit.set(branch.branchId, "RUBY");
-      }
-      const actualByUnitGroup = new Map<string, number>();
-      const actualCountByUnitGroup = new Map<string, number>();
-      let unresolvedHotelActualRows = 0;
-      for (const snapshot of businessExpenseSnapshots.filter((item) => item.state === "VERIFIED")) {
-        for (const row of snapshot.rows) {
-          if (row.isReceipt !== false) continue;
-          const expenseCode = resolveExpenseCode(row.cashFlowGroupName || row.cashFlowGroupId || "");
-          if (!expenseCode) continue;
-          const group = codeToControlGroup[expenseCode];
-          if (!group) continue;
-          const unit: CostControlUnit | null = snapshot.source === "KIOTVIET_FNB"
-            ? "COZY_GARDEN"
-            : hotelBranchToUnit.get(row.branchId) ?? null;
-          if (!unit) {
-            unresolvedHotelActualRows += 1;
-            continue;
-          }
-          const key = `${unit}|${group}`;
-          actualByUnitGroup.set(key, (actualByUnitGroup.get(key) ?? 0) + Math.max(0, row.amount));
-          actualCountByUnitGroup.set(key, (actualCountByUnitGroup.get(key) ?? 0) + 1);
-        }
-      }
+
+      const periodHotelByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
+      const monthHotelByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
       const periodRevenueByUnit: Record<CostControlUnit, number> = {
-        LAVENDER: hotelTodayByName.get("lavender homestay")?.revenue ?? 0,
-        RUBY: hotelTodayByName.get("ruby homestay")?.revenue ?? 0,
+        LAVENDER: periodHotelByName.get("lavender homestay")?.revenue ?? 0,
+        RUBY: periodHotelByName.get("ruby homestay")?.revenue ?? 0,
         COZY_GARDEN: periodFnb,
       };
-      const planByUnitGroup = new Map<string, { amount: number | null; display: string; status: string; source: string; note: string }>();
-      const planLines = businessOperating?.plan ?? [];
-      const setFixedPlan = (unit: CostControlUnit, group: CostControlGroup, lineCode: string) => {
-        const row = planLines.find((item) => item.business_unit === unit && item.line_code === lineCode);
-        const raw = row?.target_amount ?? row?.baseline_amount ?? null;
-        if (raw === null) return;
-        planByUnitGroup.set(`${unit}|${group}`, { amount: Number(raw), display: money(Number(raw)), status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: row?.formula_note ?? "Planning baseline" });
+      const monthRevenueByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: monthHotelByName.get("lavender homestay")?.revenue ?? 0,
+        RUBY: monthHotelByName.get("ruby homestay")?.revenue ?? 0,
+        COZY_GARDEN: monthFnb,
       };
-      setFixedPlan("LAVENDER", "Điện & Nước", "PLAN_EXP_UTILITIES");
-      setFixedPlan("RUBY", "Điện & Nước", "PLAN_EXP_UTILITIES");
-      setFixedPlan("COZY_GARDEN", "Điện & Nước", "PLAN_EXP_UTILITIES");
-      setFixedPlan("LAVENDER", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
-      setFixedPlan("RUBY", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
-      setFixedPlan("LAVENDER", "Khác", "PLAN_EXP_OTHER");
-      setFixedPlan("RUBY", "Khác", "PLAN_EXP_OTHER");
-      setFixedPlan("COZY_GARDEN", "Khác", "PLAN_EXP_OTHER");
-      setFixedPlan("COZY_GARDEN", "Software", "PLAN_EXP_SOFTWARE_COZY");
-      const homestayRevenueTotal = periodRevenueByUnit.LAVENDER + periodRevenueByUnit.RUBY;
-      const allocateSharedByRevenue = (group: CostControlGroup, lineCode: string) => {
-        const row = planLines.find((item) => item.business_unit === "HOSPITALITY_SHARED" && item.line_code === lineCode);
-        const raw = row?.target_amount ?? row?.baseline_amount ?? null;
-        if (raw === null || homestayRevenueTotal <= 0) return;
-        for (const unit of ["LAVENDER", "RUBY"] as CostControlUnit[]) {
-          const share = periodRevenueByUnit[unit] / homestayRevenueTotal;
-          const amount = Number(raw) * share;
-          planByUnitGroup.set(`${unit}|${group}`, {
-            amount, display: `${money(amount)} (phân bổ ${pct(share * 100)})`, status: row?.verification_status ?? "ESTIMATED",
-            source: row?.source_reference ?? "FIN-HOSPITALITY-001",
-            note: `Management allocation từ Hospitality Shared theo tỷ trọng Revenue Actual; accounting source vẫn Shared.`,
-          });
-        }
+      const periodInvoicesByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: periodHotelByName.get("lavender homestay")?.invoiceCount ?? 0,
+        RUBY: periodHotelByName.get("ruby homestay")?.invoiceCount ?? 0,
+        COZY_GARDEN: fnbPeriod.invoiceCount,
       };
-      allocateSharedByRevenue("Payroll", "PLAN_EXP_PAYROLL_HOMESTAY");
-      allocateSharedByRevenue("Software", "PLAN_EXP_SOFTWARE_HOMESTAY");
-      for (const unit of ["LAVENDER", "RUBY"] as CostControlUnit[]) {
-        const ota = planLines.find((item) => item.business_unit === unit && item.line_code === "PLAN_EXP_OTA_BOOKING");
-        const ratio = Number(ota?.target_amount ?? ota?.baseline_amount ?? Number.NaN);
-        if (Number.isFinite(ratio)) {
-          planByUnitGroup.set(`${unit}|OTA`, { amount: null, display: `${pct(ratio * 100)} DT Booking.com`, status: ota?.verification_status ?? "ESTIMATED", source: ota?.source_reference ?? "FIN-HOSPITALITY-001", note: "Chưa quy đổi thành tiền vì runtime chưa tách Revenue Booking.com theo property; không áp tỷ lệ lên toàn Revenue." });
-        }
-      }
-      const setRevenueRatioPlan = (unit: CostControlUnit, group: CostControlGroup, lineCode: string) => {
-        const row = planLines.find((item) => item.business_unit === unit && item.line_code === lineCode);
-        const ratio = Number(row?.target_amount ?? row?.baseline_amount ?? Number.NaN);
-        if (!Number.isFinite(ratio)) return;
-        const revenue = periodRevenueByUnit[unit];
-        const amount = revenue * ratio;
-        planByUnitGroup.set(`${unit}|${group}`, { amount, display: `${money(amount)} (${pct(ratio * 100)} DT Actual)`, status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: `Ngân sách kỳ = ${pct(ratio * 100)} × Revenue Actual cùng kỳ.` });
+      const monthInvoicesByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: monthHotelByName.get("lavender homestay")?.invoiceCount ?? 0,
+        RUBY: monthHotelByName.get("ruby homestay")?.invoiceCount ?? 0,
+        COZY_GARDEN: fnbMonth.invoiceCount,
       };
-      setRevenueRatioPlan("COZY_GARDEN", "Nguyên liệu / Mua hàng", "PLAN_EXP_COGS_GUARDRAIL");
-      setRevenueRatioPlan("COZY_GARDEN", "Payroll", "PLAN_EXP_PAYROLL_GUARDRAIL");
-      setRevenueRatioPlan("COZY_GARDEN", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
+      const selectedPeriodRevenue = selectedUnitCodes.reduce((sum, unit) => sum + periodRevenueByUnit[unit], 0);
 
-      const actualSourceReadyForUnit = (unit: CostControlUnit) => unit === "COZY_GARDEN"
-        ? businessFnbExpense?.state === "VERIFIED"
-        : businessHotelExpense?.state === "VERIFIED" && unresolvedHotelActualRows === 0;
-      const costControlRows: string[][] = [];
-      for (const unit of controlUnits) {
-        for (const group of controlGroups) {
-          const key = `${unit.code}|${group}`;
-          const plan = planByUnitGroup.get(key);
-          const actualReady = actualSourceReadyForUnit(unit.code);
-          const actual = actualByUnitGroup.get(key) ?? (actualReady ? 0 : null);
-          const planAmount = plan?.amount ?? null;
-          const variance = planAmount !== null && actual !== null ? planAmount - actual : null;
-          const usage = planAmount !== null && planAmount > 0 && actual !== null ? (actual / planAmount) * 100 : null;
-          let alert = "CẦN XÁC MINH";
-          if (!plan) {
-            alert = "CẦN XÁC MINH — chưa có kế hoạch chuẩn";
-          } else if (!actualReady) {
-            alert = "CẦN XÁC MINH — KiotViet chưa tách đủ theo cơ sở";
-          } else if (usage !== null) {
-            alert = usage > 100 ? "VƯỢT NGÂN SÁCH" : usage >= 85 ? "CẢNH BÁO ≥85%" : "TRONG NGÂN SÁCH";
+      const branchToUnit = new Map<string, CostControlUnit>();
+      for (const branch of [...hotelPeriod.branchBreakdown, ...hotelMonth.branchBreakdown]) {
+        const name = (branch.branchName || "").toLowerCase();
+        if (branch.branchId && name.includes("lavender")) branchToUnit.set(branch.branchId, "LAVENDER");
+        if (branch.branchId && name.includes("ruby")) branchToUnit.set(branch.branchId, "RUBY");
+      }
+      const buildActualMap = (hotelSnapshot: KiotVietCashflowSnapshot | null, fnbSnapshot: KiotVietCashflowSnapshot | null) => {
+        const amounts = new Map<string, number>();
+        const counts = new Map<string, number>();
+        let unresolvedHotelRows = 0;
+        for (const snapshot of [hotelSnapshot, fnbSnapshot].filter((item): item is KiotVietCashflowSnapshot => Boolean(item?.state === "VERIFIED"))) {
+          for (const row of snapshot.rows) {
+            if (row.isReceipt !== false) continue;
+            const expenseCode = resolveExpenseCode(row.cashFlowGroupName || row.cashFlowGroupId || "");
+            if (!expenseCode) continue;
+            const group = codeToControlGroup[expenseCode];
+            if (!group) continue;
+            const unit: CostControlUnit | null = snapshot.source === "KIOTVIET_FNB" ? "COZY_GARDEN" : branchToUnit.get(row.branchId) ?? null;
+            if (!unit) { unresolvedHotelRows += 1; continue; }
+            const key = `${unit}|${group}`;
+            amounts.set(key, (amounts.get(key) ?? 0) + Math.max(0, row.amount));
+            counts.set(key, (counts.get(key) ?? 0) + 1);
           }
-          costControlRows.push([
-            unit.label,
-            group,
-            plan?.display ?? "CẦN XÁC MINH",
-            actual === null ? "CẦN XÁC MINH" : money(actual),
-            variance === null ? "—" : money(variance),
-            usage === null ? "—" : pct(usage),
-            alert,
-            plan?.source ?? "FIN-HOSPITALITY-001 / chưa có dòng kế hoạch",
-            group === "Nguyên liệu / Mua hàng" ? `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet payment/purchase spend; không đồng nghĩa COGS.` : `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet`,
-          ]);
         }
-      }
+        return { amounts, counts, unresolvedHotelRows };
+      };
+      const periodActual = buildActualMap(businessHotelExpense, businessFnbExpense);
+      const monthActual = buildActualMap(businessHotelMonthExpense, businessFnbMonthExpense);
 
-      const daysInCurrentMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
-      const currentDayOfMonth = Number(today.slice(8, 10));
-      const monthToDateRatio = period.key === "month" ? Math.min(1, Math.max(0, currentDayOfMonth / daysInCurrentMonth)) : 1;
-      const managementCostByUnit = new Map<CostControlUnit, number>();
+
+      const bookingRevenueByUnit = (snapshot: RevenueSnapshot): Record<"LAVENDER" | "RUBY", number> => {
+        const out = { LAVENDER: 0, RUBY: 0 };
+        for (const row of snapshot.saleChannelBreakdown ?? []) {
+          if (!row.saleChannelName.toLowerCase().includes("booking")) continue;
+          const branch = row.branchName.toLowerCase();
+          if (branch.includes("lavender")) out.LAVENDER += row.revenue;
+          if (branch.includes("ruby")) out.RUBY += row.revenue;
+        }
+        return out;
+      };
+      const periodBookingRevenue = bookingRevenueByUnit(hotelPeriod);
+      const monthBookingRevenue = bookingRevenueByUnit(hotelMonth);
+
+      const planLines = businessOperating?.plan ?? [];
+      const planLine = (unit: string, code: string) => planLines.find((row) => row.business_unit === unit && row.line_code === code);
+      const planAmount = (unit: string, code: string): number | null => {
+        const row = planLine(unit, code);
+        const raw = row?.target_amount ?? row?.baseline_amount ?? null;
+        return raw === null || raw === undefined || !Number.isFinite(Number(raw)) ? null : Number(raw);
+      };
+      const homestayPayrollMonthly = planAmount("HOSPITALITY_SHARED", "PLAN_EXP_PAYROLL_HOMESTAY") ?? 0;
+      const cozyPayrollMonthly = planAmount("COZY_GARDEN", "PLAN_EXP_PAYROLL_COZY") ?? 0;
+      const homestaySoftwareMonthly = planAmount("HOSPITALITY_SHARED", "PLAN_EXP_SOFTWARE_HOMESTAY") ?? 0;
+      const cozySoftwareMonthly = planAmount("COZY_GARDEN", "PLAN_EXP_SOFTWARE_COZY") ?? 0;
+      const utilitiesMonthly: Record<CostControlUnit, number> = {
+        LAVENDER: planAmount("LAVENDER", "PLAN_EXP_UTILITIES") ?? 0,
+        RUBY: planAmount("RUBY", "PLAN_EXP_UTILITIES") ?? 0,
+        COZY_GARDEN: planAmount("COZY_GARDEN", "PLAN_EXP_UTILITIES") ?? 0,
+      };
+      const homestayMonthRevenue = monthRevenueByUnit.LAVENDER + monthRevenueByUnit.RUBY;
+      const payrollMonthlyByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: homestayMonthRevenue > 0 ? homestayPayrollMonthly * monthRevenueByUnit.LAVENDER / homestayMonthRevenue : homestayPayrollMonthly * 7 / 13,
+        RUBY: homestayMonthRevenue > 0 ? homestayPayrollMonthly * monthRevenueByUnit.RUBY / homestayMonthRevenue : homestayPayrollMonthly * 6 / 13,
+        COZY_GARDEN: cozyPayrollMonthly,
+      };
+      const softwareMonthlyByUnit: Record<CostControlUnit, number> = {
+        LAVENDER: homestaySoftwareMonthly / 2,
+        RUBY: homestaySoftwareMonthly / 2,
+        COZY_GARDEN: cozySoftwareMonthly,
+      };
+
+      const todayDate = new Date(today + "T00:00:00Z");
+      const currentYear = todayDate.getUTCFullYear();
+      const currentMonthIndex = todayDate.getUTCMonth();
+      const currentMonthDays = new Date(Date.UTC(currentYear, currentMonthIndex + 1, 0)).getUTCDate();
+      const overlapDays = (from: string, to: string, rangeFrom: string, rangeTo: string) => {
+        const start = Math.max(Date.parse(from + "T00:00:00Z"), Date.parse(rangeFrom + "T00:00:00Z"));
+        const end = Math.min(Date.parse(to + "T00:00:00Z"), Date.parse(rangeTo + "T00:00:00Z"));
+        return end < start ? 0 : Math.floor((end - start) / 86_400_000) + 1;
+      };
+      const selectedCurrentMonthDays = overlapDays(period.from, period.to, monthStart, today);
+      const currentMonthRatioForPeriod = selectedCurrentMonthDays / currentMonthDays;
+      const monthToDateRatio = Number(today.slice(8, 10)) / currentMonthDays;
+      const softwareServiceFrom = "2026-03-04";
+      const softwareServiceTo = "2027-03-03";
+      const softwareAccrualRatioForPeriod = (() => {
+        const days = overlapDays(period.from, period.to, softwareServiceFrom, softwareServiceTo);
+        if (days <= 0) return 0;
+        // Daily allocation only for filtered views; full current-month table below still uses monthly reserve.
+        const selectedStart = new Date(Math.max(Date.parse(period.from + "T00:00:00Z"), Date.parse(softwareServiceFrom + "T00:00:00Z")));
+        let ratio = 0;
+        for (let i = 0; i < days; i += 1) {
+          const d = new Date(selectedStart.getTime() + i * 86_400_000);
+          const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+          ratio += 1 / dim;
+        }
+        return ratio;
+      })();
+
+      const managementCost = (scope: "period" | "month", revenueByUnit: Record<CostControlUnit, number>, bookingRevenue: Record<"LAVENDER" | "RUBY", number>) => {
+        const actualMap = scope === "period" ? periodActual : monthActual;
+        const ratio = scope === "period" ? currentMonthRatioForPeriod : monthToDateRatio;
+        const softwareRatio = scope === "period" ? softwareAccrualRatioForPeriod : monthToDateRatio;
+        const byUnit = new Map<CostControlUnit, number>();
+        const byUnitGroup = new Map<string, number>();
+        const sourceByUnitGroup = new Map<string, string>();
+        for (const unit of controlUnits.map((item) => item.code)) {
+          let total = 0;
+          for (const group of controlGroups) {
+            const key = `${unit}|${group}`;
+            const actual = actualMap.amounts.get(key) ?? 0;
+            let value = actual;
+            let source = actual > 0 ? `KiotViet Actual · ${actualMap.counts.get(key) ?? 0} khoản` : "Chưa phát sinh Actual";
+            if (group === "Payroll") {
+              const estimate = payrollMonthlyByUnit[unit] * ratio;
+              if (actual <= 0) { value = estimate; source = `Payroll kế hoạch phân bổ kỳ · ${pct(ratio * 100)} tháng`; }
+            } else if (group === "Điện & Nước") {
+              const estimate = utilitiesMonthly[unit] * ratio;
+              if (actual <= 0) { value = estimate; source = `Utilities kế hoạch phân bổ kỳ · ${pct(ratio * 100)} tháng`; }
+            } else if (group === "Software") {
+              value = softwareMonthlyByUnit[unit] * softwareRatio;
+              source = "Phân bổ phí Software/OTA connection theo kỳ; đồng thời là mức trích quỹ dự phòng";
+            } else if (group === "OTA") {
+              value = unit === "LAVENDER" || unit === "RUBY" ? bookingRevenue[unit] * 0.20 : 0;
+              source = unit === "COZY_GARDEN" ? "Không áp dụng" : `Booking.com Revenue Actual × 20% (${money(bookingRevenue[unit])} × 20%)`;
+            }
+            byUnitGroup.set(key, value);
+            sourceByUnitGroup.set(key, source);
+            total += value;
+          }
+          byUnit.set(unit, total);
+        }
+        return { byUnit, byUnitGroup, sourceByUnitGroup };
+      };
+      const periodManagement = managementCost("period", periodRevenueByUnit, periodBookingRevenue);
+      const monthManagement = managementCost("month", monthRevenueByUnit, monthBookingRevenue);
+      const selectedManagementCost = selectedUnitCodes.reduce((sum, unit) => sum + (periodManagement.byUnit.get(unit) ?? 0), 0);
+      const selectedManagementProfit = selectedPeriodRevenue - selectedManagementCost;
+
+      const costBranchRows = controlUnits.filter((unit) => selectedUnitSet.has(unit.code)).map((unit) => {
+        const amount = periodManagement.byUnit.get(unit.code) ?? 0;
+        return [unit.label, unit.code, money(amount), selectedManagementCost > 0 ? pct((amount / selectedManagementCost) * 100) : "0%"];
+      });
+      const revenueBranchRows = controlUnits.filter((unit) => selectedUnitSet.has(unit.code)).map((unit) => {
+        const revenue = periodRevenueByUnit[unit.code];
+        return [unit.label, String(periodInvoicesByUnit[unit.code]), money(revenue), selectedPeriodRevenue > 0 ? pct((revenue / selectedPeriodRevenue) * 100) : "0%"];
+      });
+      const profitBranchRows = controlUnits.filter((unit) => selectedUnitSet.has(unit.code)).map((unit) => {
+        const value = periodRevenueByUnit[unit.code] - (periodManagement.byUnit.get(unit.code) ?? 0);
+        return [unit.label, money(value), String(Math.round(value))];
+      });
+
+      const fullMonthPlanByUnitGroup = new Map<string, { amount: number | null; display: string; source: string }>();
+      for (const unit of controlUnits.map((item) => item.code)) {
+        fullMonthPlanByUnitGroup.set(`${unit}|Payroll`, { amount: payrollMonthlyByUnit[unit], display: money(payrollMonthlyByUnit[unit]), source: unit === "COZY_GARDEN" ? "Owner-confirmed payroll 41m/tháng; Actual KiotViet payroll là authority khi chốt." : "Homestay Shared 32m phân bổ Lavender/Ruby theo Revenue Actual tháng." });
+        fullMonthPlanByUnitGroup.set(`${unit}|Điện & Nước`, { amount: utilitiesMonthly[unit], display: money(utilitiesMonthly[unit]), source: "FIN-HOSPITALITY-001 · Utilities tháng." });
+        fullMonthPlanByUnitGroup.set(`${unit}|Software`, { amount: softwareMonthlyByUnit[unit], display: money(softwareMonthlyByUnit[unit]), source: unit === "COZY_GARDEN" ? "Software Cozy monthly baseline." : "25,48m/năm ÷ 12 ÷ 2 cơ sở; trích quỹ dự phòng hàng tháng." });
+        const marketingRatio = unit === "COZY_GARDEN" ? (planAmount("COZY_GARDEN", "PLAN_EXP_MARKETING_BASELINE") ?? 0) : 0;
+        const marketingBudget = unit === "COZY_GARDEN" ? monthRevenueByUnit[unit] * marketingRatio : 0;
+        fullMonthPlanByUnitGroup.set(`${unit}|Marketing`, { amount: marketingBudget, display: money(marketingBudget), source: unit === "COZY_GARDEN" ? `${pct(marketingRatio * 100)} Revenue Actual tháng` : "Owner-confirmed budget = 0; chưa triển khai." });
+        const otaBudget = unit === "LAVENDER" || unit === "RUBY" ? monthBookingRevenue[unit] * 0.20 : 0;
+        fullMonthPlanByUnitGroup.set(`${unit}|OTA`, { amount: otaBudget, display: money(otaBudget), source: unit === "COZY_GARDEN" ? "Không áp dụng" : `Booking.com Revenue Actual tháng ${money(monthBookingRevenue[unit])} × 20%.` });
+        const materialRatio = unit === "COZY_GARDEN" ? (planAmount("COZY_GARDEN", "PLAN_EXP_COGS_GUARDRAIL") ?? 0) : 0;
+        const materialBudget = unit === "COZY_GARDEN" ? monthRevenueByUnit[unit] * materialRatio : null;
+        fullMonthPlanByUnitGroup.set(`${unit}|Nguyên liệu / Mua hàng`, { amount: materialBudget, display: materialBudget === null ? "CHƯA THIẾT LẬP" : money(materialBudget), source: unit === "COZY_GARDEN" ? `${pct(materialRatio * 100)} Revenue Actual tháng; guardrail mua hàng, không phải COGS.` : "Chưa thiết lập monthly purchase guardrail." });
+        fullMonthPlanByUnitGroup.set(`${unit}|Khác`, { amount: 0, display: money(0), source: "Owner-confirmed budget = 0; Actual phát sinh qua KiotViet." });
+      }
       const planProgressRows: string[][] = [];
-      for (const unit of controlUnits) {
-        let unitTotal = 0;
+      for (const unit of controlUnits.filter((item) => selectedUnitSet.has(item.code))) {
         for (const group of controlGroups) {
           const key = `${unit.code}|${group}`;
-          const plan = planByUnitGroup.get(key);
-          const actualReady = actualSourceReadyForUnit(unit.code);
-          const actual = actualByUnitGroup.get(key) ?? (actualReady ? 0 : null);
-          const monthlyPlan = plan?.amount ?? null;
-          const shouldAccrue = group === "Payroll" || group === "Điện & Nước";
-          const accruedPlan = monthlyPlan !== null && shouldAccrue ? monthlyPlan * monthToDateRatio : null;
-          const managementValue = actual !== null && actual > 0
-            ? actual
-            : accruedPlan !== null ? accruedPlan
-            : actual;
-          if (managementValue !== null) unitTotal += managementValue;
-          const variance = monthlyPlan !== null && managementValue !== null ? monthlyPlan - managementValue : null;
-          const usage = monthlyPlan !== null && monthlyPlan > 0 && managementValue !== null ? (managementValue / monthlyPlan) * 100 : null;
+          const plan = fullMonthPlanByUnitGroup.get(key)!;
+          const current = monthManagement.byUnitGroup.get(key) ?? 0;
+          const monthlyPlan = plan.amount;
+          const variance = monthlyPlan === null ? null : monthlyPlan - current;
+          const usage = monthlyPlan !== null && monthlyPlan > 0 ? current / monthlyPlan * 100 : null;
           let state = "ĐANG THEO DÕI";
-          if (!plan) state = "CHƯA THIẾT LẬP KẾ HOẠCH";
-          else if (managementValue === null) state = "CHỜ DỮ LIỆU KIOTVIET";
-          else if (monthlyPlan === 0 && managementValue > 0) state = "PHÁT SINH NGOÀI KẾ HOẠCH";
-          else if (monthlyPlan === 0 && managementValue === 0) state = "CHƯA PHÁT SINH";
+          if (monthlyPlan === null) state = current > 0 ? "CÓ PHÁT SINH — CHƯA CÓ BUDGET" : "CHƯA THIẾT LẬP KẾ HOẠCH";
+          else if (monthlyPlan === 0 && current > 0) state = "PHÁT SINH NGOÀI KẾ HOẠCH";
+          else if (monthlyPlan === 0 && current === 0) state = "CHƯA PHÁT SINH";
           else if (usage !== null && usage > 100) state = "VƯỢT KẾ HOẠCH";
           else if (usage !== null && usage >= 85) state = "SẮP CHẠM KẾ HOẠCH";
-          else if (actual !== null && actual > 0) state = "ĐÃ CÓ ACTUAL";
-          else if (accruedPlan !== null) state = "TẠM TÍNH THEO NGÀY";
-          const sourceRule = !plan
-            ? "Cần bổ sung tại FIN-HOSPITALITY-001 → Kế hoạch & Giả định"
-            : actual !== null && actual > 0
-              ? `KiotViet Actual thay estimate · ${actualCountByUnitGroup.get(key) ?? 0} khoản`
-              : accruedPlan !== null
-                ? `${plan.source} · lũy kế ${currentDayOfMonth}/${daysInCurrentMonth} ngày`
-                : `${plan.source} · ${plan.note}`;
-          planProgressRows.push([
-            unit.label, group, plan?.display ?? "CHƯA THIẾT LẬP",
-            managementValue === null ? "CHƯA CÓ" : money(managementValue),
-            variance === null ? "—" : money(variance), usage === null ? "—" : pct(usage), state, sourceRule,
-          ]);
+          else if ((monthActual.amounts.get(key) ?? 0) > 0) state = "ĐÃ CÓ ACTUAL";
+          else state = "TẠM TÍNH / DỰ TOÁN THÁNG";
+          planProgressRows.push([unit.label, group, plan.display, money(current), variance === null ? "—" : money(variance), usage === null ? "—" : pct(usage), state, `${plan.source} · ${monthManagement.sourceByUnitGroup.get(key) ?? ""}`]);
         }
-        managementCostByUnit.set(unit.code, unitTotal);
       }
-      const managementCostTotal = [...managementCostByUnit.values()].reduce((sum, value) => sum + value, 0);
-      const estimatedManagementProfit = bothPeriodVerified ? periodRevenue - managementCostTotal : null;
-      const costBranchRows = controlUnits.map((unit) => {
-        const amount = managementCostByUnit.get(unit.code) ?? 0;
-        return [unit.label, unit.code, money(amount), managementCostTotal > 0 ? pct((amount / managementCostTotal) * 100) : "0%"] ;
+
+      const businessUnitOverview = controlUnits.filter((unit) => selectedUnitSet.has(unit.code)).map((unit) => {
+        const revenue = monthRevenueByUnit[unit.code];
+        const cost = monthManagement.byUnit.get(unit.code) ?? 0;
+        return [unit.label, String(monthInvoicesByUnit[unit.code]), money(revenue), money(cost), money(revenue - cost), "Tháng hiện tại (MTD), không dùng số tích lũy nhiều tháng."];
       });
-      const branchSummaryByUnit: Record<CostControlUnit, { invoices: number; revenue: number }> = {
-        LAVENDER: { invoices: hotelTodayByName.get("lavender homestay")?.invoiceCount ?? 0, revenue: hotelTodayByName.get("lavender homestay")?.revenue ?? 0 },
-        RUBY: { invoices: hotelTodayByName.get("ruby homestay")?.invoiceCount ?? 0, revenue: hotelTodayByName.get("ruby homestay")?.revenue ?? 0 },
-        COZY_GARDEN: { invoices: fnbPeriod.invoiceCount, revenue: periodFnb },
-      };
-      const businessUnitOverview = controlUnits.map((unit) => {
-        const revenue = branchSummaryByUnit[unit.code].revenue;
-        const cost = managementCostByUnit.get(unit.code) ?? 0;
-        return [unit.label, String(branchSummaryByUnit[unit.code].invoices), money(revenue), money(cost), money(revenue - cost), "Số quản trị đến hiện tại; chưa phải P&L chốt tháng."];
-      });
+
+      const businessExpenseSnapshots = [businessHotelExpense, businessFnbExpense].filter((snapshot): snapshot is KiotVietCashflowSnapshot => Boolean(snapshot));
+      const businessVerifiedExpenseRows = businessExpenseSnapshots.filter((snapshot) => snapshot.state === "VERIFIED").flatMap((snapshot) => snapshot.rows);
+      const businessExpenseActual = summarizeExpenseActualRows(businessVerifiedExpenseRows.map((row) => ({ id: row.id, transDate: row.transDate, amount: row.amount, isReceipt: row.isReceipt, groupLabel: row.cashFlowGroupName || row.cashFlowGroupId || "", status: row.status })));
+      const businessExpenseSourceState = businessExpenseSnapshots.length === 2 && businessExpenseSnapshots.every((snapshot) => snapshot.state === "VERIFIED") ? "VERIFIED" : businessExpenseSnapshots.some((snapshot) => snapshot.state === "VERIFIED") ? "PARTIAL" : "HOLD";
+      const businessExpenseActualTotal = businessExpenseActual.directMappedAmount;
+      const businessExpenseActualRows = businessExpenseActual.groups.map((group, i) => [String(i + 1), `[TCE-${group.code}] ${group.canonicalCategory}`, money(group.amount), String(group.transactionCount), group.verificationStatus, "KiotViet trực tiếp", group.note]);
+      if (!businessExpenseActualRows.length) businessExpenseActualRows.push(["—", "Chưa có khoản chi P&L đọc trực tiếp đủ điều kiện", "—", "0", businessExpenseSourceState, "KiotViet Hotel/F&B", "Không suy chi phí = 0 khi nguồn chưa đủ."]);
+      const planExpenseRows = planLines.filter((row) => String(row.line_code ?? "").startsWith("PLAN_EXP_")).map((row, i) => [String(i + 1), row.business_unit === "HOSPITALITY_SHARED" ? "Dùng chung Hospitality" : String(row.business_unit ?? "—").replace("COZY_GARDEN", "Cozy Garden").replace("LAVENDER", "Lavender").replace("RUBY", "Ruby"), row.line_name ?? String(row.line_code ?? ""), row.baseline_amount === null || row.baseline_amount === undefined ? "—" : money(Number(row.baseline_amount)), row.verification_status ?? "ESTIMATED", row.source_reference ?? row.source ?? "FIN-HOSPITALITY-001", row.formula_note ?? "Planning only"]);
+      const costControlRows: string[][] = planProgressRows.map((row) => [...row, ""]);
+
+      const occupancyValue = requestedProperty === "cozy"
+        ? "N/A"
+        : businessOccupancy?.state !== "VERIFIED"
+          ? "CHƯA CÓ DỮ LIỆU"
+          : requestedProperty === "lavender"
+            ? pct(businessOccupancy.lavender ?? 0)
+            : requestedProperty === "ruby"
+              ? pct(businessOccupancy.ruby ?? 0)
+              : pct(businessOccupancy.combined ?? 0);
+      const occupancyNote = requestedProperty === "cozy"
+        ? "Không áp dụng cho F&B"
+        : businessOccupancy?.state !== "VERIFIED"
+          ? (businessOccupancy?.note ?? "Occupancy source chưa đủ")
+          : requestedProperty === "lavender"
+            ? `Lavender: ${pct(businessOccupancy.lavender ?? 0)} · ${period.label}`
+            : requestedProperty === "ruby"
+              ? `Ruby: ${pct(businessOccupancy.ruby ?? 0)} · ${period.label}`
+              : `Ruby: ${pct(businessOccupancy.ruby ?? 0)} · Lavender: ${pct(businessOccupancy.lavender ?? 0)} · ${period.label}`;
 
       const financeSummary = businessOperating?.summary ?? null;
       const openingBusinessCash = financeSummary?.openingBusinessCash ?? null;
@@ -895,66 +1010,38 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ["Khoảng trống dữ liệu", String(businessDataGaps.length), String(businessDataGaps.filter((row) => row[3] === "VERIFIED").length), String(businessDataGaps.filter((row) => row[3] === "NEED_VERIFY").length), String(businessDataGaps.filter((row) => row[3] === "HOLD").length), blockingGapRows === 0 ? "PASS" : `${blockingGapRows} BLOCKING`],
       ];
 
+      const selectedRevenueVerified = selectedUnitCodes.every((unit) => unit === "COZY_GARDEN" ? fnbPeriod.state === "VERIFIED" : hotelPeriod.state === "VERIFIED");
+      const filteredBusinessSourceState = selectedRevenueVerified ? "LIVE" : "PARTIAL";
       return makeResult(
         {
-          "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "CHƯA CÓ DỮ LIỆU",
+          "Doanh thu hôm nay": selectedRevenueVerified ? money(selectedPeriodRevenue) : "CHƯA CÓ DỮ LIỆU",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "CHƯA CÓ DỮ LIỆU",
-          "Chi phí": money(managementCostTotal),
-          "Lợi nhuận ước tính": estimatedManagementProfit === null ? "CHƯA CÓ DỮ LIỆU" : money(estimatedManagementProfit),
+          "Chi phí": money(selectedManagementCost),
+          "Lợi nhuận ước tính": selectedRevenueVerified ? money(selectedManagementProfit) : "CHƯA CÓ DỮ LIỆU",
           "Lợi nhuận gộp": "NEED VERIFY",
           "Biên lợi nhuận": "NEED VERIFY",
-          "Công suất phòng": pct(stats.averageOccupancy),
+          "Công suất phòng": occupancyValue,
         },
         {
-          "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
+          "Doanh thu hôm nay": `KiotViet Actual · ${period.label} · ${requestedProperty === "all" ? "Tất cả cơ sở" : requestedProperty}`,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": `Chi phí điều hành đến hiện tại: Payroll + Điện & Nước lũy kế theo Budget khi chưa có Actual; Actual KiotViet thay estimate. [TCE-N01]/F02 được tính là management purchase spend nhưng không phải COGS kế toán.`,
-          "Lợi nhuận ước tính": "Doanh thu Actual − Chi phí điều hành đến hiện tại. Đây là số quản trị, chưa phải lợi nhuận chốt kế toán.",
-          "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " +
-            foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
-            "; matched COST-001 " + foundationReadiness.cogs.matchedSoldSkuCount + "/" +
-            foundationReadiness.cogs.soldSkuCount + ". Không suy từ cashflow.",
+          "Chi phí": `Chi phí quản trị đúng kỳ ${period.label}: Payroll/Utilities phân bổ theo ngày trong kỳ + Software phân bổ + Booking.com forecast 20% + Actual KiotViet; không dùng số tích lũy ngoài kỳ.`,
+          "Lợi nhuận ước tính": `Doanh thu ${period.label} − Chi phí quản trị cùng kỳ. Đây là số điều hành, chưa phải P&L chốt kế toán.`,
+          "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "; matched COST-001 " + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + ". Không suy từ cashflow.",
           "Biên lợi nhuận": "NEED VERIFY: chỉ tính khi Gross Profit và COGS coverage đủ.",
-          "Công suất phòng": "Property runtime",
+          "Công suất phòng": occupancyNote,
         },
         {
-          businessChannels: branchRows.map((r, i) => [
-            String(i + 1),
-            r.name,
-            String(r.invoices),
-            money(r.revenue),
-            todayRevenue ? pct((r.revenue / todayRevenue) * 100) : "0%",
-            "—",
-            r.source,
-          ]),
-          businessBranches: branchRows.map((r, i) => [
-            String(i + 1),
-            r.name,
-            String(r.invoices),
-            money(r.revenue),
-            r.source,
-          ]),
-          businessMonthBranches: [
-            ...hotelTodayRows.map((r, i) => [
-              String(i + 1),
-              r.name.replace("Hotel · ", ""),
-              String(r.invoices),
-              money(r.revenue),
-              periodRevenue ? pct((r.revenue / periodRevenue) * 100) : "0%",
-            ]),
-            [
-              String(hotelTodayRows.length + 1),
-              "Cozy Garden",
-              String(fnbPeriod.invoiceCount),
-              money(periodFnb),
-              periodRevenue ? pct((periodFnb / periodRevenue) * 100) : "0%",
-            ],
-          ],
+          businessChannels: revenueBranchRows.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[3], "—", r[0] === "Cozy Garden" ? "KiotViet F&B" : "KiotViet Hotel"]),
+          businessBranches: revenueBranchRows.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[0] === "Cozy Garden" ? "KiotViet F&B" : "KiotViet Hotel"]),
+          businessMonthBranches: revenueBranchRows.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[3]]),
+          businessRevenueBranches: revenueBranchRows,
+          businessCostBranches: costBranchRows,
+          businessProfitBranches: profitBranchRows,
           businessPlannedExpenses: planExpenseRows,
           businessActualExpenses: businessExpenseActualRows,
           businessCostControl: costControlRows,
           businessCostPlanProgress: planProgressRows,
-          businessCostBranches: costBranchRows,
           businessUnitOverview,
           businessFinancialStack,
           businessDataGaps,
@@ -962,7 +1049,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           businessCompletionSummary,
         },
         {},
-        bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",
+        filteredBusinessSourceState,
         businessVerificationGuides,
         businessFreshness,
       );

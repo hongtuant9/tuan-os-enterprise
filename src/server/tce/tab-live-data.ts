@@ -1539,16 +1539,20 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ];
     });
 
-    const contentRows = mcc.content.slice(0, 12).map((row, i) => [
-      String(i + 1),
-      textField(row, "content_id"),
-      textField(row, "brand"),
-      textField(row, "format"),
-      textField(row, "channel_id") || "Đa kênh / kế hoạch",
-      textField(row, "scheduled_at") ? textField(row, "scheduled_at").slice(0, 16).replace("T", " ") : "Chưa lên lịch",
-      textField(row, "publish_status"),
-      textField(row, "verification_status"),
-    ]);
+    const contentRows = mcc.content.slice(0, 12).map((row, i) => {
+      const contentId = textField(row, "content_id");
+      return [
+        String(i + 1),
+        contentId,
+        textField(row, "brand"),
+        textField(row, "format"),
+        textField(row, "channel_id") || "Đa kênh / kế hoạch",
+        textField(row, "scheduled_at") ? textField(row, "scheduled_at").slice(0, 16).replace("T", " ") : "Chưa lên lịch",
+        textField(row, "publish_status"),
+        textField(row, "verification_status"),
+        contentId ? `LINK:/marketing/content/${encodeURIComponent(contentId)}|Xem bài viết` : "—",
+      ];
+    });
 
     const attributionRows = mcc.attribution.slice(0, 14).map((row, i) => [
       String(i + 1),

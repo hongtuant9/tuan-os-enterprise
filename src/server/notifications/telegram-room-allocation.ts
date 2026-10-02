@@ -144,7 +144,7 @@ export async function recordRoomAllocation(input: AllocationInput) {
     };
   }
 
-  const db = createAdminClient();
+  const db = createAdminClient() as any;
   const today = localDate();
   const targetBranch = normalizeBranch(parsed.target);
   const targetBookingCode = /^DP\d+$/i.test(parsed.target) ? parsed.target.toUpperCase() : "";
@@ -379,7 +379,7 @@ export async function attachRoomAllocationTelegramEvidence(input: {
   chatId: string | number;
   messageId: number;
 }) {
-  const db = createAdminClient();
+  const db = createAdminClient() as any;
   const { data: review, error } = await db
     .from("ai_manager_reviews")
     .select("conversation_id,evidence")

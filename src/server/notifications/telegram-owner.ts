@@ -154,7 +154,9 @@ async function sendTelegram(text: string) {
 export async function notifyOwnerIfNeeded(input: NotifyInput) {
   const cfg = config();
   const kind = alertKind(input);
-  if (!cfg.enabled || !cfg.token || !cfg.ownerChatId || !kind) {
+  const operatorChatId = await getTelegramOperatorChatId().catch(() => "");
+  const channelEnabled = Boolean(operatorChatId) || cfg.enabled;
+  if (!channelEnabled || !cfg.token || !cfg.ownerChatId || !kind) {
     return { sent: false, kind, reason: "not_configured_or_not_required" as const };
   }
 

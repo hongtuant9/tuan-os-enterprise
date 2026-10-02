@@ -280,3 +280,39 @@ export async function handleTelegramOperatorReply(input: {
     effectiveFrom: question.effective_from,
   };
 }
+
+export async function ensureFinanceOperatorQuestions() {
+  const db = createAdminClient() as any;
+  const chatId = await getTelegramOperatorChatId();
+  if (!chatId) return { checked: true, sent: 0, skipped: "operator_group_not_bound" as const };
+
+  const candidates: OperatorQuestionInput[] = [
+    {
+      questionCode: "FIN-LAV-PAYROLL-RECEPTION-BASE-202610",
+      domain: "PAYROLL",
+      businessUnit: "LAVENDER",
+      fieldCode: "RECEPTIONIST_BASE_SALARY",
+      questionText: "Lương cơ bản hiện tại của lễ tân/Quản lý Lavender là bao nhiêu mỗi tháng?",
+      expectedType: "MONEY_MONTHLY",
+      unit: "VND_MONTH",
+      effectiveFrom: "2026-10-01",
+    },
+  ];
+
+  let sent = 0;
+  for (const candidate of candidates) {
+    const { data: existingFact, error } = await db.from("operator_confirmed_facts")
+      .select("id")
+      .eq("domain", candidate.domain)
+      .eq("business_unit", candidate.businessUnit)
+      .eq("field_code", candidate.fieldCode)
+      .eq("effective_from", candidate.effectiveFrom)
+      .eq("record_status", "ACTIVE")
+      .maybeSingle();
+    if (error) throw error;
+    if (existingFact) continue;
+    const result = await createAndSendOperatorQuestion(candidate);
+    if (result.sent) sent += 1;
+  }
+  return { checked: true, sent };
+}

@@ -15,6 +15,7 @@ import { AUTONOMOUS_CONTINUATION_POLICY } from "@/server/agents/execution-govern
 import { dispatchDepartmentTask, type DepartmentExecutionResult } from "./department-executor";
 import { writeTaskExecutionCheckpoint } from "./task-execution-writeback";
 import { notifyOwnerIfNeeded } from "@/server/notifications/telegram-owner";
+import { ensureFinanceOperatorQuestions } from "@/server/notifications/telegram-operator";
 import { facebookRecruitmentBrowserStatus } from "@/server/browser/facebook-recruitment-browser";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -256,6 +257,15 @@ export async function runExecutiveCycle(now = new Date()): Promise<ExecutiveCycl
     });
   }
   try {
+    await ensureFinanceOperatorQuestions().catch(async (error) => {
+      await container.activityLog.record({
+        agent: "TUAN OS — Finance Human Input",
+        unit: "TUAN OS Telegram Operator",
+        message: `operator_question_cycle=FAILED_RETRY · error=${error instanceof Error ? error.name : "unknown"}`,
+        type: "alert",
+      });
+    });
+
     // Notify Owner for actionable gates even when Executive keeps another safe lane moving.
     // This prevents a deferred browser/MFA task from waiting silently behind an EXECUTED_INTERNAL task.
     const ownerGateCandidates = candidateExecutions

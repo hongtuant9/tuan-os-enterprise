@@ -288,7 +288,7 @@ export default function ContentReviewWorkbench(props: {
       if (result.ok) router.refresh();
     });
 
-  const mediaRequest = (action: "EDIT_IMAGE_AI" | "CREATE_SHORT_VIDEO") =>
+  const mediaRequest = (action: "EDIT_IMAGE_AI" | "CREATE_IMAGE_AI" | "CREATE_SHORT_VIDEO") =>
     startTransition(async () => {
       const result = await requestMediaCreative(contentId, action, instruction);
       setMessage(result.ok ? result.message : result.error);
@@ -484,7 +484,7 @@ export default function ContentReviewWorkbench(props: {
               rel="noreferrer"
               className="rounded-lg border border-[#bad8ff] px-3 py-2 text-center text-xs font-bold text-[#1768df]"
             >
-              Mở thư viện đang dùng
+              Thư viện ảnh
             </a>
             <button
               disabled={uploading}
@@ -492,6 +492,13 @@ export default function ContentReviewWorkbench(props: {
               className="rounded-lg border border-[#bad8ff] px-3 py-2 text-xs font-bold text-[#1768df]"
             >
               {uploading ? "Đang tải..." : "Tải ảnh/video lên"}
+            </button>
+            <button
+              disabled={pending || !assets.length}
+              onClick={() => mediaRequest("CREATE_IMAGE_AI")}
+              className="rounded-lg border border-[#bad8ff] px-3 py-2 text-xs font-bold text-[#1768df]"
+            >
+              Tạo ảnh bằng AI
             </button>
             <button
               disabled={pending || !assets.length}
@@ -503,7 +510,7 @@ export default function ContentReviewWorkbench(props: {
             <button
               disabled={pending || !assets.length}
               onClick={() => mediaRequest("CREATE_SHORT_VIDEO")}
-              className="rounded-lg border border-[#bad8ff] px-3 py-2 text-xs font-bold text-[#1768df]"
+              className="col-span-2 rounded-lg border border-[#bad8ff] px-3 py-2 text-xs font-bold text-[#1768df]"
             >
               Tạo video ngắn
             </button>
@@ -705,20 +712,26 @@ export default function ContentReviewWorkbench(props: {
                 ? draft.draftVi
                 : draft[platform] || "Chưa có nội dung cho kênh này."}
             </div>
-            {selected?.fileId ? (
-              selected.type === "video" ? (
-                <video
-                  controls
-                  className="mt-4 max-h-[420px] w-full rounded-lg bg-black object-contain"
-                  src={`/api/marketing/assets/${selected.fileId}`}
-                />
-              ) : (
-                <img
-                  className="mt-4 max-h-[420px] w-full rounded-lg object-cover"
-                  src={`/api/marketing/assets/${selected.fileId}`}
-                  alt={selected.name}
-                />
-              )
+            {assets.length ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {assets.slice(0, 4).map((asset, index) =>
+                  asset.type === "video" ? (
+                    <video
+                      key={asset.fileId || index}
+                      controls
+                      className={`${index === 0 && assets.length > 2 ? "sm:col-span-2" : ""} max-h-[420px] w-full rounded-lg bg-black object-contain`}
+                      src={`/api/marketing/assets/${asset.fileId}`}
+                    />
+                  ) : (
+                    <img
+                      key={asset.fileId || index}
+                      className={`${index === 0 && assets.length > 2 ? "sm:col-span-2" : ""} aspect-[4/3] w-full rounded-lg object-cover`}
+                      src={`/api/marketing/assets/${asset.fileId}`}
+                      alt={asset.name}
+                    />
+                  ),
+                )}
+              </div>
             ) : null}
           </div>
           <div className="rounded-xl border border-[#dce8f4] p-4 text-xs leading-5 text-[#617793]">

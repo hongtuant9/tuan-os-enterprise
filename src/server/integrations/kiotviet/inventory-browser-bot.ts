@@ -44,6 +44,7 @@ export type InventoryModuleSnapshot = {
   headers?: string[];
   cells?: string[][];
   rawRows?: string[];
+  bodyExcerpt?: string;
 };
 
 export type InventoryBotSnapshot = {
@@ -472,6 +473,7 @@ async function readModule(
         headers: [],
         cells: [],
         rawRows: [],
+        bodyExcerpt: data.body.slice(0, 12_000),
       };
     }
 
@@ -495,6 +497,7 @@ async function readModule(
       headers: data.headers,
       cells: data.cells,
       rawRows: data.rows,
+      bodyExcerpt: data.body.slice(0, 12_000),
     };
   } catch (error) {
     return {

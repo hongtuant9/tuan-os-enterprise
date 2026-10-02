@@ -101,6 +101,18 @@ type BusinessOperatingSnapshot = {
     distributionStatus?: string | null;
   } | null;
   taxPosition?: { verification_status?: string | null } | null;
+  plan?: Array<{
+    business_unit?: string | null;
+    line_code?: string | null;
+    line_name?: string | null;
+    baseline_amount?: number | null;
+    target_amount?: number | null;
+    verification_status?: string | null;
+    gate_status?: string | null;
+    source?: string | null;
+    source_reference?: string | null;
+    formula_note?: string | null;
+  }> | null;
 };
 type RpcResult = { data: unknown; error: { message?: string } | null };
 type RpcClient = { rpc: (name: string, args?: Record<string, unknown>) => PromiseLike<RpcResult> };
@@ -459,7 +471,13 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ? fnbPeriodPromise
       : safeFnb(monthStart + "T00:00:00", today + "T23:59:59");
     const businessFinanceMonth = today >= "2026-10-01" ? today.slice(0, 7) + "-01" : "2026-10-01";
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness, businessOperating] = await Promise.all([
+    const businessHotelExpensePromise = screen === "business"
+      ? financeReadWithTimeout(fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_HOTEL", period.from, period.to))
+      : Promise.resolve(null);
+    const businessFnbExpensePromise = screen === "business"
+      ? financeReadWithTimeout(fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", period.from, period.to))
+      : Promise.resolve(null);
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, stats, foundationReadiness, businessOperating, businessHotelExpense, businessFnbExpense] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
@@ -467,6 +485,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       container.dashboard.stats(),
       readFinanceFoundationReadiness(),
       screen === "business" ? readBusinessOperatingSnapshot(container.db, businessFinanceMonth) : Promise.resolve(null),
+      businessHotelExpensePromise,
+      businessFnbExpensePromise,
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -522,7 +542,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           blocker: `Expense coverage mới ${foundationReadiness.expense.coveragePct.toFixed(1)}%; payroll/utilities/OTA/OPEX còn thiếu hoặc partial, nên không được tính Profit.`,
           evidenceRequired: ["Payroll/chấm công đã chốt.", "Hóa đơn/chứng từ utilities, OTA commission, supplier/OPEX đúng kỳ.", "KiotViet authenticated source + source transaction ID khi có."],
           steps: ["Đóng các dòng missing trước.", "Đối chiếu category/business unit.", "Loại non-P&L khỏi Expense.", "Chạy reconciliation và coverage."],
-          owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + kế toán/lương", source: "FIN-HOSPITALITY-001 + KiotViet authenticated runtime + evidence gốc",
+          owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + kế toán/lương", source: "KiotViet Hotel/F&B direct authenticated runtime; FIN-HOSPITALITY-001 chỉ là Planning/Taxonomy",
           completionCriteria: ["Actual Expense coverage = 100% hoặc approved exception.", "Không duplicate Nhập hàng/Bảng lương/Sổ quỹ."],
           nextAction: `Đóng ${foundationReadiness.expense.missingRows} dòng missing và ${foundationReadiness.expense.partialRows} dòng partial theo Source Map.` },
         "Lợi nhuận gộp": { title: "Lợi nhuận gộp", status: "CẦN XÁC MINH", severity: "P0",
@@ -572,6 +592,52 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         owner: "AI CTO + AI CFO / TCE Business",
       };
 
+      const businessExpenseSnapshots = [businessHotelExpense, businessFnbExpense].filter((snapshot): snapshot is KiotVietCashflowSnapshot => Boolean(snapshot));
+      const businessVerifiedExpenseRows = businessExpenseSnapshots
+        .filter((snapshot) => snapshot.state === "VERIFIED")
+        .flatMap((snapshot) => snapshot.rows);
+      const businessExpenseActual = summarizeExpenseActualRows(businessVerifiedExpenseRows.map((row) => ({
+        id: row.id,
+        transDate: row.transDate,
+        amount: row.amount,
+        isReceipt: row.isReceipt,
+        groupLabel: row.cashFlowGroupName || row.cashFlowGroupId || "",
+        status: row.status,
+      })));
+      const businessExpenseSourceState = businessExpenseSnapshots.length === 2 && businessExpenseSnapshots.every((snapshot) => snapshot.state === "VERIFIED")
+        ? "VERIFIED"
+        : businessExpenseSnapshots.some((snapshot) => snapshot.state === "VERIFIED") ? "PARTIAL" : "HOLD";
+      const businessExpenseActualTotal = businessExpenseActual.directMappedAmount;
+      const businessExpenseActualRows = businessExpenseActual.groups.map((group, i) => [
+        String(i + 1),
+        `[TCE-${group.code}] ${group.canonicalCategory}`,
+        money(group.amount),
+        String(group.transactionCount),
+        group.verificationStatus,
+        "KiotViet trực tiếp",
+        group.note,
+      ]);
+      if (!businessExpenseActualRows.length) {
+        businessExpenseActualRows.push(["—", "Chưa có khoản chi P&L đọc trực tiếp đủ điều kiện", "—", "0", businessExpenseSourceState, "KiotViet Hotel/F&B", "Không suy chi phí = 0 khi nguồn chưa đủ."]);
+      }
+      const planExpenseRows = (businessOperating?.plan ?? [])
+        .filter((row) => String(row.line_code ?? "").startsWith("PLAN_EXP_"))
+        .map((row, i) => {
+          const code = String(row.line_code ?? "");
+          const raw = row.target_amount ?? row.baseline_amount;
+          const isRatio = code.includes("GUARDRAIL") || code.includes("MARKETING_BASELINE");
+          const value = raw === null || raw === undefined ? "—" : isRatio ? pct(Number(raw) * 100) + " doanh thu" : money(Number(raw));
+          return [
+            String(i + 1),
+            row.business_unit === "HOSPITALITY_SHARED" ? "Dùng chung Hospitality" : String(row.business_unit ?? "—").replace("COZY_GARDEN", "Cozy Garden").replace("LAVENDER", "Lavender").replace("RUBY", "Ruby"),
+            row.line_name ?? code,
+            value,
+            row.verification_status ?? "ESTIMATED",
+            row.source_reference ?? row.source ?? "FIN-HOSPITALITY-001",
+            row.formula_note ?? "Planning only; không dùng thay Actual.",
+          ];
+        });
+
       const financeSummary = businessOperating?.summary ?? null;
       const openingBusinessCash = financeSummary?.openingBusinessCash ?? null;
       const bookBusinessCash = financeSummary?.bookBusinessCash ?? null;
@@ -591,7 +657,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ["COGS", "—", "KiotViet F&B sold SKU × COST-001 BOM", foundationReadiness.checkedAt, "NEED_VERIFY — BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "Sold-SKU mapping " + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "; production-ready BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "."],
         ["Gross Profit", "—", "Canonical calculation: Revenue − COGS", foundationReadiness.checkedAt, "NEED_VERIFY — COGS chưa PASS", "Không tính số chắc chắn khi COGS coverage chưa đủ."],
         ["Gross Margin", "—", "Canonical calculation: Gross Profit / Revenue", foundationReadiness.checkedAt, "NEED_VERIFY — Gross Profit chưa PASS", "Derived metric; Revenue=0 thì N/A."],
-        ["Operating Expense", "—", "FIN-HOSPITALITY-001 + authenticated evidence", foundationReadiness.checkedAt, "NEED_VERIFY — coverage " + foundationReadiness.expense.coveragePct.toFixed(1) + "%", foundationReadiness.expense.missingRows + " missing + " + foundationReadiness.expense.partialRows + " partial trên " + foundationReadiness.expense.requiredRows + " dòng bắt buộc."],
+        ["Operating Expense", businessExpenseActualTotal > 0 ? money(businessExpenseActualTotal) : "—", "KiotViet Hotel/F&B · direct cashbook expense mapping", foundationReadiness.checkedAt, businessExpenseSourceState === "VERIFIED" && businessExpenseActual.unknownExpenseRows === 0 && businessExpenseActual.ambiguousAmount === 0 ? "VERIFIED" : businessExpenseSourceState + " — KiotViet Actual", `${businessExpenseActual.unknownExpenseRows} khoản chưa map; ${businessExpenseActual.excludedNonPnlRows} non-P&L đã loại; ambiguous ${money(businessExpenseActual.ambiguousAmount)}.`],
         ["Operating Profit", "—", "Canonical calculation layer", foundationReadiness.checkedAt, "NEED_VERIFY — COGS/Expense chưa PASS", "Không dùng Budget/Estimate thay Actual."],
         ["Profit Before Tax", profitBeforeTax === null ? "—" : money(profitBeforeTax), "Finance Operating Snapshot", businessUpdatedAt, profitBeforeTax === null ? "NEED_VERIFY — P&L chưa đóng" : "VERIFIED", "Chỉ có giá trị khi Revenue/COGS/OPEX đã đủ canonical Actual."],
         ["Tax Provision", taxProvision === null ? "—" : money(taxProvision), "Canonical Tax Position", businessUpdatedAt, taxProvision === null ? "HOLD — Tax Rule chưa VERIFIED" : "VERIFIED", "Không mặc định Tax=0."],
@@ -604,7 +670,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ];
 
       const businessDataGaps = [
-        ["Expense Actual", foundationReadiness.expense.missingRows + " missing + " + foundationReadiness.expense.partialRows + " partial", "FIN-HOSPITALITY-001 + payroll/utilities/OTA/OPEX evidence", "NEED_VERIFY", "AI CFO + Quản lý cơ sở", "Đóng dòng missing trước, sau đó partial.", "BLOCKING"],
+        ["Expense Actual", `KiotViet ${businessExpenseSourceState}; ${businessExpenseActual.unknownExpenseRows} khoản chưa map`, "KiotViet Hotel/F&B trực tiếp", businessExpenseSourceState === "VERIFIED" && businessExpenseActual.unknownExpenseRows === 0 && businessExpenseActual.ambiguousAmount === 0 ? "VERIFIED" : "NEED_VERIFY", "AI CFO + AI CTO", "Chuẩn hóa Loại chi/TCE taxonomy ngay tại KiotViet; không lấy chứng từ ngoài thay Actual.", "BLOCKING"],
         ["COGS", "BOM VERIFIED " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "COST-001 + KiotViet F&B sold-SKU", "NEED_VERIFY", "AI CFO + Cost Controller", "Nghiệm thu BOM theo SKU bán thực tế, ưu tiên SKU doanh số cao.", "BLOCKING"],
         ["Payroll September", employeeAdvances === null ? "Salary Advance canonical tồn tại; final payroll chưa đóng." : "Salary Advance " + money(employeeAdvances) + "; final payroll chưa đóng.", "Payroll close + Salary Advance subledger", "NEED_VERIFY", "Quản lý cơ sở + AI CFO", "01/10 chốt Final Payroll − Salary Advance = Remaining Payroll Payable; không double-count.", "BLOCKING"],
         ["OTA Commission", "Lavender/Ruby Booking.com opening AP chưa có amount.", "Booking.com statement/invoice + settlement", "NEED_VERIFY", "Quản lý Homestay + AI CFO", "Lấy statement tháng 9 và map đúng Lavender/Ruby.", "BLOCKING"],
@@ -636,7 +702,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
           "Doanh thu tháng": bothMonthVerified ? money(monthRevenue) : "NEED VERIFY",
-          "Chi phí": "NEED VERIFY",
+          "Chi phí": businessExpenseActualTotal > 0 ? money(businessExpenseActualTotal) : businessExpenseSourceState === "VERIFIED" ? money(0) : "NEED VERIFY",
           "Lợi nhuận gộp": "NEED VERIFY",
           "Biên lợi nhuận": "NEED VERIFY",
           "Công suất phòng": pct(stats.averageOccupancy),
@@ -644,10 +710,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": "NEED VERIFY: Expense Actual coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
-            "%; missing=" + foundationReadiness.expense.missingRows +
-            "; partial=" + foundationReadiness.expense.partialRows +
-            ". Cash Out không được dùng thay Expense.",
+          "Chi phí": `Actual trực tiếp từ KiotViet · ${businessExpenseSourceState}. Đã map P&L ${money(businessExpenseActualTotal)}; ${businessExpenseActual.unknownExpenseRows} khoản chưa map; ${businessExpenseActual.excludedNonPnlRows} khoản non-P&L đã loại.`,
           "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " +
             foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +
             "; matched COST-001 " + foundationReadiness.cogs.matchedSoldSkuCount + "/" +
@@ -688,6 +751,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
               periodRevenue ? pct((periodFnb / periodRevenue) * 100) : "0%",
             ],
           ],
+          businessPlannedExpenses: planExpenseRows,
+          businessActualExpenses: businessExpenseActualRows,
           businessFinancialStack,
           businessDataGaps,
           businessDecisionSnapshot,
@@ -746,7 +811,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         verifyWhat: ["32 dòng Expense Actual bắt buộc của Homestay + Cozy Garden.", "Khoản nào là P&L Expense, khoản nào chỉ là Cash Out/non-P&L.", "Kỳ, cơ sở, category và payment/evidence của từng khoản."],
         evidenceRequired: ["Payroll/chấm công đã chốt + chứng từ thanh toán lương.", "Hóa đơn điện/nước/Internet/software/marketing/repair/fees đúng kỳ.", "KiotViet Sổ quỹ hoặc module nguồn + Source ID, ngày, cơ sở và chứng từ đi kèm."],
         steps: ["AI CFO đọc FIN-HOSPITALITY-001 Source Map 32/32.", "Finance Browser/Inventory Browser lấy transaction/module evidence từ KiotViet.", "Đối chiếu chứng từ với category và business unit; loại N01/CAPEX/gốc vay khỏi P&L.", "Cập nhật Actual + Verification Status; chạy reconciliation và coverage."],
-        owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + bộ phận kế toán/lương + Tuấn với chứng từ owner-paid", source: "FIN-HOSPITALITY-001 + KiotViet authenticated runtime + evidence gốc",
+        owner: "AI CFO + TUAN OS Finance Audit", provider: "Quản lý Lavender/Ruby/Cozy + bộ phận kế toán/lương + Tuấn với chứng từ owner-paid", source: "KiotViet Hotel/F&B direct authenticated runtime; FIN-HOSPITALITY-001 chỉ là Planning/Taxonomy",
         completionCriteria: ["32/32 dòng có amount=0 VERIFIED hoặc Actual VERIFIED/approved exception.", "Không còn cashout bị dùng thay Expense.", "Không duplicate giữa Nhập hàng/Bảng lương/Sổ quỹ."],
         nextAction: `Đóng ${foundationReadiness.expense.missingRows} dòng missing trước, sau đó ${foundationReadiness.expense.partialRows} dòng partial theo Source Map.` },
       "Chi phí vận hành": null as unknown as TceVerificationGuide,

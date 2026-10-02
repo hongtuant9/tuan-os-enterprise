@@ -25,6 +25,66 @@ type TelegramMessageActor = {
   last_name?: string;
 };
 
+type FinanceOpenItemBridgeDb = {
+  from: (table: "business_finance_open_items") => {
+    update: (values: Record<string, unknown>) => {
+      eq: (column: string, value: unknown) => {
+        eq: (column: string, value: unknown) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+};
+
+export function financeOpenItemExternalKeyForOperatorFact(input: {
+  businessUnit: string;
+  fieldCode: string;
+}) {
+  const key = `${input.businessUnit}|${input.fieldCode}`;
+  const map: Record<string, string> = {
+    "COZY_GARDEN|SEPTEMBER_FINAL_PAYROLL_TOTAL": "OPEN-AP-COZY-PAYROLL-SEP",
+    "HOSPITALITY_SHARED|SEPTEMBER_FINAL_PAYROLL_TOTAL": "OPEN-AP-HS-PAYROLL-SEP",
+    "LAVENDER|BOOKING_COMMISSION_202609": "OPEN-AP-BOOKING-LAVENDER-SEP",
+    "RUBY|BOOKING_COMMISSION_202609": "OPEN-AP-BOOKING-RUBY-SEP",
+    "HOSPITALITY_SHARED|ELECTRICITY_202609": "OPEN-AP-ELECTRICITY-SEP",
+    "HOSPITALITY_SHARED|WATER_202609": "OPEN-AP-WATER-SEP",
+    "HOSPITALITY_SHARED|SUPPLIER_AP_20260930": "OPEN-AP-SUPPLIER-SEP",
+    "HOSPITALITY_SHARED|OTHER_ACCRUED_20260930": "OPEN-AP-OTHER-ACCRUED-SEP",
+    "HOSPITALITY_SHARED|TAX_FEE_20260930": "OPEN-AP-TAX-FEE-SEP",
+  };
+  return map[key] ?? null;
+}
+
+async function bridgeOwnerFinanceFactToOpenItem(
+  db: ReturnType<typeof createAdminClient>,
+  input: {
+    businessUnit: string;
+    fieldCode: string;
+    valueNumeric: number | null;
+    sourceReference: string;
+    questionCode: string;
+  },
+) {
+  const externalKey = financeOpenItemExternalKeyForOperatorFact(input);
+  if (!externalKey || input.valueNumeric == null) return { applied: false as const, reason: "not_mapped" as const };
+  const now = new Date().toISOString();
+  const bridgeDb = db as unknown as FinanceOpenItemBridgeDb;
+  const { error } = await bridgeDb.from("business_finance_open_items")
+    .update({
+      amount: input.valueNumeric,
+      payment_status: input.valueNumeric === 0 ? "RECONCILED" : "UNPAID",
+      verification_status: "VERIFIED",
+      source: "OWNER_TELEGRAM",
+      source_document: input.questionCode,
+      source_reference: input.sourceReference,
+      notes: "Owner-confirmed amount via Telegram Operator. Amount verification does not prove payment; settlement remains a separate gate.",
+      updated_at: now,
+    })
+    .eq("external_key", externalKey)
+    .eq("record_status", "ACTIVE");
+  if (error) throw new Error(`Finance open item bridge failed: ${error.message}`);
+  return { applied: true as const, externalKey };
+}
+
 function botToken() {
   return process.env.TELEGRAM_BOT_TOKEN?.trim() || "";
 }
@@ -254,6 +314,14 @@ export async function handleTelegramOperatorReply(input: {
     .single();
   if (factError) throw factError;
 
+  const financeBridge = await bridgeOwnerFinanceFactToOpenItem(db, {
+    businessUnit: question.business_unit,
+    fieldCode: question.field_code,
+    valueNumeric: parsed.valueNumeric,
+    sourceReference,
+    questionCode: question.question_code,
+  });
+
   const { error: updateQuestionError } = await db.from("telegram_operator_questions")
     .update({
       status: "ANSWERED",
@@ -278,6 +346,7 @@ export async function handleTelegramOperatorReply(input: {
     valueText: parsed.valueText,
     valueNumeric: parsed.valueNumeric,
     effectiveFrom: question.effective_from,
+    financeBridge,
   };
 }
 
@@ -296,6 +365,96 @@ export async function ensureFinanceOperatorQuestions() {
       expectedType: "MONEY_MONTHLY",
       unit: "VND_MONTH",
       effectiveFrom: "2026-10-01",
+    },
+    {
+      questionCode: "FIN-CG-PAYROLL-FINAL-202609",
+      domain: "PAYROLL",
+      businessUnit: "COZY_GARDEN",
+      fieldCode: "SEPTEMBER_FINAL_PAYROLL_TOTAL",
+      questionText: "Tổng CHI PHÍ LƯƠNG ĐÃ CHỐT tháng 09/2026 của Cozy Garden, trước khi đối trừ các khoản tạm ứng, là bao nhiêu? Reply 1 số tiền VND. Nếu bảng lương chưa chốt, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-PAYROLL-FINAL-202609",
+      domain: "PAYROLL",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "SEPTEMBER_FINAL_PAYROLL_TOTAL",
+      questionText: "Tổng CHI PHÍ LƯƠNG ĐÃ CHỐT tháng 09/2026 của Lavender + Ruby Homestay, trước khi đối trừ tạm ứng của Chị Nam, là bao nhiêu? Reply 1 số tiền VND. Nếu chưa chốt bảng lương/chấm công, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-LAV-BOOKING-COMMISSION-202609",
+      domain: "OTA_COMMISSION",
+      businessUnit: "LAVENDER",
+      fieldCode: "BOOKING_COMMISSION_202609",
+      questionText: "Theo statement/invoice Booking.com đúng kỳ, tổng hoa hồng Booking.com thuộc Lavender cho tháng 09/2026 là bao nhiêu? Reply 1 số tiền VND; nếu chưa có statement/invoice, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-RUBY-BOOKING-COMMISSION-202609",
+      domain: "OTA_COMMISSION",
+      businessUnit: "RUBY",
+      fieldCode: "BOOKING_COMMISSION_202609",
+      questionText: "Theo statement/invoice Booking.com đúng kỳ, tổng hoa hồng Booking.com thuộc Ruby cho tháng 09/2026 là bao nhiêu? Reply 1 số tiền VND; nếu chưa có statement/invoice, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-ELECTRICITY-202609",
+      domain: "UTILITIES",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "ELECTRICITY_202609",
+      questionText: "Theo hóa đơn/chứng từ thực tế, tổng TIỀN ĐIỆN còn phải ghi nhận cho kỳ tháng 09/2026 của cụm Hospitality là bao nhiêu? Reply 1 số tiền VND; nếu chưa có hóa đơn chính xác, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-WATER-202609",
+      domain: "UTILITIES",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "WATER_202609",
+      questionText: "Theo hóa đơn/chứng từ thực tế, tổng TIỀN NƯỚC còn phải ghi nhận cho kỳ tháng 09/2026 của cụm Hospitality là bao nhiêu? Reply 1 số tiền VND; nếu chưa có hóa đơn chính xác, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-SUPPLIER-AP-20260930",
+      domain: "ACCOUNTS_PAYABLE",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "SUPPLIER_AP_20260930",
+      questionText: "Sau khi đối soát PO/sổ nhà cung cấp, tổng CÔNG NỢ NHÀ CUNG CẤP thực tế còn phải trả tại 30/09/2026 của Hospitality là bao nhiêu? KiotViet Hotel hiện hiển thị 800 triệu nhưng CHƯA được chấp nhận là fact. Reply 1 số tiền VND; nếu chưa đối soát, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-OTHER-ACCRUED-20260930",
+      domain: "ACCOUNTS_PAYABLE",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "OTHER_ACCRUED_20260930",
+      questionText: "Ngoài payroll, điện/nước, OTA commission và công nợ nhà cung cấp, tổng nghĩa vụ kinh doanh tháng 09 còn phải trả tại 30/09/2026 là bao nhiêu? Nếu không có khoản nào, reply 0. Nếu chưa đối soát, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
+    },
+    {
+      questionCode: "FIN-HS-TAX-FEE-20260930",
+      domain: "TAX",
+      businessUnit: "HOSPITALITY_SHARED",
+      fieldCode: "TAX_FEE_20260930",
+      questionText: "Theo TỜ KHAI/CHỨNG TỪ THUẾ đã có (không dùng tỷ lệ dự phòng 7%), tổng thuế/phí thực tế còn phải trả tại 30/09/2026 là bao nhiêu? Reply 1 số tiền VND; nếu chưa có tờ khai/chứng từ chốt, reply: CHƯA CHỐT.",
+      expectedType: "MONEY",
+      unit: "VND",
+      effectiveFrom: "2026-09-30",
     },
   ];
 

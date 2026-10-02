@@ -639,15 +639,16 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         });
 
       type CostControlUnit = "LAVENDER" | "RUBY" | "COZY_GARDEN";
-      type CostControlGroup = "Payroll" | "Điện" | "Nước" | "Software" | "Marketing" | "OTA" | "COGS" | "Khác";
+      type CostControlGroup = "Payroll" | "Điện & Nước" | "Software" | "Marketing" | "OTA" | "Nguyên liệu / Mua hàng" | "Khác";
       const controlUnits: Array<{ code: CostControlUnit; label: string }> = [
         { code: "LAVENDER", label: "Lavender" },
         { code: "RUBY", label: "Ruby" },
         { code: "COZY_GARDEN", label: "Cozy Garden" },
       ];
-      const controlGroups: CostControlGroup[] = ["Payroll", "Điện", "Nước", "Software", "Marketing", "OTA", "COGS", "Khác"];
+      const controlGroups: CostControlGroup[] = ["Payroll", "Điện & Nước", "Software", "Marketing", "OTA", "Nguyên liệu / Mua hàng", "Khác"];
       const codeToControlGroup: Record<string, CostControlGroup> = {
-        C01: "Payroll", C02: "Điện", C03: "Nước", C04: "Software", C06: "Marketing", H01: "OTA",
+        C01: "Payroll", C02: "Điện & Nước", C03: "Điện & Nước", C04: "Software", C06: "Marketing", H01: "OTA",
+        N01: "Nguyên liệu / Mua hàng", F02: "Nguyên liệu / Mua hàng",
         C05: "Khác", C07: "Khác", C08: "Khác", C09: "Khác", C10: "Khác", C11: "Khác", F01: "Khác", H02: "Khác", H03: "Khác",
       };
       const hotelBranchToUnit = new Map<string, CostControlUnit>();
@@ -691,14 +692,32 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         if (raw === null) return;
         planByUnitGroup.set(`${unit}|${group}`, { amount: Number(raw), display: money(Number(raw)), status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: row?.formula_note ?? "Planning baseline" });
       };
-      setFixedPlan("LAVENDER", "Điện", "PLAN_EXP_ELECTRICITY");
-      setFixedPlan("RUBY", "Điện", "PLAN_EXP_ELECTRICITY");
-      setFixedPlan("COZY_GARDEN", "Điện", "PLAN_EXP_ELECTRICITY");
+      setFixedPlan("LAVENDER", "Điện & Nước", "PLAN_EXP_UTILITIES");
+      setFixedPlan("RUBY", "Điện & Nước", "PLAN_EXP_UTILITIES");
+      setFixedPlan("COZY_GARDEN", "Điện & Nước", "PLAN_EXP_UTILITIES");
       setFixedPlan("COZY_GARDEN", "Software", "PLAN_EXP_SOFTWARE_COZY");
-      const homestaySoftware = planLines.find((item) => item.business_unit === "HOSPITALITY_SHARED" && item.line_code === "PLAN_EXP_SOFTWARE_HOMESTAY");
-      if (homestaySoftware && (homestaySoftware.target_amount ?? homestaySoftware.baseline_amount) !== null) {
+      const homestayRevenueTotal = periodRevenueByUnit.LAVENDER + periodRevenueByUnit.RUBY;
+      const allocateSharedByRevenue = (group: CostControlGroup, lineCode: string) => {
+        const row = planLines.find((item) => item.business_unit === "HOSPITALITY_SHARED" && item.line_code === lineCode);
+        const raw = row?.target_amount ?? row?.baseline_amount ?? null;
+        if (raw === null || homestayRevenueTotal <= 0) return;
         for (const unit of ["LAVENDER", "RUBY"] as CostControlUnit[]) {
-          planByUnitGroup.set(`${unit}|Software`, { amount: null, display: "CẦN XÁC MINH", status: "NEED_VERIFY", source: homestaySoftware.source_reference ?? "FIN-HOSPITALITY-001", note: "Có baseline Homestay dùng chung nhưng chưa có rule phân bổ Lavender/Ruby; không chia 50/50." });
+          const share = periodRevenueByUnit[unit] / homestayRevenueTotal;
+          const amount = Number(raw) * share;
+          planByUnitGroup.set(`${unit}|${group}`, {
+            amount, display: `${money(amount)} (phân bổ ${pct(share * 100)})`, status: row?.verification_status ?? "ESTIMATED",
+            source: row?.source_reference ?? "FIN-HOSPITALITY-001",
+            note: `Management allocation từ Hospitality Shared theo tỷ trọng Revenue Actual; accounting source vẫn Shared.`,
+          });
+        }
+      };
+      allocateSharedByRevenue("Payroll", "PLAN_EXP_PAYROLL_HOMESTAY");
+      allocateSharedByRevenue("Software", "PLAN_EXP_SOFTWARE_HOMESTAY");
+      for (const unit of ["LAVENDER", "RUBY"] as CostControlUnit[]) {
+        const ota = planLines.find((item) => item.business_unit === unit && item.line_code === "PLAN_EXP_OTA_BOOKING");
+        const ratio = Number(ota?.target_amount ?? ota?.baseline_amount ?? Number.NaN);
+        if (Number.isFinite(ratio)) {
+          planByUnitGroup.set(`${unit}|OTA`, { amount: null, display: `${pct(ratio * 100)} DT Booking.com`, status: ota?.verification_status ?? "ESTIMATED", source: ota?.source_reference ?? "FIN-HOSPITALITY-001", note: "Chưa quy đổi thành tiền vì runtime chưa tách Revenue Booking.com theo property; không áp tỷ lệ lên toàn Revenue." });
         }
       }
       const setRevenueRatioPlan = (unit: CostControlUnit, group: CostControlGroup, lineCode: string) => {
@@ -709,7 +728,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         const amount = revenue * ratio;
         planByUnitGroup.set(`${unit}|${group}`, { amount, display: `${money(amount)} (${pct(ratio * 100)} DT Actual)`, status: row?.verification_status ?? "ESTIMATED", source: row?.source_reference ?? "FIN-HOSPITALITY-001", note: `Ngân sách kỳ = ${pct(ratio * 100)} × Revenue Actual cùng kỳ.` });
       };
-      setRevenueRatioPlan("COZY_GARDEN", "COGS", "PLAN_EXP_COGS_GUARDRAIL");
+      setRevenueRatioPlan("COZY_GARDEN", "Nguyên liệu / Mua hàng", "PLAN_EXP_COGS_GUARDRAIL");
       setRevenueRatioPlan("COZY_GARDEN", "Payroll", "PLAN_EXP_PAYROLL_GUARDRAIL");
       setRevenueRatioPlan("COZY_GARDEN", "Marketing", "PLAN_EXP_MARKETING_BASELINE");
 
@@ -721,15 +740,13 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         for (const group of controlGroups) {
           const key = `${unit.code}|${group}`;
           const plan = planByUnitGroup.get(key);
-          const actualReady = group === "COGS" ? false : actualSourceReadyForUnit(unit.code);
-          const actual = group === "COGS" ? null : (actualByUnitGroup.get(key) ?? (actualReady ? 0 : null));
+          const actualReady = actualSourceReadyForUnit(unit.code);
+          const actual = actualByUnitGroup.get(key) ?? (actualReady ? 0 : null);
           const planAmount = plan?.amount ?? null;
           const variance = planAmount !== null && actual !== null ? planAmount - actual : null;
           const usage = planAmount !== null && planAmount > 0 && actual !== null ? (actual / planAmount) * 100 : null;
           let alert = "CẦN XÁC MINH";
-          if (group === "COGS") {
-            alert = `CẦN XÁC MINH — BOM ${foundationReadiness.cogs.verifiedSoldSkuCount}/${foundationReadiness.cogs.soldSkuCount}`;
-          } else if (!plan) {
+          if (!plan) {
             alert = "CẦN XÁC MINH — chưa có kế hoạch chuẩn";
           } else if (!actualReady) {
             alert = "CẦN XÁC MINH — KiotViet chưa tách đủ theo cơ sở";
@@ -745,7 +762,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
             usage === null ? "—" : pct(usage),
             alert,
             plan?.source ?? "FIN-HOSPITALITY-001 / chưa có dòng kế hoạch",
-            group === "COGS" ? "Actual COGS chưa mở: cần KiotViet sold-SKU + production-ready BOM." : `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet`,
+            group === "Nguyên liệu / Mua hàng" ? `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet payment/purchase spend; không đồng nghĩa COGS.` : `${actualCountByUnitGroup.get(key) ?? 0} khoản KiotViet`,
           ]);
         }
       }
@@ -760,10 +777,10 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         for (const group of controlGroups) {
           const key = `${unit.code}|${group}`;
           const plan = planByUnitGroup.get(key);
-          const actualReady = group === "COGS" ? false : actualSourceReadyForUnit(unit.code);
-          const actual = group === "COGS" ? null : (actualByUnitGroup.get(key) ?? (actualReady ? 0 : null));
+          const actualReady = actualSourceReadyForUnit(unit.code);
+          const actual = actualByUnitGroup.get(key) ?? (actualReady ? 0 : null);
           const monthlyPlan = plan?.amount ?? null;
-          const shouldAccrue = group === "Payroll" || group === "Điện" || group === "Nước";
+          const shouldAccrue = group === "Payroll" || group === "Điện & Nước";
           const accruedPlan = monthlyPlan !== null && shouldAccrue ? monthlyPlan * monthToDateRatio : null;
           const managementValue = actual !== null && actual > 0
             ? actual
@@ -884,7 +901,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         {
           "Doanh thu hôm nay": "KiotViet Hotel + F&B Actual · " + period.label,
           "Doanh thu tháng": "KiotViet Hotel + F&B Actual · tháng hiện tại",
-          "Chi phí": `Chi phí điều hành đến hiện tại: estimate lũy kế Payroll/Điện/Nước khi có baseline + Actual KiotViet; Actual thay estimate, không cộng chồng.`,
+          "Chi phí": `Chi phí điều hành đến hiện tại: Payroll + Điện & Nước lũy kế theo Budget khi chưa có Actual; Actual KiotViet thay estimate. [TCE-N01]/F02 được tính là management purchase spend nhưng không phải COGS kế toán.`,
           "Lợi nhuận ước tính": "Doanh thu Actual − Chi phí điều hành đến hiện tại. Đây là số quản trị, chưa phải lợi nhuận chốt kế toán.",
           "Lợi nhuận gộp": "NEED VERIFY: sold-SKU BOM VERIFIED " +
             foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount +

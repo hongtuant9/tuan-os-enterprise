@@ -1,4 +1,4 @@
-const fs = require("fs");
+import fs from "node:fs";
 
 const REPORT_PATH = process.env.TCE_MORNING_REPORT_PATH || "/tmp/tce-morning-latest.json";
 const DRY_RUN = String(process.env.TCE_MORNING_TELEGRAM_DRY_RUN || "").toLowerCase() === "true";
@@ -10,12 +10,8 @@ const OTA_SOURCE_MAX_AGE_MINUTES = Number(process.env.TCE_OTA_SOURCE_MAX_AGE_MIN
 function localDate(d = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
-function viDate(isoDate) {
-  const [y,m,d] = String(isoDate).split("-");
-  return `${d}/${m}/${y}`;
-}
 function shortDate(isoDate) {
-  const [y,m,d] = String(isoDate).split("-");
+  const [,m,d] = String(isoDate).split("-");
   return `${d}/${m}`;
 }
 function shortRoom(v) {

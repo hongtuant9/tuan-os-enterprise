@@ -2,6 +2,8 @@ import "server-only";
 import { KiotVietFnbClient } from "@/server/integrations/kiotviet/fnb-client";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { fetchFnbCashflowActual, fetchHotelCashflowActual } from "@/server/integrations/kiotviet/cashflow-actual";
+import { readKiotVietActualRange, type KiotVietActualRangeRow } from "@/server/integrations/kiotviet/finance-browser-bot";
+import { expenseCategoryCode, expenseTransactionType, resolveBusinessExpenseGroup } from "@/server/finance/expense-actual-core";
 
 const CUTOVER = "2026-10-01";
 type Row = Record<string, unknown>;
@@ -29,7 +31,7 @@ export function businessUnitFromBranch(system:"HOTEL"|"FNB",branchName:unknown):
   if(s.includes("ruby"))return "RUBY";
   return "HOSPITALITY_SHARED";
 }
-export function canonicalFinanceSourceKey(system:"HOTEL"|"FNB",kind:"INVOICE"|"CASHFLOW",id:string){return `KIOTVIET:${system}:${kind}:${id}`;}
+export function canonicalFinanceSourceKey(system:"HOTEL"|"FNB",kind:"INVOICE"|"CASHFLOW"|"PURCHASE_ORDER",id:string){return `KIOTVIET:${system}:${kind}:${id}`;}
 function tceCode(label:string){return label.match(/\[TCE-([A-Z0-9]+)\]/i)?.[1]?.toUpperCase()??null;}
 
 async function invoiceRows(system:"HOTEL"|"FNB",day:string):Promise<Row[]> {
@@ -53,11 +55,150 @@ async function invoiceRows(system:"HOTEL"|"FNB",day:string):Promise<Row[]> {
   return out.filter(x=>!cancelled(x));
 }
 
+type UpsertResult = Promise<{ error: { message: string } | null }>;
 type CutoverDb = {
-  from: (table: "business_finance_transactions") => {
-    upsert: (rows: Record<string, unknown>[], options: { onConflict: string; ignoreDuplicates: boolean }) => Promise<{ error: { message: string } | null }>;
+  from: (table: "business_finance_transactions" | "sync_sources") => {
+    upsert: (rows: Record<string, unknown>[] | Record<string, unknown>, options: { onConflict: string; ignoreDuplicates: boolean }) => UpsertResult;
   };
 };
+
+
+function actualBusinessUnit(system: "HOTEL" | "FNB", row: KiotVietActualRangeRow): BusinessUnit {
+  return businessUnitFromBranch(system, row.branchName);
+}
+
+function sourceRegistryKey(system: "HOTEL" | "FNB", kind: "cashflow" | "purchase_orders") {
+  return `kiotviet_${system.toLowerCase()}_${kind}_actual`;
+}
+
+function parseCoverageCursor(value: unknown) {
+  const match = String(value ?? "").match(/^coverage:(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/);
+  return match ? { from: match[1], to: match[2] } : null;
+}
+
+function shiftDay(value: string, days: number) {
+  const date = new Date(value + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function mergedCoverageCursor(existing: unknown, from: string, to: string) {
+  const current = parseCoverageCursor(existing);
+  if (!current) return `coverage:${from}..${to}`;
+  const overlapsOrAdjacent = from <= shiftDay(current.to, 1) && to >= shiftDay(current.from, -1);
+  if (!overlapsOrAdjacent) return `coverage:${from}..${to}`;
+  return `coverage:${from < current.from ? from : current.from}..${to > current.to ? to : current.to}`;
+}
+
+async function currentCoverageCursor(dbInput: unknown, key: string): Promise<string | null> {
+  type Result = { data: { last_cursor?: string | null } | null; error: { message?: string } | null };
+  type Db = { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { maybeSingle: () => Promise<Result> } } } };
+  try {
+    const result = await (dbInput as Db).from("sync_sources").select("last_cursor").eq("key", key).maybeSingle();
+    return result.error ? null : result.data?.last_cursor ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: string, to: string) {
+  const db = dbInput as CutoverDb;
+  const writes: Record<string, unknown>[] = [];
+  const sourceStates: Array<{ system: "HOTEL" | "FNB"; kind: "cashflow" | "purchase_orders"; state: string; expected: number; fetched: number }> = [];
+  let excludedNonPnl = 0;
+  let unmappedPnl = 0;
+
+  for (const system of ["HOTEL", "FNB"] as const) {
+    const snapshot = await readKiotVietActualRange(system, from, to);
+    const cashVerified = snapshot.state === "VERIFIED" && snapshot.cashflowExpectedRows === snapshot.cashflowFetchedRows;
+    const purchaseVerified = snapshot.state === "VERIFIED" && snapshot.purchaseExpectedRows === snapshot.purchaseFetchedRows;
+    sourceStates.push({ system, kind: "cashflow", state: cashVerified ? "VERIFIED" : snapshot.state, expected: snapshot.cashflowExpectedRows, fetched: snapshot.cashflowFetchedRows });
+    sourceStates.push({ system, kind: "purchase_orders", state: purchaseVerified ? "VERIFIED" : snapshot.state, expected: snapshot.purchaseExpectedRows, fetched: snapshot.purchaseFetchedRows });
+
+    if (cashVerified) {
+      for (const row of snapshot.cashflowRows) {
+        if (row.flowType !== 2) continue;
+        if (row.usedForFinancialReporting !== true) { excludedNonPnl += 1; continue; }
+        const group = resolveBusinessExpenseGroup(row.cashFlowGroupName ?? "") ?? "Khác";
+        const unit = actualBusinessUnit(system, row);
+        if (unit === "HOSPITALITY_SHARED") { unmappedPnl += 1; continue; }
+        writes.push({
+          external_key: canonicalFinanceSourceKey(system, "CASHFLOW", row.id),
+          transaction_date: row.date,
+          business_unit: unit,
+          transaction_type: expenseTransactionType(group),
+          category_code: expenseCategoryCode(group),
+          subcategory_code: row.cashFlowGroupName ?? null,
+          counterparty: row.partnerName || null,
+          amount: Math.max(0, row.amount),
+          source_document: row.code || row.id,
+          source_reference: row.id,
+          payment_status: "PAID",
+          verification_status: "VERIFIED",
+          source: system === "FNB" ? "KIOTVIET_FNB_CASHBOOK_WEB_API" : "KIOTVIET_HOTEL_CASHBOOK_WEB_API",
+          record_status: "ACTIVE",
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    if (purchaseVerified) {
+      for (const row of snapshot.purchaseOrderRows) {
+        const unit = actualBusinessUnit(system, row);
+        if (unit === "HOSPITALITY_SHARED") { unmappedPnl += 1; continue; }
+        writes.push({
+          external_key: canonicalFinanceSourceKey(system, "PURCHASE_ORDER", row.id),
+          transaction_date: row.date,
+          business_unit: unit,
+          transaction_type: "OPEX",
+          category_code: "EXP_PURCHASE",
+          subcategory_code: "PURCHASE_ORDER_COMPLETED",
+          counterparty: row.supplierName || null,
+          amount: Math.max(0, row.amount),
+          source_document: row.code || row.id,
+          source_reference: row.id,
+          payment_status: "NEED_VERIFY",
+          verification_status: "VERIFIED",
+          source: system === "FNB" ? "KIOTVIET_FNB_PURCHASE_ORDER_WEB_API" : "KIOTVIET_HOTEL_PURCHASE_ORDER_WEB_API",
+          record_status: "ACTIVE",
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    for (const kind of ["cashflow", "purchase_orders"] as const) {
+      const state = sourceStates.find((item) => item.system === system && item.kind === kind)!;
+      const key = sourceRegistryKey(system, kind);
+      const existingCursor = await currentCoverageCursor(dbInput, key);
+      const nextCursor = state.state === "VERIFIED" ? mergedCoverageCursor(existingCursor, from, to) : existingCursor;
+      const { error } = await db.from("sync_sources").upsert({
+        key,
+        name: `KiotViet ${system} — ${kind === "cashflow" ? "Expense Cashflow Actual" : "Purchase Orders Actual"}`,
+        description: "Authenticated KiotViet Web API; canonical Expense Actual source for TUAN OS Business.",
+        supports_incremental: true,
+        schedule_enabled: true,
+        schedule_interval_minutes: 15,
+        status: state.state === "VERIFIED" ? "idle" : "error",
+        last_synced_at: state.state === "VERIFIED" ? new Date().toISOString() : null,
+        last_cursor: nextCursor,
+        last_error: state.state === "VERIFIED" ? null : `${state.state}; reconciliation=${state.fetched}/${state.expected}`,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key", ignoreDuplicates: false });
+      if (error) throw new Error(`sync source upsert failed: ${error.message}`);
+    }
+  }
+
+  if (writes.length) {
+    const { error } = await db.from("business_finance_transactions").upsert(writes, { onConflict: "external_key", ignoreDuplicates: false });
+    if (error) throw new Error(`canonical Expense Actual upsert failed: ${error.message}`);
+  }
+
+  const verifiedSources = sourceStates.filter((item) => item.state === "VERIFIED").length;
+  return {
+    state: verifiedSources === sourceStates.length && unmappedPnl === 0 ? "VERIFIED" : "PARTIAL",
+    from, to, sourceStates, upserted: writes.length, excludedNonPnl, unmappedPnl,
+  };
+}
 
 export async function syncCanonicalBusinessFinance(dbInput:unknown,now=new Date()){
   const day=localDateKey(now);

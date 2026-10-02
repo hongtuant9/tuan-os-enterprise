@@ -23,8 +23,9 @@ import { summarizeCashflow } from "@/server/finance/foundation";
 import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
-import { resolveExpenseCode, summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
+import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
+import { readBusinessExpenseActual, type BusinessExpenseActualSnapshot } from "@/server/finance/business-expense-actual";
 import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type DataRecencyStatus, type FreshnessStatus, type PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
 export type TceTabScreen =
@@ -568,30 +569,22 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ? fnbPeriodPromise
       : safeFnb(monthStart + "T00:00:00", today + "T23:59:59");
     const businessFinanceMonth = today >= "2026-10-01" ? today.slice(0, 7) + "-01" : "2026-10-01";
-    const businessHotelExpensePromise = screen === "business"
-      ? financeReadWithTimeout(fetchHotelCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_HOTEL", period.from, period.to))
+    const businessPeriodExpensePromise = screen === "business"
+      ? readBusinessExpenseActual(container.db, period.from, period.to)
       : Promise.resolve(null);
-    const businessFnbExpensePromise = screen === "business"
-      ? financeReadWithTimeout(fetchFnbCashflowActual(period.from + "T00:00:00", period.to + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", period.from, period.to))
-      : Promise.resolve(null);
-    const businessHotelMonthExpensePromise = screen === "business"
-      ? (sameAsCurrentMonth ? businessHotelExpensePromise : financeReadWithTimeout(fetchHotelCashflowActual(monthStart + "T00:00:00", today + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_HOTEL", monthStart, today)))
-      : Promise.resolve(null);
-    const businessFnbMonthExpensePromise = screen === "business"
-      ? (sameAsCurrentMonth ? businessFnbExpensePromise : financeReadWithTimeout(fetchFnbCashflowActual(monthStart + "T00:00:00", today + "T23:59:59"), cashflowTimeoutFallback("KIOTVIET_FNB", monthStart, today)))
+    const businessMonthExpensePromise = screen === "business"
+      ? (sameAsCurrentMonth ? businessPeriodExpensePromise : readBusinessExpenseActual(container.db, monthStart, today))
       : Promise.resolve(null);
     const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessHotelExpense, businessFnbExpense, businessHotelMonthExpense, businessFnbMonthExpense, businessOccupancy] = await Promise.all([
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessPeriodExpense, businessMonthExpense, businessOccupancy] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
       fnbMonthPromise,
       readFinanceFoundationReadiness(),
       screen === "business" ? readBusinessOperatingSnapshot(container.db, businessFinanceMonth) : Promise.resolve(null),
-      businessHotelExpensePromise,
-      businessFnbExpensePromise,
-      businessHotelMonthExpensePromise,
-      businessFnbMonthExpensePromise,
+      businessPeriodExpensePromise,
+      businessMonthExpensePromise,
       occupancyPromise,
     ]);
 
@@ -697,11 +690,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
               ? ["LAVENDER", "RUBY"]
               : ["LAVENDER", "RUBY", "COZY_GARDEN"];
       const selectedUnitSet = new Set<CostControlUnit>(selectedUnitCodes);
-      const codeToControlGroup: Record<string, CostControlGroup> = {
-        C01: "Payroll", C02: "Điện & Nước", C03: "Điện & Nước", C04: "Software", C06: "Marketing", H01: "OTA",
-        N01: "Nguyên liệu / Mua hàng", F02: "Nguyên liệu / Mua hàng",
-        C05: "Khác", C07: "Khác", C08: "Khác", C09: "Khác", C10: "Khác", C11: "Khác", F01: "Khác", H02: "Khác", H03: "Khác",
-      };
+
 
       const periodHotelByName = new Map(hotelPeriod.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
       const monthHotelByName = new Map(hotelMonth.branchBreakdown.map((b) => [b.branchName.toLowerCase(), b]));
@@ -727,52 +716,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       };
       const selectedPeriodRevenue = selectedUnitCodes.reduce((sum, unit) => sum + periodRevenueByUnit[unit], 0);
 
-      const branchToUnit = new Map<string, CostControlUnit>();
-      for (const branch of [...hotelPeriod.branchBreakdown, ...hotelMonth.branchBreakdown]) {
-        const name = (branch.branchName || "").toLowerCase();
-        if (branch.branchId && name.includes("lavender")) branchToUnit.set(branch.branchId, "LAVENDER");
-        if (branch.branchId && name.includes("ruby")) branchToUnit.set(branch.branchId, "RUBY");
-      }
-      const buildActualMap = (hotelSnapshot: KiotVietCashflowSnapshot | null, fnbSnapshot: KiotVietCashflowSnapshot | null) => {
-        const amounts = new Map<string, number>();
-        const counts = new Map<string, number>();
-        const unitTotals = new Map<CostControlUnit, number>();
-        let unresolvedHotelRows = 0;
-        let unknownHotelRows = 0;
-        let unknownFnbRows = 0;
-        const snapshots = [hotelSnapshot, fnbSnapshot].filter((item): item is KiotVietCashflowSnapshot => Boolean(item?.state === "VERIFIED"));
-        for (const snapshot of snapshots) {
-          for (const row of snapshot.rows) {
-            if (row.isReceipt !== false) continue;
-            const expenseCode = resolveExpenseCode(row.cashFlowGroupName || row.cashFlowGroupId || "");
-            const group = expenseCode ? codeToControlGroup[expenseCode] : undefined;
-            if (!expenseCode || !group) {
-              if (snapshot.source === "KIOTVIET_FNB") unknownFnbRows += 1;
-              else unknownHotelRows += 1;
-              continue;
-            }
-            const unit: CostControlUnit | null = snapshot.source === "KIOTVIET_FNB"
-              ? "COZY_GARDEN"
-              : branchToUnit.get(row.branchId) ?? null;
-            if (!unit) { unresolvedHotelRows += 1; continue; }
-            const key = `${unit}|${group}`;
-            const amount = Math.max(0, row.amount);
-            amounts.set(key, (amounts.get(key) ?? 0) + amount);
-            counts.set(key, (counts.get(key) ?? 0) + 1);
-            unitTotals.set(unit, (unitTotals.get(unit) ?? 0) + amount);
-          }
-        }
-        const hotelReady = hotelSnapshot?.state === "VERIFIED" && unresolvedHotelRows === 0 && unknownHotelRows === 0;
-        const fnbReady = fnbSnapshot?.state === "VERIFIED" && unknownFnbRows === 0;
-        const unitReady = new Map<CostControlUnit, boolean>([
-          ["LAVENDER", hotelReady],
-          ["RUBY", hotelReady],
-          ["COZY_GARDEN", fnbReady],
-        ]);
-        return { amounts, counts, unitTotals, unitReady, unresolvedHotelRows, unknownHotelRows, unknownFnbRows };
-      };
-      const periodActual = buildActualMap(businessHotelExpense, businessFnbExpense);
-      const monthActual = buildActualMap(businessHotelMonthExpense, businessFnbMonthExpense);
+      const periodActual = businessPeriodExpense as BusinessExpenseActualSnapshot;
+      const monthActual = businessMonthExpense as BusinessExpenseActualSnapshot;
 
       const bookingRevenueByUnit = (snapshot: RevenueSnapshot): Record<"LAVENDER" | "RUBY", number> => {
         const out = { LAVENDER: 0, RUBY: 0 };
@@ -873,9 +818,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       };
       const periodPlan = planForRange(period.from, period.to, periodRevenueByUnit, periodBookingRevenue);
 
-      const actualStateFor = (actual: typeof periodActual, unit: CostControlUnit) => ({
-        ready: actual.unitReady.get(unit) === true,
-        amount: actual.unitReady.get(unit) === true ? (actual.unitTotals.get(unit) ?? 0) : null,
+      const actualStateFor = (actual: BusinessExpenseActualSnapshot, unit: CostControlUnit) => ({
+        ready: actual.unitReady[unit] === true,
+        amount: actual.unitReady[unit] === true ? (actual.unitTotals[unit] ?? 0) : null,
       });
       const selectedActualStates = selectedUnitCodes.map((unit) => actualStateFor(periodActual, unit));
       const selectedActualExpenseReady = selectedActualStates.every((state) => state.ready);
@@ -904,8 +849,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         for (const group of controlGroups) {
           const key = `${unit.code}|${group}`;
           const expected = periodPlan.byUnitGroup.get(key) ?? 0;
-          const actualReady = periodActual.unitReady.get(unit.code) === true;
-          const actualValue = actualReady ? (periodActual.amounts.get(key) ?? 0) : null;
+          const actualReady = periodActual.unitReady[unit.code] === true;
+          const actualValue = actualReady ? (periodActual.unitGroupTotals[key] ?? 0) : null;
           const variance = actualValue === null ? null : actualValue - expected;
           const usage = expected > 0 && actualValue !== null ? actualValue / expected * 100 : null;
           let state = actualValue === null ? "CHƯA ĐỦ DỮ LIỆU ACTUAL" : actualValue === 0 ? "CHƯA PHÁT SINH ACTUAL" : "ĐÃ CÓ ACTUAL";
@@ -939,13 +884,22 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ];
       });
 
-      const businessExpenseSnapshots = [businessHotelExpense, businessFnbExpense].filter((snapshot): snapshot is KiotVietCashflowSnapshot => Boolean(snapshot));
-      const businessVerifiedExpenseRows = businessExpenseSnapshots.filter((snapshot) => snapshot.state === "VERIFIED").flatMap((snapshot) => snapshot.rows);
-      const businessExpenseActual = summarizeExpenseActualRows(businessVerifiedExpenseRows.map((row) => ({ id: row.id, transDate: row.transDate, amount: row.amount, isReceipt: row.isReceipt, groupLabel: row.cashFlowGroupName || row.cashFlowGroupId || "", status: row.status })));
-      const businessExpenseSourceState = businessExpenseSnapshots.length === 2 && businessExpenseSnapshots.every((snapshot) => snapshot.state === "VERIFIED") ? "VERIFIED" : businessExpenseSnapshots.some((snapshot) => snapshot.state === "VERIFIED") ? "PARTIAL" : "HOLD";
-      const businessExpenseActualTotal = businessExpenseActual.directMappedAmount;
-      const businessExpenseActualRows = businessExpenseActual.groups.map((group, i) => [String(i + 1), `[TCE-${group.code}] ${group.canonicalCategory}`, money(group.amount), String(group.transactionCount), group.verificationStatus, "KiotViet trực tiếp", group.note]);
-      if (!businessExpenseActualRows.length) businessExpenseActualRows.push(["—", "Chưa có khoản chi P&L đọc trực tiếp đủ điều kiện", "—", "0", businessExpenseSourceState, "KiotViet Hotel/F&B", "Không suy chi phí = 0 khi nguồn chưa đủ."]);
+      const allExpenseUnitsReady = (Object.values(periodActual.unitReady) as boolean[]).every(Boolean);
+      const businessExpenseSourceState = allExpenseUnitsReady ? "VERIFIED" : "PARTIAL";
+      const businessExpenseActualTotal = Object.values(periodActual.unitTotals).reduce((sum, value) => sum + value, 0);
+      const actualGrouped = new Map<string, { unit: string; group: string; amount: number; count: number; sources: Set<string> }>();
+      for (const row of periodActual.rows) {
+        const key = `${row.unit}|${row.group}`;
+        const current = actualGrouped.get(key) ?? { unit: row.unit, group: row.group, amount: 0, count: 0, sources: new Set<string>() };
+        current.amount += row.amount;
+        current.count += 1;
+        current.sources.add(row.source);
+        actualGrouped.set(key, current);
+      }
+      const businessExpenseActualRows = [...actualGrouped.values()]
+        .sort((a, b) => a.unit.localeCompare(b.unit) || a.group.localeCompare(b.group))
+        .map((group, i) => [String(i + 1), `${group.unit} · ${group.group}`, money(group.amount), String(group.count), "VERIFIED", [...group.sources].join(", "), "Canonical KiotViet Actual; cashbook P&L + completed Purchase Orders; supplier payment non-P&L excluded."]);
+      if (!businessExpenseActualRows.length) businessExpenseActualRows.push(["—", "Chưa có khoản chi Actual trong kỳ", "—", "0", businessExpenseSourceState, "KiotViet Hotel/F&B", allExpenseUnitsReady ? "Coverage VERIFIED; Actual = 0 cho kỳ lọc." : "Coverage chưa đủ; không suy Actual = 0."]);
       const planExpenseRows = planLines.filter((row) => String(row.line_code ?? "").startsWith("PLAN_EXP_")).map((row, i) => [String(i + 1), row.business_unit === "HOSPITALITY_SHARED" ? "Dùng chung Hospitality" : String(row.business_unit ?? "—").replace("COZY_GARDEN", "Cozy Garden").replace("LAVENDER", "Lavender").replace("RUBY", "Ruby"), row.line_name ?? String(row.line_code ?? ""), row.baseline_amount === null || row.baseline_amount === undefined ? "—" : money(Number(row.baseline_amount)), row.verification_status ?? "ESTIMATED", row.source_reference ?? row.source ?? "FIN-HOSPITALITY-001", row.formula_note ?? "Planning only"]);
       const costControlRows: string[][] = planProgressRows.map((row) => [...row, ""]);
 
@@ -987,7 +941,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ["COGS", "—", "KiotViet F&B sold SKU × COST-001 BOM", foundationReadiness.checkedAt, "NEED_VERIFY — BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "Sold-SKU mapping " + foundationReadiness.cogs.matchedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "; production-ready BOM " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount + "."],
         ["Gross Profit", "—", "Canonical calculation: Revenue − COGS", foundationReadiness.checkedAt, "NEED_VERIFY — COGS chưa PASS", "Không tính số chắc chắn khi COGS coverage chưa đủ."],
         ["Gross Margin", "—", "Canonical calculation: Gross Profit / Revenue", foundationReadiness.checkedAt, "NEED_VERIFY — Gross Profit chưa PASS", "Derived metric; Revenue=0 thì N/A."],
-        ["Operating Expense", businessExpenseActualTotal > 0 ? money(businessExpenseActualTotal) : "—", "KiotViet Hotel/F&B · direct cashbook expense mapping", foundationReadiness.checkedAt, businessExpenseSourceState === "VERIFIED" && businessExpenseActual.unknownExpenseRows === 0 && businessExpenseActual.ambiguousAmount === 0 ? "VERIFIED" : businessExpenseSourceState + " — KiotViet Actual", `${businessExpenseActual.unknownExpenseRows} khoản chưa map; ${businessExpenseActual.excludedNonPnlRows} non-P&L đã loại; ambiguous ${money(businessExpenseActual.ambiguousAmount)}.`],
+        ["Management Expense Actual", businessExpenseActualTotal > 0 ? money(businessExpenseActualTotal) : "—", "KiotViet Cashbook P&L + completed Purchase Orders", foundationReadiness.checkedAt, businessExpenseSourceState === "VERIFIED" ? "VERIFIED" : "NEED_VERIFY — coverage", `Canonical rows=${periodActual.rows.length}; Cashbook P&L + Purchase Orders; non-P&L supplier payments excluded upstream.`],
         ["Operating Profit", "—", "Canonical calculation layer", foundationReadiness.checkedAt, "NEED_VERIFY — COGS/Expense chưa PASS", "Không dùng Budget/Estimate thay Actual."],
         ["Profit Before Tax", profitBeforeTax === null ? "—" : money(profitBeforeTax), "Finance Operating Snapshot", businessUpdatedAt, profitBeforeTax === null ? "NEED_VERIFY — P&L chưa đóng" : "VERIFIED", "Chỉ có giá trị khi Revenue/COGS/OPEX đã đủ canonical Actual."],
         ["Tax Provision", taxProvision === null ? "—" : money(taxProvision), "Canonical Tax Position", businessUpdatedAt, taxProvision === null ? "HOLD — Tax Rule chưa VERIFIED" : "VERIFIED", "Không mặc định Tax=0."],
@@ -1000,7 +954,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ];
 
       const businessDataGaps = [
-        ["Expense Actual", `KiotViet ${businessExpenseSourceState}; ${businessExpenseActual.unknownExpenseRows} khoản chưa map`, "KiotViet Hotel/F&B trực tiếp", businessExpenseSourceState === "VERIFIED" && businessExpenseActual.unknownExpenseRows === 0 && businessExpenseActual.ambiguousAmount === 0 ? "VERIFIED" : "NEED_VERIFY", "AI CFO + AI CTO", "Chuẩn hóa Loại chi/TCE taxonomy ngay tại KiotViet; không lấy chứng từ ngoài thay Actual.", "BLOCKING"],
+        ["Expense Actual", `KiotViet ${businessExpenseSourceState}; canonical rows=${periodActual.rows.length}`, "KiotViet authenticated Web API → canonical DB", businessExpenseSourceState === "VERIFIED" ? "VERIFIED" : "NEED_VERIFY", "AI CFO + AI CTO", "Đóng coverage Cashflow + Purchase Orders cho đủ kỳ; không lấy Budget thay Actual.", "BLOCKING"],
         ["COGS", "BOM VERIFIED " + foundationReadiness.cogs.verifiedSoldSkuCount + "/" + foundationReadiness.cogs.soldSkuCount, "COST-001 + KiotViet F&B sold-SKU", "NEED_VERIFY", "AI CFO + Cost Controller", "Nghiệm thu BOM theo SKU bán thực tế, ưu tiên SKU doanh số cao.", "BLOCKING"],
         ["Payroll September", employeeAdvances === null ? "Salary Advance canonical tồn tại; final payroll chưa đóng." : "Salary Advance " + money(employeeAdvances) + "; final payroll chưa đóng.", "Payroll close + Salary Advance subledger", "NEED_VERIFY", "Quản lý cơ sở + AI CFO", "01/10 chốt Final Payroll − Salary Advance = Remaining Payroll Payable; không double-count.", "BLOCKING"],
         ["OTA Commission", "Lavender/Ruby Booking.com opening AP chưa có amount.", "Booking.com statement/invoice + settlement", "NEED_VERIFY", "Quản lý Homestay + AI CFO", "Lấy statement tháng 9 và map đúng Lavender/Ruby.", "BLOCKING"],

@@ -155,3 +155,57 @@ export function summarizeExpenseActualRows(rows: CashbookExpenseRow[]) {
       .reduce((sum, group) => sum + group.amount, 0),
   };
 }
+
+export type BusinessExpenseGroup = "Payroll" | "Điện & Nước" | "Software" | "Marketing" | "OTA" | "Nguyên liệu / Mua hàng" | "Khác";
+
+export function resolveBusinessExpenseGroup(groupLabel: string): BusinessExpenseGroup | null {
+  const label = groupLabel.trim();
+  const hs = label.match(/\[HS-P(\d{2}|99)\]/i)?.[1];
+  if (hs) {
+    if (hs === "01") return "Payroll";
+    if (hs === "02") return "OTA";
+    if (["03", "04", "05", "14"].includes(hs)) return "Nguyên liệu / Mua hàng";
+    if (hs === "06") return "Điện & Nước";
+    if (hs === "08") return "Software";
+    if (hs === "09") return "Marketing";
+    return "Khác";
+  }
+  const cz = label.match(/\[CZ-P(\d{2}|99)\]/i)?.[1];
+  if (cz) {
+    if (["01", "02", "03", "07", "14"].includes(cz)) return "Nguyên liệu / Mua hàng";
+    if (cz === "04") return "Payroll";
+    if (cz === "06") return "Điện & Nước";
+    if (cz === "08") return "Marketing";
+    if (cz === "09") return "Software";
+    return "Khác";
+  }
+  const code = resolveExpenseCode(label);
+  if (!code) return null;
+  if (code === "C01") return "Payroll";
+  if (["C02", "C03"].includes(code)) return "Điện & Nước";
+  if (code === "C04") return "Software";
+  if (code === "C06") return "Marketing";
+  if (code === "H01") return "OTA";
+  if (code === "F01") return "Nguyên liệu / Mua hàng";
+  if (["N01", "N02", "N03", "N04", "N05", "N06", "R01", "RN01", "RN02"].includes(code)) return null;
+  return "Khác";
+}
+
+export function expenseTransactionType(group: BusinessExpenseGroup) {
+  if (group === "Payroll") return "PAYROLL" as const;
+  if (group === "Điện & Nước") return "UTILITY" as const;
+  if (group === "OTA") return "OTA_COMMISSION" as const;
+  return "OPEX" as const;
+}
+
+export function expenseCategoryCode(group: BusinessExpenseGroup) {
+  return ({
+    "Payroll": "EXP_PAYROLL",
+    "Điện & Nước": "EXP_UTILITIES",
+    "Software": "EXP_SOFTWARE",
+    "Marketing": "EXP_MARKETING",
+    "OTA": "EXP_OTA",
+    "Nguyên liệu / Mua hàng": "EXP_PURCHASE",
+    "Khác": "EXP_OTHER",
+  } satisfies Record<BusinessExpenseGroup, string>)[group];
+}

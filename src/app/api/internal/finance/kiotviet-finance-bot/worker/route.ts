@@ -6,6 +6,7 @@ import {
   type FinanceBotSystem,
 } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { syncCanonicalBusinessFinance } from "@/server/finance/canonical-finance-sync";
+import { ensureFinanceOperatorQuestions } from "@/server/notifications/telegram-operator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,12 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     canonicalSync = { state: "ERROR", message: error instanceof Error ? error.message : "canonical finance sync failed" };
   }
+  const operatorQuestions = await ensureFinanceOperatorQuestions().catch((error) => ({
+    checked: false as const,
+    sent: 0,
+    error: error instanceof Error ? error.message : "finance operator question seed failed",
+  }));
+
   await container.activityLog.record({
     agent: "TCE KiotViet Finance Bot v1",
     unit: "Finance",
@@ -54,5 +61,5 @@ export async function POST(req: NextRequest) {
     ).join(" | "),
   }).catch(() => undefined);
 
-  return NextResponse.json({ ok: true, results, canonicalSync }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, results, canonicalSync, operatorQuestions }, { headers: { "Cache-Control": "no-store" } });
 }

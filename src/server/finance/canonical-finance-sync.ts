@@ -101,7 +101,7 @@ async function currentCoverageCursor(dbInput: unknown, key: string): Promise<str
   }
 }
 
-export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: string, to: string) {
+export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: string, to: string, options: { dryRun?: boolean } = {}) {
   const db = dbInput as CutoverDb;
   const writes: Record<string, unknown>[] = [];
   const sourceStates: Array<{ system: "HOTEL" | "FNB"; kind: "cashflow" | "purchase_orders"; state: string; expected: number; fetched: number }> = [];
@@ -166,37 +166,49 @@ export async function syncCanonicalExpenseActualRange(dbInput: unknown, from: st
       }
     }
 
-    for (const kind of ["cashflow", "purchase_orders"] as const) {
-      const state = sourceStates.find((item) => item.system === system && item.kind === kind)!;
-      const key = sourceRegistryKey(system, kind);
-      const existingCursor = await currentCoverageCursor(dbInput, key);
-      const nextCursor = state.state === "VERIFIED" ? mergedCoverageCursor(existingCursor, from, to) : existingCursor;
-      const { error } = await db.from("sync_sources").upsert({
-        key,
-        name: `KiotViet ${system} — ${kind === "cashflow" ? "Expense Cashflow Actual" : "Purchase Orders Actual"}`,
-        description: "Authenticated KiotViet Web API; canonical Expense Actual source for TUAN OS Business.",
-        supports_incremental: true,
-        schedule_enabled: true,
-        schedule_interval_minutes: 15,
-        status: state.state === "VERIFIED" ? "idle" : "error",
-        last_synced_at: state.state === "VERIFIED" ? new Date().toISOString() : null,
-        last_cursor: nextCursor,
-        last_error: state.state === "VERIFIED" ? null : `${state.state}; reconciliation=${state.fetched}/${state.expected}`,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "key", ignoreDuplicates: false });
-      if (error) throw new Error(`sync source upsert failed: ${error.message}`);
+    if (!options.dryRun) {
+      for (const kind of ["cashflow", "purchase_orders"] as const) {
+        const state = sourceStates.find((item) => item.system === system && item.kind === kind)!;
+        const key = sourceRegistryKey(system, kind);
+        const existingCursor = await currentCoverageCursor(dbInput, key);
+        const nextCursor = state.state === "VERIFIED" ? mergedCoverageCursor(existingCursor, from, to) : existingCursor;
+        const { error } = await db.from("sync_sources").upsert({
+          key,
+          name: `KiotViet ${system} — ${kind === "cashflow" ? "Expense Cashflow Actual" : "Purchase Orders Actual"}`,
+          description: "Authenticated KiotViet Web API; canonical Expense Actual source for TUAN OS Business.",
+          supports_incremental: true,
+          schedule_enabled: true,
+          schedule_interval_minutes: 15,
+          status: state.state === "VERIFIED" ? "idle" : "error",
+          last_synced_at: state.state === "VERIFIED" ? new Date().toISOString() : null,
+          last_cursor: nextCursor,
+          last_error: state.state === "VERIFIED" ? null : `${state.state}; reconciliation=${state.fetched}/${state.expected}`,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "key", ignoreDuplicates: false });
+        if (error) throw new Error(`sync source upsert failed: ${error.message}`);
+      }
     }
   }
 
-  if (writes.length) {
+  if (!options.dryRun && writes.length) {
     const { error } = await db.from("business_finance_transactions").upsert(writes, { onConflict: "external_key", ignoreDuplicates: false });
     if (error) throw new Error(`canonical Expense Actual upsert failed: ${error.message}`);
   }
 
+  const previewByUnitCategory: Record<string, { count: number; amount: number }> = {};
+  for (const row of writes) {
+    const key = `${String(row.business_unit)}|${String(row.category_code)}`;
+    const current = previewByUnitCategory[key] ?? { count: 0, amount: 0 };
+    current.count += 1;
+    current.amount += Number(row.amount ?? 0);
+    previewByUnitCategory[key] = current;
+  }
   const verifiedSources = sourceStates.filter((item) => item.state === "VERIFIED").length;
   return {
     state: verifiedSources === sourceStates.length && unmappedPnl === 0 ? "VERIFIED" : "PARTIAL",
-    from, to, sourceStates, upserted: writes.length, excludedNonPnl, unmappedPnl,
+    dryRun: Boolean(options.dryRun),
+    from, to, sourceStates, upserted: options.dryRun ? 0 : writes.length, candidateRows: writes.length,
+    excludedNonPnl, unmappedPnl, previewByUnitCategory,
   };
 }
 

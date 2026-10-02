@@ -51,7 +51,8 @@ export async function POST(req: NextRequest) {
   const rangeDays = Math.floor((Date.parse(requestedTo + "T00:00:00Z") - Date.parse(requestedFrom + "T00:00:00Z")) / 86_400_000) + 1;
   if (rangeDays < 1 || rangeDays > 366) return NextResponse.json({ ok: false, error: "range_too_large" }, { status: 400 });
 
-  const backfillOnly = payload.mode === "expense_backfill";
+  const backfillOnly = payload.mode === "expense_backfill" || payload.mode === "expense_probe";
+  const expenseDryRun = payload.mode === "expense_probe";
   const systems: FinanceBotSystem[] = ["FNB", "HOTEL"];
   const results = [];
   if (!backfillOnly) {
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
   let expenseActualSync: unknown = { state: "NOT_RUN" };
   try {
-    expenseActualSync = await syncCanonicalExpenseActualRange(container.db, requestedFrom, requestedTo);
+    expenseActualSync = await syncCanonicalExpenseActualRange(container.db, requestedFrom, requestedTo, { dryRun: expenseDryRun });
   } catch (error) {
     expenseActualSync = { state: "ERROR", message: error instanceof Error ? error.message : "expense actual sync failed" };
   }

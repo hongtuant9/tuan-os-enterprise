@@ -103,7 +103,7 @@ export default async function ContentReviewPage({
   const db = dbOf(admin.db);
   const [contentResult, recordsResult, revisionResult] = await Promise.all([
     db.from("marketing_content_items").select("*").eq("content_id", contentId).maybeSingle(),
-    db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-shadow-content").limit(500),
+    db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-shadow-content").order("synced_at", { ascending: false }).limit(500),
     db.from("marketing_recommendations").select("recommendation_key,title,summary,status,generated_at,evidence")
       .eq("category", "CONTENT")
       .contains("evidence", { content_id: contentId })

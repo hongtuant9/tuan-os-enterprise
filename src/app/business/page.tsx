@@ -7,7 +7,7 @@ export const revalidate = 0;
 export default async function Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ period?: string; from?: string; to?: string; view?: string }>;
+  searchParams?: Promise<{ period?: string; from?: string; to?: string; view?: string; property?: string }>;
 }) {
   const params = searchParams ? await searchParams : {};
   const data = await getTceTabLiveData("business", params);

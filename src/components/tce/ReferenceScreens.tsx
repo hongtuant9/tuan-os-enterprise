@@ -378,6 +378,29 @@ function Donut({
   );
 }
 
+function SignedBarChart({ rows = [] }: { rows?: string[][] }) {
+  const parsed = rows.map((row) => ({ label: row[0] ?? "—", display: row[1] ?? "—", value: Number(row[2] ?? 0) || 0 }));
+  const maxAbs = Math.max(1, ...parsed.map((row) => Math.abs(row.value)));
+  return (
+    <div className="flex min-h-[245px] flex-col justify-center gap-4 px-4 py-5">
+      {parsed.map((row) => {
+        const width = Math.max(2, Math.abs(row.value) / maxAbs * 48);
+        const positive = row.value >= 0;
+        return <div key={row.label} className="grid grid-cols-[90px_1fr_100px] items-center gap-2">
+          <b className="truncate text-[9px] text-[#405b82]">{row.label}</b>
+          <div className="relative h-7 rounded bg-[#f4f7fb]">
+            <div className="absolute bottom-0 left-1/2 top-0 w-px bg-[#b8c8dc]" />
+            <div className={"absolute top-1/2 h-3 -translate-y-1/2 rounded " + (positive ? "bg-[#15b978]" : "bg-[#ef5350]")} style={positive ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }} />
+          </div>
+          <b className={"text-right text-[9px] " + (positive ? "text-[#148856]" : "text-[#c43e3b]")}>{row.display}</b>
+        </div>;
+      })}
+      {!parsed.length ? <p className="text-center text-[9px] text-[#7386a3]">Chưa có dữ liệu theo bộ lọc.</p> : null}
+      <div className="grid grid-cols-[90px_1fr_100px] items-center gap-2 text-[7px] text-[#8798b0]"><span/><div className="flex justify-between"><span>Âm</span><span>0</span><span>Dương</span></div><span/></div>
+    </div>
+  );
+}
+
 function Pipeline({ items }: { items: string[] }) {
   return (
     <div className="flex h-full min-h-[145px] items-center gap-1.5 overflow-x-auto overscroll-x-contain px-3 py-3 [scrollbar-gutter:stable]">
@@ -438,26 +461,27 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
       }
       return (
         <div className="grid grid-cols-12 gap-2">
-          <div className="col-span-12 flex justify-end">
-            <Link href="/business?view=data-control" className="rounded-[6px] border border-[#b8d2f5] bg-white px-4 py-2 text-[9px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Nguồn dữ liệu & Kiểm soát →</Link>
-          </div>
-          <Section title="Cơ cấu Doanh thu và Chi phí theo cơ sở" subtitle={"Số điều hành đến hiện tại · " + (data?.period.label ?? "Tháng")} className="col-span-12" icon="◔">
-            <div className="grid gap-2 p-3 xl:grid-cols-2">
-              <div className="min-h-[300px] rounded-[9px] border border-[#e2ebf5] bg-white">
-                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Cơ cấu doanh thu</b><p className="mt-1 text-[8px] text-[#7a8da8]">Actual từ KiotViet</p></div>
-                {(() => { const rows=data?.tables.businessMonthBranches??[]; const values=rows.map(r=>r[3]??"—"); const shares=rows.map(r=>Number((r[4]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Doanh thu hôm nay"]??"—"} sub="Tổng doanh thu" items={rows.map(r=>r[1]??"Cơ sở")} values={values} shares={shares}/>; })()}
+          <Section title="Cơ cấu Doanh thu, Chi phí và Lợi nhuận theo cơ sở" subtitle={"Cùng kỳ lọc · " + (data?.period.label ?? "Tháng")} className="col-span-12" icon="◔">
+            <div className="grid gap-2 p-3 xl:grid-cols-3">
+              <div className="min-h-[290px] rounded-[9px] border border-[#e2ebf5] bg-white">
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Doanh thu theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Actual KiotViet · đúng kỳ đang chọn</p></div>
+                {(() => { const rows=data?.tables.businessRevenueBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Doanh thu hôm nay"]??"—"} sub={data?.period.label ?? "Kỳ lọc"} items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
               </div>
-              <div className="min-h-[300px] rounded-[9px] border border-[#e2ebf5] bg-white">
-                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Cơ cấu chi phí điều hành</b><p className="mt-1 text-[8px] text-[#7a8da8]">Payroll/Utilities lũy kế + Actual KiotViet, không cộng trùng</p></div>
-                {(() => { const rows=data?.tables.businessCostBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Chi phí"]??"—"} sub="Tổng chi phí đến hiện tại" items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
+              <div className="min-h-[290px] rounded-[9px] border border-[#e2ebf5] bg-white">
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Chi phí theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Cùng kỳ: recurring allocation + Booking forecast + Actual KiotViet</p></div>
+                {(() => { const rows=data?.tables.businessCostBranches??[]; const values=rows.map(r=>r[2]??"—"); const shares=rows.map(r=>Number((r[3]??"0").replace("%","").replace(",","."))||0); return <Donut center={data?.metricValues["Chi phí"]??"—"} sub={data?.period.label ?? "Kỳ lọc"} items={rows.map(r=>r[0]??"Cơ sở")} values={values} shares={shares}/>; })()}
+              </div>
+              <div className="min-h-[290px] rounded-[9px] border border-[#e2ebf5] bg-white">
+                <div className="px-4 pt-4"><b className="text-[11px] text-[#173964]">Lợi nhuận theo cơ sở</b><p className="mt-1 text-[8px] text-[#7a8da8]">Doanh thu − chi phí quản trị cùng kỳ; thanh âm/dương giữ đúng dấu</p></div>
+                <SignedBarChart rows={data?.tables.businessProfitBranches}/>
               </div>
             </div>
           </Section>
-          <Section title="Kế hoạch và tiến độ chi phí" subtitle="Theo từng cơ sở và nhóm chi phí · kế hoạch tháng so với chi phí điều hành đến hiện tại" className="col-span-12" icon="▤">
-            <DataTable columns={["Cơ sở","Nhóm chi phí","Kế hoạch tháng","Đến hiện tại","Chênh lệch","% ngân sách","Trạng thái","Nguồn / cách tính"]} data={data?.tables.businessCostPlanProgress}/>
+          <Section title="Tổng quan theo cơ sở — Tháng hiện tại" subtitle="Chỉ dùng số tháng hiện tại (MTD), không cộng dồn nhiều tháng" className="col-span-12" icon="◫">
+            <DataTable columns={["Cơ sở","Hóa đơn tháng","Doanh thu tháng","Chi phí tháng (MTD)","Kết quả quản trị tháng","Ghi chú"]} data={data?.tables.businessUnitOverview}/>
           </Section>
-          <Section title="Tổng quan theo cơ sở" subtitle="Doanh thu và chi phí điều hành để theo dõi cơ sở nào đang cần chú ý" className="col-span-12 h-[300px]" icon="◫">
-            <DataTable columns={["Cơ sở","Hóa đơn","Doanh thu","Chi phí đến hiện tại","Chênh lệch quản trị","Ghi chú"]} data={data?.tables.businessUnitOverview}/>
+          <Section title="Kế hoạch và tiến độ chi phí" subtitle="Kế hoạch tháng vs chi phí quản trị tháng hiện tại · Actual KiotViet thay estimate khi có" className="col-span-12" icon="▤">
+            <DataTable columns={["Cơ sở","Nhóm chi phí","Kế hoạch tháng","Đến hiện tại","Chênh lệch","% ngân sách","Trạng thái","Nguồn / cách tính"]} data={data?.tables.businessCostPlanProgress}/>
           </Section>
         </div>
       );
@@ -752,11 +776,12 @@ export default function ReferenceScreen({ screen, data, businessView = "main" }:
         <MobileMockupScreen screen={screen} data={data} />
       </div>
       <div className="hidden md:block">
-        <TceWorkspaceShell title={m.title} subtitle={m.subtitle} generatedAt={data?.generatedAt ?? new Date().toISOString()}>
+        <TceWorkspaceShell title={m.title} subtitle={m.subtitle} generatedAt={data?.generatedAt ?? new Date().toISOString()} enablePropertyFilter={screen === "business"}>
           <div className="mx-auto max-w-[1680px] px-4 pb-6 pt-4">
             {data?.freshness ? <DataFreshnessBar {...data.freshness}/> : null}
             {m.detailHref ? <div className="absolute right-4 top-[91px] z-10"><Link href={m.detailHref} className="rounded-[5px] border border-[#b7d3f9] bg-white px-3 py-1 text-[8px] font-bold text-[#1768df]">{m.detailLabel} →</Link></div> : null}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {screen === "business" && businessView === "main" ? <div className="mb-3 flex justify-end"><Link href="/business?view=data-control" className="rounded-[6px] border border-[#b8d2f5] bg-white px-4 py-2 text-[9px] font-bold text-[#1768df] hover:bg-[#eef6ff]">Nguồn dữ liệu & Kiểm soát →</Link></div> : null}
+            <div className={"grid grid-cols-1 gap-3 sm:grid-cols-2 " + (screen === "business" ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
               {metrics.map((metric) => {
                 const costDrilldown = (screen === "business" || screen === "finance") && /chi phí/i.test(metric.label);
                 return costDrilldown

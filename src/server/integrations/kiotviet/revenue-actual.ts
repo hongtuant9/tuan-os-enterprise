@@ -16,6 +16,8 @@ export type RevenueSnapshot = {
   revenue: number;
   collected: number;
   branchBreakdown: Array<{ branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>;
+  saleChannelBreakdown?: Array<{ saleChannelId: string; saleChannelName: string; branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>;
+  saleChannelState?: "VERIFIED" | "NEED_VERIFY";
   statusBreakdown: Record<string, { count: number; revenue: number; collected: number }>;
   receivable: {
     state: "VERIFIED" | "NEED_VERIFY";
@@ -64,7 +66,7 @@ function isExplicitlyCancelled(invoice: Invoice) {
   return label.includes("hủy") || label.includes("huỷ") || label.includes("cancel") || label.includes("void");
 }
 
-function summarize(source: RevenueSnapshot["source"], from: string, to: string, invoices: Invoice[]): RevenueSnapshot {
+function summarize(source: RevenueSnapshot["source"], from: string, to: string, invoices: Invoice[], saleChannels?: Map<string, string>): RevenueSnapshot {
   const seen = new Set<string>();
   let duplicateCount = 0;
   let missingSourceIdCount = 0;
@@ -84,6 +86,7 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
   const valid = unique.filter((x) => !isExplicitlyCancelled(x));
   const branch = new Map<string, { branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>();
   const statusBreakdown: RevenueSnapshot["statusBreakdown"] = {};
+  const saleChannel = new Map<string, { saleChannelId: string; saleChannelName: string; branchId: string; branchName: string; invoiceCount: number; revenue: number; collected: number }>();
   let receivableInvoiceCount = 0;
   let receivableCoveredInvoiceCount = 0;
   let receivableOutstanding = 0;
@@ -100,6 +103,14 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
     b.revenue += revenue;
     b.collected += collected;
     branch.set(key, b);
+
+    if (saleChannels) {
+      const saleChannelId = String(invoice.saleChannelId ?? "").trim();
+      const saleChannelName = saleChannelId ? (saleChannels.get(saleChannelId) ?? "Không rõ kênh") : "Trực tiếp / Không gắn kênh";
+      const channelKey = `${saleChannelId || "DIRECT"}|${branchId}|${branchName}`;
+      const c = saleChannel.get(channelKey) ?? { saleChannelId, saleChannelName, branchId, branchName, invoiceCount: 0, revenue: 0, collected: 0 };
+      c.invoiceCount += 1; c.revenue += revenue; c.collected += collected; saleChannel.set(channelKey, c);
+    }
 
     const totalRaw = invoice.total;
     const paymentRaw = invoice.totalPayment;
@@ -142,6 +153,8 @@ function summarize(source: RevenueSnapshot["source"], from: string, to: string, 
     revenue: valid.reduce((sum, x) => sum + num(x.total), 0),
     collected: valid.reduce((sum, x) => sum + num(x.totalPayment), 0),
     branchBreakdown: [...branch.values()].sort((a, b) => b.revenue - a.revenue),
+    saleChannelBreakdown: saleChannels ? [...saleChannel.values()].sort((a, b) => b.revenue - a.revenue) : [],
+    saleChannelState: saleChannels ? "VERIFIED" : "NEED_VERIFY",
     statusBreakdown,
     receivable: {
       state:
@@ -209,6 +222,9 @@ export async function fetchHotelRevenueActual(from: string, to: string): Promise
   }
 
   const all: Invoice[] = [];
+  const saleChannelsResult = await client.listSaleChannels();
+  const channelRows = rows(saleChannelsResult.data);
+  const saleChannels = saleChannelsResult.ok ? new Map(channelRows.map((row) => [String(row.id ?? ""), String(row.name ?? "Không rõ kênh")])) : undefined;
   let httpStatus = 200;
   for (let pageIndex = 1; pageIndex <= 1000; pageIndex += 1) {
     const query = new URLSearchParams({
@@ -227,7 +243,7 @@ export async function fetchHotelRevenueActual(from: string, to: string): Promise
     const total = totalOf(res.data, all.length);
     if (batch.length === 0 || all.length >= total || batch.length < 100) break;
   }
-  const out = summarize("KIOTVIET_HOTEL", from, to, all);
+  const out = summarize("KIOTVIET_HOTEL", from, to, all, saleChannels);
   out.httpStatus = httpStatus;
   return out;
 }

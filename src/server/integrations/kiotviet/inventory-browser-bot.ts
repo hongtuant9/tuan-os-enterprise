@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 
@@ -188,25 +188,70 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function launch(system: InventoryBotSystem): Promise<Browser> {
+type BrowserLaunch = {
+  browser: Browser;
+  profileMode: "PERSISTENT" | "EPHEMERAL_FALLBACK";
+  cleanupProfile?: string;
+};
+
+function chromiumArgs() {
+  return [
+    "--no-sandbox",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--no-first-run",
+    "--window-size=1440,1400",
+  ];
+}
+
+function isProfileLockError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /profile appears to be in use|process_singleton|SingletonLock|SingletonCookie|SingletonSocket/i.test(message);
+}
+
+async function launch(system: InventoryBotSystem): Promise<BrowserLaunch> {
   await mkdir(STATE_ROOT, { recursive: true });
-  const profile = join(STATE_ROOT, system.toLowerCase() + "-profile");
-  await mkdir(profile, { recursive: true });
-  return puppeteer.launch({
-    executablePath: await findChromium(),
-    headless: true,
-    userDataDir: profile,
-    args: [
-      "--no-sandbox",
-      "--disable-gpu",
-      "--disable-dev-shm-usage",
-      "--disable-background-networking",
-      "--disable-default-apps",
-      "--disable-sync",
-      "--no-first-run",
-      "--window-size=1440,1400",
-    ],
-  });
+  const executablePath = await findChromium();
+  const persistentProfile = join(STATE_ROOT, system.toLowerCase() + "-profile");
+  await mkdir(persistentProfile, { recursive: true });
+
+  try {
+    const browser = await puppeteer.launch({
+      executablePath,
+      headless: true,
+      userDataDir: persistentProfile,
+      args: chromiumArgs(),
+    });
+    return { browser, profileMode: "PERSISTENT" };
+  } catch (error) {
+    if (!isProfileLockError(error)) throw error;
+
+    const ephemeralProfile = join(
+      STATE_ROOT,
+      "ephemeral-profiles",
+      `${system.toLowerCase()}-${process.pid}-${Date.now()}`
+    );
+    await mkdir(ephemeralProfile, { recursive: true });
+    try {
+      const browser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        userDataDir: ephemeralProfile,
+        args: chromiumArgs(),
+      });
+      return {
+        browser,
+        profileMode: "EPHEMERAL_FALLBACK",
+        cleanupProfile: ephemeralProfile,
+      };
+    } catch (fallbackError) {
+      await rm(ephemeralProfile, { recursive: true, force: true }).catch(() => undefined);
+      throw fallbackError;
+    }
+  }
 }
 
 async function login(
@@ -592,8 +637,13 @@ export async function runInventoryBotRead(
     }
 
     let browser: Browser;
+    let profileMode: BrowserLaunch["profileMode"] = "PERSISTENT";
+    let cleanupProfile: string | undefined;
     try {
-      browser = await launch(system);
+      const launched = await launch(system);
+      browser = launched.browser;
+      profileMode = launched.profileMode;
+      cleanupProfile = launched.cleanupProfile;
     } catch (error) {
       const snapshot: InventoryBotSnapshot = {
         system,
@@ -658,7 +708,7 @@ export async function runInventoryBotRead(
         modules,
         supplierDebtDiagnostics,
         writeEnabled: false,
-        detail: `Inventory/Purchase READ audit: verified=${verifiedModules}/${definitions.length}; writes disabled.`,
+        detail: `Inventory/Purchase READ audit: verified=${verifiedModules}/${definitions.length}; writes disabled; profile_mode=${profileMode}.`,
       };
       await saveSummary(system, snapshot);
       return snapshot;
@@ -677,7 +727,10 @@ export async function runInventoryBotRead(
       await saveSummary(system, snapshot);
       return snapshot;
     } finally {
-      await browser.close();
+      await browser.close().catch(() => undefined);
+      if (cleanupProfile) {
+        await rm(cleanupProfile, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
   });
 }

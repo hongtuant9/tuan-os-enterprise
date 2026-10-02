@@ -614,6 +614,24 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ["Bank vs Book", bankReconOpenCount ? bankReconOpenCount + " account chưa MATCHED." : "Không còn account reconciliation mở.", "Finance Accounts + bank evidence", bankReconOpenCount ? "NEED_VERIFY" : "VERIFIED", "AI CFO + Audit", bankReconOpenCount ? "Đối soát physical balance/routing TK HKD Tuấn + Ruby." : "Duy trì month-end reconcile.", bankReconOpenCount ? "BLOCKING" : "NON-BLOCKING"],
       ];
 
+      const verifiedStackRows = businessFinancialStack.filter((row) => String(row[4]).startsWith("VERIFIED")).length;
+      const holdStackRows = businessFinancialStack.filter((row) => String(row[4]).startsWith("HOLD")).length;
+      const needVerifyStackRows = businessFinancialStack.length - verifiedStackRows - holdStackRows;
+      const blockingGapRows = businessDataGaps.filter((row) => row[6] === "BLOCKING").length;
+
+      const businessDecisionSnapshot = [
+        ["Nguồn tiền quản trị 30/09", openingBusinessCash === null ? "—" : money(openingBusinessCash), openingBusinessCash === null ? "NEED_VERIFY" : "VERIFIED", "finance_opening_positions", openingBusinessCash === null ? "Xác minh opening position." : "Không dùng thay Profit/Owner Distribution."],
+        ["Phải thu OTA", otaReceivable === null ? "—" : money(otaReceivable), otaReceivable === null ? "NEED_VERIFY" : "VERIFIED", "business_finance_open_items · AR", otaReceivable === null ? "Đối soát OTA receivable." : "Theo dõi settlement; không ghi Revenue lần hai."],
+        ["Công nợ phải trả đã biết", knownAp === null ? "—" : money(knownAp), unknownApCount > 0 ? "NEED_VERIFY" : "VERIFIED", "business_finance_open_items · AP", unknownApCount > 0 ? `${unknownApCount} khoản còn thiếu amount/due date.` : "Duy trì AP reconciliation."],
+        ["Thuế dự phòng", taxProvision === null ? "—" : money(taxProvision), taxProvision === null ? "HOLD" : "VERIFIED", "finance_tax_positions", taxProvision === null ? "Không suy Tax=0; chờ tax rule/evidence VERIFIED." : "Theo dõi Actual tax."],
+        ["Tiền có thể phân phối cho chủ", ownerDistributableCash === null ? "—" : money(ownerDistributableCash), ownerDistributableCash === null ? "HOLD" : "VERIFIED", "Finance Distribution Gate", ownerDistributableCash === null ? "Chỉ mở sau P&L + Tax + AP + Reserve PASS." : "Dùng canonical distribution value."],
+      ];
+
+      const businessCompletionSummary = [
+        ["Chuỗi tài chính", String(businessFinancialStack.length), String(verifiedStackRows), String(needVerifyStackRows), String(holdStackRows), verifiedStackRows === businessFinancialStack.length ? "PASS" : "OPEN"],
+        ["Khoảng trống dữ liệu", String(businessDataGaps.length), String(businessDataGaps.filter((row) => row[3] === "VERIFIED").length), String(businessDataGaps.filter((row) => row[3] === "NEED_VERIFY").length), String(businessDataGaps.filter((row) => row[3] === "HOLD").length), blockingGapRows === 0 ? "PASS" : `${blockingGapRows} BLOCKING`],
+      ];
+
       return makeResult(
         {
           "Doanh thu hôm nay": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
@@ -672,6 +690,8 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
           ],
           businessFinancialStack,
           businessDataGaps,
+          businessDecisionSnapshot,
+          businessCompletionSummary,
         },
         {},
         bothTodayVerified && bothMonthVerified ? "LIVE" : "PARTIAL",

@@ -42,8 +42,8 @@ const tones: Record<Tone, { box: string; icon: string; delta: string }> = {
 
 const meta: Record<ScreenKey, ScreenMeta> = {
   business: {
-    title: "Kinh doanh – Điều hành doanh thu & lợi nhuận",
-    subtitle: "Dữ liệu tổng hợp từ: Lavender Homestay | Ruby Homestay | Cozy Garden | KiotViet | Hệ thống quản lý phòng",
+    title: "Kinh doanh – Doanh thu, lợi nhuận & nghĩa vụ tài chính",
+    subtitle: "Nguồn chuẩn: KiotViet Hotel/F&B | FIN-HOSPITALITY-001 | COST-001 | Finance Runtime | Lavender · Ruby · Cozy Garden",
     metrics: [
       { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "So với hôm qua", tone: "blue", icon: "▮▮" },
       { label: "Doanh thu tháng", value: "—", delta: "↗", note: "So với tháng trước", tone: "green", icon: "▦" },
@@ -418,8 +418,23 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
     case "business":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Daily-series chi tiết sẽ hiển thị khi đủ dữ liệu"} className="col-span-12 h-[345px]" icon="▮">
-            <BarLineChart />
+          <Section title="Doanh thu – Chi phí – Lợi nhuận" subtitle={"Kỳ đang xem: " + (data?.period.label ?? "Hôm nay") + " · Revenue dùng runtime; Cost/Profit chỉ mở khi cổng xác minh PASS"} className="col-span-12 h-[345px]" icon="▮">
+            <div className="grid h-full grid-cols-3 gap-3 p-4">
+              {[
+                ["Doanh thu kỳ đang xem", data?.metricValues["Doanh thu hôm nay"] ?? "—", data?.metricNotes["Doanh thu hôm nay"] ?? "KiotViet Actual"],
+                ["Chi phí thực tế", data?.metricValues["Chi phí"] ?? "—", data?.metricNotes["Chi phí"] ?? "FIN-HOSPITALITY-001"],
+                ["Lợi nhuận gộp", data?.metricValues["Lợi nhuận gộp"] ?? "—", data?.metricNotes["Lợi nhuận gộp"] ?? "Doanh thu − Giá vốn"],
+              ].map(([label,value,note]) => (
+                <div key={label} className="rounded-[9px] border border-[#dfe9f4] bg-gradient-to-br from-white to-[#f5f9fd] p-4">
+                  <p className="text-[11px] font-semibold text-[#527099]">{label}</p>
+                  <p className="mt-3 text-[24px] font-extrabold tracking-[-0.03em] text-[#0c2455]">{viDisplay(value)}</p>
+                  <p className="mt-3 text-[9px] leading-4 text-[#7388a7]">{viDisplay(note)}</p>
+                </div>
+              ))}
+              <div className="col-span-3 rounded-[8px] border border-[#e6edf5] bg-white p-3 text-[9px] leading-4 text-[#5d7595]">
+                <b className="text-[#173964]">Nguyên tắc:</b> số chưa đủ bằng chứng vẫn phải hiển thị đầy đủ blocker, nguồn cần, owner và hành động tiếp theo ở <b>Data Gap Register</b>; không thay bằng 0, ước tính hoặc tỷ lệ giả định.
+              </div>
+            </div>
           </Section>
           <Section title="Cơ cấu doanh thu theo cơ sở" subtitle={"Tỷ trọng doanh thu · " + (data?.period.label ?? "Hôm nay")} className="col-span-12 h-[345px]" icon="◔">
             {(() => {
@@ -441,11 +456,11 @@ function Board({ screen, data }: { screen: ScreenKey; data?: TceTabLiveData }) {
           <Section id="business-data-gaps" title="Data Gap Register" subtitle="Chỉ giữ NEED_VERIFY/HOLD khi còn thiếu evidence; mỗi dòng nêu rõ source, owner và next action" className="col-span-12" icon="!">
             <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Next Action","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
           </Section>
-          <Section title="Dự báo & cảnh báo" subtitle="Chỉ đưa khuyến nghị khi dữ liệu đủ tin cậy" className="col-span-12 h-[260px]" icon="●">
-            <div className="grid h-full grid-cols-2 gap-2 p-3">
-              {["Dự báo doanh thu tháng","Ngưỡng hòa vốn","Top dịch vụ / mặt hàng","Công nợ cần theo dõi"].map((x)=><div key={x} className="rounded-[7px] border border-[#e6eef6] bg-[#fbfdff] p-3"><b className="text-[9px] text-[#3c5578]">{x}</b><p className="mt-2 text-[18px] font-extrabold text-[#0e2858]">—</p><p className="mt-1 text-[8px] text-[#7c8ea8]">Chưa đủ dữ liệu để kết luận.</p></div>)}
-              <div className="col-span-2 rounded-[7px] border border-[#fde4b5] bg-[#fffaf0] p-2 text-[9px] text-[#9a6b14]">Cảnh báo kinh doanh sẽ hiển thị ở đây khi có bằng chứng.</div>
-            </div>
+          <Section title="Mức độ hoàn thiện dữ liệu kinh doanh" subtitle="Mỗi trạng thái Cần xác minh phải có nguồn, owner, next action và ảnh hưởng rõ ràng" className="col-span-12 h-[210px]" icon="✓">
+            <DataTable columns={["Nhóm","Tổng mục","Đã xác minh","Cần xác minh","Tạm dừng","Kết luận"]} data={data?.tables.businessCompletionSummary}/>
+          </Section>
+          <Section title="Ảnh chụp quyết định tài chính" subtitle="Các số phục vụ quyết định tiền mặt/nghĩa vụ; không đánh đồng Doanh thu, Tiền mặt, Lợi nhuận và Tiền có thể phân phối" className="col-span-12 h-[300px]" icon="●">
+            <DataTable columns={["Chỉ số","Giá trị","Trạng thái","Nguồn","Hành động / Giới hạn sử dụng"]} data={data?.tables.businessDecisionSnapshot}/>
           </Section>
         </div>
       );

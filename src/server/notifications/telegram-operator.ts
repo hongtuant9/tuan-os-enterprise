@@ -306,7 +306,7 @@ export async function ensureFinanceOperatorQuestions() {
       .eq("domain", candidate.domain)
       .eq("business_unit", candidate.businessUnit)
       .eq("field_code", candidate.fieldCode)
-      .eq("effective_from", candidate.effectiveFrom)
+      .eq("effective_from", candidate.effectiveFrom!)
       .eq("record_status", "ACTIVE")
       .maybeSingle();
     if (error) throw error;

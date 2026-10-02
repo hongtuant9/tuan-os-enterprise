@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { getAdminContainer } from "@/server/container";
 import type { ManagerWorkItem } from "@/server/ai-operations/control-plane";
 import type { DepartmentExecutionResult } from "@/server/ai-operations/department-executor";
+import { getTelegramOperatorChatId } from "@/server/notifications/telegram-operator";
 
 export type TelegramOwnerAlertKind =
   | "OWNER_AUTH_GATE"
@@ -133,11 +134,13 @@ async function alreadySent(fingerprint: string, cooldownMinutes: number) {
 
 async function sendTelegram(text: string) {
   const cfg = config();
+  const operatorChatId = await getTelegramOperatorChatId().catch(() => "");
+  const targetChatId = operatorChatId || cfg.ownerChatId;
   const response = await fetch(`https://api.telegram.org/bot${cfg.token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id: cfg.ownerChatId,
+      chat_id: targetChatId,
       text,
       disable_web_page_preview: true,
     }),

@@ -7,6 +7,33 @@ import ContentReviewEditor from "@/components/tce/ContentReviewEditor";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type DbError = { message?: string } | null;
+type DbResult = { data?: unknown; error?: DbError };
+type Query = PromiseLike<DbResult> & {
+  select(columns?: string): Query;
+  eq(column: string, value: unknown): Query;
+  contains(column: string, value: unknown): Query;
+  order(column: string, options?: { ascending?: boolean }): Query;
+  limit(value: number): Query;
+  maybeSingle(): Promise<DbResult>;
+};
+type UntypedDb = { from(name: string): Query };
+type Row = Record<string, unknown>;
+
+function dbOf(value: unknown): UntypedDb {
+  return value as UntypedDb;
+}
+
+function rows(value: unknown): Row[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Row => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : [];
+}
+
+function row(value: unknown): Row {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
+}
+
 function s(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -29,27 +56,27 @@ export default async function ContentReviewPage({
   await ensureMarketingWorkbookFresh();
 
   const admin = getAdminContainer();
-  const [{ data: content }, { data: records }, { data: revisionRequests }] = await Promise.all([
-    admin.db.from("marketing_content_items").select("*").eq("content_id", contentId).maybeSingle(),
-    admin.db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-shadow-content").limit(500),
-    admin.db.from("marketing_recommendations").select("title,summary,status,generated_at")
+  const db = dbOf(admin.db);
+  const [contentResult, recordsResult, revisionResult] = await Promise.all([
+    db.from("marketing_content_items").select("*").eq("content_id", contentId).maybeSingle(),
+    db.from("sync_records").select("data,synced_at").eq("source_key", "marketing-shadow-content").limit(500),
+    db.from("marketing_recommendations").select("title,summary,status,generated_at,evidence")
       .eq("category", "CONTENT")
       .contains("evidence", { content_id: contentId })
       .order("generated_at", { ascending: false })
       .limit(8),
   ]);
-  if (!content) notFound();
+  const content = row(contentResult.data);
+  if (!s(content.content_id)) notFound();
 
-  const record = (records ?? []).find((row) => {
-    const data = row.data && typeof row.data === "object" && !Array.isArray(row.data) ? row.data as Record<string, unknown> : {};
+  const records = rows(recordsResult.data);
+  const revisionRequests = rows(revisionResult.data);
+  const record = records.find((recordRow) => {
+    const data = row(recordRow.data);
     return pick(data, ["CONTENT_ID", "Content ID"]) === contentId;
   });
-  const source = record?.data && typeof record.data === "object" && !Array.isArray(record.data)
-    ? record.data as Record<string, unknown>
-    : {};
-  const metadata = content.metadata && typeof content.metadata === "object" && !Array.isArray(content.metadata)
-    ? content.metadata as Record<string, unknown>
-    : {};
+  const source = row(record?.data);
+  const metadata = row(content.metadata);
 
   const initial = {
     draftVi: pick(source, ["DRAFT_VI", "Draft VI"]) || s(metadata.draft_vi),
@@ -87,13 +114,13 @@ export default async function ContentReviewPage({
         <section className="mt-5 rounded-xl border border-[#dce8f4] bg-white p-5">
           <h2 className="text-base font-extrabold text-[#10285a]">Yêu cầu AI gần đây</h2>
           <div className="mt-3 divide-y divide-[#edf2f7]">
-            {(revisionRequests ?? []).length ? (revisionRequests ?? []).map((row, index) => (
+            {revisionRequests.length ? revisionRequests.map((requestRow, index) => (
               <div key={index} className="py-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <b className="text-[#29486f]">{s(row.title)}</b>
-                  <span className="rounded bg-[#eef4fb] px-2 py-1 text-xs font-bold text-[#557195]">{s(row.status)}</span>
+                  <b className="text-[#29486f]">{s(requestRow.title)}</b>
+                  <span className="rounded bg-[#eef4fb] px-2 py-1 text-xs font-bold text-[#557195]">{s(requestRow.status)}</span>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap leading-6 text-[#657b9d]">{s(row.summary)}</p>
+                <p className="mt-1 whitespace-pre-wrap leading-6 text-[#657b9d]">{s(requestRow.summary)}</p>
               </div>
             )) : <p className="py-4 text-sm text-[#7a8da8]">Chưa có yêu cầu điều chỉnh AI cho bài này.</p>}
           </div>

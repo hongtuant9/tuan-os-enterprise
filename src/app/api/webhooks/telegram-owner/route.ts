@@ -13,6 +13,10 @@ import {
   handleMorningDepartmentCallback,
 } from "@/server/notifications/telegram-morning-operations";
 import {
+  attachRoomAllocationTelegramEvidence,
+  recordRoomAllocation,
+} from "@/server/notifications/telegram-room-allocation";
+import {
   bindTelegramOperatorGroup,
   ensureFinanceOperatorQuestions,
   getTelegramOperatorChatId,
@@ -249,6 +253,66 @@ export async function POST(req: NextRequest) {
       "• ✅ Done / Hoàn thành",
     ].join("\n"));
     return NextResponse.json({ ok: true, bound: true });
+  }
+
+
+  if (/^\/(phanphong|roompax)\b/i.test(text)) {
+    const configuredOpsChatId = await getTelegramOperationsChatId().catch(() => "");
+    if (!configuredOpsChatId || String(chatId) !== configuredOpsChatId) {
+      await reply(chatId, "Lệnh này chỉ dùng trong nhóm Vận Hành _Homestay_Group.");
+      return NextResponse.json({ ok: true, ignored: "room_allocation_non_ops_group" });
+    }
+
+    try {
+      const result = await recordRoomAllocation({ raw: text, actor: update.message?.from });
+      if (!result.ok) {
+        await reply(chatId, result.message);
+        return NextResponse.json({ ok: true, roomAllocation: result.reason });
+      }
+
+      await reply(chatId, result.confirmation);
+
+      const statusTime = new Date(result.notifiedAt).toLocaleTimeString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const taskText = [...result.taskLines, "", `📌 Trạng thái: Thông báo (${statusTime})`].join("\n");
+      const sent = await telegram("sendMessage", {
+        chat_id: chatId,
+        text: taskText,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "✅ Xác nhận", callback_data: `morning_ack:${result.taskReviewId}` },
+            { text: "🏁 Hoàn thành", callback_data: `morning_done:${result.taskReviewId}` },
+          ]],
+        },
+      }) as { result?: { message_id?: number } } | null;
+
+      const messageId = sent?.result?.message_id;
+      if (messageId != null) {
+        await attachRoomAllocationTelegramEvidence({
+          reviewId: result.taskReviewId,
+          chatId,
+          messageId,
+        });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        roomAllocation: "VERIFIED",
+        bookingCode: result.bookingCode,
+        taskReviewId: result.taskReviewId,
+      });
+    } catch (error) {
+      console.error("[telegram-room-allocation] failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await reply(chatId, "⚠️ Không thể ghi nhận phân bổ phòng. Vui lòng kiểm tra lại booking/phòng hoặc báo quản lý.");
+      return NextResponse.json({ ok: false, error: "room_allocation_failed" }, { status: 200 });
+    }
   }
 
   const operatorChatId = await getTelegramOperatorChatId().catch(() => "");

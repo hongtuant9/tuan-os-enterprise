@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       );
 
     const auth =
-      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
     const values = await getSheetValues(
       source.sheet_id,
       `${q(CONTENT_TAB)}!A1:AK${MAX_ROWS}`,

@@ -21,10 +21,7 @@ import {
   BFL_FLUX_2_PRO_MODEL,
   editImageWithFlux2Pro,
 } from "@/server/media/bfl-flux-client";
-import {
-  generateContentRevision,
-  type ContentRevisionDraft,
-} from "@/server/marketing-command-center/content-revision";
+import { generateContentRevision } from "@/server/marketing-command-center/content-revision";
 
 type ActionResult =
   | { ok: true; message: string; revisionReady?: boolean }

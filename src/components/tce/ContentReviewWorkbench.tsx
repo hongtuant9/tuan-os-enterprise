@@ -4,10 +4,12 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   applyAiContentRevision,
+  approvePlatformImageCreative,
   createContentSnapshot,
   requestAiContentRevision,
   requestMediaCreative,
   requestPlatformImageCreative,
+  rejectPlatformImageCreative,
   saveContentOwnerNote,
   saveMarketingContentDraft,
   savePlatformMediaRendition,
@@ -46,6 +48,22 @@ type PlatformMediaRendition = {
   targetWidth: number;
   targetHeight: number;
   mediaStatus: string;
+};
+type PlatformAiDraft = {
+  recommendationKey: string;
+  platform: string;
+  fileId: string;
+  fileName: string;
+  sourceFileId: string;
+  aspectRatio: string;
+  targetWidth: number;
+  targetHeight: number;
+  creativeStatus: string;
+  model: string;
+  aiSize: string;
+  estimatedCostUsd: number;
+  aiError: string;
+  generatedAt: string;
 };
 type History = {
   key: string;
@@ -204,6 +222,7 @@ export default function ContentReviewWorkbench(props: {
   revisions: Revision[];
   history: History[];
   platformMedia: PlatformMediaRendition[];
+  aiPlatformMedia: PlatformAiDraft[];
   ownerNote: string;
   assetStatus: {
     original: string;
@@ -227,6 +246,7 @@ export default function ContentReviewWorkbench(props: {
     revisions,
     history,
     platformMedia,
+    aiPlatformMedia,
     ownerNote,
     assetStatus,
     providerSync,
@@ -259,6 +279,16 @@ export default function ContentReviewWorkbench(props: {
   const platformRenditions = activeMediaKey
     ? platformMedia.filter((item) => item.platform === activeMediaKey)
     : [];
+  const latestAiDraft =
+    activeMediaKey && selected?.fileId
+      ? aiPlatformMedia.find(
+          (item) =>
+            item.platform === activeMediaKey &&
+            item.sourceFileId === selected.fileId &&
+            item.creativeStatus !== "REJECTED" &&
+            item.creativeStatus !== "APPROVED",
+        )
+      : null;
   const previewMediaKey: PlatformMediaKey = activeMediaKey || "facebook";
   const previewMediaProfile = MEDIA_PROFILES[previewMediaKey];
   const previewAssets = assets.slice(0, 4).map((asset) => {
@@ -529,6 +559,122 @@ export default function ContentReviewWorkbench(props: {
         activeMediaProfile.width,
         activeMediaProfile.height,
         instruction,
+      );
+      setMessage(result.ok ? result.message : result.error);
+      if (result.ok) router.refresh();
+    });
+  };
+
+  async function approveLatestAiImage() {
+    if (
+      !latestAiDraft?.fileId ||
+      !selected?.fileId ||
+      !activeMediaKey ||
+      !activeMediaProfile
+    ) {
+      setMessage(
+        "Chưa có AI image draft REVIEW_REQUIRED phù hợp với ảnh/kênh đang chọn.",
+      );
+      return;
+    }
+    setRenditionBusy(true);
+    setMessage("");
+    try {
+      const sourceResponse = await fetch(
+        `/api/marketing/assets/${latestAiDraft.fileId}`,
+        { credentials: "include" },
+      );
+      if (!sourceResponse.ok) throw new Error("Không đọc được AI image draft.");
+      const sourceBlob = await sourceResponse.blob();
+      const bitmap = await createImageBitmap(sourceBlob);
+      const canvas = document.createElement("canvas");
+      canvas.width = activeMediaProfile.width;
+      canvas.height = activeMediaProfile.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Trình duyệt không hỗ trợ canvas.");
+      const targetRatio = activeMediaProfile.width / activeMediaProfile.height;
+      const sourceRatio = bitmap.width / bitmap.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = bitmap.width;
+      let sh = bitmap.height;
+      if (sourceRatio > targetRatio) {
+        sw = bitmap.height * targetRatio;
+        sx = (bitmap.width - sw) / 2;
+      } else if (sourceRatio < targetRatio) {
+        sh = bitmap.width / targetRatio;
+        sy = (bitmap.height - sh) / 2;
+      }
+      ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const renditionBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) =>
+            blob
+              ? resolve(blob)
+              : reject(new Error("Không tạo được file AI rendition đã duyệt.")),
+          "image/jpeg",
+          0.92,
+        );
+      });
+      const safeBase =
+        (selected.name || "asset")
+          .replace(/\.[^.]+$/, "")
+          .replace(/[^A-Za-z0-9_-]+/g, "_")
+          .slice(0, 48) || "asset";
+      const fileName = `${contentId}_${activeMediaKey}_${activeMediaProfile.width}x${activeMediaProfile.height}_AI_APPROVED_${safeBase}.jpg`;
+      const form = new FormData();
+      form.set("contentId", contentId);
+      form.set("attachToCanonical", "false");
+      form.set(
+        "file",
+        new File([renditionBlob], fileName, { type: "image/jpeg" }),
+      );
+      const uploadResponse = await fetch(
+        `/api/marketing/content/${encodeURIComponent(contentId)}/upload`,
+        {
+          method: "POST",
+          body: form,
+          credentials: "include",
+        },
+      );
+      const uploadPayload = await uploadResponse.json();
+      if (!uploadResponse.ok)
+        throw new Error(
+          uploadPayload?.error || "Upload AI rendition đã duyệt thất bại.",
+        );
+      const approved = await approvePlatformImageCreative(
+        contentId,
+        latestAiDraft.recommendationKey,
+        {
+          fileId: uploadPayload.file.id,
+          fileName,
+          sourceFileId: selected.fileId,
+          aspectRatio: activeMediaProfile.ratio,
+          targetWidth: activeMediaProfile.width,
+          targetHeight: activeMediaProfile.height,
+        },
+      );
+      if (!approved.ok) throw new Error(approved.error);
+      setMessage(approved.message);
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Không duyệt được AI image draft.",
+      );
+    } finally {
+      setRenditionBusy(false);
+    }
+  }
+
+  const rejectLatestAiImage = () => {
+    if (!latestAiDraft?.recommendationKey) return;
+    startTransition(async () => {
+      const result = await rejectPlatformImageCreative(
+        contentId,
+        latestAiDraft.recommendationKey,
       );
       setMessage(result.ok ? result.message : result.error);
       if (result.ok) router.refresh();
@@ -808,6 +954,93 @@ export default function ContentReviewWorkbench(props: {
                 );
               })}
             </div>
+
+            {activeMediaProfile && selected?.fileId ? (
+              <div className="mt-3 rounded-xl border border-[#cfe0f3] bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <b className="text-sm text-[#244c77]">
+                      AI-enhanced draft cho ảnh đang chọn
+                    </b>
+                    <p className="mt-1 text-[11px] text-[#7185a4]">
+                      Ảnh AI luôn REVIEW_REQUIRED; chỉ khi Owner duyệt mới thay
+                      rendition active của kênh.
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded px-2 py-1 text-[10px] font-bold ${latestAiDraft?.creativeStatus === "REVIEW_REQUIRED" ? "bg-[#fff1c9] text-[#876315]" : latestAiDraft?.creativeStatus === "HOLD_AI_RUNTIME" ? "bg-[#ffe8e8] text-[#a43c3c]" : "bg-[#eef4fb] text-[#607894]"}`}
+                  >
+                    {latestAiDraft?.creativeStatus || "CHƯA CÓ"}
+                  </span>
+                </div>
+                {latestAiDraft?.fileId ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+                    <img
+                      src={`/api/marketing/assets/${latestAiDraft.fileId}`}
+                      alt="AI enhanced draft"
+                      className="aspect-[4/5] w-full rounded-lg object-cover"
+                    />
+                    <div className="text-[11px] leading-5 text-[#617793]">
+                      <div>
+                        <b>Model:</b> {latestAiDraft.model || "—"}
+                      </div>
+                      <div>
+                        <b>AI draft size:</b> {latestAiDraft.aiSize || "—"}
+                      </div>
+                      <div>
+                        <b>Rendition cuối nếu duyệt:</b>{" "}
+                        {activeMediaProfile.width}×{activeMediaProfile.height}
+                      </div>
+                      <div>
+                        <b>Chi phí ghi ledger:</b>{" "}
+                        {latestAiDraft.estimatedCostUsd > 0
+                          ? `$${latestAiDraft.estimatedCostUsd.toFixed(4)}`
+                          : "chưa có"}
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          disabled={
+                            pending ||
+                            renditionBusy ||
+                            latestAiDraft.creativeStatus !== "REVIEW_REQUIRED"
+                          }
+                          onClick={approveLatestAiImage}
+                          className="rounded-lg bg-[#168a52] px-2 py-2 text-[11px] font-bold text-white disabled:bg-[#a9bad2]"
+                        >
+                          Duyệt ảnh AI
+                        </button>
+                        <button
+                          disabled={
+                            pending ||
+                            latestAiDraft.creativeStatus !== "REVIEW_REQUIRED"
+                          }
+                          onClick={rejectLatestAiImage}
+                          className="rounded-lg border border-[#e7aaaa] px-2 py-2 text-[11px] font-bold text-[#b44747] disabled:text-[#a9bad2]"
+                        >
+                          Từ chối
+                        </button>
+                        <button
+                          disabled={pending || renditionBusy}
+                          onClick={requestPlatformAiImage}
+                          className="rounded-lg border border-[#8cbcf5] px-2 py-2 text-[11px] font-bold text-[#1768df] disabled:text-[#a9bad2]"
+                        >
+                          Tạo lại
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : latestAiDraft?.creativeStatus === "HOLD_AI_RUNTIME" ? (
+                  <div className="mt-3 rounded-lg bg-[#fff6f6] p-3 text-xs leading-5 text-[#8e4a4a]">
+                    {latestAiDraft.aiError || "AI runtime đang HOLD."}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-xs text-[#7185a4]">
+                    Chưa có AI-enhanced draft cho ảnh/kênh này. Bấm “AI làm đẹp
+                    cho kênh này” để tạo.
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-4">

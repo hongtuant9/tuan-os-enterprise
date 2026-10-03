@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Readable } from "node:stream";
+import { google } from "googleapis";
 import { createClient as createRequestClient } from "@/lib/supabase/server";
 import { getAdminContainer } from "@/server/container";
 import { getCurrentSession } from "@/server/auth/session";
@@ -11,6 +13,10 @@ import {
   setSheetValue,
 } from "@/server/integrations/google/drive-client";
 import { runMarketingCommandCenterCycle } from "@/server/marketing-command-center/cycle";
+import {
+  assertTceAiBudget,
+  recordTceImageUsage,
+} from "@/server/agents/tce-cost-guard";
 import {
   generateContentRevision,
   type ContentRevisionDraft,
@@ -862,6 +868,32 @@ export async function savePlatformMediaRendition(
   }
 }
 
+const PLATFORM_IMAGE_AI_MODEL = "gpt-image-2.5-sunburst";
+const PLATFORM_IMAGE_AI_RESERVED_COST_USD = 0.5;
+
+function aiDraftSize(aspectRatio: string): string {
+  if (aspectRatio === "4:5") return "1088x1360";
+  if (aspectRatio === "4:3") return "1216x912";
+  return "1024x1024";
+}
+
+function safeAiError(value: unknown): string {
+  const message =
+    value instanceof Error
+      ? value.message
+      : String(value ?? "AI image runtime error");
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]")
+    .slice(0, 500);
+}
+
+type ImageApiUsage = {
+  input_tokens?: number;
+  input_tokens_details?: { image_tokens?: number; text_tokens?: number };
+  output_tokens?: number;
+  output_tokens_details?: { image_tokens?: number; text_tokens?: number };
+};
+
 export async function requestPlatformImageCreative(
   contentId: string,
   platform: PlatformMediaKey,
@@ -871,12 +903,39 @@ export async function requestPlatformImageCreative(
   targetHeight: number,
   instruction: string,
 ): Promise<ActionResult> {
+  const session = await requireManager();
+  const admin = getAdminContainer();
+  const key = `PLATFORM_MEDIA_AI:${contentId}:${platform}:${Date.now()}`;
+  const cleanInstruction = clean(instruction);
+  const baseEvidence = {
+    content_id: contentId,
+    media_action: "CREATE_PLATFORM_IMAGE_AI",
+    platform,
+    source_file_id: clean(sourceFileId),
+    aspect_ratio: clean(aspectRatio),
+    target_width: Number(targetWidth || 0),
+    target_height: Number(targetHeight || 0),
+    creative_status: "GENERATING",
+    requested_by: session.email ?? session.userId,
+    requested_at: new Date().toISOString(),
+    source: "CEO Content Review UI",
+    guardrail:
+      "Preserve real scene, architecture, signage, food/products and amenities. Do not invent objects, people, views, facilities, prices or claims.",
+  };
+
   try {
-    const session = await requireManager();
-    const admin = getAdminContainer();
-    const key = `PLATFORM_MEDIA_AI:${contentId}:${platform}:${Date.now()}`;
-    const cleanInstruction = clean(instruction);
-    const result = await dbOf(admin.db)
+    if (
+      !baseEvidence.source_file_id ||
+      !baseEvidence.target_width ||
+      !baseEvidence.target_height
+    ) {
+      return {
+        ok: false,
+        error: "Thiếu source asset hoặc target size cho AI image.",
+      };
+    }
+
+    const insertResult = await dbOf(admin.db)
       .from("marketing_recommendations")
       .insert({
         recommendation_key: key,
@@ -886,23 +945,9 @@ export async function requestPlatformImageCreative(
         summary:
           cleanInstruction ||
           "Tạo bản ảnh AI-enhanced từ asset gốc, giữ đúng hiện trạng và tối ưu sức hút thị giác.",
-        evidence: {
-          content_id: contentId,
-          media_action: "CREATE_PLATFORM_IMAGE_AI",
-          platform,
-          source_file_id: clean(sourceFileId),
-          aspect_ratio: clean(aspectRatio),
-          target_width: Number(targetWidth || 0),
-          target_height: Number(targetHeight || 0),
-          creative_status: "REVIEW_REQUIRED",
-          requested_by: session.email ?? session.userId,
-          requested_at: new Date().toISOString(),
-          source: "CEO Content Review UI",
-          guardrail:
-            "Preserve real scene, architecture, signage, food/products and amenities. Do not invent objects, people, views, facilities, prices or claims.",
-        },
+        evidence: baseEvidence,
         recommended_action:
-          "AI Creative Agent tạo draft từ ảnh gốc; Owner duyệt trước khi chọn làm rendition active/provider asset.",
+          "AI tạo draft từ ảnh gốc; Owner duyệt trước khi chọn làm rendition active/provider asset.",
         action_class: "SAFE_INTERNAL",
         approval_required: false,
         approval_id: null,
@@ -910,15 +955,364 @@ export async function requestPlatformImageCreative(
         generated_at: new Date().toISOString(),
         expires_at: null,
       });
-    if (result.error)
+    if (insertResult.error) {
       return {
         ok: false,
-        error: result.error.message ?? "Không tạo được yêu cầu AI image.",
+        error: insertResult.error.message ?? "Không tạo được yêu cầu AI image.",
+      };
+    }
+
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      await dbOf(admin.db)
+        .from("marketing_recommendations")
+        .update({
+          evidence: {
+            ...baseEvidence,
+            creative_status: "HOLD_AI_RUNTIME",
+            ai_error: "OPENAI_API_KEY SET=no",
+          },
+        })
+        .eq("recommendation_key", key);
+      revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+      return {
+        ok: true,
+        message:
+          "Đã ghi yêu cầu AI image nhưng OPENAI_API_KEY chưa được cấu hình; giữ HOLD_AI_RUNTIME.",
+      };
+    }
+
+    await assertTceAiBudget(PLATFORM_IMAGE_AI_RESERVED_COST_USD);
+
+    const auth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
+    const drive = google.drive({ version: "v3", auth });
+    const meta = await drive.files.get({
+      fileId: baseEvidence.source_file_id,
+      fields: "id,name,mimeType,parents",
+    });
+    const sourceName = clean(meta.data.name) || "source-image";
+    const sourceMime = clean(meta.data.mimeType) || "image/jpeg";
+    if (!sourceMime.startsWith("image/"))
+      throw new Error("Source asset không phải ảnh.");
+    const parentId = meta.data.parents?.[0];
+    if (!parentId)
+      throw new Error(
+        "Không xác định được Owner media folder của source asset.",
+      );
+
+    const media = await drive.files.get(
+      { fileId: baseEvidence.source_file_id, alt: "media" },
+      { responseType: "arraybuffer" },
+    );
+    const sourceBuffer = Buffer.from(media.data as ArrayBuffer);
+    if (!sourceBuffer.length)
+      throw new Error("Không đọc được bytes của ảnh gốc.");
+
+    const aiSize = aiDraftSize(baseEvidence.aspect_ratio);
+    const prompt = [
+      "Edit this real hospitality/travel photograph. Preserve the exact real place and factual visual identity.",
+      "Improve exposure, white balance, tonal range, clarity, local contrast and color balance so it feels naturally premium and more visually attractive on a mobile social feed.",
+      "Keep architecture, signage, spatial layout, furniture, plants, food/products, water, mountains, people and all existing objects faithful to the source image.",
+      "Do not add, remove, replace or fabricate people, buildings, facilities, views, products, decorations, text, logos, prices or amenities.",
+      "Do not add text overlays or marketing graphics. Avoid HDR, oversaturation, artificial sunset, fake depth of field or an obviously AI-generated look.",
+      `Target composition: ${baseEvidence.aspect_ratio}; retain important signage and subject within a safe mobile crop.`,
+      cleanInstruction ? `Owner instruction: ${cleanInstruction}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const form = new FormData();
+    form.set("model", PLATFORM_IMAGE_AI_MODEL);
+    form.set("prompt", prompt);
+    form.set("size", aiSize);
+    form.set("quality", "medium");
+    form.set("output_format", "jpeg");
+    form.set("output_compression", "88");
+    form.set("n", "1");
+    form.append(
+      "image",
+      new Blob([sourceBuffer], { type: sourceMime }),
+      sourceName,
+    );
+
+    const aiResponse = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: form,
+    });
+    const aiJson = (await aiResponse.json()) as {
+      data?: Array<{ b64_json?: string; revised_prompt?: string }>;
+      usage?: ImageApiUsage;
+      error?: { message?: string };
+      size?: string;
+      quality?: string;
+      output_format?: string;
+    };
+    if (!aiResponse.ok)
+      throw new Error(
+        `OpenAI image edit ${aiResponse.status}: ${clean(aiJson.error?.message) || "request failed"}`,
+      );
+    const encoded = clean(aiJson.data?.[0]?.b64_json);
+    if (!encoded) throw new Error("OpenAI image edit không trả về ảnh.");
+    const outputBuffer = Buffer.from(encoded, "base64");
+    if (!outputBuffer.length) throw new Error("AI image output rỗng.");
+
+    const safeBase =
+      sourceName
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^A-Za-z0-9_-]+/g, "_")
+        .slice(0, 54) || "asset";
+    const fileName = `${contentId}_${platform}_AI_DRAFT_${aiSize}_${safeBase}.jpg`;
+    const uploaded = await drive.files.create({
+      requestBody: { name: fileName, parents: [parentId] },
+      media: { mimeType: "image/jpeg", body: Readable.from(outputBuffer) },
+      fields: "id,name,parents,size",
+    });
+    const aiFileId = clean(uploaded.data.id);
+    if (!aiFileId) throw new Error("Drive không trả file ID cho AI draft.");
+
+    const estimatedCostUsd = await recordTceImageUsage(
+      "marketing_manager",
+      PLATFORM_IMAGE_AI_MODEL,
+      aiJson.usage ?? {},
+      "content-review-platform-image",
+      PLATFORM_IMAGE_AI_RESERVED_COST_USD,
+    );
+
+    const successEvidence = {
+      ...baseEvidence,
+      creative_status: "REVIEW_REQUIRED",
+      file_id: aiFileId,
+      file_name: fileName,
+      model: PLATFORM_IMAGE_AI_MODEL,
+      ai_size: aiSize,
+      quality: clean(aiJson.quality) || "medium",
+      output_format: clean(aiJson.output_format) || "jpeg",
+      revised_prompt: clean(aiJson.data?.[0]?.revised_prompt),
+      estimated_cost_usd: estimatedCostUsd,
+      completed_at: new Date().toISOString(),
+    };
+    const updateResult = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .update({ evidence: successEvidence, status: "OPEN" })
+      .eq("recommendation_key", key);
+    if (updateResult.error)
+      throw new Error(
+        updateResult.error.message ?? "Không lưu được AI draft metadata.",
+      );
+
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message:
+        "AI đã tạo ảnh draft thật từ ảnh gốc. Trạng thái REVIEW_REQUIRED; chưa thay rendition đang dùng.",
+    };
+  } catch (error) {
+    const safeError = safeAiError(error);
+    await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .update({
+        evidence: {
+          ...baseEvidence,
+          creative_status: "HOLD_AI_RUNTIME",
+          ai_error: safeError,
+        },
+      })
+      .eq("recommendation_key", key);
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message: `Đã ghi yêu cầu nhưng AI image chưa hoàn tất: ${safeError}`,
+    };
+  }
+}
+
+export async function approvePlatformImageCreative(
+  contentId: string,
+  recommendationKey: string,
+  rendition: {
+    fileId: string;
+    fileName: string;
+    sourceFileId: string;
+    aspectRatio: string;
+    targetWidth: number;
+    targetHeight: number;
+  },
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const recResult = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .select("recommendation_key,evidence")
+      .eq("recommendation_key", recommendationKey)
+      .maybeSingle();
+    const rec = obj(recResult.data);
+    const evidence = obj(rec.evidence);
+    if (
+      !clean(rec.recommendation_key) ||
+      clean(evidence.content_id) !== contentId
+    ) {
+      return { ok: false, error: "Không tìm thấy AI image draft của bài này." };
+    }
+    if (clean(evidence.creative_status) !== "REVIEW_REQUIRED") {
+      return {
+        ok: false,
+        error: "AI image draft không ở trạng thái REVIEW_REQUIRED.",
+      };
+    }
+    const platform = clean(evidence.platform) as PlatformMediaKey;
+    if (
+      !(
+        ["facebook", "instagram", "google_business", "tripadvisor"] as string[]
+      ).includes(platform)
+    ) {
+      return { ok: false, error: "Platform của AI image draft không hợp lệ." };
+    }
+    const activeKey = `PLATFORM_MEDIA:${contentId}:${platform}:${clean(rendition.sourceFileId)}`;
+    const activePayload = {
+      content_id: contentId,
+      platform,
+      media_status: "APPROVED",
+      variant_type: "AI_ENHANCED",
+      file_id: clean(rendition.fileId),
+      file_name: clean(rendition.fileName),
+      source_file_id: clean(rendition.sourceFileId),
+      aspect_ratio: clean(rendition.aspectRatio),
+      target_width: Number(rendition.targetWidth || 0),
+      target_height: Number(rendition.targetHeight || 0),
+      ai_draft_key: recommendationKey,
+      approved_at: new Date().toISOString(),
+      approved_by: session.email ?? session.userId,
+      source: "CEO Content Review UI",
+    };
+    if (
+      !activePayload.file_id ||
+      !activePayload.source_file_id ||
+      !activePayload.target_width ||
+      !activePayload.target_height
+    ) {
+      return { ok: false, error: "Thiếu dữ liệu rendition AI đã duyệt." };
+    }
+    const existing = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .select("recommendation_key")
+      .eq("recommendation_key", activeKey)
+      .maybeSingle();
+    if (clean(obj(existing.data).recommendation_key)) {
+      const updated = await dbOf(admin.db)
+        .from("marketing_recommendations")
+        .update({
+          summary: `Approved AI rendition ${platform} — ${activePayload.aspect_ratio} ${activePayload.target_width}x${activePayload.target_height}`,
+          evidence: activePayload,
+          status: "ACKNOWLEDGED",
+        })
+        .eq("recommendation_key", activeKey);
+      if (updated.error)
+        return {
+          ok: false,
+          error:
+            updated.error.message ?? "Không cập nhật được active rendition.",
+        };
+    } else {
+      const inserted = await dbOf(admin.db)
+        .from("marketing_recommendations")
+        .insert({
+          recommendation_key: activeKey,
+          category: "CONTENT",
+          severity: "INFO",
+          title: `Ảnh AI đã duyệt — ${contentId} — ${platform}`,
+          summary: `Approved AI rendition ${platform} — ${activePayload.aspect_ratio} ${activePayload.target_width}x${activePayload.target_height}`,
+          evidence: activePayload,
+          recommended_action:
+            "Dùng rendition đã được Owner duyệt cho preview/provider sync ở bước có approval phù hợp.",
+          action_class: "SAFE_INTERNAL",
+          approval_required: false,
+          approval_id: null,
+          status: "ACKNOWLEDGED",
+          generated_at: new Date().toISOString(),
+          expires_at: null,
+        });
+      if (inserted.error)
+        return {
+          ok: false,
+          error: inserted.error.message ?? "Không lưu được active rendition.",
+        };
+    }
+    const draftUpdated = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .update({
+        evidence: {
+          ...evidence,
+          creative_status: "APPROVED",
+          approved_file_id: activePayload.file_id,
+          approved_at: activePayload.approved_at,
+          approved_by: activePayload.approved_by,
+        },
+        status: "COMPLETED",
+      })
+      .eq("recommendation_key", recommendationKey);
+    if (draftUpdated.error)
+      return {
+        ok: false,
+        error:
+          draftUpdated.error.message ?? "Không cập nhật được AI draft status.",
       };
     revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
     return {
       ok: true,
-      message: "Đã tạo AI image draft request ở trạng thái REVIEW_REQUIRED.",
+      message:
+        "Đã duyệt ảnh AI và đặt rendition này làm media active cho kênh. Chưa provider sync.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Lỗi không xác định",
+    };
+  }
+}
+
+export async function rejectPlatformImageCreative(
+  contentId: string,
+  recommendationKey: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const recResult = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .select("recommendation_key,evidence")
+      .eq("recommendation_key", recommendationKey)
+      .maybeSingle();
+    const rec = obj(recResult.data);
+    const evidence = obj(rec.evidence);
+    if (
+      !clean(rec.recommendation_key) ||
+      clean(evidence.content_id) !== contentId
+    )
+      return { ok: false, error: "Không tìm thấy AI image draft của bài này." };
+    const result = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .update({
+        evidence: {
+          ...evidence,
+          creative_status: "REJECTED",
+          rejected_at: new Date().toISOString(),
+          rejected_by: session.email ?? session.userId,
+        },
+        status: "DISMISSED",
+      })
+      .eq("recommendation_key", recommendationKey);
+    if (result.error)
+      return {
+        ok: false,
+        error: result.error.message ?? "Không từ chối được AI draft.",
+      };
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message:
+        "Đã từ chối AI image draft. Ảnh active hiện tại được giữ nguyên.",
     };
   } catch (error) {
     return {

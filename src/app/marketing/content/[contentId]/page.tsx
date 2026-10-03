@@ -222,6 +222,32 @@ export default async function ContentReviewPage({
     .filter((media) =>
       Boolean(media.platform && media.fileId && media.sourceFileId),
     );
+  const aiPlatformMedia = revisionRequests
+    .filter((requestRow) =>
+      s(requestRow.recommendation_key).startsWith(
+        `PLATFORM_MEDIA_AI:${contentId}:`,
+      ),
+    )
+    .map((requestRow) => {
+      const evidence = row(requestRow.evidence);
+      return {
+        recommendationKey: s(requestRow.recommendation_key),
+        platform: s(evidence.platform),
+        fileId: s(evidence.file_id),
+        fileName: s(evidence.file_name),
+        sourceFileId: s(evidence.source_file_id),
+        aspectRatio: s(evidence.aspect_ratio),
+        targetWidth: Number(evidence.target_width || 0),
+        targetHeight: Number(evidence.target_height || 0),
+        creativeStatus: s(evidence.creative_status),
+        model: s(evidence.model),
+        aiSize: s(evidence.ai_size),
+        estimatedCostUsd: Number(evidence.estimated_cost_usd || 0),
+        aiError: s(evidence.ai_error),
+        generatedAt: s(requestRow.generated_at),
+      };
+    })
+    .filter((media) => Boolean(media.platform && media.sourceFileId));
   const qaMedia = pick(source, ["QA_MEDIA", "QA Media"]) || "NEED VERIFY";
   const canonicalNote = pick(source, ["NOTE", "Note"]);
   const providerSync = providerSyncState(
@@ -314,6 +340,7 @@ export default async function ContentReviewPage({
           revisions={revisions}
           history={history}
           platformMedia={platformMedia}
+          aiPlatformMedia={aiPlatformMedia}
           ownerNote={ownerNote}
           assetStatus={{
             original: originalAssetStatus,

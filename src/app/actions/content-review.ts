@@ -891,10 +891,6 @@ function safeAiError(value: unknown): string {
     .slice(0, 500);
 }
 
-  output_tokens?: number;
-  output_tokens_details?: { image_tokens?: number; text_tokens?: number };
-};
-
 export async function requestPlatformImageCreative(
   contentId: string,
   platform: PlatformMediaKey,

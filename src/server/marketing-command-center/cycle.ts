@@ -254,12 +254,48 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
         language: pick(data, ["LANGUAGE", "Language"]) || null,
         tracking_url: pick(data, ["TRACKING_URL", "Tracking URL"]) || null,
         approval_status: pick(data, ["APPROVAL_STATUS", "Approval Status"]) || null,
+        qa_fact: pick(data, ["QA_FACT", "QA Fact"]) || null,
+        qa_brand: pick(data, ["QA_BRAND", "QA Brand"]) || null,
+        qa_media: pick(data, ["QA_MEDIA", "QA Media"]) || null,
+        qa_copy: pick(data, ["QA_COPY", "QA Copy"]) || null,
+        qa_privacy: pick(data, ["QA_PRIVACY", "QA Privacy"]) || null,
+        qa_cta: pick(data, ["QA_CTA", "QA CTA"]) || null,
+        qa_tracking: pick(data, ["QA_TRACKING", "QA Tracking"]) || null,
+        qa_platform: pick(data, ["QA_PLATFORM", "QA Platform"]) || null,
+        qa_status: pick(data, ["QA_STATUS", "QA Status"]) || null,
         plan_only: true,
       },
       last_synced_at: str(record.synced_at) || nowIso,
     }];
   });
   if (contentPayload.length) {
+    const existingApprovalRows = rowList(
+      await db
+        .from("marketing_content_items")
+        .select("content_id,publish_status,approval_status,metadata"),
+    );
+    const existingByContentId = new Map(
+      existingApprovalRows.map((row) => [str(row.content_id), row]),
+    );
+    for (const payload of contentPayload) {
+      const current = existingByContentId.get(str(payload.content_id));
+      const currentApproval = str(current?.approval_status).toUpperCase();
+      const incomingApproval = str(payload.approval_status).toUpperCase();
+      if (
+        currentApproval === "OWNER_APPROVED_FOR_METRICOOL" &&
+        incomingApproval !== "OWNER_APPROVED_FOR_METRICOOL"
+      ) {
+        payload.approval_status = str(current?.approval_status);
+        payload.publish_status =
+          str(current?.publish_status) || "APPROVED_FOR_METRICOOL";
+        const currentMetadata = obj(current?.metadata);
+        payload.metadata = {
+          ...currentMetadata,
+          ...payload.metadata,
+          approval_status: "OWNER_APPROVED_FOR_METRICOOL",
+        } as typeof payload.metadata;
+      }
+    }
     await db.from("marketing_content_items").upsert(contentPayload, { onConflict: "content_id" });
   }
   if (contentRecords.length) {

@@ -181,6 +181,14 @@ export class GoogleOAuthTokenStore {
     return this.getAuthorizedClient(connection);
   }
 
+  async getSystemAuthorizedClientForDriveWrite(): Promise<Auth.OAuth2Client> {
+    const connection = await this.repo.findMostRecent();
+    if (!connection) throw new GoogleNotConnectedError();
+    const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
+    if (!scopes.has(GOOGLE_DRIVE_WRITE_SCOPE)) throw new GoogleDriveWriteScopeError();
+    return this.getAuthorizedClient(connection);
+  }
+
   private async getAuthorizedClient(connection: ConnectionRow): Promise<Auth.OAuth2Client> {
     if (!connection.refresh_token) {
       throw new GoogleNotConnectedError();

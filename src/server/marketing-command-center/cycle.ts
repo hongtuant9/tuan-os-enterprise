@@ -231,9 +231,11 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       utm_campaign: (note.match(/utm campaign=([^;\s]+)/i)?.[1] ?? null),
       source_reference: pick(data, ["SOURCE", "Source"]) || null,
       asset_ids: assetIds,
+      tracking_url: pick(data, ["TRACKING_URL", "Tracking URL"]) || null,
       approval_status: pick(data, ["APPROVAL_STATUS", "Approval Status"]) || "PENDING_OWNER_APPROVAL",
       reviewed_by: pick(data, ["REVIEWED_BY", "Reviewed By"]) || null,
       last_qa_at: pick(data, ["LAST_QA_AT", "Last QA At"]) || null,
+      hook: pick(data, ["HOOK", "Hook"]) || null,
       metadata: {
         draft_vi: pick(data, ["DRAFT_VI", "Draft VI"]),
         cta: pick(data, ["CTA", "Cta"]),
@@ -245,6 +247,8 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
         facebook_variant: pick(data, ["FACEBOOK_VARIANT", "Facebook Variant"]) || null,
         instagram_variant: pick(data, ["INSTAGRAM_VARIANT", "Instagram Variant"]) || null,
         tripadvisor_variant: pick(data, ["TRIPADVISOR_VARIANT", "Tripadvisor Variant"]) || null,
+        google_business_variant:
+          pick(data, ["GOOGLE_BUSINESS_VARIANT", "Google Business Variant"]) || null,
         journey_stage: pick(data, ["JOURNEY_STAGE", "Journey Stage"]) || null,
         hook: pick(data, ["HOOK", "Hook"]) || null,
         language: pick(data, ["LANGUAGE", "Language"]) || null,

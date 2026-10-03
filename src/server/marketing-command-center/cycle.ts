@@ -290,18 +290,10 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
           str(current?.publish_status) || "APPROVED_FOR_METRICOOL";
         const currentMetadata = obj(current?.metadata);
         payload.metadata = {
+          ...currentMetadata,
           ...payload.metadata,
           approval_status: "OWNER_APPROVED_FOR_METRICOOL",
-          approval_decision_id:
-            str(currentMetadata.approval_decision_id) || null,
-          approval_source: str(currentMetadata.approval_source) || null,
-          approved_at: str(currentMetadata.approved_at) || null,
-          approved_by: str(currentMetadata.approved_by) || null,
-          canonical_sync_status:
-            str(currentMetadata.canonical_sync_status) || "PENDING_REAUTH",
-          canonical_sync_error:
-            str(currentMetadata.canonical_sync_error) || null,
-        };
+        } as typeof payload.metadata;
       }
     }
     await db.from("marketing_content_items").upsert(contentPayload, { onConflict: "content_id" });

@@ -55,7 +55,15 @@ export class GoogleSheetsWriteScopeError extends Error {
   }
 }
 
+export class GoogleDriveWriteScopeError extends Error {
+  constructor() {
+    super("Tài khoản Google chưa có quyền ghi Drive. Hãy kết nối lại tài khoản Google hệ thống một lần để cấp quyền tạo ảnh/video dẫn xuất trong thư viện Owner-approved.");
+    this.name = "GoogleDriveWriteScopeError";
+  }
+}
+
 const GOOGLE_SHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const GOOGLE_DRIVE_WRITE_SCOPE = "https://www.googleapis.com/auth/drive";
 const GOOGLE_ANALYTICS_READ_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 const GOOGLE_GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const GOOGLE_GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
@@ -170,6 +178,14 @@ export class GoogleOAuthTokenStore {
     if (!connection) throw new GoogleNotConnectedError();
     const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
     if (!scopes.has(GOOGLE_SHEETS_WRITE_SCOPE)) throw new GoogleSheetsWriteScopeError();
+    return this.getAuthorizedClient(connection);
+  }
+
+  async getSystemAuthorizedClientForDriveWrite(): Promise<Auth.OAuth2Client> {
+    const connection = await this.repo.findMostRecent();
+    if (!connection) throw new GoogleNotConnectedError();
+    const scopes = new Set((connection.scope ?? "").split(/[\s,]+/).filter(Boolean));
+    if (!scopes.has(GOOGLE_DRIVE_WRITE_SCOPE)) throw new GoogleDriveWriteScopeError();
     return this.getAuthorizedClient(connection);
   }
 

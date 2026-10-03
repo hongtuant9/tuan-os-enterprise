@@ -92,6 +92,13 @@ function assertOwnerApprovedMediaSource(parentIds: string[] | null | undefined) 
   }
 }
 
+function driveFileIdsFromAssetCell(value: unknown) {
+  return clean(value)
+    .split(/[;\n]+/)
+    .map((part) => part.match(/\|\s*Drive\s+([A-Za-z0-9_-]{10,})$/i)?.[1] ?? "")
+    .filter(Boolean);
+}
+
 async function requireManager() {
   const requestDb = await createRequestClient();
   const session = await getCurrentSession(requestDb);
@@ -354,6 +361,146 @@ export async function saveMarketingContentDraft(
     return {
       ok: true,
       message: "Đã lưu vào Content Queue canonical và read-back PASS.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Lỗi không xác định",
+    };
+  }
+}
+
+export async function approveMarketingContentForMetricool(
+  contentId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const workbookId = await getWorkbookId();
+    const sheetsAuth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const found = await findContentRow(workbookId, contentId, sheetsAuth);
+
+    const verification = clean(found.row[8]).toUpperCase();
+    const publishStatus = clean(found.row[9]).toUpperCase();
+    const currentNote = clean(found.row[13]);
+    const assetIds = driveFileIdsFromAssetCell(found.row[18]);
+    const approvalStatus = clean(found.row[21]).toUpperCase();
+    const qaStatus = clean(found.row[32]).toUpperCase();
+    const facebookVariant = clean(found.row[22]);
+    const instagramVariant = clean(found.row[23]);
+
+    if (verification !== "VERIFIED")
+      return { ok: false, error: "HOLD: Nội dung chưa VERIFIED." };
+    if (qaStatus !== "PASS")
+      return { ok: false, error: "HOLD: QA_STATUS phải PASS trước khi duyệt đăng." };
+    if (!assetIds.length)
+      return { ok: false, error: "HOLD: Bài chưa có ảnh/video nguồn hợp lệ." };
+    if (!facebookVariant && !instagramVariant)
+      return { ok: false, error: "HOLD: Chưa có Facebook/Instagram variant để đưa sang Metricool." };
+    if (/PUBLISHED/.test(publishStatus))
+      return { ok: false, error: "Bài đã xuất bản; không duyệt lại." };
+    if (
+      approvalStatus === "OWNER_APPROVED_FOR_METRICOOL" ||
+      publishStatus === "APPROVED_FOR_METRICOOL"
+    )
+      return { ok: true, message: "Bài đã được Owner duyệt và đang chờ đồng bộ Metricool." };
+
+    const driveAuth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
+    const drive = google.drive({ version: "v3", auth: driveAuth });
+    for (const fileId of assetIds) {
+      const meta = await drive.files.get({
+        fileId,
+        fields: "id,name,mimeType,parents",
+      });
+      if (
+        !clean(meta.data.mimeType).startsWith("image/") &&
+        !clean(meta.data.mimeType).startsWith("video/")
+      )
+        return { ok: false, error: "HOLD_SOURCE_POLICY: Asset không phải ảnh/video." };
+      assertOwnerApprovedMediaSource(meta.data.parents);
+    }
+
+    const approvedAt = new Date().toISOString();
+    const approvedBy = session.email ?? session.userId;
+    const note = [
+      currentNote,
+      `Owner approved in App at ${approvedAt}; provider sync pending. Do not publish from any unapproved draft.`,
+    ].filter(Boolean).join(" ");
+
+    await Promise.all([
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!J${found.rowNumber}`, "APPROVED_FOR_METRICOOL", sheetsAuth),
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!N${found.rowNumber}`, note, sheetsAuth),
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!V${found.rowNumber}`, "OWNER_APPROVED_FOR_METRICOOL", sheetsAuth),
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!AH${found.rowNumber}`, approvedBy, sheetsAuth),
+      setSheetValue(workbookId, `${q(CONTENT_TAB)}!AI${found.rowNumber}`, approvedAt, sheetsAuth),
+    ]);
+
+    const verify = await findContentRow(workbookId, contentId, sheetsAuth);
+    if (
+      clean(verify.row[9]) !== "APPROVED_FOR_METRICOOL" ||
+      clean(verify.row[21]) !== "OWNER_APPROVED_FOR_METRICOOL"
+    )
+      throw new Error("Read-back approval không khớp; giữ HOLD.");
+
+    const outboxKey = `METRICOOL_PUBLISH_READY:${contentId}:${Date.now()}`;
+    const outboxResult = await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .insert({
+        recommendation_key: outboxKey,
+        category: "CONTENT",
+        severity: "ACTION",
+        title: `Metricool publish ready — ${contentId}`,
+        summary: "Owner đã duyệt nội dung trong App; chờ provider sync có read-back.",
+        evidence: {
+          content_id: contentId,
+          provider: "METRICOOL",
+          publish_gate: "OWNER_APPROVED",
+          provider_sync_status: "PENDING_PROVIDER_SYNC",
+          approved_at: approvedAt,
+          approved_by: approvedBy,
+          asset_ids: assetIds,
+          source_policy: "OWNER_APPROVED_LIBRARY_ONLY",
+        },
+        recommended_action:
+          "Đồng bộ bài đã duyệt sang Metricool bằng authenticated provider path; read-back id/uuid trước khi chuyển SCHEDULED.",
+        action_class: "BUSINESS_WRITE_APPROVED",
+        approval_required: false,
+        approval_id: null,
+        status: "OPEN",
+        generated_at: approvedAt,
+        expires_at: null,
+      });
+    if (outboxResult.error)
+      throw new Error(outboxResult.error.message ?? "Không tạo được Metricool outbox.");
+
+    const syncSummary = await admin.sync.run(
+      "marketing-shadow-content",
+      "manual",
+      approvedBy,
+    );
+    if (syncSummary.status === "failed")
+      return {
+        ok: false,
+        error:
+          "Approval đã ghi vào Workbook nhưng runtime sync thất bại: " +
+          (syncSummary.errorMessage || "unknown error"),
+      };
+    await runMarketingCommandCenterCycle(new Date());
+
+    await admin.activityLog.record({
+      agent: "AI Marketing Manager",
+      unit: "Marketing",
+      message: `Owner approved ${contentId} for Metricool provider sync`,
+      type: "action",
+    });
+    revalidatePath("/marketing");
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message:
+        "Đã duyệt nội dung và đưa vào hàng chờ Metricool. Chỉ được chuyển SCHEDULED sau provider read-back PASS.",
     };
   } catch (error) {
     return {

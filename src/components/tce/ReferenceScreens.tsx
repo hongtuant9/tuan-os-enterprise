@@ -520,8 +520,8 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           <Section title="Chiến dịch & thực thi" subtitle="Kế hoạch từ tài liệu CMO; số thực tế từ nhà cung cấp khi kết nối hoạt động" className="col-span-12 h-[250px]" icon="▣">
             <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Trạng thái","Mục tiêu","Xác minh"]} data={data?.tables.marketingCampaigns}/>
           </Section>
-          <Section title="Lịch nội dung & xuất bản" subtitle="Lập kế hoạch → Kiểm tra chất lượng → Đã lên lịch → Đã xuất bản; không tự xuất bản khi chưa được phê duyệt" className="col-span-12 h-[250px]" icon="♟">
-            <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Xác minh","Hành động"]} data={data?.tables.marketingContent}/>
+          <Section title="Lịch nội dung & xuất bản" subtitle="App là nguồn duyệt: Xem bài viết → QA → Duyệt đăng → đồng bộ Metricool → read-back → xuất bản" className="col-span-12" icon="♟">
+            <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Phê duyệt","Xác minh","Hành động"]} data={data?.tables.marketingContent}/>
           </Section>
 
           <Section title="Đối chiếu nguồn – Nguồn → Khách tiềm năng → Đặt chỗ → Doanh thu" subtitle="Đối chiếu đường dẫn, khách hàng, hội thoại và đặt chỗ; tránh đếm trùng chuyển đổi từ nhà cung cấp" className="col-span-12 h-[240px]" icon="↗">

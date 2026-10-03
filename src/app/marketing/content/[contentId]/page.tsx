@@ -341,6 +341,12 @@ export default async function ContentReviewPage({
           format={s(content.format)}
           channel={s(content.channel_id) || "Đa kênh / kế hoạch"}
           serviceLine={pick(source, ["SERVICE_LINE", "Service Line"])}
+          trackingUrl={
+            pick(source, ["TRACKING_URL", "Tracking URL"]) ||
+            s(content.tracking_url) ||
+            s(metadata.tracking_url)
+          }
+          ctaLabel={pick(source, ["CTA", "Cta"]) || s(metadata.cta)}
           assets={assets}
           revisions={revisions}
           history={history}

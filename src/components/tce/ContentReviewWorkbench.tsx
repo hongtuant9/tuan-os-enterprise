@@ -220,6 +220,8 @@ export default function ContentReviewWorkbench(props: {
   format: string;
   channel: string;
   serviceLine: string;
+  trackingUrl: string;
+  ctaLabel: string;
   assets: Asset[];
   revisions: Revision[];
   history: History[];
@@ -245,6 +247,8 @@ export default function ContentReviewWorkbench(props: {
     format,
     channel,
     serviceLine,
+    trackingUrl,
+    ctaLabel,
     assets,
     revisions,
     history,
@@ -326,6 +330,35 @@ export default function ContentReviewWorkbench(props: {
     Math.max(previewAssets.length - 1, 0),
   );
   const activePreviewAsset = previewAssets[activePreviewIndex];
+
+  const platformCta =
+    previewMediaKey === "facebook"
+      ? {
+          label: "Nhắn tin",
+          mode: "Native Page / Messenger",
+          providerStatus: "NEED VERIFY",
+          destination: "Facebook Page / Messenger",
+        }
+      : previewMediaKey === "instagram"
+        ? {
+            label: "Gửi tin nhắn",
+            mode: "Instagram DM / Link in bio",
+            providerStatus: "NEED VERIFY",
+            destination: "Instagram DM / profile link",
+          }
+        : previewMediaKey === "google_business"
+          ? {
+              label: "Tìm hiểu thêm",
+              mode: "Google Business action button",
+              providerStatus: trackingUrl ? "SUPPORTED" : "NEED VERIFY",
+              destination: trackingUrl || "Chưa có tracking URL",
+            }
+          : {
+              label: ctaLabel || "Liên hệ",
+              mode: "Tripadvisor native contact / link",
+              providerStatus: "NEED VERIFY",
+              destination: trackingUrl || "Chưa có tracking URL",
+            };
 
   const activeLibrary =
     LIBRARIES.find((library) => libraryMatches(serviceLine, library)) ||
@@ -1427,7 +1460,7 @@ export default function ContentReviewWorkbench(props: {
                           "Chưa có nội dung Google Business."}
                       </div>
                       <button className="mt-3 w-full rounded-full bg-[#1768df] py-2 text-[11px] font-bold text-white">
-                        Chỉ đường
+                        {platformCta.label}
                       </button>
                     </div>
                   </>
@@ -1489,6 +1522,29 @@ export default function ContentReviewWorkbench(props: {
                 Preview dùng object-cover theo đúng tỷ lệ nền tảng. Khi bấm
                 “Chuẩn hoá kích thước ảnh này”, hệ thống tạo file JPEG thật và
                 lưu mapping platform → source asset → rendition.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-[#dce8f4] bg-[#fafcff] p-4 text-xs leading-5 text-[#617793]">
+              <b className="text-sm text-[#244c77]">CTA & tracking</b>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <b>CTA hiển thị:</b> {platformCta.label}
+                </div>
+                <div>
+                  <b>Kiểu CTA:</b> {platformCta.mode}
+                </div>
+                <div>
+                  <b>Provider capability:</b> {platformCta.providerStatus}
+                </div>
+                <div className="min-w-0">
+                  <b>Tracking destination:</b>{" "}
+                  <span className="break-all">{platformCta.destination}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-[11px] text-[#7b8da5]">
+                Raw UTM/tracking URL không được đưa vào caption. Chỉ bind vào
+                CTA/provider field khi capability đã VERIFIED.
               </p>
             </div>
 

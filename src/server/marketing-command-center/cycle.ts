@@ -205,6 +205,10 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     if (!contentId) return [];
     const note = pick(data, ["NOTE", "Note"]);
     const publishStatus = pick(data, ["PUBLISH_STATUS", "Publish Status"]) || "PLANNED";
+    const assetIds = pick(data, ["ASSET_IDS", "Asset IDs"])
+      .split(/[;\n]+/)
+      .map((part) => part.match(/\|\s*Drive\s+([A-Za-z0-9_-]{10,})$/i)?.[1] ?? "")
+      .filter(Boolean);
     const scheduledMatch = note.match(/scheduled\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2})/i);
     let scheduledAt: string | null = null;
     if (scheduledMatch) {
@@ -226,6 +230,10 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       destination_url: null,
       utm_campaign: (note.match(/utm campaign=([^;\s]+)/i)?.[1] ?? null),
       source_reference: pick(data, ["SOURCE", "Source"]) || null,
+      asset_ids: assetIds,
+      approval_status: pick(data, ["APPROVAL_STATUS", "Approval Status"]) || "PENDING_OWNER_APPROVAL",
+      reviewed_by: pick(data, ["REVIEWED_BY", "Reviewed By"]) || null,
+      last_qa_at: pick(data, ["LAST_QA_AT", "Last QA At"]) || null,
       metadata: {
         draft_vi: pick(data, ["DRAFT_VI", "Draft VI"]),
         cta: pick(data, ["CTA", "Cta"]),

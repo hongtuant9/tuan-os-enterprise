@@ -165,6 +165,10 @@ export default async function ContentReviewPage({
   });
   const source = row(record?.data);
   const metadata = row(content.metadata);
+  const approvalStatus =
+    s(content.approval_status) ||
+    s(metadata.approval_status) ||
+    "PENDING_OWNER_APPROVAL";
 
   const initial = {
     draftVi: pick(source, ["DRAFT_VI", "Draft VI"]) || s(metadata.draft_vi),
@@ -330,6 +334,7 @@ export default async function ContentReviewPage({
           contentId={contentId}
           initial={initial}
           publishStatus={s(content.publish_status)}
+          approvalStatus={approvalStatus}
           verificationStatus={s(content.verification_status)}
           brand={s(content.brand)}
           pillar={s(content.pillar)}

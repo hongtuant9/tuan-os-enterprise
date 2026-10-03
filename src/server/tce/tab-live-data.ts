@@ -498,6 +498,20 @@ function latestIsoValue(values: Array<string | null | undefined>): string | null
   return latest;
 }
 
+function formatTceLocalDateTime(value: string): string {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return value.slice(0, 16).replace("T", " ");
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(ms));
+}
+
 function recencyFromTimestamp(now: Date, dataThrough: string | null, currentWithinMs = 24 * 60 * 60_000): DataRecencyStatus {
   if (!dataThrough) return "NO_DATA";
   const ts = Date.parse(dataThrough);
@@ -1527,7 +1541,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         return [
           String(i + 1), contentId, textField(row, "brand"), textField(row, "format"),
           textField(row, "channel_id") || "Đa kênh / kế hoạch",
-          textField(row, "scheduled_at") ? textField(row, "scheduled_at").slice(0, 16).replace("T", " ") : "Chưa lên lịch",
+          textField(row, "scheduled_at")
+            ? formatTceLocalDateTime(textField(row, "scheduled_at"))
+            : "Chưa lên lịch",
           textField(row, "publish_status"),
           textField(row, "approval_status") || textField(metadata, "approval_status") || "PENDING_OWNER_APPROVAL",
           textField(row, "verification_status"),

@@ -97,21 +97,21 @@ const LIBRARIES: Library[] = [
     label: "COZY GARDEN",
     description: "Ảnh/video Cozy Garden",
     serviceLine: "COZY_GARDEN",
-    url: "https://drive.google.com/drive/folders/1cRd-duz3eGh7d0ekak44bUC_a5gCIgVs",
+    url: "https://drive.google.com/drive/folders/1lJouk0yNhJ4apZHLkM2Jo0pHitdnCRGB",
   },
   {
     key: "lavender",
     label: "LAVENDER Homestay",
     description: "Phòng & khuôn viên Lavender",
     serviceLine: "LAVENDER",
-    url: "https://drive.google.com/drive/folders/1PguwKr3YFVwX-nFD-pJD3Knef8J397FN",
+    url: "https://drive.google.com/drive/folders/1igwtWF9JHJe-SkhDzjZ5EYlasi3Vvqq2",
   },
   {
     key: "ruby",
     label: "Ruby Homestay",
     description: "Phòng & khuôn viên Ruby",
     serviceLine: "RUBY",
-    url: "https://drive.google.com/drive/folders/1yJVDm9aVBay58-pw3-S6lw9oba3568BF",
+    url: "https://drive.google.com/drive/folders/1WfZsGN1psmlTdyPg5W3Gmz8Q_0jvZH2B",
   },
 ];
 
@@ -262,6 +262,7 @@ export default function ContentReviewWorkbench(props: {
   const [instruction, setInstruction] = useState("");
   const [platform, setPlatform] = useState<Platform>("draftVi");
   const [selectedAsset, setSelectedAsset] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -298,7 +299,15 @@ export default function ContentReviewWorkbench(props: {
       : null;
   const previewMediaKey: PlatformMediaKey = activeMediaKey || "facebook";
   const previewMediaProfile = MEDIA_PROFILES[previewMediaKey];
-  const previewAssets = assets.slice(0, 4).map((asset) => {
+  const previewLimit =
+    previewMediaKey === "instagram"
+      ? 7
+      : previewMediaKey === "facebook"
+        ? 6
+        : previewMediaKey === "google_business"
+          ? 3
+          : 5;
+  const previewAssets = assets.slice(0, previewLimit).map((asset) => {
     const rendition = platformMedia.find(
       (item) =>
         item.platform === previewMediaKey && item.sourceFileId === asset.fileId,
@@ -312,6 +321,12 @@ export default function ContentReviewWorkbench(props: {
         }
       : { ...asset, rendition: null as PlatformMediaRendition | null };
   });
+  const activePreviewIndex = Math.min(
+    previewIndex,
+    Math.max(previewAssets.length - 1, 0),
+  );
+  const activePreviewAsset = previewAssets[activePreviewIndex];
+
   const activeLibrary =
     LIBRARIES.find((library) => libraryMatches(serviceLine, library)) ||
     LIBRARIES[0];
@@ -339,6 +354,83 @@ export default function ContentReviewWorkbench(props: {
     !latest ? "Chưa có bản AI đề xuất mới" : "",
     providerSync.status === "NEED_VERIFY" ? "Provider sync cần xác minh" : "",
   ].filter(Boolean);
+
+  const previewMedia = activePreviewAsset ? (
+    <div className="relative">
+      {activePreviewAsset.type === "video" ? (
+        <video
+          controls
+          className="w-full bg-black object-contain"
+          style={{ aspectRatio: previewMediaProfile.previewAspect }}
+          src={`/api/marketing/assets/${activePreviewAsset.fileId}`}
+        />
+      ) : (
+        <img
+          className="w-full object-cover"
+          style={{ aspectRatio: previewMediaProfile.previewAspect }}
+          src={`/api/marketing/assets/${activePreviewAsset.fileId}`}
+          alt={activePreviewAsset.name}
+        />
+      )}
+      {previewAssets.length > 1 ? (
+        <>
+          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[10px] font-bold text-white">
+            {activePreviewIndex + 1}/{previewAssets.length}
+          </span>
+          <button
+            type="button"
+            aria-label="Ảnh trước"
+            onClick={() =>
+              setPreviewIndex((current) =>
+                current <= 0 ? previewAssets.length - 1 : current - 1,
+              )
+            }
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2 py-1 text-sm font-bold text-white"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            aria-label="Ảnh tiếp theo"
+            onClick={() =>
+              setPreviewIndex((current) =>
+                current >= previewAssets.length - 1 ? 0 : current + 1,
+              )
+            }
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2 py-1 text-sm font-bold text-white"
+          >
+            ›
+          </button>
+        </>
+      ) : null}
+    </div>
+  ) : (
+    <div
+      className="flex items-center justify-center bg-[#f3f6fa] text-xs text-[#7b8da5]"
+      style={{ aspectRatio: previewMediaProfile.previewAspect }}
+    >
+      Chưa có media.
+    </div>
+  );
+
+  const previewDots =
+    previewAssets.length > 1 ? (
+      <div className="flex items-center justify-center gap-1.5 py-2">
+        {previewAssets.map((asset, index) => (
+          <button
+            key={asset.fileId}
+            type="button"
+            aria-label={`Xem ảnh ${index + 1}`}
+            onClick={() => setPreviewIndex(index)}
+            className={`h-1.5 rounded-full transition-all ${
+              activePreviewIndex === index
+                ? "w-4 bg-[#1768df]"
+                : "w-1.5 bg-[#c8d2df]"
+            }`}
+          />
+        ))}
+      </div>
+    ) : null;
 
   const saveAll = () =>
     startTransition(async () => {
@@ -703,7 +795,7 @@ export default function ContentReviewWorkbench(props: {
           {PLATFORM_META.map((item) => (
             <button
               key={item.key}
-              onClick={() => setPlatform(item.key)}
+              onClick={() => { setPlatform(item.key); setPreviewIndex(0); }}
               className={`flex min-w-max items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold transition ${platform === item.key ? "border-[#1768df] text-[#1768df]" : "border-transparent text-[#516b91] hover:text-[#1768df]"}`}
             >
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#eef4fb] text-xs">
@@ -1252,7 +1344,7 @@ export default function ContentReviewWorkbench(props: {
             (item) => (
               <button
                 key={item.key}
-                onClick={() => setPlatform(item.key)}
+                onClick={() => { setPlatform(item.key); setPreviewIndex(0); }}
                 className={`min-w-max px-4 py-2 text-xs font-bold ${platform === item.key ? "border-b-2 border-[#1768df] text-[#1768df]" : "text-[#607894]"}`}
               >
                 {item.icon} {item.label}
@@ -1292,31 +1384,8 @@ export default function ContentReviewWorkbench(props: {
               <div className="max-h-[720px] overflow-y-auto bg-white">
                 {previewMediaKey === "instagram" ? (
                   <>
-                    <div className="flex snap-x snap-mandatory overflow-x-auto">
-                      {previewAssets.map((asset, index) =>
-                        asset.type === "video" ? (
-                          <video
-                            key={asset.fileId || index}
-                            controls
-                            className="w-full shrink-0 snap-center bg-black object-contain"
-                            style={{
-                              aspectRatio: previewMediaProfile.previewAspect,
-                            }}
-                            src={`/api/marketing/assets/${asset.fileId}`}
-                          />
-                        ) : (
-                          <img
-                            key={asset.fileId || index}
-                            className="w-full shrink-0 snap-center object-cover"
-                            style={{
-                              aspectRatio: previewMediaProfile.previewAspect,
-                            }}
-                            src={`/api/marketing/assets/${asset.fileId}`}
-                            alt={asset.name}
-                          />
-                        ),
-                      )}
-                    </div>
+                    {previewMedia}
+                    {previewDots}
                     <div className="flex items-center justify-between px-4 py-3 text-xl">
                       <span>♡ ◯ ↗</span>
                       <span>▢</span>
@@ -1334,31 +1403,8 @@ export default function ContentReviewWorkbench(props: {
                     <div className="whitespace-pre-wrap px-4 py-3 text-[12px] leading-5 text-[#1f3048]">
                       {draft.facebookVariant || "Chưa có nội dung Facebook."}
                     </div>
-                    <div className="flex snap-x snap-mandatory overflow-x-auto">
-                      {previewAssets.map((asset, index) =>
-                        asset.type === "video" ? (
-                          <video
-                            key={asset.fileId || index}
-                            controls
-                            className="w-full shrink-0 snap-center bg-black object-contain"
-                            style={{
-                              aspectRatio: previewMediaProfile.previewAspect,
-                            }}
-                            src={`/api/marketing/assets/${asset.fileId}`}
-                          />
-                        ) : (
-                          <img
-                            key={asset.fileId || index}
-                            className="w-full shrink-0 snap-center object-cover"
-                            style={{
-                              aspectRatio: previewMediaProfile.previewAspect,
-                            }}
-                            src={`/api/marketing/assets/${asset.fileId}`}
-                            alt={asset.name}
-                          />
-                        ),
-                      )}
-                    </div>
+                    {previewMedia}
+                    {previewDots}
                     <div className="border-t border-[#eef2f7] px-4 py-3 text-center text-[11px] font-bold text-[#536b89]">
                       ♡ Thích &nbsp;&nbsp; ◯ Bình luận &nbsp;&nbsp; ↗ Chia sẻ
                     </div>
@@ -1373,19 +1419,8 @@ export default function ContentReviewWorkbench(props: {
                         Google Business Profile
                       </div>
                     </div>
-                    <div className="flex snap-x snap-mandatory overflow-x-auto">
-                      {previewAssets.map((asset, index) => (
-                        <img
-                          key={asset.fileId || index}
-                          className="w-full shrink-0 snap-center object-cover"
-                          style={{
-                            aspectRatio: previewMediaProfile.previewAspect,
-                          }}
-                          src={`/api/marketing/assets/${asset.fileId}`}
-                          alt={asset.name}
-                        />
-                      ))}
-                    </div>
+                    {previewMedia}
+                    {previewDots}
                     <div className="px-4 py-4">
                       <div className="whitespace-pre-wrap text-[12px] leading-5 text-[#263e5d]">
                         {draft.googleBusinessVariant ||
@@ -1406,19 +1441,8 @@ export default function ContentReviewWorkbench(props: {
                         Tripadvisor · Tam Coc
                       </div>
                     </div>
-                    <div className="flex snap-x snap-mandatory overflow-x-auto">
-                      {previewAssets.map((asset, index) => (
-                        <img
-                          key={asset.fileId || index}
-                          className="w-full shrink-0 snap-center object-cover"
-                          style={{
-                            aspectRatio: previewMediaProfile.previewAspect,
-                          }}
-                          src={`/api/marketing/assets/${asset.fileId}`}
-                          alt={asset.name}
-                        />
-                      ))}
-                    </div>
+                    {previewMedia}
+                    {previewDots}
                     <div className="whitespace-pre-wrap px-4 py-4 text-[12px] leading-5 text-[#263e5d]">
                       {draft.tripadvisorVariant ||
                         "Chưa có nội dung Tripadvisor."}
@@ -1442,12 +1466,8 @@ export default function ContentReviewWorkbench(props: {
                 </span>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {assets.slice(0, 4).map((asset) => {
-                  const rendition = platformMedia.find(
-                    (item) =>
-                      item.platform === previewMediaKey &&
-                      item.sourceFileId === asset.fileId,
-                  );
+                {previewAssets.map((asset) => {
+                  const rendition = asset.rendition;
                   return (
                     <div
                       key={asset.fileId}

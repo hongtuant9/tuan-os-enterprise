@@ -68,6 +68,30 @@ function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function ownerApprovedMediaLibraryFolderIds(): Set<string> {
+  return new Set(
+    (process.env.TCE_OWNER_APPROVED_MEDIA_LIBRARY_FOLDER_IDS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
+function assertOwnerApprovedMediaSource(parentIds: string[] | null | undefined) {
+  const approved = ownerApprovedMediaLibraryFolderIds();
+  if (!approved.size) {
+    throw new Error(
+      "HOLD_SOURCE_POLICY: Owner-approved media library folders chưa được cấu hình.",
+    );
+  }
+  const sourceParents = parentIds ?? [];
+  if (!sourceParents.some((id) => approved.has(id))) {
+    throw new Error(
+      "HOLD_SOURCE_POLICY: Source asset không thuộc Owner-approved 01_MEDIA_LIBRARY.",
+    );
+  }
+}
+
 async function requireManager() {
   const requestDb = await createRequestClient();
   const session = await getCurrentSession(requestDb);
@@ -913,6 +937,7 @@ export async function requestPlatformImageCreative(
     requested_by: session.email ?? session.userId,
     requested_at: new Date().toISOString(),
     source: "CEO Content Review UI",
+    source_policy: "OWNER_APPROVED_LIBRARY_ONLY",
     guardrail:
       "Preserve real scene, architecture, signage, food/products and amenities. Do not invent objects, people, views, facilities, prices or claims.",
   };
@@ -993,6 +1018,7 @@ export async function requestPlatformImageCreative(
       throw new Error(
         "Không xác định được Owner media folder của source asset.",
       );
+    assertOwnerApprovedMediaSource(meta.data.parents);
 
     const media = await drive.files.get(
       { fileId: baseEvidence.source_file_id, alt: "media" },
@@ -1081,12 +1107,15 @@ export async function requestPlatformImageCreative(
     };
   } catch (error) {
     const safeError = safeAiError(error);
+    const creativeStatus = safeError.startsWith("HOLD_SOURCE_POLICY")
+      ? "HOLD_SOURCE_POLICY"
+      : "HOLD_AI_RUNTIME";
     await dbOf(admin.db)
       .from("marketing_recommendations")
       .update({
         evidence: {
           ...baseEvidence,
-          creative_status: "HOLD_AI_RUNTIME",
+          creative_status: creativeStatus,
           ai_error: safeError,
         },
       })

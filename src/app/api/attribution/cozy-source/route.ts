@@ -98,6 +98,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const externalEventKey = `cozy_table_scan:${anonymousId}:${qrId}:${fifteenMinuteBucket()}`;
     const selfReportedSource = source === "skip" ? null : source;
+    const attributionId = crypto.randomUUID();
     const attributionStatus = contradictoryPaidSource
       ? "NEED_VERIFY"
       : alignedPaidSource
@@ -139,16 +140,20 @@ export async function POST(request: Request) {
       verification_status: verificationStatus,
       evidence_source: evidenceSource,
       metadata: {
-        business_unit: "cozy_garden",
+        business_unit: "COZY_GARDEN",
         qr_id: qrId,
         table_number: tableNumber,
-        attribution_id: anonymousId,
+        attribution_id: attributionId,
+        kiotviet_branch_id: 41925,
+        kiotviet_table_id: destination.kiotVietTableId,
+        kiotviet_table_status: destination.status,
+        kiotviet_destination: destination.kiotVietUrl,
         privacy: "NO_PII_COLLECTED",
         source_capture_version: "v2",
         qr_campaign: "cozy_table_source",
-        kiotviet_table_status: destination.status,
-        kiotviet_destination: destination.kiotVietUrl,
+        prior_paid_touch_present: hasPaidClick,
         order_join_status: "NEED_VERIFY",
+        order_join_reason: "KIOTVIET_FNB_INVOICE_HAS_ORDER_ID_BUT_NO_TABLE_ID_AND_PUBLIC_ORDERS_ENDPOINT_IS_UNAVAILABLE",
         join_strategy: "ATTRIBUTION_ID_PLUS_TABLE_PLUS_TIME",
       },
     };

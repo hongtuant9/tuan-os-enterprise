@@ -121,6 +121,10 @@ export default function SourceCaptureClient() {
 
   const tableNumber = context?.tableNumber ?? null;
   const reservedTable = tableNumber !== null && tableNumber >= 38;
+  const directMenuFallback =
+    tableNumber !== null && tableNumber <= 37
+      ? `/q/cozy/${tableNumber}?direct=1`
+      : null;
 
   if (hold || reservedTable) {
     return (
@@ -176,7 +180,17 @@ export default function SourceCaptureClient() {
 
         {error ? (
           <div className="mt-4 rounded-xl bg-[#fff5f2] p-3 text-sm text-[#8f3c2d]">
-            We could not save your answer. Please ask a team member to open the KiotViet menu for this table.
+            We could not save your answer.
+            {directMenuFallback ? (
+              <>
+                {" "}You can still{" "}
+                <a className="font-semibold underline" href={directMenuFallback}>
+                  open the menu
+                </a>.
+              </>
+            ) : (
+              " Please ask a team member for assistance."
+            )}
           </div>
         ) : null}
       </section>

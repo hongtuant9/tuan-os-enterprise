@@ -14,13 +14,14 @@ import {
 } from "@/server/integrations/google/drive-client";
 import { runMarketingCommandCenterCycle } from "@/server/marketing-command-center/cycle";
 import {
-  assertTceAiBudget,
-  recordTceImageUsage,
+  assertTceBflImageBudget,
+  recordTceBflImageUsage,
 } from "@/server/agents/tce-cost-guard";
 import {
-  generateContentRevision,
-  type ContentRevisionDraft,
-} from "@/server/marketing-command-center/content-revision";
+  BFL_FLUX_2_PRO_MODEL,
+  editImageWithFlux2Pro,
+} from "@/server/media/bfl-flux-client";
+import { generateContentRevision } from "@/server/marketing-command-center/content-revision";
 
 type ActionResult =
   | { ok: true; message: string; revisionReady?: boolean }
@@ -868,8 +869,8 @@ export async function savePlatformMediaRendition(
   }
 }
 
-const PLATFORM_IMAGE_AI_MODEL = "gpt-image-2.5-sunburst";
-const PLATFORM_IMAGE_AI_RESERVED_COST_USD = 0.5;
+const PLATFORM_IMAGE_AI_MODEL = BFL_FLUX_2_PRO_MODEL;
+const PLATFORM_IMAGE_AI_RESERVED_COST_USD = 0.15;
 
 function aiDraftSize(aspectRatio: string): string {
   if (aspectRatio === "4:5") return "1088x1360";
@@ -886,13 +887,6 @@ function safeAiError(value: unknown): string {
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]")
     .slice(0, 500);
 }
-
-type ImageApiUsage = {
-  input_tokens?: number;
-  input_tokens_details?: { image_tokens?: number; text_tokens?: number };
-  output_tokens?: number;
-  output_tokens_details?: { image_tokens?: number; text_tokens?: number };
-};
 
 export async function requestPlatformImageCreative(
   contentId: string,
@@ -962,14 +956,14 @@ export async function requestPlatformImageCreative(
       };
     }
 
-    if (!process.env.OPENAI_API_KEY?.trim()) {
+    if (!process.env.BFL_API_KEY?.trim()) {
       await dbOf(admin.db)
         .from("marketing_recommendations")
         .update({
           evidence: {
             ...baseEvidence,
             creative_status: "HOLD_AI_RUNTIME",
-            ai_error: "OPENAI_API_KEY SET=no",
+            ai_error: "BFL_API_KEY SET=no",
           },
         })
         .eq("recommendation_key", key);
@@ -977,11 +971,11 @@ export async function requestPlatformImageCreative(
       return {
         ok: true,
         message:
-          "Đã ghi yêu cầu AI image nhưng OPENAI_API_KEY chưa được cấu hình; giữ HOLD_AI_RUNTIME.",
+          "Đã ghi yêu cầu AI image nhưng BFL_API_KEY chưa được cấu hình; giữ HOLD_AI_RUNTIME.",
       };
     }
 
-    await assertTceAiBudget(PLATFORM_IMAGE_AI_RESERVED_COST_USD);
+    await assertTceBflImageBudget(PLATFORM_IMAGE_AI_RESERVED_COST_USD);
 
     const auth =
       await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
@@ -1021,41 +1015,15 @@ export async function requestPlatformImageCreative(
       .filter(Boolean)
       .join("\n");
 
-    const form = new FormData();
-    form.set("model", PLATFORM_IMAGE_AI_MODEL);
-    form.set("prompt", prompt);
-    form.set("size", aiSize);
-    form.set("quality", "medium");
-    form.set("output_format", "jpeg");
-    form.set("output_compression", "88");
-    form.set("n", "1");
-    form.append(
-      "image",
-      new Blob([sourceBuffer], { type: sourceMime }),
-      sourceName,
-    );
-
-    const aiResponse = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: form,
+    const [aiWidth, aiHeight] = aiSize.split("x").map(Number);
+    const fluxResult = await editImageWithFlux2Pro({
+      sourceBuffer,
+      prompt,
+      width: aiWidth,
+      height: aiHeight,
+      outputFormat: "jpeg",
     });
-    const aiJson = (await aiResponse.json()) as {
-      data?: Array<{ b64_json?: string; revised_prompt?: string }>;
-      usage?: ImageApiUsage;
-      error?: { message?: string };
-      size?: string;
-      quality?: string;
-      output_format?: string;
-    };
-    if (!aiResponse.ok)
-      throw new Error(
-        `OpenAI image edit ${aiResponse.status}: ${clean(aiJson.error?.message) || "request failed"}`,
-      );
-    const encoded = clean(aiJson.data?.[0]?.b64_json);
-    if (!encoded) throw new Error("OpenAI image edit không trả về ảnh.");
-    const outputBuffer = Buffer.from(encoded, "base64");
-    if (!outputBuffer.length) throw new Error("AI image output rỗng.");
+    const outputBuffer = fluxResult.outputBuffer;
 
     const safeBase =
       sourceName
@@ -1071,12 +1039,11 @@ export async function requestPlatformImageCreative(
     const aiFileId = clean(uploaded.data.id);
     if (!aiFileId) throw new Error("Drive không trả file ID cho AI draft.");
 
-    const estimatedCostUsd = await recordTceImageUsage(
+    const estimatedCostUsd = await recordTceBflImageUsage(
       "marketing_manager",
       PLATFORM_IMAGE_AI_MODEL,
-      aiJson.usage ?? {},
-      "content-review-platform-image",
-      PLATFORM_IMAGE_AI_RESERVED_COST_USD,
+      fluxResult.costUsd,
+      "bfl-content-review-platform-image",
     );
 
     const successEvidence = {
@@ -1086,9 +1053,14 @@ export async function requestPlatformImageCreative(
       file_name: fileName,
       model: PLATFORM_IMAGE_AI_MODEL,
       ai_size: aiSize,
-      quality: clean(aiJson.quality) || "medium",
-      output_format: clean(aiJson.output_format) || "jpeg",
-      revised_prompt: clean(aiJson.data?.[0]?.revised_prompt),
+      provider: "BLACK_FOREST_LABS",
+      quality: "pro",
+      output_format: "jpeg",
+      generation_id: fluxResult.generationId,
+      input_mp: fluxResult.inputMp,
+      output_mp: fluxResult.outputMp,
+      cost_credits: fluxResult.costCredits,
+      result_prompt: fluxResult.resultPrompt,
       estimated_cost_usd: estimatedCostUsd,
       completed_at: new Date().toISOString(),
     };
@@ -1105,7 +1077,7 @@ export async function requestPlatformImageCreative(
     return {
       ok: true,
       message:
-        "AI đã tạo ảnh draft thật từ ảnh gốc. Trạng thái REVIEW_REQUIRED; chưa thay rendition đang dùng.",
+        "FLUX.2 Pro đã tạo ảnh draft từ ảnh gốc. Trạng thái REVIEW_REQUIRED; chưa thay rendition đang dùng.",
     };
   } catch (error) {
     const safeError = safeAiError(error);

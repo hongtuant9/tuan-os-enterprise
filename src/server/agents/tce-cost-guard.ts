@@ -79,17 +79,17 @@ async function usageTotals(
     dayQuery = dayQuery.eq("agent_id", agentId);
   }
   if (sourceMode === "BFL") {
-    monthQuery = monthQuery.like("request_source", "bfl-%");
-    dayQuery = dayQuery.like("request_source", "bfl-%");
+    monthQuery = monthQuery.like("model", "flux-%");
+    dayQuery = dayQuery.like("model", "flux-%");
   } else if (sourceMode === "OPENAI") {
-    monthQuery = monthQuery.not("request_source", "like", "bfl-%");
-    dayQuery = dayQuery.not("request_source", "like", "bfl-%");
+    monthQuery = monthQuery.not("model", "like", "flux-%");
+    dayQuery = dayQuery.not("model", "like", "flux-%");
   }
 
   const [monthResult, dayResult] = await Promise.all([monthQuery, dayQuery]);
   if (monthResult.error || dayResult.error) {
     throw new Error(
-      "HOLD_COST_LEDGER: không đọc được OpenAI usage ledger; fail closed.",
+      "HOLD_COST_LEDGER: không đọc được AI usage ledger; fail closed.",
     );
   }
 

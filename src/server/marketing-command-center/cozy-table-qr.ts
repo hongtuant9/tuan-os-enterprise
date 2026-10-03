@@ -2,6 +2,7 @@ export type CozyTableDestination = {
   tableNumber: number;
   qrId: string;
   status: "ACTIVE" | "HOLD";
+  kiotVietTableId: number | null;
   kiotVietUrl: string | null;
 };
 
@@ -48,10 +49,12 @@ const ACTIVE_KIOTVIET_URLS: Record<number, string> = {
 export function cozyTableDestination(tableNumber: number): CozyTableDestination | null {
   if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 40) return null;
   const url = ACTIVE_KIOTVIET_URLS[tableNumber] ?? null;
+  const kiotVietTableId = url ? Number(url.split("/").at(-1)) : null;
   return {
     tableNumber,
     qrId: `table_${String(tableNumber).padStart(2, "0")}`,
     status: url ? "ACTIVE" : "HOLD",
+    kiotVietTableId,
     kiotVietUrl: url,
   };
 }

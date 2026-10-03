@@ -291,6 +291,18 @@ export default function ContentReviewWorkbench(props: {
   const platformRenditions = activeMediaKey
     ? platformMedia.filter((item) => item.platform === activeMediaKey)
     : [];
+  const selectedActiveRendition =
+    activeMediaKey && selected?.fileId
+      ? platformRenditions.find(
+          (item) =>
+            item.sourceFileId === selected.fileId &&
+            !/SUPERSEDED|REJECTED/i.test(item.mediaStatus),
+        )
+      : null;
+  const selectedDisplayFileId =
+    selectedActiveRendition?.fileId || selected?.fileId || "";
+  const selectedDisplayName =
+    selectedActiveRendition?.fileName || selected?.name || "";
   const latestAiDraft =
     activeMediaKey && selected?.fileId
       ? aiPlatformMedia.find(
@@ -797,6 +809,7 @@ export default function ContentReviewWorkbench(props: {
       );
       if (!approved.ok) throw new Error(approved.error);
       setMessage(approved.message);
+      setPreviewIndex(selectedAsset);
       router.refresh();
     } catch (error) {
       setMessage(
@@ -943,18 +956,18 @@ export default function ContentReviewWorkbench(props: {
               {assetStatus.original}
             </span>
           </div>
-          {selected?.fileId ? (
-            selected.type === "video" ? (
+          {selectedDisplayFileId ? (
+            selected?.type === "video" ? (
               <video
                 controls
                 className="mt-3 aspect-[4/3] w-full rounded-lg bg-black object-contain"
-                src={`/api/marketing/assets/${selected.fileId}`}
+                src={`/api/marketing/assets/${selectedDisplayFileId}`}
               />
             ) : (
               <img
                 className="mt-3 aspect-[4/3] w-full rounded-lg object-cover"
-                src={`/api/marketing/assets/${selected.fileId}`}
-                alt={selected.name}
+                src={`/api/marketing/assets/${selectedDisplayFileId}`}
+                alt={selectedDisplayName}
               />
             )
           ) : (
@@ -977,11 +990,20 @@ export default function ContentReviewWorkbench(props: {
                     </div>
                   ) : (
                     <img
-                      src={
-                        asset.fileId
-                          ? `/api/marketing/assets/${asset.fileId}`
-                          : ""
-                      }
+                      src={(() => {
+                        const rendition = activeMediaKey
+                          ? platformMedia.find(
+                              (item) =>
+                                item.platform === activeMediaKey &&
+                                item.sourceFileId === asset.fileId &&
+                                !/SUPERSEDED|REJECTED/i.test(item.mediaStatus),
+                            )
+                          : null;
+                        const fileId = rendition?.fileId || asset.fileId;
+                        return fileId
+                          ? `/api/marketing/assets/${fileId}`
+                          : "";
+                      })()}
                       alt={asset.name}
                       className="aspect-square w-full object-cover"
                     />

@@ -8,6 +8,7 @@ import {
   getSheetValues,
   setSheetValue,
 } from "@/server/integrations/google/drive-client";
+import { reconcileMarketingContentRuntime } from "@/server/marketing-command-center/content-runtime-reconcile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,19 +103,35 @@ export async function DELETE(
       .filter(Boolean);
     const parsed = currentLines.map(parseAssetLine);
     const matched = parsed.find((asset) => asset.fileId === fileId);
+
     if (!matched) {
-      return NextResponse.json({ error: "asset_not_attached" }, { status: 404 });
+      await reconcileMarketingContentRuntime(admin.db, {
+        contentId,
+        assetCell: currentLines.join("\n"),
+        publishStatus: publishStatus || "READY_FOR_OWNER_REVIEW",
+        approvalStatus: approvalStatus || "PENDING_OWNER_APPROVAL",
+        qaMedia: clean(row[26]) || "NEED VERIFY",
+        qaStatus: clean(row[32]) || "HOLD",
+      });
+      return NextResponse.json({
+        ok: true,
+        alreadyDetached: true,
+        deletedFromDrive: false,
+        message:
+          "Asset đã không còn gắn trong canonical. Runtime đã được đồng bộ lại; hãy tải lại trang.",
+      });
     }
 
     const nextLines = parsed
       .filter((asset) => asset.fileId !== fileId)
       .map((asset) => asset.line);
+    const nextAssetCell = nextLines.join("\n");
     const sheetRow = rowIndex + 1;
 
     await setSheetValue(
       source.sheet_id,
       `${q(CONTENT_TAB)}!S${sheetRow}`,
-      nextLines.join("\n"),
+      nextAssetCell,
       auth,
     );
     await setSheetValue(
@@ -144,7 +161,7 @@ export async function DELETE(
 
     const verify = await getSheetValues(
       source.sheet_id,
-      `${q(CONTENT_TAB)}!S${sheetRow}:S${sheetRow}`,
+      `${q(CONTENT_TAB)}!S${sheetRow}:AG${sheetRow}`,
       auth,
     );
     const verifiedAssets = clean(verify?.[0]?.[0]);
@@ -155,17 +172,15 @@ export async function DELETE(
       );
     }
 
-    const sync = await admin.sync.run(
-      "marketing-shadow-content",
-      "manual",
-      session.email ?? session.userId,
-    );
-    if (sync.status === "failed") {
-      return NextResponse.json(
-        { error: "runtime_sync_failed", detail: sync.errorMessage ?? null },
-        { status: 502 },
-      );
-    }
+    await reconcileMarketingContentRuntime(admin.db, {
+      contentId,
+      assetCell: nextAssetCell,
+      publishStatus: "READY_FOR_OWNER_REVIEW",
+      approvalStatus: "PENDING_OWNER_APPROVAL",
+      qaMedia: "NEED VERIFY",
+      qaStatus: "HOLD",
+      resetVariantMedia: true,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -174,7 +189,7 @@ export async function DELETE(
       deletedFromDrive: false,
       approvalReset: true,
       message:
-        "Đã gỡ media khỏi bài viết. File gốc vẫn giữ trong thư viện; media cần xác minh lại trước khi duyệt đăng.",
+        "Đã gỡ media khỏi bài viết. File gốc vẫn giữ trong thư viện; canonical và runtime đã đồng bộ, media cần xác minh lại trước khi duyệt đăng.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "detach_asset_error";

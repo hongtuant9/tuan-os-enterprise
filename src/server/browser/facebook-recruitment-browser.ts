@@ -1,9 +1,11 @@
 import "server-only";
-import { access, mkdir, readlink, unlink } from "node:fs/promises";
-import { hostname } from "node:os";
-import { join } from "node:path";
+import { access, mkdir, readlink, unlink, writeFile } from "node:fs/promises";
+import { hostname, tmpdir } from "node:os";
+import { extname, join } from "node:path";
+import { google } from "googleapis";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { createClient } from "@supabase/supabase-js";
+import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 
 export type FacebookRecruitmentBrowserState =
   | "DISABLED"
@@ -174,6 +176,36 @@ function normalize(value: string) {
     .trim();
 }
 
+async function materializeDriveAsset(fileId: string) {
+  const auth =
+    await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
+  const drive = google.drive({ version: "v3", auth });
+  const meta = await drive.files.get({
+    fileId,
+    fields: "id,name,mimeType",
+  });
+  const name = String(meta.data.name || "recruitment-media.png");
+  const mimeType = String(meta.data.mimeType || "image/png");
+  const extension =
+    extname(name) ||
+    (mimeType.includes("jpeg")
+      ? ".jpg"
+      : mimeType.includes("webp")
+        ? ".webp"
+        : ".png");
+  const path = join(
+    tmpdir(),
+    `tce-facebook-recruitment-${process.pid}-${Date.now()}${extension}`,
+  );
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" },
+  );
+  const bytes = Buffer.from(response.data as ArrayBuffer);
+  await writeFile(path, bytes);
+  return { path, name, mimeType };
+}
+
 function parseMembers(text: string): number | null {
   const normalized = text.replace(/,/g, ".").replace(/\s+/g, " ");
   const k = normalized.match(/(\d+(?:\.\d+)?)\s*[kK]\s*(?:members|thanh vien)/i);
@@ -274,7 +306,7 @@ async function verifyExistingPost(page: Page, item: QueueItem, marker: string) {
   return normalize(text).includes(normalize(marker));
 }
 
-async function postToGroup(page: Page, item: QueueItem, copy: string) {
+async function postToGroup(page: Page, item: QueueItem, copy: string, mediaPath: string) {
   if (!item.url) return { status: "HOLD_GROUP_URL" };
   await page
     .goto(item.url, { waitUntil: "domcontentloaded", timeout: 45000 })
@@ -328,6 +360,21 @@ async function postToGroup(page: Page, item: QueueItem, copy: string) {
   if (!box) return { status: "HOLD_EDITOR_NOT_FOUND" };
   await box.click();
   await box.type(copy, { delay: 2 });
+
+  let fileInput = await page.$('input[type="file"]');
+  if (!fileInput) {
+    await clickButtonByText(page, [
+      /photo\/video/i,
+      /add photos\/videos/i,
+      /ảnh\/video/i,
+      /thêm ảnh\/video/i,
+    ]);
+    await new Promise((r) => setTimeout(r, 900));
+    fileInput = await page.$('input[type="file"]');
+  }
+  if (!fileInput) return { status: "HOLD_MEDIA_INPUT_NOT_FOUND" };
+  await fileInput.uploadFile(mediaPath);
+  await new Promise((r) => setTimeout(r, 1800));
 
   const submitted = await clickButtonByText(page, [
     /^Post$/i,
@@ -402,7 +449,7 @@ export async function facebookRecruitmentWorkerTick() {
   );
   const { data: item, error } = await supabase
     .from("marketing_content_items")
-    .select("content_id,publish_status,approval_status,metadata")
+    .select("content_id,publish_status,approval_status,asset_ids,metadata")
     .eq("content_id", CONTENT_ID)
     .maybeSingle();
 
@@ -423,9 +470,17 @@ export async function facebookRecruitmentWorkerTick() {
   const copy = String(
     metadata.facebook_group_variant || metadata.facebook_variant || metadata.draft_vi || "",
   ).trim();
+  const itemAssetIds = Array.isArray(item.asset_ids)
+    ? item.asset_ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const mediaAssetId = String(
+    metadata.facebook_group_media_asset_id || itemAssetIds[0] || "",
+  ).trim();
 
   if (!copy || queue.length === 0)
     return { state: "ERROR", processed: 0, reason: "queue_or_copy_missing" };
+  if (!mediaAssetId)
+    return { state: "ERROR", processed: 0, reason: "media_asset_missing" };
 
   let approved = queue.filter((x) => x.status === "POST_APPROVED").length;
   if (approved >= TARGET_APPROVED)
@@ -433,12 +488,19 @@ export async function facebookRecruitmentWorkerTick() {
 
   return withBrowserLock(async () => {
     let browser: Browser | null = null;
+    let mediaFile: { path: string; name: string; mimeType: string } | null = null;
     try {
       browser = await launch();
       const page = await browser.newPage();
       const auth = await authState(page);
       if (auth !== "READY")
         return { state: auth, processed: 0, approved };
+
+    try {
+      mediaFile = await materializeDriveAsset(mediaAssetId);
+    } catch {
+      return { state: "ERROR", processed: 0, approved, reason: "MEDIA_DOWNLOAD_FAILED" };
+    }
 
     const now = new Date().toISOString();
     let processed = 0;
@@ -476,7 +538,7 @@ export async function facebookRecruitmentWorkerTick() {
         entry.status = "DISCOVERED";
       }
 
-      const result = await postToGroup(page, entry, copy);
+      const result = await postToGroup(page, entry, copy, mediaFile.path);
       entry.status = result.status;
       entry.attempted_at = now;
       entry.last_checked_at = now;
@@ -517,6 +579,7 @@ export async function facebookRecruitmentWorkerTick() {
       return { state: "ERROR", processed: 0, approved, reason };
     } finally {
       await browser?.close().catch(() => undefined);
+      if (mediaFile?.path) await unlink(mediaFile.path).catch(() => undefined);
     }
   });
 }

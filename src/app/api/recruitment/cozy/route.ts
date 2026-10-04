@@ -1,14 +1,12 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
-import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
+import {
+  upsertCozyRecruitmentCandidate,
+  normalizeRecruitmentPhone,
+  validRecruitmentPhone,
+} from "@/server/recruitment/cozy-intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const TASK_WORKBOOK_ID = "1uVG0L9FzcPBgOCk5IyWNuYVneCCgupqg-SH0TcERSjM";
-const SHEET_NAME = "RECRUIT_CG_002";
-const MAX_ROWS = 1000;
 
 type Payload = {
   fullName?: string;
@@ -29,22 +27,6 @@ function clean(value: unknown, max = 500) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
 }
 
-function normalizePhone(value: string) {
-  return value.replace(/[\s().-]/g, "");
-}
-
-function validPhone(value: string) {
-  return /^(?:\+?84|0)\d{8,10}$/.test(value);
-}
-
-function candidateId(phone: string) {
-  return `CG-WEB-${createHash("sha256").update(phone).digest("hex").slice(0, 10).toUpperCase()}`;
-}
-
-function a1(tab: string, range: string) {
-  return `'${tab.replaceAll("'", "''")}'!${range}`;
-}
-
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as Payload;
@@ -54,7 +36,7 @@ export async function POST(request: Request) {
 
     const fullName = clean(payload.fullName, 120);
     const position = clean(payload.position, 80);
-    const phone = normalizePhone(clean(payload.phone, 40));
+    const phone = normalizeRecruitmentPhone(clean(payload.phone, 40));
     const location = clean(payload.location, 160);
     const experience = clean(payload.experience, 500);
     const startDate = clean(payload.startDate, 120);
@@ -68,7 +50,7 @@ export async function POST(request: Request) {
     const missing = [
       !fullName ? "fullName" : null,
       !allowedPosition ? "position" : null,
-      !validPhone(phone) ? "phone" : null,
+      !validRecruitmentPhone(phone) ? "phone" : null,
       !location ? "location" : null,
       !experience ? "experience" : null,
       !startDate ? "startDate" : null,
@@ -85,111 +67,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = candidateId(phone);
-    const auth =
-      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForDriveWrite();
-    const sheets = google.sheets({ version: "v4", auth });
-    const read = await sheets.spreadsheets.values.get({
-      spreadsheetId: TASK_WORKBOOK_ID,
-      range: a1(SHEET_NAME, `A1:S${MAX_ROWS}`),
+    const result = await upsertCozyRecruitmentCandidate({
+      fullName,
+      position: position as "BAR ĐA NĂNG / PHỤC VỤ" | "BẾP",
+      phone,
+      location,
+      experience,
+      startDate,
+      shiftAvailability,
+      englishLevel,
+      interviewPreference,
+      source,
+      intakeChannel: "WEB_RECRUITMENT_FORM",
     });
-    const rows = read.data.values ?? [];
-    const matchIndex = rows.findIndex((row, index) => {
-      if (index === 0) return false;
-      const rowId = clean(row?.[0], 80);
-      const rowPhone = normalizePhone(clean(row?.[4], 40));
-      return rowId === id || (rowPhone && rowPhone === phone);
-    });
-
-    const now = new Date();
-    const receivedAt = now.toISOString();
-    const evidence = [
-      "WEB_RECRUITMENT_FORM",
-      `location=${location}`,
-      `start=${startDate}`,
-      `shift=${shiftAvailability}`,
-      `source=${source}`,
-      `received_at=${receivedAt}`,
-    ].join(" | ");
-
-    if (matchIndex >= 0) {
-      const row = [...(rows[matchIndex] ?? [])];
-      while (row.length < 19) row.push("");
-      row[0] = row[0] || id;
-      row[1] = row[1] || receivedAt;
-      row[2] = fullName;
-      row[3] = position;
-      row[4] = phone;
-      row[5] = source;
-      row[6] = row[6] || "Applied";
-      row[7] = position === "BAR ĐA NĂNG / PHỤC VỤ" ? englishLevel : "N/A";
-      row[8] = experience;
-      row[9] = row[9] || "READY_FOR_INTERVIEW_REVIEW";
-      row[10] = interviewPreference;
-      row[11] = row[11] || "AI CHRO";
-      row[12] = evidence;
-      row[18] = row[18] || "CANDIDATE";
-
-      const rowNumber = matchIndex + 1;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: TASK_WORKBOOK_ID,
-        range: a1(SHEET_NAME, `A${rowNumber}:S${rowNumber}`),
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [row] },
-      });
-    } else {
-      const row = [
-        id,
-        receivedAt,
-        fullName,
-        position,
-        phone,
-        source,
-        "Applied",
-        position === "BAR ĐA NĂNG / PHỤC VỤ" ? englishLevel : "N/A",
-        experience,
-        "READY_FOR_INTERVIEW_REVIEW",
-        interviewPreference,
-        "AI CHRO",
-        evidence,
-        "",
-        "NOT_STARTED",
-        "NOT_STARTED",
-        "NOT_STARTED",
-        "",
-        "CANDIDATE",
-      ];
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: TASK_WORKBOOK_ID,
-        range: a1(SHEET_NAME, "A:S"),
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: { values: [row] },
-      });
-    }
-
-    const verify = await sheets.spreadsheets.values.get({
-      spreadsheetId: TASK_WORKBOOK_ID,
-      range: a1(SHEET_NAME, `A1:M${MAX_ROWS}`),
-    });
-    const verified = (verify.data.values ?? []).some(
-      (row) => clean(row?.[0], 80) === id && normalizePhone(clean(row?.[4], 40)) === phone,
-    );
-    if (!verified) {
-      return NextResponse.json({ error: "canonical_readback_failed" }, { status: 502 });
-    }
 
     return NextResponse.json({
       ok: true,
-      candidateId: id,
-      status: "Applied",
-      next: "INTERVIEW_REVIEW",
+      candidateId: result.candidateId,
+      status: result.status,
+      next: result.next,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "recruitment_intake_error";
+    const status = message === "missing_or_invalid_fields" ? 400 : 500;
     return NextResponse.json(
       { error: "recruitment_intake_error", detail: message.slice(0, 180) },
-      { status: 500 },
+      { status },
     );
   }
 }

@@ -187,6 +187,228 @@ function detectProperty(content: string): string | null {
   return null;
 }
 
+type RecruitmentField =
+  | "position"
+  | "full_name"
+  | "phone"
+  | "location"
+  | "experience"
+  | "start_date"
+  | "shift_availability"
+  | "english_level"
+  | "interview_preference";
+
+function recruitmentIntent(content: string, existingMetadata: Record<string, Json>): boolean {
+  if (existingMetadata.recruitment_active === true) return true;
+  if (/(ứng tuyển|ứng viên|tuyển dụng|xin việc|tìm việc|việc làm|apply|application|job|phỏng vấn xin việc|job interview)/i.test(content)) return true;
+  return /(vị trí|công việc|tuyển).{0,30}(bar|phục vụ|bếp|pha chế)|(bar|phục vụ|bếp|pha chế).{0,30}(vị trí|công việc|tuyển)/i.test(content);
+}
+
+function recruitmentPosition(content: string): "BAR ĐA NĂNG / PHỤC VỤ" | "BẾP" | null {
+  if (/(nhân viên bếp|làm bếp|phụ bếp|đầu bếp|kitchen|cook)/i.test(content)) return "BẾP";
+  if (/(bar|phục vụ|pha chế|waiter|waitress|server|bartender)/i.test(content)) return "BAR ĐA NĂNG / PHỤC VỤ";
+  return null;
+}
+
+function recruitmentQuestion(field: RecruitmentField, position: string | null): string {
+  switch (field) {
+    case "position":
+      return "Bạn muốn ứng tuyển vị trí Bar đa năng/Phục vụ hay Nhân viên Bếp?";
+    case "full_name":
+      return "Bạn cho mình xin họ và tên nhé.";
+    case "phone":
+      return "Bạn cho mình xin số điện thoại để bộ phận tuyển dụng liên hệ nhé.";
+    case "location":
+      return "Hiện bạn đang ở khu vực nào?";
+    case "experience":
+      return position === "BẾP"
+        ? "Bạn đã có kinh nghiệm bếp/phụ bếp chưa? Nếu có, bạn mô tả ngắn giúp mình nhé."
+        : "Bạn đã có kinh nghiệm Bar/Phục vụ/Pha chế chưa? Nếu có, bạn mô tả ngắn giúp mình nhé.";
+    case "start_date":
+      return "Bạn có thể bắt đầu đi làm từ khi nào?";
+    case "shift_availability":
+      return "Bạn có thể làm ca nào hoặc khung giờ nào trong ngày?";
+    case "english_level":
+      return "Khả năng giao tiếp tiếng Anh cơ bản của bạn hiện ở mức nào: chưa có / cơ bản / khá?";
+    case "interview_preference":
+      return "Trong 24 giờ tới, bạn thuận tiện gọi điện hoặc phỏng vấn vào khung giờ nào?";
+  }
+}
+
+function normalizedAnswer(content: string): string {
+  return content.trim().replace(/\s+/g, " ").slice(0, 500);
+}
+
+function decideRecruitmentMessage(
+  content: string,
+  existingMetadata: Record<string, Json>,
+  customerName?: string,
+  customerContact?: string
+): PilotDecision {
+  const trimmed = content.trim();
+  const currentPosition = recruitmentPosition(trimmed)
+    ?? (typeof existingMetadata.recruitment_position === "string" ? existingMetadata.recruitment_position : null);
+  const expectedField = typeof existingMetadata.recruitment_next_field === "string"
+    ? existingMetadata.recruitment_next_field as RecruitmentField
+    : null;
+
+  const patch: Record<string, Json> = {
+    recruitment_active: true,
+    primary_intent: "recruitment",
+    routed_agent: "AI_RECEPTIONIST",
+    journey_entry: "COZY",
+    recruitment_source: existingMetadata.recruitment_source ?? "facebook_messenger",
+    recruitment_status: "COLLECTING",
+    last_guest_message: trimmed,
+    language: detectLanguage(trimmed),
+    recruitment_position: currentPosition,
+    recruitment_full_name:
+      customerName
+      ?? (typeof existingMetadata.recruitment_full_name === "string" ? existingMetadata.recruitment_full_name : null),
+    recruitment_phone:
+      customerContact
+      ?? normalizePhone(trimmed)
+      ?? (typeof existingMetadata.recruitment_phone === "string" ? existingMetadata.recruitment_phone : null),
+    recruitment_location:
+      typeof existingMetadata.recruitment_location === "string" ? existingMetadata.recruitment_location : null,
+    recruitment_experience:
+      typeof existingMetadata.recruitment_experience === "string" ? existingMetadata.recruitment_experience : null,
+    recruitment_start_date:
+      typeof existingMetadata.recruitment_start_date === "string" ? existingMetadata.recruitment_start_date : null,
+    recruitment_shift_availability:
+      typeof existingMetadata.recruitment_shift_availability === "string" ? existingMetadata.recruitment_shift_availability : null,
+    recruitment_english_level:
+      typeof existingMetadata.recruitment_english_level === "string" ? existingMetadata.recruitment_english_level : null,
+    recruitment_interview_preference:
+      typeof existingMetadata.recruitment_interview_preference === "string" ? existingMetadata.recruitment_interview_preference : null,
+  };
+
+  if (expectedField) {
+    const answer = normalizedAnswer(trimmed);
+    if (expectedField === "position") patch.recruitment_position = recruitmentPosition(trimmed) ?? answer;
+    if (expectedField === "full_name") patch.recruitment_full_name = answer;
+    if (expectedField === "phone") patch.recruitment_phone = normalizePhone(trimmed) ?? answer;
+    if (expectedField === "location") patch.recruitment_location = answer;
+    if (expectedField === "experience") patch.recruitment_experience = answer;
+    if (expectedField === "start_date") patch.recruitment_start_date = answer;
+    if (expectedField === "shift_availability") patch.recruitment_shift_availability = answer;
+    if (expectedField === "english_level") patch.recruitment_english_level = answer;
+    if (expectedField === "interview_preference") patch.recruitment_interview_preference = answer;
+  }
+
+  if (!patch.recruitment_position) {
+    patch.recruitment_next_field = "position";
+    return {
+      reply: recruitmentQuestion("position", null),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_full_name) {
+    patch.recruitment_next_field = "full_name";
+    return {
+      reply: recruitmentQuestion("full_name", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_phone) {
+    patch.recruitment_next_field = "phone";
+    return {
+      reply: recruitmentQuestion("phone", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_location) {
+    patch.recruitment_next_field = "location";
+    return {
+      reply: recruitmentQuestion("location", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_experience) {
+    patch.recruitment_next_field = "experience";
+    return {
+      reply: recruitmentQuestion("experience", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_start_date) {
+    patch.recruitment_next_field = "start_date";
+    return {
+      reply: recruitmentQuestion("start_date", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_shift_availability) {
+    patch.recruitment_next_field = "shift_availability";
+    return {
+      reply: recruitmentQuestion("shift_availability", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (
+    patch.recruitment_position === "BAR ĐA NĂNG / PHỤC VỤ"
+    && !patch.recruitment_english_level
+  ) {
+    patch.recruitment_next_field = "english_level";
+    return {
+      reply: recruitmentQuestion("english_level", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+  if (!patch.recruitment_interview_preference) {
+    patch.recruitment_next_field = "interview_preference";
+    return {
+      reply: recruitmentQuestion("interview_preference", String(patch.recruitment_position)),
+      conversationStatus: "waiting_guest",
+      metadataPatch: patch,
+      evidence: { engine: "RECRUITMENT_INTAKE_V1", source: "candidate_direct_message", evaluated_at: new Date().toISOString() },
+    };
+  }
+
+  patch.recruitment_next_field = null;
+  patch.recruitment_status = "READY_FOR_INTERVIEW_REVIEW";
+  patch.recruitment_completed_at = new Date().toISOString();
+
+  return {
+    reply:
+      "Cảm ơn bạn, mình đã ghi nhận đủ thông tin và khung giờ phỏng vấn/gọi điện bạn mong muốn. Bộ phận tuyển dụng Cozy Garden sẽ liên hệ theo thông tin này. Đây chưa phải xác nhận nhận việc nhé.",
+    conversationStatus: "needs_manager",
+    metadataPatch: patch,
+    evidence: {
+      engine: "RECRUITMENT_INTAKE_V1",
+      source: "candidate_direct_message",
+      evaluated_at: new Date().toISOString(),
+      auto_hire_decision: false,
+    },
+    review: {
+      reviewType: "service_request",
+      title: "Ứng viên Cozy Garden đã đủ thông tin để phỏng vấn",
+      reason: "Ứng viên đã cung cấp đủ bộ thông tin cơ bản và khung giờ phỏng vấn/gọi điện mong muốn.",
+      missingFields: [],
+      recommendation: "Đối chiếu tiêu chí tuyển dụng hiện hành, xác nhận lịch phỏng vấn và liên hệ ứng viên trong 24 giờ.",
+      proposedReply:
+        "Cảm ơn bạn, Cozy Garden đã ghi nhận hồ sơ và sẽ liên hệ để xác nhận lịch phỏng vấn.",
+      riskLevel: "low",
+    },
+  };
+}
+
 export function decidePilotMessage(
   content: string,
   existingMetadata: Record<string, Json>,
@@ -194,6 +416,9 @@ export function decidePilotMessage(
   customerContact?: string
 ): PilotDecision {
   const trimmed = content.trim();
+  if (recruitmentIntent(trimmed, existingMetadata)) {
+    return decideRecruitmentMessage(trimmed, existingMetadata, customerName, customerContact);
+  }
   const route = classifyEcosystemMessage(trimmed);
   const dates = extractDateRange(trimmed);
   const metadataPatch: Record<string, Json> = {

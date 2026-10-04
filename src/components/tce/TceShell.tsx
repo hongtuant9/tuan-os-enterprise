@@ -13,6 +13,7 @@ type IconName =
 const NAVIGATION: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/", label: "Tổng quan", icon: "home" },
   { href: "/business", label: "Kinh doanh", icon: "business" },
+  { href: "/taib", label: "TAIB · AI Business", icon: "business" },
   { href: "/marketing", label: "Tiếp thị", icon: "marketing" },
   { href: "/operations", label: "Vận hành", icon: "operations" },
   { href: "/ai-le-tan", label: "AI-Lễ Tân", icon: "reception" },

@@ -49,6 +49,128 @@ function obj(value: unknown): Row {
     : {};
 }
 
+function rows(value: unknown): Row[] {
+  return Array.isArray(value) ? value.map(obj) : [];
+}
+
+async function prepareMetricoolPublishAttempts(
+  dbValue: unknown,
+  input: {
+    contentId: string;
+    approvalId: string;
+    assetIds: string[];
+    approvedAt: string;
+  },
+) {
+  const db = dbOf(dbValue);
+  const variantsResult = await db
+    .from("marketing_content_variants")
+    .select(
+      "id,content_id,channel_id,variant_key,qa_status,approval_status,publish_status,provider_post_id,metadata",
+    )
+    .eq("content_id", input.contentId);
+  if (variantsResult.error) {
+    throw new Error(
+      variantsResult.error.message ?? "Không đọc được channel variants.",
+    );
+  }
+
+  const primaryVariants = rows(variantsResult.data).filter(
+    (variant) =>
+      clean(variant.variant_key) === "PRIMARY" &&
+      ["facebook", "instagram"].includes(clean(variant.channel_id)),
+  );
+
+  for (const variant of primaryVariants) {
+    const variantId = clean(variant.id);
+    const channelId = clean(variant.channel_id);
+    if (!variantId || !channelId) continue;
+
+    const metadata = obj(variant.metadata);
+    const providerUuid = clean(metadata.provider_uuid);
+    const providerState = clean(metadata.provider_state);
+    const stalePublished =
+      /PUBLISHED_STALE_PROVIDER_MISMATCH/i.test(providerState);
+    const nextMetadata = {
+      ...metadata,
+      provider: "metricool",
+      canonical_media_ready: input.assetIds.length > 0,
+      canonical_drive_id: input.assetIds[0] ?? null,
+      approval_decision_id: input.approvalId,
+      owner_approved_at: input.approvedAt,
+      reconcile_policy: providerUuid
+        ? "UPDATE_EXISTING_ONLY_NO_DUPLICATE"
+        : "CREATE_ONLY_IF_PROVIDER_OBJECT_ABSENT",
+      read_back_verified: false,
+      hold_reason: stalePublished
+        ? "PUBLISHED_PROVIDER_CONTENT_DIFFERS_FROM_CANONICAL"
+        : null,
+    };
+
+    const variantUpdate = await db
+      .from("marketing_content_variants")
+      .update({
+        qa_status: "PASS",
+        approval_status: "APPROVED",
+        publish_status: stalePublished ? "HOLD" : "READY",
+        media_asset_ids: input.assetIds,
+        metadata: nextMetadata,
+        updated_at: input.approvedAt,
+      })
+      .eq("id", variantId);
+    if (variantUpdate.error) {
+      throw new Error(
+        variantUpdate.error.message ??
+          `Không chuẩn bị được variant ${channelId} cho Metricool.`,
+      );
+    }
+
+    const idempotencyKey = [
+      input.contentId,
+      channelId,
+      "PRIMARY",
+      providerUuid || input.approvalId,
+    ].join(":");
+    const attemptInsert = await db
+      .from("marketing_publish_attempts")
+      .insert({
+        idempotency_key: idempotencyKey,
+        content_variant_id: variantId,
+        channel_id: channelId,
+        provider: "metricool",
+        request_mode: "APPROVAL_REQUIRED",
+        status: stalePublished ? "HOLD" : "PREPARED",
+        approval_id: input.approvalId,
+        provider_post_id: clean(variant.provider_post_id) || null,
+        provider_uuid: providerUuid || null,
+        metadata: {
+          provider_state: providerState || "NOT_RECONCILED",
+          read_back_verified: false,
+          reconcile_policy: providerUuid
+            ? "UPDATE_EXISTING_ONLY_NO_DUPLICATE"
+            : "CREATE_ONLY_IF_PROVIDER_OBJECT_ABSENT",
+          hold_reason: stalePublished
+            ? "PUBLISHED_PROVIDER_CONTENT_DIFFERS_FROM_CANONICAL"
+            : null,
+          canonical_asset_ids: input.assetIds,
+        },
+        created_at: input.approvedAt,
+        updated_at: input.approvedAt,
+      });
+    if (
+      attemptInsert.error &&
+      !/duplicate key|idempotency_key/i.test(
+        attemptInsert.error.message ?? "",
+      )
+    ) {
+      throw new Error(
+        attemptInsert.error.message ??
+          `Không tạo được provider attempt ${channelId}.`,
+      );
+    }
+  }
+}
+
 type ContentDraft = {
   draftVi: string;
   facebookVariant: string;
@@ -465,6 +587,23 @@ export async function approveMarketingContentForMetricool(
           "Không ghi được Owner approval vào runtime.",
       };
 
+    let providerAttemptStatus = "PASS";
+    let providerAttemptError = "";
+    try {
+      await prepareMetricoolPublishAttempts(admin.db, {
+        contentId,
+        approvalId: decisionId,
+        assetIds,
+        approvedAt,
+      });
+    } catch (error) {
+      providerAttemptStatus = "HOLD";
+      providerAttemptError =
+        error instanceof Error
+          ? error.message
+          : "Không chuẩn bị được Metricool provider attempts.";
+    }
+
     const decisionResult = await dbOf(admin.db)
       .from("marketing_recommendations")
       .insert({
@@ -615,6 +754,8 @@ export async function approveMarketingContentForMetricool(
       ...runtimeMetadata,
       canonical_sync_status: canonicalSyncStatus,
       canonical_sync_error: canonicalSyncError || null,
+      provider_attempt_status: providerAttemptStatus,
+      provider_attempt_error: providerAttemptError || null,
     };
     await dbOf(admin.db)
       .from("marketing_content_items")

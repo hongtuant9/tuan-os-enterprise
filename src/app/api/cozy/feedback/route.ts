@@ -8,6 +8,7 @@ type DbError = { message?: string } | null;
 type DbResult = { data: unknown; error: DbError };
 type DbQuery = PromiseLike<DbResult> & {
   insert(row: Record<string, unknown>): DbQuery;
+  upsert(row: Record<string, unknown>, options?: Record<string, unknown>): DbQuery;
   select(columns?: string): DbQuery;
   single(): PromiseLike<DbResult>;
 };
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     const cookieStore = await cookies();
     const tableFromCookie = parseTable(cookieStore.get("tce_cozy_table")?.value);
     const tableFromBody = parseTable(body?.tableNumber);
-    const tableNumber = tableFromCookie ?? tableFromBody;
+    const tableNumber = tableFromBody ?? tableFromCookie;
     if (!tableNumber) {
       return NextResponse.json({ ok: false, error: "TABLE_NOT_IDENTIFIED" }, { status: 400 });
     }
@@ -116,7 +117,12 @@ export async function POST(request: Request) {
 
     const issueCategory = issueCodes.map((x) => ISSUE_LABELS[x]).join(", ");
     const positiveCategory = positiveCodes.map((x) => POSITIVE_LABELS[x]).join(", ");
-    const submissionId = "NATIVE-" + crypto.randomUUID();
+    const submissionKey =
+      typeof body?.submissionKey === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.submissionKey)
+        ? body.submissionKey
+        : crypto.randomUUID();
+    const submissionId = "NATIVE-" + submissionKey;
     const anonymousId = cleanText(body?.anonymousId, 128) || cookieStore.get("tce_cozy_aid")?.value || null;
     const qrId = cleanText(body?.qrId, 64) || `feedback_table_${String(tableNumber).padStart(2, "0")}`;
     const source = cleanText(body?.source, 64) || "table_qr";
@@ -159,7 +165,7 @@ export async function POST(request: Request) {
     } else {
       const createdResult = await db
         .from("cozy_customer_cases")
-        .insert({
+        .upsert({
           submission_id: submissionId,
           rating,
           table_number: String(tableNumber),
@@ -167,7 +173,7 @@ export async function POST(request: Request) {
           feedback_text: feedbackText || null,
           status: "ĐÃ GIẢI QUYẾT",
           customer_result: "KHÁCH HÀI LÒNG",
-        })
+        }, { onConflict: "submission_id" })
         .select("id")
         .single();
 

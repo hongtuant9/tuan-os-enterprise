@@ -8,6 +8,8 @@ const cmiBrowserEnabled = companyAutopilotEnabled && process.env.CMI_BROWSER_ENA
 const cmiWorkerExplicitlyDisabled = process.env.CMI_QUEUE_WORKER_ENABLED?.trim().toLowerCase() === "false";
 const cmiWorkerEnabled = cmiBrowserEnabled && !cmiWorkerExplicitlyDisabled;
 const cmiIntervalMs = Math.max(5000, Number(process.env.CMI_QUEUE_WORKER_INTERVAL_MS || 15000));
+const facebookRecruitmentWorkerEnabled = companyAutopilotEnabled && process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() !== "false";
+const facebookRecruitmentWorkerIntervalMs = Math.max(120000, Number(process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_INTERVAL_MS || 300000));
 
 const staffOpsWorkerEnabled = companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const staffOpsIntervalMs = Math.max(60_000, Number(process.env.TCE_STAFF_OPS_WORKER_INTERVAL_MS || 300_000));
@@ -65,6 +67,7 @@ const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
 const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
 const trelloWorkerToken = deriveToken("tce-trello-worker-v1");
 const knowledgeGovernanceWorkerToken = deriveToken("tce-knowledge-governance-worker-v1");
+const facebookRecruitmentWorkerToken = deriveToken("tce-facebook-recruitment-browser-worker-v1");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -96,6 +99,48 @@ async function cmiTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`[CMI worker] ${message}`);
+  }
+}
+
+async function facebookRecruitmentWorkerTick() {
+  if (!facebookRecruitmentWorkerEnabled || !facebookRecruitmentWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/browser/facebook-recruitment/worker",
+      "x-tce-facebook-browser-worker-token",
+      facebookRecruitmentWorkerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(`[Facebook Recruitment] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    const result = payload?.result ?? {};
+    if (result?.state !== "READY" || (result?.processed ?? 0) > 0) {
+      console.log(
+        `[Facebook Recruitment] state=${result?.state ?? "n/a"} processed=${result?.processed ?? 0} approved=${result?.approved ?? 0} target=${result?.target ?? 10}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[Facebook Recruitment] ${message}`);
+  }
+}
+
+async function facebookRecruitmentWorkerLoop() {
+  if (!facebookRecruitmentWorkerEnabled) {
+    console.log("[Facebook Recruitment] disabled");
+    return;
+  }
+  if (!facebookRecruitmentWorkerToken) {
+    console.error("[Facebook Recruitment] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[Facebook Recruitment] enabled interval_ms=${facebookRecruitmentWorkerIntervalMs} runtime=VPS_ALWAYS_ON`);
+  await sleep(45000);
+  while (!stopping) {
+    await facebookRecruitmentWorkerTick();
+    await sleep(facebookRecruitmentWorkerIntervalMs);
   }
 }
 
@@ -549,6 +594,7 @@ server.on("exit", (code, signal) => {
 });
 
 void cmiWorkerLoop();
+void facebookRecruitmentWorkerLoop();
 void staffOpsWorkerLoop();
 void executiveWorkerLoop();
 void syncWorkerLoop();

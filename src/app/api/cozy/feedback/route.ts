@@ -10,6 +10,8 @@ type DbQuery = PromiseLike<DbResult> & {
   insert(row: Record<string, unknown>): DbQuery;
   upsert(row: Record<string, unknown>, options?: Record<string, unknown>): DbQuery;
   select(columns?: string): DbQuery;
+  eq(column: string, value: unknown): DbQuery;
+  maybeSingle(): PromiseLike<DbResult>;
   single(): PromiseLike<DbResult>;
 };
 type UntypedDb = { from(name: string): DbQuery };
@@ -57,6 +59,39 @@ function cleanCodes(value: unknown, dictionary: Record<string, string>, max = 8)
     .map((x) => String(x))
     .filter((x) => Boolean(dictionary[x]))
     .slice(0, max);
+}
+
+async function postRecoveryWithRetry(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  payload: Record<string, unknown>;
+}) {
+  let lastStatus = 0;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(input.supabaseUrl + "/functions/v1/cozy-telegram-webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + input.serviceRoleKey,
+        },
+        body: JSON.stringify(input.payload),
+        cache: "no-store",
+        signal: AbortSignal.timeout(12_000),
+      });
+
+      lastStatus = response.status;
+      if (response.ok) return { ok: true as const, status: response.status };
+      if (response.status < 500 || attempt === 2) {
+        return { ok: false as const, status: response.status };
+      }
+    } catch {
+      if (attempt === 2) return { ok: false as const, status: lastStatus || 599 };
+    }
+  }
+
+  return { ok: false as const, status: lastStatus || 599 };
 }
 
 function reviewUrl(input: {
@@ -135,13 +170,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, error: "RECOVERY_BACKEND_UNAVAILABLE" }, { status: 503 });
       }
 
-      const response = await fetch(supabaseUrl + "/functions/v1/cozy-telegram-webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + serviceRoleKey,
-        },
-        body: JSON.stringify({
+      const recovery = await postRecoveryWithRetry({
+        supabaseUrl,
+        serviceRoleKey,
+        payload: {
           kind: "native_feedback",
           source: "native_tce_feedback",
           submission_id: submissionId,
@@ -153,13 +185,11 @@ export async function POST(request: Request) {
           qr_id: qrId,
           anonymous_id: anonymousId,
           acquisition_source: source,
-        }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(12_000),
+        },
       });
 
-      if (!response.ok) {
-        console.error("[cozy-native-feedback] recovery backend HTTP", response.status);
+      if (!recovery.ok) {
+        console.error("[cozy-native-feedback] recovery backend HTTP", recovery.status);
         return NextResponse.json({ ok: false, error: "RECOVERY_ALERT_FAILED" }, { status: 502 });
       }
     } else {
@@ -181,21 +211,30 @@ export async function POST(request: Request) {
       const created = createdResult.data as { id?: string } | null;
       if (!created?.id) throw new Error("POSITIVE_CASE_ID_MISSING");
 
-      const eventResult = await db.from("cozy_case_events").insert({
-        case_id: created.id,
-        event_type: "positive_feedback_submitted",
-        payload: {
-          source: "native_tce_feedback",
-          positive_category: positiveCategory,
-          table_number: tableNumber,
-          qr_id: qrId,
-          anonymous_id: anonymousId,
-          acquisition_source: source,
-        },
-      });
-      const eventResolved = await eventResult;
-      if (eventResolved.error) {
-        console.error("[cozy-native-feedback] positive event", eventResolved.error.message);
+      const existingEvent = await db
+        .from("cozy_case_events")
+        .select("id")
+        .eq("case_id", created.id)
+        .eq("event_type", "positive_feedback_submitted")
+        .maybeSingle();
+
+      if (!existingEvent.data) {
+        const eventResult = await db.from("cozy_case_events").insert({
+          case_id: created.id,
+          event_type: "positive_feedback_submitted",
+          payload: {
+            source: "native_tce_feedback",
+            positive_category: positiveCategory,
+            table_number: tableNumber,
+            qr_id: qrId,
+            anonymous_id: anonymousId,
+            acquisition_source: source,
+          },
+        });
+        const eventResolved = await eventResult;
+        if (eventResolved.error) {
+          console.error("[cozy-native-feedback] positive event", eventResolved.error.message);
+        }
       }
     }
 

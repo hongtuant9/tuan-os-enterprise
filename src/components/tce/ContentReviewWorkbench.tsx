@@ -273,11 +273,17 @@ export default function ContentReviewWorkbench(props: {
   const [removingAsset, setRemovingAsset] = useState(false);
   const [renditionBusy, setRenditionBusy] = useState(false);
 
+  const isTaibPersonalBrand =
+    /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
+    /TAIB_PERSONAL_BRAND/i.test(serviceLine);
   const approvalDone =
-    /OWNER_APPROVED_FOR_METRICOOL/i.test(approvalStatus) ||
-    /APPROVED_FOR_METRICOOL/i.test(publishStatus);
+    /OWNER_APPROVED_FOR_METRICOOL|OWNER_APPROVED_FOR_PERSONAL_FACEBOOK/i.test(
+      approvalStatus,
+    ) ||
+    /APPROVED_FOR_METRICOOL|READY_FOR_PERSONAL_FACEBOOK/i.test(publishStatus);
   const locked =
-    approvalDone || /SCHEDULED|PUBLISHED|FB_SCHEDULED/i.test(publishStatus);
+    approvalDone ||
+    /SCHEDULED|PUBLISHED|FB_SCHEDULED|SCHEDULED_MANUAL/i.test(publishStatus);
   const latest =
     revisions.find((revision) => revision.revisionStatus === "REVIEW_READY") ||
     revisions.find(
@@ -346,12 +352,19 @@ export default function ContentReviewWorkbench(props: {
 
   const platformCta =
     previewMediaKey === "facebook"
-      ? {
-          label: "Nhắn tin",
-          mode: "Native Page / Messenger",
-          providerStatus: "NEED VERIFY",
-          destination: "Facebook Page / Messenger",
-        }
+      ? isTaibPersonalBrand
+        ? {
+            label: "Bình luận / nhắn tin",
+            mode: "Facebook cá nhân · đăng thủ công",
+            providerStatus: "MANUAL",
+            destination: "Facebook cá nhân của Owner",
+          }
+        : {
+            label: "Nhắn tin",
+            mode: "Native Page / Messenger",
+            providerStatus: "NEED VERIFY",
+            destination: "Facebook Page / Messenger",
+          }
       : previewMediaKey === "instagram"
         ? {
             label: "Gửi tin nhắn",
@@ -911,7 +924,9 @@ export default function ContentReviewWorkbench(props: {
               </span>
             </div>
             <p className="mt-1 text-xs leading-5 text-[#6e82a2]">
-              Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, bài vào hàng chờ đồng bộ Metricool; chỉ chuyển SCHEDULED sau provider read-back PASS.
+              {isTaibPersonalBrand
+                ? "Chỉ duyệt khi nội dung, QA và media đã đạt. TAIB Personal Brand sau duyệt sẽ chờ đăng thủ công trên Facebook cá nhân theo ngày dự kiến; không chuyển qua Metricool/Cozy Garden."
+                : "Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, bài vào hàng chờ đồng bộ Metricool; chỉ chuyển SCHEDULED sau provider read-back PASS."}
             </p>
           </div>
           <button onClick={approveForMetricool} disabled={pending || approvalDone} className="rounded-lg bg-[#1768df] px-5 py-2.5 text-sm font-extrabold text-white disabled:bg-[#a9bad2]">

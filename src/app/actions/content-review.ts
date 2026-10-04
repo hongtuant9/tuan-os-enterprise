@@ -526,6 +526,18 @@ export async function approveMarketingContentForMetricool(
     const found = await findContentRow(workbookId, contentId, sheetsAuth);
     const canonical = found.row;
 
+    const brand = clean(canonical[1]);
+    const serviceLine = clean(canonical[14]);
+    const isTaibPersonalBrand =
+      /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
+      /TAIB_PERSONAL_BRAND/i.test(serviceLine);
+    const targetPublishStatus = isTaibPersonalBrand
+      ? "READY_FOR_PERSONAL_FACEBOOK"
+      : "APPROVED_FOR_METRICOOL";
+    const targetApprovalStatus = isTaibPersonalBrand
+      ? "OWNER_APPROVED_FOR_PERSONAL_FACEBOOK"
+      : "OWNER_APPROVED_FOR_METRICOOL";
+
     const assetIds = driveFileIdsFromAssetCell(canonical[18]);
     const verification = clean(canonical[8]).toUpperCase();
     const publishStatus = clean(canonical[9]).toUpperCase();
@@ -583,7 +595,12 @@ export async function approveMarketingContentForMetricool(
         ok: false,
         error: "HOLD: Bài chưa có ảnh/video nguồn hợp lệ.",
       };
-    if (!facebookVariant && !instagramVariant)
+    if (isTaibPersonalBrand && !facebookVariant)
+      return {
+        ok: false,
+        error: "HOLD: TAIB Personal Brand chưa có Facebook variant.",
+      };
+    if (!isTaibPersonalBrand && !facebookVariant && !instagramVariant)
       return {
         ok: false,
         error:
@@ -592,31 +609,39 @@ export async function approveMarketingContentForMetricool(
     if (/PUBLISHED/.test(publishStatus))
       return { ok: false, error: "Bài đã xuất bản; không duyệt lại." };
     if (
-      approvalStatus === "OWNER_APPROVED_FOR_METRICOOL" ||
-      publishStatus === "APPROVED_FOR_METRICOOL"
+      approvalStatus === targetApprovalStatus ||
+      publishStatus === targetPublishStatus
     )
       return {
         ok: true,
-        message: "Bài đã được Owner duyệt và đang chờ/đã đồng bộ Metricool.",
+        message: isTaibPersonalBrand
+          ? "Bài đã được Owner duyệt cho Facebook cá nhân và đang chờ đăng thủ công theo lịch."
+          : "Bài đã được Owner duyệt và đang chờ/đã đồng bộ Metricool.",
       };
 
     const runtimeMetadata = {
       ...metadata,
       qa_status: "PASS",
       qa_media: "PASS",
-      approval_status: "OWNER_APPROVED_FOR_METRICOOL",
+      approval_status: targetApprovalStatus,
       approval_decision_id: decisionId,
       approval_source: "CEO_CONTENT_REVIEW_UI",
       approved_at: approvedAt,
       approved_by: approvedBy,
+      target_channel: isTaibPersonalBrand
+        ? "FACEBOOK_PERSONAL"
+        : clean(metadata.target_channel) || null,
+      delivery_mode: isTaibPersonalBrand ? "MANUAL" : "PROVIDER",
+      provider: isTaibPersonalBrand ? null : "METRICOOL",
       canonical_sync_status: "PENDING",
       canonical_sync_error: null,
     };
     const runtimeUpdate = await dbOf(admin.db)
       .from("marketing_content_items")
       .update({
-        publish_status: "APPROVED_FOR_METRICOOL",
-        approval_status: "OWNER_APPROVED_FOR_METRICOOL",
+        publish_status: targetPublishStatus,
+        approval_status: targetApprovalStatus,
+        channel_id: isTaibPersonalBrand ? "facebook_personal" : clean(content.channel_id) || null,
         reviewed_by: approvedBy,
         last_qa_at: approvedAt,
         metadata: runtimeMetadata,
@@ -631,21 +656,23 @@ export async function approveMarketingContentForMetricool(
           "Không ghi được Owner approval vào runtime.",
       };
 
-    let providerAttemptStatus = "PASS";
+    let providerAttemptStatus = isTaibPersonalBrand ? "NOT_APPLICABLE" : "PASS";
     let providerAttemptError = "";
-    try {
-      await prepareMetricoolPublishAttempts(admin.db, {
-        contentId,
-        approvalId: decisionId,
-        assetIds,
-        approvedAt,
-      });
-    } catch (error) {
-      providerAttemptStatus = "HOLD";
-      providerAttemptError =
-        error instanceof Error
-          ? error.message
-          : "Không chuẩn bị được Metricool provider attempts.";
+    if (!isTaibPersonalBrand) {
+      try {
+        await prepareMetricoolPublishAttempts(admin.db, {
+          contentId,
+          approvalId: decisionId,
+          assetIds,
+          approvedAt,
+        });
+      } catch (error) {
+        providerAttemptStatus = "HOLD";
+        providerAttemptError =
+          error instanceof Error
+            ? error.message
+            : "Không chuẩn bị được Metricool provider attempts.";
+      }
     }
 
     const decisionResult = await dbOf(admin.db)
@@ -655,8 +682,9 @@ export async function approveMarketingContentForMetricool(
         category: "CONTENT",
         severity: "INFO",
         title: `Owner approved content — ${contentId}`,
-        summary:
-          "Owner approved this content in CEO Content Review UI for Metricool provider sync.",
+        summary: isTaibPersonalBrand
+          ? "Owner approved TAIB Personal Brand content for manual publication on the Owner's personal Facebook profile."
+          : "Owner approved this content in CEO Content Review UI for Metricool provider sync.",
         evidence: {
           content_id: contentId,
           decision_type: "OWNER_PUBLISH_APPROVAL",
@@ -665,10 +693,14 @@ export async function approveMarketingContentForMetricool(
           asset_ids: assetIds,
           qa_status: "PASS",
           qa_media: "PASS",
-          provider: "METRICOOL",
+          provider: isTaibPersonalBrand ? "MANUAL_PERSONAL_FACEBOOK" : "METRICOOL",
+          target_channel: isTaibPersonalBrand
+            ? "FACEBOOK_PERSONAL"
+            : null,
         },
-        recommended_action:
-          "Honor Owner approval; provider may schedule only through authenticated Metricool path and must record provider read-back before SCHEDULED.",
+        recommended_action: isTaibPersonalBrand
+          ? "Publish manually to the Owner's personal Facebook profile on the planned date; record public URL/evidence after publication. Do not route through Cozy Garden Metricool."
+          : "Honor Owner approval; provider may schedule only through authenticated Metricool path and must record provider read-back before SCHEDULED.",
         action_class: "BUSINESS_WRITE_APPROVED",
         approval_required: false,
         approval_id: null,
@@ -684,60 +716,60 @@ export async function approveMarketingContentForMetricool(
           "Owner approval đã ghi runtime nhưng không tạo được Decision record.",
       };
 
-    const outboxKey = `METRICOOL_PUBLISH_READY:${contentId}:${Date.now()}`;
-    const outboxResult = await dbOf(admin.db)
-      .from("marketing_recommendations")
-      .insert({
-        recommendation_key: outboxKey,
-        category: "CONTENT",
-        severity: "ACTION",
-        title: `Metricool publish ready — ${contentId}`,
-        summary:
-          "Owner đã duyệt nội dung trong App; chờ provider sync có read-back.",
-        evidence: {
-          content_id: contentId,
-          provider: "METRICOOL",
-          publish_gate: "OWNER_APPROVED",
-          provider_sync_status: "PENDING_PROVIDER_SYNC",
-          owner_decision_id: decisionId,
-          approved_at: approvedAt,
-          approved_by: approvedBy,
-          asset_ids: assetIds,
-          source_policy: "OWNER_APPROVED_LIBRARY_ONLY",
-        },
-        recommended_action:
-          "Đồng bộ bài đã duyệt sang Metricool bằng authenticated provider path; read-back id/uuid trước khi chuyển SCHEDULED.",
-        action_class: "BUSINESS_WRITE_APPROVED",
-        approval_required: false,
-        approval_id: null,
-        status: "OPEN",
-        generated_at: approvedAt,
-        expires_at: null,
-      });
-    if (outboxResult.error)
-      return {
-        ok: false,
-        error:
-          outboxResult.error.message ??
-          "Owner approval đã ghi nhưng không tạo được Metricool outbox.",
-      };
+    if (!isTaibPersonalBrand) {
+      const outboxKey = `METRICOOL_PUBLISH_READY:${contentId}:${Date.now()}`;
+      const outboxResult = await dbOf(admin.db)
+        .from("marketing_recommendations")
+        .insert({
+          recommendation_key: outboxKey,
+          category: "CONTENT",
+          severity: "ACTION",
+          title: `Metricool publish ready — ${contentId}`,
+          summary:
+            "Owner đã duyệt nội dung trong App; chờ provider sync có read-back.",
+          evidence: {
+            content_id: contentId,
+            provider: "METRICOOL",
+            publish_gate: "OWNER_APPROVED",
+            provider_sync_status: "PENDING_PROVIDER_SYNC",
+            owner_decision_id: decisionId,
+            approved_at: approvedAt,
+            approved_by: approvedBy,
+            asset_ids: assetIds,
+            source_policy: "OWNER_APPROVED_LIBRARY_ONLY",
+          },
+          recommended_action:
+            "Đồng bộ bài đã duyệt sang Metricool bằng authenticated provider path; read-back id/uuid trước khi chuyển SCHEDULED.",
+          action_class: "BUSINESS_WRITE_APPROVED",
+          approval_required: false,
+          approval_id: null,
+          status: "OPEN",
+          generated_at: approvedAt,
+          expires_at: null,
+        });
+      if (outboxResult.error)
+        return {
+          ok: false,
+          error:
+            outboxResult.error.message ??
+            "Owner approval đã ghi nhưng không tạo được Metricool outbox.",
+        };
+    }
 
     let canonicalSyncStatus = "PASS";
     let canonicalSyncError = "";
     try {
       const currentNote = clean(found.row[13]);
-      const note = [
-        currentNote,
-        `Owner approved in App at ${approvedAt}; decision=${decisionId}; provider sync pending.`,
-      ]
-        .filter(Boolean)
-        .join(" ");
+      const routingNote = isTaibPersonalBrand
+        ? `Owner approved in App at ${approvedAt}; decision=${decisionId}; TARGET_CHANNEL=FACEBOOK_PERSONAL; DELIVERY_MODE=MANUAL; Metricool not applicable.`
+        : `Owner approved in App at ${approvedAt}; decision=${decisionId}; provider sync pending.`;
+      const note = [currentNote, routingNote].filter(Boolean).join(" ");
 
       await Promise.all([
         setSheetValue(
           workbookId,
           `${q(CONTENT_TAB)}!J${found.rowNumber}`,
-          "APPROVED_FOR_METRICOOL",
+          targetPublishStatus,
           sheetsAuth,
         ),
         setSheetValue(
@@ -749,7 +781,7 @@ export async function approveMarketingContentForMetricool(
         setSheetValue(
           workbookId,
           `${q(CONTENT_TAB)}!V${found.rowNumber}`,
-          "OWNER_APPROVED_FOR_METRICOOL",
+          targetApprovalStatus,
           sheetsAuth,
         ),
         setSheetValue(
@@ -780,8 +812,8 @@ export async function approveMarketingContentForMetricool(
 
       const verify = await findContentRow(workbookId, contentId, sheetsAuth);
       if (
-        clean(verify.row[9]) !== "APPROVED_FOR_METRICOOL" ||
-        clean(verify.row[21]) !== "OWNER_APPROVED_FOR_METRICOOL" ||
+        clean(verify.row[9]) !== targetPublishStatus ||
+        clean(verify.row[21]) !== targetApprovalStatus ||
         clean(verify.row[26]) !== "PASS" ||
         clean(verify.row[32]) !== "PASS"
       )
@@ -819,7 +851,9 @@ export async function approveMarketingContentForMetricool(
     await admin.activityLog.record({
       agent: "AI Marketing Manager",
       unit: "Marketing",
-      message: `Owner approved ${contentId} for Metricool provider sync; canonical=${canonicalSyncStatus}`,
+      message: isTaibPersonalBrand
+        ? `Owner approved ${contentId} for manual personal Facebook publication; canonical=${canonicalSyncStatus}`
+        : `Owner approved ${contentId} for Metricool provider sync; canonical=${canonicalSyncStatus}`,
       type: "action",
     });
     revalidatePath("/marketing");
@@ -829,8 +863,12 @@ export async function approveMarketingContentForMetricool(
       ok: true,
       message:
         canonicalSyncStatus === "PASS"
-          ? "Đã duyệt đăng và đưa vào hàng chờ Metricool. Canonical read-back PASS; chỉ chuyển SCHEDULED sau provider read-back PASS."
-          : "Đã ghi nhận Owner approval và đưa vào hàng chờ Metricool. Google canonical sync đang PENDING_REAUTH; quyết định Owner được giữ trong runtime và không bị hạ cấp.",
+          ? isTaibPersonalBrand
+            ? "Đã duyệt bài cho Facebook cá nhân. Bài đang chờ đăng thủ công theo ngày dự kiến; không chuyển sang Metricool/Cozy Garden."
+            : "Đã duyệt đăng và đưa vào hàng chờ Metricool. Canonical read-back PASS; chỉ chuyển SCHEDULED sau provider read-back PASS."
+          : isTaibPersonalBrand
+            ? "Đã ghi nhận Owner approval cho Facebook cá nhân. Google canonical sync đang PENDING_REAUTH; không chuyển bài sang Metricool."
+            : "Đã ghi nhận Owner approval và đưa vào hàng chờ Metricool. Google canonical sync đang PENDING_REAUTH; quyết định Owner được giữ trong runtime và không bị hạ cấp.",
     };
   } catch (error) {
     return {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const OPTIONS = [
   ["google_search", "Google Search"],
@@ -79,6 +79,11 @@ export default function SourceCaptureClient() {
       wbraid: cookieValue("tce_wbraid") || p.get("wbraid") || "",
     };
   }, []);
+
+  useEffect(() => {
+    if (!context?.tableNumber) return;
+    setSharedCookie("tce_cozy_table", String(context.tableNumber));
+  }, [context]);
 
   async function choose(source: string) {
     if (submitting || !context) return;

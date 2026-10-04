@@ -641,7 +641,7 @@ export async function approveMarketingContentForMetricool(
       .update({
         publish_status: targetPublishStatus,
         approval_status: targetApprovalStatus,
-        channel_id: isTaibPersonalBrand ? "facebook_personal" : clean(content.channel_id) || null,
+        channel_id: isTaibPersonalBrand ? "facebook" : clean(content.channel_id) || null,
         reviewed_by: approvedBy,
         last_qa_at: approvedAt,
         metadata: runtimeMetadata,

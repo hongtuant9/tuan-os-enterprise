@@ -91,6 +91,16 @@ async function prepareMetricoolPublishAttempts(
     const providerState = clean(metadata.provider_state);
     const stalePublished =
       /PUBLISHED_STALE_PROVIDER_MISMATCH/i.test(providerState);
+    const providerAction = stalePublished
+      ? "REPLACE_PUBLISHED_STALE"
+      : providerUuid
+        ? "UPDATE_EXISTING"
+        : "CREATE_NEW";
+    const reconcilePolicy = stalePublished
+      ? "CREATE_SINGLE_REPLACEMENT_AND_SUPERSEDE_OLD"
+      : providerUuid
+        ? "UPDATE_EXISTING_ONLY_NO_DUPLICATE"
+        : "CREATE_ONLY_IF_PROVIDER_OBJECT_ABSENT";
     const nextMetadata = {
       ...metadata,
       provider: "metricool",
@@ -98,13 +108,10 @@ async function prepareMetricoolPublishAttempts(
       canonical_drive_id: input.assetIds[0] ?? null,
       approval_decision_id: input.approvalId,
       owner_approved_at: input.approvedAt,
-      reconcile_policy: providerUuid
-        ? "UPDATE_EXISTING_ONLY_NO_DUPLICATE"
-        : "CREATE_ONLY_IF_PROVIDER_OBJECT_ABSENT",
+      provider_action: providerAction,
+      reconcile_policy: reconcilePolicy,
       read_back_verified: false,
-      hold_reason: stalePublished
-        ? "PUBLISHED_PROVIDER_CONTENT_DIFFERS_FROM_CANONICAL"
-        : null,
+      hold_reason: null,
     };
 
     const variantUpdate = await db
@@ -112,7 +119,7 @@ async function prepareMetricoolPublishAttempts(
       .update({
         qa_status: "PASS",
         approval_status: "APPROVED",
-        publish_status: stalePublished ? "HOLD" : "READY",
+        publish_status: "READY",
         media_asset_ids: input.assetIds,
         metadata: nextMetadata,
         updated_at: input.approvedAt,
@@ -129,7 +136,7 @@ async function prepareMetricoolPublishAttempts(
       input.contentId,
       channelId,
       "PRIMARY",
-      providerUuid || input.approvalId,
+      input.approvalId,
     ].join(":");
     const attemptInsert = await db
       .from("marketing_publish_attempts")
@@ -139,20 +146,19 @@ async function prepareMetricoolPublishAttempts(
         channel_id: channelId,
         provider: "metricool",
         request_mode: "APPROVAL_REQUIRED",
-        status: stalePublished ? "HOLD" : "PREPARED",
+        status: "PREPARED",
         approval_id: input.approvalId,
         provider_post_id: clean(variant.provider_post_id) || null,
         provider_uuid: providerUuid || null,
         metadata: {
           provider_state: providerState || "NOT_RECONCILED",
+          provider_action: providerAction,
           read_back_verified: false,
-          reconcile_policy: providerUuid
-            ? "UPDATE_EXISTING_ONLY_NO_DUPLICATE"
-            : "CREATE_ONLY_IF_PROVIDER_OBJECT_ABSENT",
-          hold_reason: stalePublished
-            ? "PUBLISHED_PROVIDER_CONTENT_DIFFERS_FROM_CANONICAL"
-            : null,
+          reconcile_policy: reconcilePolicy,
+          hold_reason: null,
           canonical_asset_ids: input.assetIds,
+          predecessor_provider_post_id: clean(variant.provider_post_id) || null,
+          predecessor_provider_uuid: providerUuid || null,
         },
         created_at: input.approvedAt,
         updated_at: input.approvedAt,

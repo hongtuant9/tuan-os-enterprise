@@ -270,6 +270,7 @@ export default function ContentReviewWorkbench(props: {
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [removingAsset, setRemovingAsset] = useState(false);
   const [renditionBusy, setRenditionBusy] = useState(false);
 
   const approvalDone =
@@ -587,6 +588,53 @@ export default function ContentReviewWorkbench(props: {
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function detachSelectedAsset() {
+    if (!selected?.fileId) return;
+    if (locked) {
+      setMessage(
+        "Bài đã được duyệt/scheduled/published nên không thể gỡ media trực tiếp.",
+      );
+      return;
+    }
+    const confirmed = window.confirm(
+      `Gỡ "${selected.name}" khỏi bài viết này?\n\nFile gốc vẫn được giữ trong thư viện media và có thể dùng lại sau.`,
+    );
+    if (!confirmed) return;
+
+    setRemovingAsset(true);
+    setMessage("");
+    try {
+      const response = await fetch(
+        `/api/marketing/content/${encodeURIComponent(contentId)}/asset`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId: selected.fileId }),
+        },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Không gỡ được media khỏi bài.");
+      }
+      setSelectedAsset(0);
+      setPreviewIndex(0);
+      setMessage(
+        payload?.message ||
+          "Đã gỡ media khỏi bài; file gốc vẫn còn trong thư viện.",
+      );
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Không gỡ được media khỏi bài.",
+      );
+    } finally {
+      setRemovingAsset(false);
     }
   }
 
@@ -977,40 +1025,56 @@ export default function ContentReviewWorkbench(props: {
           )}
 
           {assets.length ? (
-            <div className="mt-2 grid grid-cols-5 gap-2">
-              {assets.slice(0, 10).map((asset, index) => (
+            <>
+              <div className="mt-2 grid grid-cols-5 gap-2">
+                {assets.slice(0, 10).map((asset, index) => (
+                  <button
+                    key={asset.fileId || index}
+                    onClick={() => setSelectedAsset(index)}
+                    className={`overflow-hidden rounded border ${selectedAsset === index ? "border-2 border-[#1768df]" : "border-[#dce8f4]"}`}
+                  >
+                    {asset.type === "video" ? (
+                      <div className="flex aspect-square items-center justify-center bg-[#eef2f7] text-[10px]">
+                        VIDEO
+                      </div>
+                    ) : (
+                      <img
+                        src={(() => {
+                          const rendition = activeMediaKey
+                            ? platformMedia.find(
+                                (item) =>
+                                  item.platform === activeMediaKey &&
+                                  item.sourceFileId === asset.fileId &&
+                                  !/SUPERSEDED|REJECTED/i.test(item.mediaStatus),
+                              )
+                            : null;
+                          const fileId = rendition?.fileId || asset.fileId;
+                          return fileId
+                            ? `/api/marketing/assets/${fileId}`
+                            : "";
+                        })()}
+                        alt={asset.name}
+                        className="aspect-square w-full object-cover"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#f1d6d6] bg-[#fffafa] px-3 py-2">
+                <div className="min-w-0 text-[11px] leading-4 text-[#7b5c5c]">
+                  <b>Thay media:</b> gỡ ảnh/video đang chọn khỏi bài. File gốc
+                  vẫn được giữ trong thư viện để dùng lại.
+                </div>
                 <button
-                  key={asset.fileId || index}
-                  onClick={() => setSelectedAsset(index)}
-                  className={`overflow-hidden rounded border ${selectedAsset === index ? "border-2 border-[#1768df]" : "border-[#dce8f4]"}`}
+                  type="button"
+                  disabled={!selected?.fileId || removingAsset || locked}
+                  onClick={detachSelectedAsset}
+                  className="shrink-0 rounded-lg border border-[#e8aaaa] px-3 py-2 text-xs font-bold text-[#b43f3f] hover:bg-[#fff1f1] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {asset.type === "video" ? (
-                    <div className="flex aspect-square items-center justify-center bg-[#eef2f7] text-[10px]">
-                      VIDEO
-                    </div>
-                  ) : (
-                    <img
-                      src={(() => {
-                        const rendition = activeMediaKey
-                          ? platformMedia.find(
-                              (item) =>
-                                item.platform === activeMediaKey &&
-                                item.sourceFileId === asset.fileId &&
-                                !/SUPERSEDED|REJECTED/i.test(item.mediaStatus),
-                            )
-                          : null;
-                        const fileId = rendition?.fileId || asset.fileId;
-                        return fileId
-                          ? `/api/marketing/assets/${fileId}`
-                          : "";
-                      })()}
-                      alt={asset.name}
-                      className="aspect-square w-full object-cover"
-                    />
-                  )}
+                  {removingAsset ? "Đang gỡ..." : "Gỡ khỏi bài"}
                 </button>
-              ))}
-            </div>
+              </div>
+            </>
           ) : null}
 
           <input

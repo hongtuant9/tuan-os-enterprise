@@ -71,6 +71,7 @@ export default function FeedbackClient({
   const [error, setError] = useState("");
   const [reviewUrl, setReviewUrl] = useState("");
   const [submissionId, setSubmissionId] = useState("");
+  const [submissionKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     const fromQuery = parseTable(tableParam);
@@ -103,6 +104,7 @@ export default function FeedbackClient({
           qrId: qrId || `feedback_table_${String(tableNumber).padStart(2, "0")}`,
           source,
           anonymousId: cookieValue("tce_cozy_aid") || null,
+          submissionKey,
         }),
       });
 

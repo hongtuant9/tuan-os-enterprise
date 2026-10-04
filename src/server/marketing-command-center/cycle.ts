@@ -205,6 +205,11 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     if (!contentId) return [];
     const note = pick(data, ["NOTE", "Note"]);
     const publishStatus = pick(data, ["PUBLISH_STATUS", "Publish Status"]) || "PLANNED";
+    const brand = pick(data, ["MASTER_BRAND", "BRAND", "Brand"]) || "";
+    const serviceLine = pick(data, ["SERVICE_LINE", "Service Line"]) || "";
+    const isTaibPersonalBrand =
+      /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
+      /TAIB_PERSONAL_BRAND/i.test(serviceLine);
     const assetIds = pick(data, ["ASSET_IDS", "Asset IDs"])
       .split(/[;\n]+/)
       .map((part) => part.match(/\|\s*Drive\s+([A-Za-z0-9_-]{10,})$/i)?.[1] ?? "")
@@ -217,11 +222,15 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
     }
     return [{
       content_id: contentId,
-      brand: pick(data, ["MASTER_BRAND", "BRAND", "Brand"]) || null,
+      brand: brand || null,
       pillar: pick(data, ["PILLAR", "Pillar"]) || null,
       objective: pick(data, ["OBJECTIVE", "Objective"]) || null,
       format: pick(data, ["FORMAT", "Format"]) || null,
-      channel_id: /facebook|metricool/i.test(note + " " + publishStatus) ? "facebook" : null,
+      channel_id: isTaibPersonalBrand
+        ? "facebook_personal"
+        : /facebook|metricool/i.test(note + " " + publishStatus)
+          ? "facebook"
+          : null,
       campaign_id: null,
       publish_status: publishStatus,
       verification_status: canonicalVerification(pick(data, ["VERIFICATION", "Verification", "XÁC MINH (Verification Status)"])),
@@ -243,7 +252,9 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
         dependency: pick(data, ["DEPENDENCY", "Dependency"]),
         success_metric: pick(data, ["SUCCESS_METRIC", "Success Metric"]),
         note,
-        service_line: pick(data, ["SERVICE_LINE", "Service Line"]) || null,
+        service_line: serviceLine || null,
+        target_channel: isTaibPersonalBrand ? "FACEBOOK_PERSONAL" : null,
+        delivery_mode: isTaibPersonalBrand ? "MANUAL" : "PROVIDER",
         facebook_variant: pick(data, ["FACEBOOK_VARIANT", "Facebook Variant"]) || null,
         instagram_variant: pick(data, ["INSTAGRAM_VARIANT", "Instagram Variant"]) || null,
         tripadvisor_variant: pick(data, ["TRIPADVISOR_VARIANT", "Tripadvisor Variant"]) || null,
@@ -282,17 +293,20 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       const currentApproval = str(current?.approval_status).toUpperCase();
       const incomingApproval = str(payload.approval_status).toUpperCase();
       if (
-        currentApproval === "OWNER_APPROVED_FOR_METRICOOL" &&
-        incomingApproval !== "OWNER_APPROVED_FOR_METRICOOL"
+        currentApproval.startsWith("OWNER_APPROVED_") &&
+        !incomingApproval.startsWith("OWNER_APPROVED_")
       ) {
         payload.approval_status = str(current?.approval_status);
         payload.publish_status =
-          str(current?.publish_status) || "APPROVED_FOR_METRICOOL";
+          str(current?.publish_status) ||
+          (currentApproval === "OWNER_APPROVED_FOR_PERSONAL_FACEBOOK"
+            ? "READY_FOR_PERSONAL_FACEBOOK"
+            : "APPROVED_FOR_METRICOOL");
         const currentMetadata = obj(current?.metadata);
         payload.metadata = {
           ...currentMetadata,
           ...payload.metadata,
-          approval_status: "OWNER_APPROVED_FOR_METRICOOL",
+          approval_status: str(current?.approval_status),
         } as typeof payload.metadata;
       }
     }

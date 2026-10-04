@@ -532,6 +532,7 @@ export class AiReceptionistService {
     qaPass: boolean;
     qaReasons: string[];
     usedGenerativeRenderer: boolean;
+    primaryIntent: string | null;
     duplicate: boolean;
   }> {
     const externalMessageId = input.externalMessageId?.trim() || null;
@@ -547,6 +548,7 @@ export class AiReceptionistService {
           qaPass: false,
           qaReasons: ["duplicate_message"],
           usedGenerativeRenderer: false,
+          primaryIntent: null,
           duplicate: true,
         };
       }
@@ -892,6 +894,9 @@ export class AiReceptionistService {
       qaPass: rendered.qa.pass,
       qaReasons: rendered.qa.reasons,
       usedGenerativeRenderer: rendered.usedGenerativeRenderer,
+      primaryIntent: typeof decision.metadataPatch.primary_intent === "string"
+        ? decision.metadataPatch.primary_intent
+        : null,
       duplicate: false,
     };
   }

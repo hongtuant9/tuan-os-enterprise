@@ -53,9 +53,24 @@ function verifySignature(raw: string, signature: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function sendMessenger(pageId: string, recipientId: string, text: string): Promise<{ sent: boolean; messageId: string | null }> {
+async function sendMessenger(
+  pageId: string,
+  recipientId: string,
+  text: string,
+  options?: { recruitment?: boolean; entity?: FacebookPageEntity },
+): Promise<{ sent: boolean; messageId: string | null }> {
   const token = pageAccessToken(pageId);
-  if (process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true" || !token || !isPilotOutboundEnabled() || !isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) || !["limited_auto", "live"].includes(getReceptionistMode())) {
+  const recruitmentAllowed =
+    options?.recruitment === true &&
+    options.entity === "cozy" &&
+    process.env.TCE_RECRUITMENT_MESSENGER_AUTO_REPLY_ENABLED?.trim().toLowerCase() === "true";
+  const generalPilotAllowed =
+    process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true" &&
+    isPilotOutboundEnabled() &&
+    isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) &&
+    ["limited_auto", "live"].includes(getReceptionistMode());
+
+  if (!token || (!recruitmentAllowed && !generalPilotAllowed)) {
     return { sent: false, messageId: null };
   }
   const version = process.env.FACEBOOK_GRAPH_API_VERSION?.trim() || "v23.0";
@@ -133,7 +148,10 @@ export async function POST(request: Request) {
         });
         if (!result.duplicate) {
           try {
-            const delivery = await sendMessenger(pageId, senderId, result.reply);
+            const delivery = await sendMessenger(pageId, senderId, result.reply, {
+              recruitment: result.primaryIntent === "recruitment",
+              entity,
+            });
             if (delivery.sent && result.outboundMessageId) {
               await service.markOutboundDelivery(result.outboundMessageId, { status: "sent", externalMessageId: delivery.messageId });
             }

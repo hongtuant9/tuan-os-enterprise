@@ -56,14 +56,35 @@ function parseAssets(value: string) {
     .split(/[;\n]+/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => {
-      const match = part.match(/^(.*?)\s*\|\s*Drive\s+([A-Za-z0-9_-]{10,})$/i);
-      if (match)
+    .map((part, index) => {
+      const namedMatch = part.match(
+        /^(.*?)\s*\|\s*Drive\s+([A-Za-z0-9_-]{10,200})$/i,
+      );
+      if (namedMatch)
         return {
-          name: match[1].trim(),
-          fileId: match[2],
-          type: /\.(mp4|mov|webm)$/i.test(match[1]) ? "video" : "image",
+          name: namedMatch[1].trim(),
+          fileId: namedMatch[2],
+          type: /\.(mp4|mov|webm)$/i.test(namedMatch[1]) ? "video" : "image",
         };
+
+      const rawIdMatch = part.match(/^([A-Za-z0-9_-]{10,200})$/);
+      if (rawIdMatch)
+        return {
+          name: `Drive asset ${index + 1}`,
+          fileId: rawIdMatch[1],
+          type: "image",
+        };
+
+      const driveUrlMatch = part.match(
+        /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,200})/i,
+      );
+      if (driveUrlMatch)
+        return {
+          name: `Drive asset ${index + 1}`,
+          fileId: driveUrlMatch[1],
+          type: "image",
+        };
+
       return {
         name: part,
         fileId: "",

@@ -517,30 +517,66 @@ export async function approveMarketingContentForMetricool(
       .maybeSingle();
     const content = obj(contentResult.data);
     const metadata = obj(content.metadata);
-    const assetIds = Array.isArray(content.asset_ids)
-      ? content.asset_ids.map(clean).filter(Boolean)
-      : [];
-    const verification = clean(content.verification_status).toUpperCase();
-    const publishStatus = clean(content.publish_status).toUpperCase();
-    const approvalStatus = clean(content.approval_status).toUpperCase();
-    const qaStatus = clean(metadata.qa_status).toUpperCase();
-    const qaMedia = clean(metadata.qa_media).toUpperCase();
-    const facebookVariant = clean(metadata.facebook_variant);
-    const instagramVariant = clean(metadata.instagram_variant);
-
     if (!clean(content.content_id))
       return { ok: false, error: "Không tìm thấy nội dung runtime." };
+
+    const workbookId = await getWorkbookId();
+    const sheetsAuth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const found = await findContentRow(workbookId, contentId, sheetsAuth);
+    const canonical = found.row;
+
+    const assetIds = driveFileIdsFromAssetCell(canonical[18]);
+    const verification = clean(canonical[8]).toUpperCase();
+    const publishStatus = clean(canonical[9]).toUpperCase();
+    const approvalStatus = clean(canonical[21]).toUpperCase();
+    const qaFact = clean(canonical[24]).toUpperCase();
+    const qaBrand = clean(canonical[25]).toUpperCase();
+    const qaMedia = clean(canonical[26]).toUpperCase();
+    const qaCopyright = clean(canonical[27]).toUpperCase();
+    const qaPrivacy = clean(canonical[28]).toUpperCase();
+    const qaCta = clean(canonical[29]).toUpperCase();
+    const qaTracking = clean(canonical[30]).toUpperCase();
+    const qaPlatform = clean(canonical[31]).toUpperCase();
+    const qaStatus = clean(canonical[32]).toUpperCase();
+    const facebookVariant = clean(canonical[22]);
+    const instagramVariant = clean(canonical[23]);
+
     if (verification !== "VERIFIED")
       return { ok: false, error: "HOLD: Nội dung chưa VERIFIED." };
-    if (qaStatus !== "PASS")
+
+    const nonMediaQa = [
+      ["QA_FACT", qaFact],
+      ["QA_BRAND", qaBrand],
+      ["QA_COPYRIGHT", qaCopyright],
+      ["QA_PRIVACY", qaPrivacy],
+      ["QA_CTA", qaCta],
+      ["QA_TRACKING", qaTracking],
+      ["QA_PLATFORM", qaPlatform],
+    ].filter(([, value]) => value !== "PASS");
+    if (nonMediaQa.length)
       return {
         ok: false,
-        error: "HOLD: QA_STATUS phải PASS trước khi duyệt đăng.",
+        error:
+          "HOLD: Các kiểm tra QA chưa PASS: " +
+          nonMediaQa.map(([name]) => name).join(", "),
       };
-    if (qaMedia && qaMedia !== "PASS")
+
+    if (!["PASS", "PENDING_OWNER_ASSET_REVIEW"].includes(qaMedia))
       return {
         ok: false,
-        error: "HOLD: QA_MEDIA phải PASS trước khi duyệt đăng.",
+        error:
+          "HOLD: Media đang ở trạng thái " +
+          (qaMedia || "NEED VERIFY") +
+          ". Hãy hoàn tất/gắn lại media trước khi duyệt.",
+      };
+    if (!["PASS", "PENDING_OWNER_ASSET_REVIEW"].includes(qaStatus))
+      return {
+        ok: false,
+        error:
+          "HOLD: QA_STATUS đang ở trạng thái " +
+          (qaStatus || "HOLD") +
+          ".",
       };
     if (!assetIds.length)
       return {
@@ -566,6 +602,8 @@ export async function approveMarketingContentForMetricool(
 
     const runtimeMetadata = {
       ...metadata,
+      qa_status: "PASS",
+      qa_media: "PASS",
       approval_status: "OWNER_APPROVED_FOR_METRICOOL",
       approval_decision_id: decisionId,
       approval_source: "CEO_CONTENT_REVIEW_UI",
@@ -625,8 +663,8 @@ export async function approveMarketingContentForMetricool(
           approved_at: approvedAt,
           approved_by: approvedBy,
           asset_ids: assetIds,
-          qa_status: qaStatus,
-          qa_media: qaMedia || "PASS",
+          qa_status: "PASS",
+          qa_media: "PASS",
           provider: "METRICOOL",
         },
         recommended_action:
@@ -687,10 +725,6 @@ export async function approveMarketingContentForMetricool(
     let canonicalSyncStatus = "PASS";
     let canonicalSyncError = "";
     try {
-      const workbookId = await getWorkbookId();
-      const sheetsAuth =
-        await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
-      const found = await findContentRow(workbookId, contentId, sheetsAuth);
       const currentNote = clean(found.row[13]);
       const note = [
         currentNote,
@@ -720,6 +754,18 @@ export async function approveMarketingContentForMetricool(
         ),
         setSheetValue(
           workbookId,
+          `${q(CONTENT_TAB)}!AA${found.rowNumber}`,
+          "PASS",
+          sheetsAuth,
+        ),
+        setSheetValue(
+          workbookId,
+          `${q(CONTENT_TAB)}!AG${found.rowNumber}`,
+          "PASS",
+          sheetsAuth,
+        ),
+        setSheetValue(
+          workbookId,
           `${q(CONTENT_TAB)}!AH${found.rowNumber}`,
           approvedBy,
           sheetsAuth,
@@ -735,9 +781,11 @@ export async function approveMarketingContentForMetricool(
       const verify = await findContentRow(workbookId, contentId, sheetsAuth);
       if (
         clean(verify.row[9]) !== "APPROVED_FOR_METRICOOL" ||
-        clean(verify.row[21]) !== "OWNER_APPROVED_FOR_METRICOOL"
+        clean(verify.row[21]) !== "OWNER_APPROVED_FOR_METRICOOL" ||
+        clean(verify.row[26]) !== "PASS" ||
+        clean(verify.row[32]) !== "PASS"
       )
-        throw new Error("Read-back canonical approval không khớp.");
+        throw new Error("Read-back canonical approval/QA không khớp.");
 
       const syncSummary = await admin.sync.run(
         "marketing-shadow-content",

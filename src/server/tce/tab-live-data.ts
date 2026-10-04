@@ -1534,16 +1534,29 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       .slice(0, 50)
       .map((row, i) => {
         const contentId = textField(row, "content_id");
+        const brand = textField(row, "brand");
         const metadata =
           row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
             ? (row.metadata as Record<string, unknown>)
             : {};
+        const serviceLine = textField(metadata, "service_line");
+        const isTaibPersonalBrand =
+          /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
+          /TAIB_PERSONAL_BRAND/i.test(serviceLine);
+        const note = textField(metadata, "note");
+        const plannedDate = note.match(/planned\s+(\d{1,2}\/\d{1,2}\/\d{4})/i)?.[1] ?? "";
+        const channelDisplay = isTaibPersonalBrand
+          ? "Facebook cá nhân"
+          : textField(row, "channel_id") || "Đa kênh / kế hoạch";
+        const scheduleDisplay = textField(row, "scheduled_at")
+          ? formatTceLocalDateTime(textField(row, "scheduled_at"))
+          : isTaibPersonalBrand && plannedDate
+            ? plannedDate + " · thủ công"
+            : "Chưa lên lịch";
         return [
-          String(i + 1), contentId, textField(row, "brand"), textField(row, "format"),
-          textField(row, "channel_id") || "Đa kênh / kế hoạch",
-          textField(row, "scheduled_at")
-            ? formatTceLocalDateTime(textField(row, "scheduled_at"))
-            : "Chưa lên lịch",
+          String(i + 1), contentId, brand, textField(row, "format"),
+          channelDisplay,
+          scheduleDisplay,
           textField(row, "publish_status"),
           textField(row, "approval_status") || textField(metadata, "approval_status") || "PENDING_OWNER_APPROVAL",
           textField(row, "verification_status"),

@@ -325,7 +325,8 @@ export default async function ContentReviewPage({
           <div>
             <p className="text-xs text-[#7a8da8]">Kênh runtime</p>
             <b className="mt-1 block text-sm text-[#173964]">
-              {s(content.channel_id) === "facebook_personal"
+              {/TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(s(content.brand)) ||
+              /TAIB_PERSONAL_BRAND/i.test(pick(source, ["SERVICE_LINE", "Service Line"]))
                 ? "Facebook cá nhân"
                 : s(content.channel_id) || "Đa kênh / kế hoạch"}
             </b>
@@ -342,7 +343,8 @@ export default async function ContentReviewPage({
           pillar={s(content.pillar)}
           format={s(content.format)}
           channel={
-            s(content.channel_id) === "facebook_personal"
+            /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(s(content.brand)) ||
+            /TAIB_PERSONAL_BRAND/i.test(pick(source, ["SERVICE_LINE", "Service Line"]))
               ? "Facebook cá nhân"
               : s(content.channel_id) || "Đa kênh / kế hoạch"
           }

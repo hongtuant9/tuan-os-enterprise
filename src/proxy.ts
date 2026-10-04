@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/cozy/review",
   "/cozy/feedback",
   "/cozy/source",
+  "/recruitment/cozy",
   "/lavender/review",
   "/lavender/feedback",
   "/ruby/review",

@@ -25,11 +25,22 @@ function clean(value: unknown) {
 }
 
 function parseAssetLine(line: string) {
-  const match = line.match(/^(.*?)\s*\|\s*Drive\s+([^\s]+)\s*$/i);
+  const named = line.match(
+    /^(.*?)\s*\|\s*Drive\s+([A-Za-z0-9_-]{10,200})\s*$/i,
+  );
+  if (named) {
+    return {
+      line,
+      name: clean(named[1]),
+      fileId: clean(named[2]),
+    };
+  }
+
+  const rawId = line.match(/^([A-Za-z0-9_-]{10,200})$/);
   return {
     line,
-    name: clean(match?.[1] ?? ""),
-    fileId: clean(match?.[2] ?? ""),
+    name: "",
+    fileId: clean(rawId?.[1] ?? ""),
   };
 }
 
@@ -98,7 +109,7 @@ export async function DELETE(
     }
 
     const currentLines = clean(row[18])
-      .split(/\r?\n/)
+      .split(/[;\n]+/)
       .map((line) => line.trim())
       .filter(Boolean);
     const parsed = currentLines.map(parseAssetLine);
@@ -125,7 +136,13 @@ export async function DELETE(
     const nextLines = parsed
       .filter((asset) => asset.fileId !== fileId)
       .map((asset) => asset.line);
-    const nextAssetCell = nextLines.join("\n");
+    const nextAssetCell = nextLines.join(";\n");
+    const nextQaMedia = nextLines.length
+      ? "PENDING_OWNER_ASSET_REVIEW"
+      : "NEED VERIFY";
+    const nextQaStatus = nextLines.length
+      ? "PENDING_OWNER_ASSET_REVIEW"
+      : "HOLD";
     const sheetRow = rowIndex + 1;
 
     await setSheetValue(
@@ -149,13 +166,13 @@ export async function DELETE(
     await setSheetValue(
       source.sheet_id,
       `${q(CONTENT_TAB)}!AA${sheetRow}`,
-      "NEED VERIFY",
+      nextQaMedia,
       auth,
     );
     await setSheetValue(
       source.sheet_id,
       `${q(CONTENT_TAB)}!AG${sheetRow}`,
-      "HOLD",
+      nextQaStatus,
       auth,
     );
 
@@ -177,8 +194,8 @@ export async function DELETE(
       assetCell: nextAssetCell,
       publishStatus: "READY_FOR_OWNER_REVIEW",
       approvalStatus: "PENDING_OWNER_APPROVAL",
-      qaMedia: "NEED VERIFY",
-      qaStatus: "HOLD",
+      qaMedia: nextQaMedia,
+      qaStatus: nextQaStatus,
       resetVariantMedia: true,
     });
 
@@ -188,8 +205,9 @@ export async function DELETE(
       remainingAssetCount: nextLines.length,
       deletedFromDrive: false,
       approvalReset: true,
-      message:
-        "Đã gỡ media khỏi bài viết. File gốc vẫn giữ trong thư viện; canonical và runtime đã đồng bộ, media cần xác minh lại trước khi duyệt đăng.",
+      message: nextLines.length
+        ? "Đã gỡ media khỏi bài viết. File gốc vẫn giữ trong thư viện; các asset còn lại cần Owner review lại trước khi duyệt đăng."
+        : "Đã gỡ asset cuối cùng khỏi bài viết. File gốc vẫn giữ trong thư viện; bài đang HOLD cho tới khi gắn media hợp lệ.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "detach_asset_error";

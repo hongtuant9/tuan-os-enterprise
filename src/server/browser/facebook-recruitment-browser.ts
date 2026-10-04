@@ -318,7 +318,7 @@ export async function facebookRecruitmentBrowserStatus() {
 export async function facebookRecruitmentWorkerTick() {
   if (!enabled()) return { state: "DISABLED", processed: 0 };
 
-  const supabase = createAdminClient();
+  const supabase = createAdminClient() as any;
   const { data: item, error } = await supabase
     .from("marketing_content_items")
     .select("content_id,publish_status,approval_status,metadata")

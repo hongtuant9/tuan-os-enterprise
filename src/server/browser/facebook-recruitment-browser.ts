@@ -2,7 +2,7 @@ import "server-only";
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
 
 export type FacebookRecruitmentBrowserState =
   | "DISABLED"
@@ -318,7 +318,11 @@ export async function facebookRecruitmentBrowserStatus() {
 export async function facebookRecruitmentWorkerTick() {
   if (!enabled()) return { state: "DISABLED", processed: 0 };
 
-  const supabase = createAdminClient() as any;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
   const { data: item, error } = await supabase
     .from("marketing_content_items")
     .select("content_id,publish_status,approval_status,metadata")

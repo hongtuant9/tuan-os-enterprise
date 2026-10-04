@@ -10,6 +10,7 @@ import {
   getSheetValues,
   setSheetValue,
 } from "@/server/integrations/google/drive-client";
+import { reconcileMarketingContentRuntime } from "@/server/marketing-command-center/content-runtime-reconcile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,16 +126,42 @@ export async function POST(req: NextRequest) {
         ? `${existingAssets}
 ${nextAsset}`
         : nextAsset;
+      const sheetRow = rowIndex + 1;
+
       await setSheetValue(
         source.sheet_id,
-        `${q(CONTENT_TAB)}!S${rowIndex + 1}`,
+        `${q(CONTENT_TAB)}!S${sheetRow}`,
         nextAssets,
+        auth,
+      );
+      await setSheetValue(
+        source.sheet_id,
+        `${q(CONTENT_TAB)}!J${sheetRow}`,
+        "READY_FOR_OWNER_REVIEW",
+        auth,
+      );
+      await setSheetValue(
+        source.sheet_id,
+        `${q(CONTENT_TAB)}!V${sheetRow}`,
+        "PENDING_OWNER_APPROVAL",
+        auth,
+      );
+      await setSheetValue(
+        source.sheet_id,
+        `${q(CONTENT_TAB)}!AA${sheetRow}`,
+        "NEED VERIFY",
+        auth,
+      );
+      await setSheetValue(
+        source.sheet_id,
+        `${q(CONTENT_TAB)}!AG${sheetRow}`,
+        "HOLD",
         auth,
       );
 
       const verify = await getSheetValues(
         source.sheet_id,
-        `${q(CONTENT_TAB)}!S${rowIndex + 1}:S${rowIndex + 1}`,
+        `${q(CONTENT_TAB)}!S${sheetRow}:AG${sheetRow}`,
         auth,
       );
       if (!clean(verify?.[0]?.[0]).includes(fileId)) {
@@ -144,17 +171,15 @@ ${nextAsset}`
         );
       }
 
-      const sync = await admin.sync.run(
-        "marketing-shadow-content",
-        "manual",
-        session.email ?? session.userId,
-      );
-      if (sync.status === "failed") {
-        return NextResponse.json(
-          { error: "runtime_sync_failed", detail: sync.errorMessage ?? null },
-          { status: 502 },
-        );
-      }
+      await reconcileMarketingContentRuntime(admin.db, {
+        contentId,
+        assetCell: nextAssets,
+        publishStatus: "READY_FOR_OWNER_REVIEW",
+        approvalStatus: "PENDING_OWNER_APPROVAL",
+        qaMedia: "NEED VERIFY",
+        qaStatus: "HOLD",
+        resetVariantMedia: true,
+      });
     }
 
     return NextResponse.json({

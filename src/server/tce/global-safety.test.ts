@@ -8,7 +8,7 @@ const read=(p:string)=>fs.readFileSync(path.join(root,p),"utf8");
 
 test("critical TCE routes and navigation remain present",()=>{
   const shell=read("src/components/tce/TceShell.tsx");
-  for(const route of ["/ai-le-tan","/business","/marketing","/finance","/personal-finance"]){
+  for(const route of ["/ai-le-tan","/business","/taib","/marketing","/finance","/personal-finance"]){
     assert.match(shell,new RegExp(`href: \"${route.replaceAll("/","\\/")}\"`));
     assert.equal(fs.existsSync(path.join(root,"src/app",route.slice(1),"page.tsx")),true,`missing ${route}`);
   }
@@ -244,4 +244,17 @@ test("Business Expense Actual pipeline is KiotViet-backed, range-scoped and fail
   assert.match(bot,/Status eq 3/);
   assert.match(bot,/cashflowRows\.length === raw\.cashExpected/);
   assert.match(bot,/purchaseOrderRows\.length === raw\.purchaseExpected/);
+});
+
+
+test("TAIB command center is TASK-001-backed and fail-closed",()=>{
+  const page=read("src/app/taib/page.tsx");
+  const shell=read("src/components/tce/TceShell.tsx");
+  assert.match(shell,/href: "\/taib"/);
+  assert.match(shell,/TAIB · AI Business/);
+  assert.match(page,/TASK-TUAN-BRAND-/);
+  assert.match(page,/sync_records/);
+  assert.match(page,/TASK-001\. Dashboard không phải nơi sửa task/);
+  assert.match(page,/Google Drive TASK-001 vẫn là authority/);
+  assert.doesNotMatch(page,/create table|insert into|service_role/i);
 });

@@ -7,11 +7,11 @@ export const revalidate = 0;
 
 const TERMINAL = new Set(["DONE", "CANCELLED"]);
 const PHASES = [
-  ["A", "Nền tảng & định vị", ["TASK-TUAN-BRAND-001", "TASK-TUAN-BRAND-002"]],
-  ["B", "Khám phá khách hàng", ["TASK-TUAN-BRAND-003", "TASK-TUAN-BRAND-004"]],
-  ["C", "Gói đề xuất & pilot trả phí", ["TASK-TUAN-BRAND-005"]],
-  ["D", "Triển khai & case study", ["TASK-TUAN-BRAND-006", "TASK-TUAN-BRAND-007"]],
-  ["E", "Thương mại hóa địa phương", ["TASK-TUAN-BRAND-008"]],
+  ["A", "Brand First & xây lòng tin", ["TASK-TUAN-BRAND-001", "TASK-TUAN-BRAND-002", "TASK-TUAN-BRAND-008"]],
+  ["B", "Customer Discovery sau Trust Gate", ["TASK-TUAN-BRAND-003", "TASK-TUAN-BRAND-004"]],
+  ["C", "Pilot trả phí", ["TASK-TUAN-BRAND-005"]],
+  ["D", "Triển khai & đo kết quả", ["TASK-TUAN-BRAND-006"]],
+  ["E", "Case study & thương mại hóa", ["TASK-TUAN-BRAND-007"]],
 ] as const;
 
 function tone(status: string) {
@@ -56,7 +56,7 @@ export default async function TaibPage() {
   const blocked = tasks.filter((x) => x.status === "BLOCKED" || x.status === "HOLD").length;
   const waitingApproval = tasks.filter((x) => x.pendingCeoApproval || x.status === "WAITING_APPROVAL").length;
   const completion = total ? Math.round((done / total) * 100) : 0;
-  const paidPilot = tasks.find((x) => x.id === "TASK-TUAN-BRAND-005");
+  const trustBuild = tasks.find((x) => x.id === "TASK-TUAN-BRAND-008");
   const syncAt = latestSyncAt(syncRecordsQuery.data ?? [], "task-001");
 
   const currentPhase =
@@ -81,7 +81,7 @@ export default async function TaibPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-100">Business line · MKT-TUAN-001</p>
               <h2 className="mt-1 text-2xl font-black">Thương mại hóa năng lực TUAN OS qua thương hiệu cá nhân Tuấn</h2>
               <p className="mt-2 max-w-4xl text-sm text-blue-50">
-                Chiến lược hiện tại: Customer Discovery → pain lặp lại → paid pilot → case study thật → offer lặp lại → workshop/khóa học.
+                Chiến lược hiện tại: Brand First → Trust Gate → Customer Discovery → paid pilot → case study thật → sales.
               </p>
             </div>
             <div className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-right">
@@ -98,7 +98,7 @@ export default async function TaibPage() {
             ["Đang chạy", String(inProgress)],
             ["Bị chặn", String(blocked)],
             ["Chờ CEO", String(waitingApproval)],
-            ["Paid pilot gate", paidPilot ? statusVi(paidPilot.status) : "Chưa đồng bộ"],
+            ["Trust gate", trustBuild ? statusVi(trustBuild.status) : "Chưa đồng bộ"],
           ].map(([label, value]) => (
             <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
@@ -201,8 +201,8 @@ export default async function TaibPage() {
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-black text-[#102b5c]">Scale Gate</h3>
-            <p className="mt-3 text-[11px] font-bold text-rose-700">HOLD SaaS / Mass Ads / Khóa học lớn</p>
-            <p className="mt-2 text-[10px] leading-5 text-slate-600">Chỉ mở khi paid evidence, case study, onboarding lặp lại và support cost đã PASS.</p>
+            <p className="mt-3 text-[11px] font-bold text-rose-700">HOLD Outreach bán hàng / SaaS / Mass Ads / Khóa học lớn</p>
+            <p className="mt-2 text-[10px] leading-5 text-slate-600">External discovery/sales chỉ mở sau Trust Gate; scale lớn chỉ mở khi paid evidence, case study, onboarding lặp lại và support cost đã PASS.</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-black text-[#102b5c]">Ưu tiên hiện tại</h3>

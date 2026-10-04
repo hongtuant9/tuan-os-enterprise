@@ -1,5 +1,6 @@
 import "server-only";
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, readlink, unlink } from "node:fs/promises";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { createClient } from "@supabase/supabase-js";
@@ -33,6 +34,51 @@ const TARGET_APPROVED = 10;
 const STATE_ROOT =
   process.env.TCE_AUTH_BROWSER_STATE_DIR?.trim() || "/var/lib/tce-auth-browser";
 const PROFILE_DIR = join(STATE_ROOT, "facebook-recruitment-profile");
+let browserMutex: Promise<unknown> = Promise.resolve();
+
+async function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = browserMutex;
+  let release!: () => void;
+  browserMutex = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+async function clearStaleChromiumSingleton(profile: string) {
+  const lockPath = join(profile, "SingletonLock");
+  let stale = false;
+  try {
+    const target = await readlink(lockPath);
+    const match = target.match(/^(.*)-(\d+)$/);
+    if (!match) {
+      stale = true;
+    } else {
+      const [, lockHost, pidText] = match;
+      const pid = Number(pidText);
+      if (lockHost !== hostname()) {
+        stale = true;
+      } else {
+        try {
+          process.kill(pid, 0);
+        } catch {
+          stale = true;
+        }
+      }
+    }
+  } catch {
+    return;
+  }
+  if (!stale) return;
+  for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
+    await unlink(join(profile, name)).catch(() => undefined);
+  }
+}
 
 function enabled() {
   return (
@@ -58,6 +104,7 @@ async function chromium() {
 
 async function launch(): Promise<Browser> {
   await mkdir(PROFILE_DIR, { recursive: true });
+  await clearStaleChromiumSingleton(PROFILE_DIR);
   return puppeteer.launch({
     executablePath: await chromium(),
     headless: true,
@@ -300,19 +347,31 @@ export async function facebookRecruitmentBrowserStatus() {
       state: "DISABLED" as FacebookRecruitmentBrowserState,
       authenticated: false,
     };
-  const browser = await launch();
-  try {
-    const page = await browser.newPage();
-    const state = await authState(page);
-    return { state, authenticated: state === "READY" };
-  } catch {
-    return {
-      state: "ERROR" as FacebookRecruitmentBrowserState,
-      authenticated: false,
-    };
-  } finally {
-    await browser.close();
-  }
+
+  return withBrowserLock(async () => {
+    let browser: Browser | null = null;
+    try {
+      browser = await launch();
+      const page = await browser.newPage();
+      const state = await authState(page);
+      return { state, authenticated: state === "READY" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const reason =
+        /singleton|profile.*lock|process is still running/i.test(message)
+          ? "PROFILE_BUSY"
+          : /chromium.*not found|executable.*not found/i.test(message)
+            ? "CHROMIUM_UNAVAILABLE"
+            : "BROWSER_LAUNCH_FAILED";
+      return {
+        state: "ERROR" as FacebookRecruitmentBrowserState,
+        authenticated: false,
+        reason,
+      };
+    } finally {
+      await browser?.close().catch(() => undefined);
+    }
+  });
 }
 
 export async function facebookRecruitmentWorkerTick() {
@@ -354,12 +413,14 @@ export async function facebookRecruitmentWorkerTick() {
   if (approved >= TARGET_APPROVED)
     return { state: "STOP_TARGET_REACHED", processed: 0, approved };
 
-  const browser = await launch();
-  try {
-    const page = await browser.newPage();
-    const auth = await authState(page);
-    if (auth !== "READY")
-      return { state: auth, processed: 0, approved };
+  return withBrowserLock(async () => {
+    let browser: Browser | null = null;
+    try {
+      browser = await launch();
+      const page = await browser.newPage();
+      const auth = await authState(page);
+      if (auth !== "READY")
+        return { state: auth, processed: 0, approved };
 
     const now = new Date().toISOString();
     let processed = 0;
@@ -427,12 +488,19 @@ export async function facebookRecruitmentWorkerTick() {
       approved,
       target: TARGET_APPROVED,
     };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown";
-    return { state: "ERROR", processed: 0, approved, reason: message.slice(0, 200) };
-  } finally {
-    await browser.close();
-  }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown";
+      const reason =
+        /singleton|profile.*lock|process is still running/i.test(message)
+          ? "PROFILE_BUSY"
+          : /chromium.*not found|executable.*not found/i.test(message)
+            ? "CHROMIUM_UNAVAILABLE"
+            : "BROWSER_RUNTIME_ERROR";
+      return { state: "ERROR", processed: 0, approved, reason };
+    } finally {
+      await browser?.close().catch(() => undefined);
+    }
+  });
 }
 
 export function facebookRecruitmentBrowserPolicy() {

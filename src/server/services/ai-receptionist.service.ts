@@ -16,6 +16,7 @@ import { ActivityLogService } from "@/server/services/activity-log.service";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
 import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
+import { upsertCozyRecruitmentCandidate } from "@/server/recruitment/cozy-intake";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
 import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-execution";
@@ -272,6 +273,73 @@ export class AiReceptionistService {
     private readonly repo: AiReceptionistRepository,
     private readonly activityLog: ActivityLogService
   ) {}
+
+
+  private async syncRecruitmentCandidateToTracker(
+    externalConversationId: string,
+    metadata: Record<string, Json>,
+  ): Promise<{ status: "SYNCED" | "HOLD"; candidateId: string; row: number | null; detail?: string }> {
+    const position = metadata.recruitment_position;
+    const fullName = metadata.recruitment_full_name;
+    const phone = metadata.recruitment_phone;
+    const location = metadata.recruitment_location;
+    const experience = metadata.recruitment_experience;
+    const startDate = metadata.recruitment_start_date;
+    const shiftAvailability = metadata.recruitment_shift_availability;
+    const englishLevel = metadata.recruitment_english_level;
+    const interviewPreference = metadata.recruitment_interview_preference;
+
+    if (
+      (position !== "BAR ĐA NĂNG / PHỤC VỤ" && position !== "BẾP")
+      || typeof fullName !== "string"
+      || typeof phone !== "string"
+      || typeof location !== "string"
+      || typeof experience !== "string"
+      || typeof startDate !== "string"
+      || typeof shiftAvailability !== "string"
+      || typeof interviewPreference !== "string"
+    ) {
+      return {
+        status: "HOLD",
+        candidateId: "",
+        row: null,
+        detail: "recruitment_intake_missing_fields",
+      };
+    }
+
+    try {
+      const result = await upsertCozyRecruitmentCandidate({
+        fullName,
+        position,
+        phone,
+        location,
+        experience,
+        startDate,
+        shiftAvailability,
+        englishLevel: typeof englishLevel === "string" ? englishLevel : "",
+        interviewPreference,
+        source: "FB_GROUP_NB",
+        intakeChannel: "FACEBOOK_MESSENGER_RECRUITMENT",
+        externalConversationId,
+      });
+      return {
+        status: "SYNCED",
+        candidateId: result.candidateId,
+        row: result.sheetRow,
+      };
+    } catch (error) {
+      const detail = error instanceof Error
+        ? error.message.slice(0, 240)
+        : "unknown_recruitment_tracker_error";
+      await this.activityLog.record({
+        agent: "AI Recruitment",
+        unit: "Cozy Garden",
+        message: `Recruitment tracker HOLD: conversation=${externalConversationId}; ${detail}`,
+        type: "alert",
+      });
+      return { status: "HOLD", candidateId: "", row: null, detail };
+    }
+  }
 
   private async resolveCustomerId(input: { channel: string; externalConversationId: string; customerName?: string | null; customerContact?: string | null; language?: string | null }): Promise<string> {
     const candidates = buildIdentityCandidates(input);
@@ -725,6 +793,30 @@ export class AiReceptionistService {
         primary_intent: decision.metadataPatch.primary_intent ?? "general",
       },
     };
+
+    if (
+      mergedMetadata.recruitment_status === "READY_FOR_INTERVIEW_REVIEW"
+      && mergedMetadata.recruitment_tracker_status !== "SYNCED"
+    ) {
+      const tracker = await this.syncRecruitmentCandidateToTracker(
+        externalConversationId,
+        mergedMetadata,
+      );
+      mergedMetadata.recruitment_tracker_status = tracker.status;
+      mergedMetadata.recruitment_candidate_id = tracker.candidateId;
+      mergedMetadata.recruitment_tracker_row = tracker.row;
+      mergedMetadata.recruitment_tracker_synced_at =
+        tracker.status === "SYNCED" ? new Date().toISOString() : null;
+      mergedMetadata.recruitment_tracker_detail = tracker.detail ?? null;
+      if (tracker.status === "SYNCED") {
+        await this.activityLog.record({
+          agent: "AI Recruitment",
+          unit: "Cozy Garden",
+          message: `Recruitment intake SYNCED: candidate_id=${tracker.candidateId}; row=${tracker.row}; source=FB_GROUP_NB.`,
+          type: "info",
+        });
+      }
+    }
 
     const resolvedCustomerName = input.customerName
       ?? (typeof input.reservationContext?.guestName === "string" ? input.reservationContext.guestName : null)

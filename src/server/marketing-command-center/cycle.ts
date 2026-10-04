@@ -226,11 +226,9 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
       pillar: pick(data, ["PILLAR", "Pillar"]) || null,
       objective: pick(data, ["OBJECTIVE", "Objective"]) || null,
       format: pick(data, ["FORMAT", "Format"]) || null,
-      channel_id: isTaibPersonalBrand
-        ? "facebook_personal"
-        : /facebook|metricool/i.test(note + " " + publishStatus)
-          ? "facebook"
-          : null,
+      channel_id: /facebook|metricool/i.test(note + " " + publishStatus) || isTaibPersonalBrand
+        ? "facebook"
+        : null,
       campaign_id: null,
       publish_status: publishStatus,
       verification_status: canonicalVerification(pick(data, ["VERIFICATION", "Verification", "XÁC MINH (Verification Status)"])),

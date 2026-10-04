@@ -34,6 +34,7 @@ const TARGET_APPROVED = 10;
 const STATE_ROOT =
   process.env.TCE_AUTH_BROWSER_STATE_DIR?.trim() || "/var/lib/tce-auth-browser";
 const PROFILE_DIR = join(STATE_ROOT, "facebook-recruitment-profile");
+const BOOTSTRAP_LOCK = join(STATE_ROOT, "facebook-recruitment-bootstrap.lock");
 let browserMutex: Promise<unknown> = Promise.resolve();
 
 async function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -77,6 +78,15 @@ async function clearStaleChromiumSingleton(profile: string) {
   if (!stale) return;
   for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
     await unlink(join(profile, name)).catch(() => undefined);
+  }
+}
+
+async function bootstrapActive() {
+  try {
+    await access(BOOTSTRAP_LOCK);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -347,6 +357,12 @@ export async function facebookRecruitmentBrowserStatus() {
       state: "DISABLED" as FacebookRecruitmentBrowserState,
       authenticated: false,
     };
+  if (await bootstrapActive())
+    return {
+      state: "HOLD_LOGIN" as FacebookRecruitmentBrowserState,
+      authenticated: false,
+      reason: "LOGIN_BOOTSTRAP_ACTIVE",
+    };
 
   return withBrowserLock(async () => {
     let browser: Browser | null = null;
@@ -376,6 +392,8 @@ export async function facebookRecruitmentBrowserStatus() {
 
 export async function facebookRecruitmentWorkerTick() {
   if (!enabled()) return { state: "DISABLED", processed: 0 };
+  if (await bootstrapActive())
+    return { state: "HOLD_LOGIN", processed: 0, reason: "LOGIN_BOOTSTRAP_ACTIVE" };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -518,5 +536,6 @@ export function facebookRecruitmentBrowserPolicy() {
     approvalGate:
       "OWNER_APPROVED_FOR_METRICOOL + APPROVED_FOR_METRICOOL",
     antiBotPolicy: "FAIL_CLOSED_ON_LOGIN_MFA_CAPTCHA_OR_JOIN_QUESTIONS",
+    bootstrapLock: "PERSISTENT_STATE_MARKER",
   };
 }

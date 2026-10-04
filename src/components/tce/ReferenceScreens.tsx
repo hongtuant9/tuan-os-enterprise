@@ -520,7 +520,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           <Section title="Chiến dịch & thực thi" subtitle="Kế hoạch từ tài liệu CMO; số thực tế từ nhà cung cấp khi kết nối hoạt động" className="col-span-12 h-[250px]" icon="▣">
             <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Trạng thái","Mục tiêu","Xác minh"]} data={data?.tables.marketingCampaigns}/>
           </Section>
-          <Section title="Lịch nội dung & xuất bản" subtitle="App là nguồn duyệt: Xem bài viết → QA → Duyệt đăng → đồng bộ Metricool → read-back → xuất bản" className="col-span-12" icon="♟">
+          <Section title="Lịch nội dung & xuất bản" subtitle="App là nguồn duyệt: TAIB Personal Brand → Facebook cá nhân thủ công; TCE/Cozy/Lavender/Ruby → Metricool → read-back → xuất bản" className="col-span-12" icon="♟">
             <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Phê duyệt","Xác minh","Hành động"]} data={data?.tables.marketingContent}/>
           </Section>
 

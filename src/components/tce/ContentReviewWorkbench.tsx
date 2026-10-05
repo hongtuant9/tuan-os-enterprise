@@ -423,6 +423,15 @@ export default function ContentReviewWorkbench(props: {
     LIBRARIES[0];
   const latestValue = latest?.generated?.[platform] || "";
   const activeValue = draft[platform] || "";
+  const contentDirty = useMemo(
+    () =>
+      draft.draftVi !== baseline.draftVi ||
+      draft.facebookVariant !== baseline.facebookVariant ||
+      draft.instagramVariant !== baseline.instagramVariant ||
+      draft.googleBusinessVariant !== baseline.googleBusinessVariant ||
+      draft.tripadvisorVariant !== baseline.tripadvisorVariant,
+    [draft, baseline],
+  );
   const wordCount = useMemo(
     () => draft.facebookVariant.trim().split(/\s+/).filter(Boolean).length,
     [draft.facebookVariant],
@@ -551,6 +560,21 @@ export default function ContentReviewWorkbench(props: {
       setMessage("");
       if (!chosenSchedule)
         return setMessage("Hãy chọn ngày/giờ đăng trước khi Duyệt đăng.");
+
+      if (contentDirty) {
+        const saveResult = await saveMarketingContentDraft(
+          contentId,
+          draft,
+          baseline,
+        );
+        if (!saveResult.ok)
+          return setMessage(
+            "Không thể Duyệt đăng vì lưu nội dung mới thất bại: " +
+              saveResult.error,
+          );
+        setBaseline({ ...draft });
+      }
+
       const scheduleResult = await saveMarketingContentSchedule(
         contentId,
         chosenSchedule,
@@ -558,7 +582,13 @@ export default function ContentReviewWorkbench(props: {
       );
       if (!scheduleResult.ok) return setMessage(scheduleResult.error);
       const result = await approveMarketingContentForMetricool(contentId);
-      setMessage(result.ok ? result.message : result.error);
+      setMessage(
+        result.ok
+          ? contentDirty
+            ? "Đã lưu nội dung mới + lịch đăng + Duyệt đăng lại thành công."
+            : result.message
+          : result.error,
+      );
       if (result.ok) router.refresh();
     });
 
@@ -1006,9 +1036,23 @@ export default function ContentReviewWorkbench(props: {
                 {providerLocked ? "Đã lên lịch/đã đăng" : "Hoàn duyệt"}
               </button>
             ) : (
-              <button onClick={approveForMetricool} disabled={pending} className="rounded-lg bg-[#1768df] px-5 py-2.5 text-sm font-extrabold text-white disabled:bg-[#a9bad2]">
-                Duyệt đăng
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={saveAll}
+                  disabled={pending || locked || !contentDirty}
+                  className="rounded-lg border border-[#1768df] bg-white px-5 py-2.5 text-sm font-extrabold text-[#1768df] disabled:border-[#cbd6e3] disabled:text-[#9aaabd]"
+                >
+                  {contentDirty ? "Lưu thay đổi" : "Đã lưu"}
+                </button>
+                <button
+                  onClick={approveForMetricool}
+                  disabled={pending}
+                  className="rounded-lg bg-[#1768df] px-5 py-2.5 text-sm font-extrabold text-white disabled:bg-[#a9bad2]"
+                >
+                  Duyệt đăng
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1054,6 +1098,11 @@ export default function ContentReviewWorkbench(props: {
             Lưu lịch
           </button>
         </div>
+        {!approvalDone && contentDirty ? (
+          <p className="mt-2 rounded-lg bg-[#fff8e8] px-3 py-2 text-xs font-semibold text-[#8b5c00]">
+            Có nội dung chưa lưu. Anh có thể bấm “Lưu thay đổi”, hoặc bấm “Duyệt đăng” — hệ thống sẽ tự lưu và read-back nội dung mới trước khi duyệt.
+          </p>
+        ) : null}
         {providerLocked && approvalDone ? (
           <p className="mt-2 text-xs font-semibold text-[#a25d18]">
             Bài đã có lịch/provider state. Muốn sửa nội dung hoặc giờ đăng phải hủy/hoàn lịch provider trước; hệ thống đang khóa fail-closed để tránh bản cũ tự đăng.

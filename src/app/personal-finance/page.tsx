@@ -109,7 +109,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
   const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes, otaReceivedCurrentRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -128,11 +128,9 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
     raw.rpc("finance_cutover_snapshot"),
     raw.rpc("finance_operating_snapshot", { p_month: month }),
-    raw.from("finance_accounts").select("account_code,display_name,business_unit,current_balance,balance_as_of,verification_status,reconciliation_status").in("account_code", ["CASH-COZY","CASH-LAVENDER","CASH-RUBY"]).eq("record_status","ACTIVE").order("account_code"),
-    raw.from("finance_opening_positions").select("position_code,cutover_date,amount,verification_status,source,record_status,notes").eq("position_code","OTA-RECEIVED-CURRENT-20261005").eq("record_status","ACTIVE").maybeSingle(),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes, otaReceivedCurrentRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -150,8 +148,6 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const historyTransfers = (historyTransferRes.data ?? []) as Row[];
   const snapshots = (snapshotsRes.data ?? []) as Row[];
   const operating = operatingRes.data && typeof operatingRes.data === "object" && !Array.isArray(operatingRes.data) ? operatingRes.data as Row : null;
-  const businessCashAccounts = (businessCashAccountsRes.data ?? []) as Row[];
-  const otaReceivedCurrent = otaReceivedCurrentRes.data as Row | null;
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -192,7 +188,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Theo dõi tiền thực tế, tiền trên sổ và tiến độ Tự do tài chính." generatedAt={new Date().toISOString()} headerVariant="personal-finance">
     <div className="space-y-4 p-4 text-[#17233d] [color-scheme:light] lg:p-5">
       <section className="flex flex-col gap-3 rounded-xl border border-[#dce8f4] bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
-        <div><div className="text-[10px] font-bold uppercase tracking-[.12em] text-[#6d83a3]">Kỳ theo dõi</div><div className="mt-1 text-[13px] font-extrabold text-[#102456]">Tài chính cá nhân theo tháng</div><p className="mt-1 text-[10px] text-[#7185a5]">Chọn tháng để xem Actual, P&L, dòng tiền và sức khỏe tài chính tại thời điểm cần kiểm tra.</p></div>
+        <div><div className="text-[10px] font-bold uppercase tracking-[.12em] text-[#6d83a3]">Kỳ theo dõi</div><div className="mt-1 text-[13px] font-extrabold text-[#102456]">Tài chính cá nhân theo tháng</div><p className="mt-1 text-[10px] text-[#7185a5]">Chọn tháng để xem tiền cá nhân, thu–chi gia đình, nợ và tiến độ tự do tài chính.</p></div>
         <form method="get" className="flex items-center gap-2"><input type="month" name="month" defaultValue={month.slice(0,7)} className="rounded-lg border border-[#b7c9dd] bg-white px-3 py-2 text-[11px] font-bold text-[#183252]"/><button className="rounded-lg bg-[#0874eb] px-4 py-2 text-[11px] font-bold text-white">Xem kỳ</button></form>
       </section>
       {migrationMissing ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] font-semibold text-amber-800">HOLD: Personal Finance production schema chưa đầy đủ. Không suy 0đ từ NO DATA và tạm khóa form ghi dữ liệu cho tới khi migration + RLS PASS.</div> : null}
@@ -208,35 +204,32 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         historyTransactions={historyTransactions}
         debts={debts}
         personalAccounts={accounts}
-        businessCashAccounts={businessCashAccounts}
-        otaReceivedCurrent={otaReceivedCurrent}
+        transfers={transfers}
         migrationMissing={migrationMissing}
       />
 
-      <section id="data-source-map" className="rounded-xl border border-[#dce8f4] bg-white p-4">
-        <h2 className="text-[14px] font-extrabold text-[#102456]">2. Bản đồ nguồn dữ liệu (Data Source Map)</h2>
+      <details id="data-source-map" className="rounded-xl border border-[#dce8f4] bg-white p-4">
+        <summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Bản đồ nguồn dữ liệu</summary>
         <p className="mt-1 text-[10px] text-[#7185a5]">Supabase là canonical runtime Personal Finance sau migration; Sheet gia đình là nguồn lịch sử/planning/evidence. FIN-HOSPITALITY-001 chỉ là Business Finance.</p>
         <div className="mt-3 overflow-x-auto"><table className="min-w-[1050px] w-full text-[10px] text-[#17233d]"><thead className="bg-[#f3f7fb] text-[#294567]"><tr>{["Metric","Authority","Bảng nguồn","View/query","Calculation","CEO cập nhật"].map(x=><th key={x} className="p-2 text-left font-bold">{x}</th>)}</tr></thead><tbody className="text-[#17233d]">
           {sourceMap.map((r)=><tr key={r[0]} className="border-t border-[#dce8f4] bg-white text-[#17233d]">{r.map((x,i)=><td key={i} className="p-2 align-top text-[#17233d]">{x}</td>)}</tr>)}
         </tbody></table></div>
-      </section>
+      </details>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">3. Dòng tiền cá nhân</h2><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px]"><thead className="bg-[#f3f7fb]"><tr><th className="p-2 text-left">Ngày</th><th>Loại</th><th>Danh mục</th><th className="text-right">Số tiền</th><th>Trạng thái</th><th>Nguồn</th></tr></thead><tbody>
+        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">Dòng tiền cá nhân</h2><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px]"><thead className="bg-[#f3f7fb]"><tr><th className="p-2 text-left">Ngày</th><th>Loại</th><th>Danh mục</th><th className="text-right">Số tiền</th><th>Trạng thái</th><th>Nguồn</th></tr></thead><tbody>
           {transactions.length ? transactions.map((x,i)=><tr key={i} className="border-t"><td className="p-2">{String(x.transaction_date)}</td><td>{String(x.transaction_type)}</td><td>{String(x.category)}</td><td className="text-right">{money(x.amount)}</td><td className="text-center"><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></td><td>{String(x.source)}</td></tr>) : <tr><td colSpan={6} className="p-6 text-center text-slate-500">NO DATA — chưa có giao dịch canonical tháng này.</td></tr>}
         </tbody></table></div></div>
-        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">4. Chi phí gia đình</h2><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{expenseSummary.map(x=><div key={x.category} className="rounded-lg bg-[#f5f9fd] p-3 text-[10px]"><div>{x.category}</div><b className="mt-1 block text-[14px]">{verifiedExpenses.length ? money(x.amount) : "—"}</b></div>)}</div></div>
+        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">Chi phí gia đình</h2><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{expenseSummary.map(x=><div key={x.category} className="rounded-lg bg-[#f5f9fd] p-3 text-[10px]"><div>{x.category}</div><b className="mt-1 block text-[14px]">{verifiedExpenses.length ? money(x.amount) : "—"}</b></div>)}</div></div>
       </section>
 
-      <section className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">5. Business ↔ Personal</h2><p className="mt-1 text-[10px] text-[#7185a5]">Chỉ tiền/lợi ích kinh tế thực sự chuyển giữa doanh nghiệp và cá nhân. Doanh thu/P&L Hospitality không đi thẳng vào Personal Income.</p><div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">{transfers.length ? transfers.map((x,i)=><div key={i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.business_unit)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.transfer_type)} · {money(x.amount)} · {String(x.transfer_date)}</div><div className="mt-1 text-slate-500">{String(x.source)} · {String(x.source_reference ?? "—")}</div></div>) : <p className="text-[10px] text-slate-500">NO DATA — chưa có transfer canonical.</p>}</div></section>
-
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">6. Nợ</h2><div className="mt-3 space-y-2">{debts.length ? debts.map((x,i)=><div key={i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">Dư gốc: {x.verification_status==="VERIFIED" ? money(x.current_principal) : "—"} · Đáo hạn: {String(x.maturity_date ?? "—")}</div><div className="mt-1 text-slate-500">Nguồn: {String(x.source)} · Source updated: {fmtDate(x.source_updated_at)}</div></div>) : <p className="text-[10px] text-slate-500">NO DATA — không đồng nghĩa Tổng nợ = 0.</p>}</div></div>
-        <div className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">7. Tài sản & tài khoản</h2><div className="mt-3 space-y-2">{accounts.map((x,i)=><div key={"a"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.account_type)} · {x.verification_status==="VERIFIED" ? money(x.current_balance) : "—"}</div></div>)}{assets.map((x,i)=><div key={"v"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.asset_type)} · {String(x.valuation_kind)} · {x.verification_status==="VERIFIED" ? money(x.value_amount) : "—"}</div></div>)}{!accounts.length&&!assets.length?<p className="text-[10px] text-slate-500">NO DATA — không đồng nghĩa Tổng tài sản = 0.</p>:null}</div></div>
+      <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <details className="rounded-xl border border-[#dce8f4] bg-white p-4"><summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Các khoản nợ · xem chi tiết</summary><div className="mt-3 space-y-2">{debts.length ? debts.map((x,i)=><div key={i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">Dư gốc: {x.verification_status==="VERIFIED" ? money(x.current_principal) : "—"} · Đáo hạn: {String(x.maturity_date ?? "—")}</div><div className="mt-1 text-slate-500">Nguồn: {String(x.source)} · Source updated: {fmtDate(x.source_updated_at)}</div></div>) : <p className="text-[10px] text-slate-500">NO DATA — không đồng nghĩa Tổng nợ = 0.</p>}</div></details>
+        <details className="rounded-xl border border-[#dce8f4] bg-white p-4"><summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Tài khoản & tài sản · xem chi tiết</summary><div className="mt-3 space-y-2">{accounts.map((x,i)=><div key={"a"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.account_type)} · {x.verification_status==="VERIFIED" ? money(x.current_balance) : "—"}</div></div>)}{assets.map((x,i)=><div key={"v"+i} className="rounded-lg border p-3 text-[10px]"><div className="flex justify-between"><b>{String(x.name)}</b><Status value={effectiveStatus(x.verification_status,x.source_updated_at,month)} /></div><div className="mt-2">{String(x.asset_type)} · {String(x.valuation_kind)} · {x.verification_status==="VERIFIED" ? money(x.value_amount) : "—"}</div></div>)}{!accounts.length&&!assets.length?<p className="text-[10px] text-slate-500">NO DATA — không đồng nghĩa Tổng tài sản = 0.</p>:null}</div></details>
       </section>
 
-            <section id="data-list" className="rounded-xl border border-[#dce8f4] bg-white p-4">
-        <h2 className="text-[14px] font-extrabold text-[#102456]">Chi tiết dữ liệu & thao tác an toàn</h2>
+      <details id="data-list" className="rounded-xl border border-[#dce8f4] bg-white p-4">
+        <summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Chi tiết dữ liệu & thao tác an toàn</summary>
         <p className="mt-1 text-[10px] text-[#445b7d]">Không hard delete. Giao dịch/transfer dùng Hủy; account/asset/debt dùng Ngừng sử dụng/HOLD. Mọi thao tác ghi lý do và audit before/after.</p>
         <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px_auto]" action="/personal-finance">
           <input className={inputClass} name="q" defaultValue={firstParam(params.q)} placeholder="Tìm theo tên, ngày, danh mục, số tiền..."/>
@@ -251,10 +244,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
             </tbody></table></div>
           </details>)}
         </div>
-      </section>
+      </details>
 
-      <section id="master-data-settings" className="rounded-xl border border-[#c9d9ec] bg-white p-4 text-[#1f3657]">
-        <h2 className="text-[14px] font-extrabold text-[#102456]">10. Cài đặt danh mục</h2>
+      <details id="master-data-settings" className="rounded-xl border border-[#c9d9ec] bg-white p-4 text-[#1f3657]">
+        <summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Cài đặt danh mục</summary>
         <p className="mt-1 text-[10px] text-[#445b7d]">Supabase Master Data là canonical runtime. Không xóa cứng taxonomy đã dùng; tắt bằng INACTIVE. Code kỹ thuật được giữ trong database, UI hiển thị tên tiếng Việt.</p>
         {migrationMissing ? <p className="mt-3 rounded bg-amber-50 p-3 text-[10px] font-semibold text-amber-800">HOLD tới khi migration Master Data + RLS PASS.</p> : <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
           <form action={saveFinanceMasterData} className="grid grid-cols-2 gap-2 rounded-lg bg-[#f6f9fd] p-3">
@@ -278,9 +271,9 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
             </tbody></table>
           </div>
         </div>}
-      </section>
+      </details>
 
-      <section className="rounded-xl border border-[#dce8f4] bg-white p-4"><h2 className="text-[14px] font-extrabold text-[#102456]">11. Nhập / cập nhật dữ liệu</h2><p className="mt-1 text-[10px] text-[#7185a5]">CEO thao tác tại đây; không sửa database trực tiếp. Mọi bản ghi do App tạo mặc định NEED_VERIFY cho tới khi evidence được reconciliation.</p>
+      <details className="rounded-xl border border-[#dce8f4] bg-white p-4"><summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Nhập / cập nhật dữ liệu</summary><p className="mt-1 text-[10px] text-[#7185a5]">CEO thao tác tại đây; không sửa database trực tiếp. Mọi bản ghi do App tạo mặc định NEED_VERIFY cho tới khi evidence được reconciliation.</p>
         <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
           <FormShell id="input-transaction" title="+ Giao dịch" disabled={migrationMissing}><form action={savePersonalTransaction} className="mt-3 grid grid-cols-2 gap-2">
             <input type="hidden" name="record_id" value={editTransaction ? String(editTransaction.id) : ""}/>
@@ -308,7 +301,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
 
           <FormShell id="import-history" title="Import dữ liệu lịch sử từ Sheet" disabled={migrationMissing}><form action={importLegacyPersonalFinance} className="mt-3"><p className="text-[10px] text-[#64799d]">Đọc 04_GiaoDich + baseline nợ/quỹ từ workbook gia đình; import idempotent và mặc định NEED_VERIFY. Phân phối Hospitality có conflict sẽ không tự VERIFIED.</p><button className="mt-3 rounded-md bg-[#102456] px-3 py-2 text-[11px] font-bold text-white">Audit + Import lịch sử</button>{auditRes.data ? <pre className="mt-3 overflow-auto rounded-lg bg-slate-50 p-3 text-[9px]">{JSON.stringify(auditRes.data.metadata,null,2)}</pre>:null}</form></FormShell>
         </div>
-      </section>
+      </details>
     </div>
   </TceWorkspaceShell>;
 }

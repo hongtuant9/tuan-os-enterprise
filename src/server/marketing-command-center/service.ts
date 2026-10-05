@@ -118,6 +118,7 @@ export async function getMarketingCommandCenterSnapshot(
     const group2DataQualityRows = rows(group2DataQualityResult);
     const group2ReconciliationRows = rows(group2ReconciliationResult);
     const group2GateRows = rows(group2GateResult);
+    const contentById = new Map(contentRows.map((row) => [s(row.content_id), row]));
     const attemptsByVariant = new Map<string, Row[]>();
     for (const attempt of publishAttemptRows) {
       const variantId = s(attempt.content_variant_id);
@@ -130,6 +131,7 @@ export async function getMarketingCommandCenterSnapshot(
         return ["PUBLISHED", "SCHEDULED", "SCHEDULED_VERIFIED", "READY_FOR_PERSONAL_FACEBOOK"].includes(status);
       })
       .map((variant) => {
+        const contentItem = contentById.get(s(variant.content_id)) ?? {};
         const metadata =
           variant.metadata && typeof variant.metadata === "object" && !Array.isArray(variant.metadata)
             ? (variant.metadata as Row)
@@ -171,11 +173,16 @@ export async function getMarketingCommandCenterSnapshot(
         const metricVerification = s(performance.verification_status) || "NEED_VERIFY";
         return {
           content_id: s(variant.content_id),
+          brand: s(contentItem.brand),
           variant_id: s(variant.id),
           channel_id: channelId,
           variant_key: variantKey,
           destination_type: destinationType,
-          destination_name: s(metadata.destination_name) || s(metadata.destination_ref) || channelId,
+          destination_name:
+            s(metadata.destination_name) ||
+            s(metadata.destination_ref) ||
+            (destinationType === "FANPAGE" ? s(contentItem.brand) : "") ||
+            channelId,
           provider,
           publish_status: s(variant.publish_status),
           scheduled_at: s(variant.scheduled_at),

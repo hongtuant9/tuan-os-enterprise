@@ -532,7 +532,7 @@ export async function approveMarketingContentForMetricool(
       /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
       /TAIB_PERSONAL_BRAND/i.test(serviceLine);
     const targetPublishStatus = isTaibPersonalBrand
-      ? "READY_FOR_PERSONAL_FACEBOOK"
+      ? "READY_FOR_FACEBOOK_NATIVE_SCHEDULE"
       : "APPROVED_FOR_METRICOOL";
     const targetApprovalStatus = isTaibPersonalBrand
       ? "OWNER_APPROVED_FOR_PERSONAL_FACEBOOK"
@@ -615,7 +615,7 @@ export async function approveMarketingContentForMetricool(
       return {
         ok: true,
         message: isTaibPersonalBrand
-          ? "Bài đã được Owner duyệt cho Facebook cá nhân và đang chờ đăng thủ công theo lịch."
+          ? "Bài đã được Owner duyệt cho Facebook cá nhân và đang chờ VPS tự lên lịch native trên Facebook."
           : "Bài đã được Owner duyệt và đang chờ/đã đồng bộ Metricool.",
       };
 
@@ -631,7 +631,9 @@ export async function approveMarketingContentForMetricool(
       target_channel: isTaibPersonalBrand
         ? "FACEBOOK_PERSONAL"
         : clean(metadata.target_channel) || null,
-      delivery_mode: isTaibPersonalBrand ? "MANUAL" : "PROVIDER",
+      delivery_mode: isTaibPersonalBrand
+        ? "FACEBOOK_NATIVE_SCHEDULE"
+        : "PROVIDER",
       provider: isTaibPersonalBrand ? null : "METRICOOL",
       canonical_sync_status: "PENDING",
       canonical_sync_error: null,
@@ -699,7 +701,7 @@ export async function approveMarketingContentForMetricool(
             : null,
         },
         recommended_action: isTaibPersonalBrand
-          ? "Publish manually to the Owner's personal Facebook profile on the planned date; record public URL/evidence after publication. Do not route through Cozy Garden Metricool."
+          ? "VPS Facebook scheduler tự tạo lịch trên Professional Dashboard của Owner, read-back Content Calendar, rồi mới chuyển SCHEDULED_VERIFIED. Không route qua Cozy Garden Metricool."
           : "Honor Owner approval; provider may schedule only through authenticated Metricool path and must record provider read-back before SCHEDULED.",
         action_class: "BUSINESS_WRITE_APPROVED",
         approval_required: false,
@@ -761,7 +763,7 @@ export async function approveMarketingContentForMetricool(
     try {
       const currentNote = clean(found.row[13]);
       const routingNote = isTaibPersonalBrand
-        ? `Owner approved in App at ${approvedAt}; decision=${decisionId}; TARGET_CHANNEL=FACEBOOK_PERSONAL; DELIVERY_MODE=MANUAL; Metricool not applicable.`
+        ? `Owner approved in App at ${approvedAt}; decision=${decisionId}; TARGET_CHANNEL=FACEBOOK_PERSONAL; DELIVERY_MODE=FACEBOOK_NATIVE_SCHEDULE; VPS scheduler pending; Metricool not applicable.`
         : `Owner approved in App at ${approvedAt}; decision=${decisionId}; provider sync pending.`;
       const note = [currentNote, routingNote].filter(Boolean).join(" ");
 
@@ -864,10 +866,10 @@ export async function approveMarketingContentForMetricool(
       message:
         canonicalSyncStatus === "PASS"
           ? isTaibPersonalBrand
-            ? "Đã duyệt bài cho Facebook cá nhân. Bài đang chờ đăng thủ công theo ngày dự kiến; không chuyển sang Metricool/Cozy Garden."
+            ? "Đã duyệt bài cho Facebook cá nhân. VPS sẽ tự lên lịch native trên Facebook theo ngày/giờ đã chốt và chỉ đánh dấu SCHEDULED_VERIFIED sau read-back Content Calendar."
             : "Đã duyệt đăng và đưa vào hàng chờ Metricool. Canonical read-back PASS; chỉ chuyển SCHEDULED sau provider read-back PASS."
           : isTaibPersonalBrand
-            ? "Đã ghi nhận Owner approval cho Facebook cá nhân. Google canonical sync đang PENDING_REAUTH; không chuyển bài sang Metricool."
+            ? "Đã ghi nhận Owner approval cho Facebook cá nhân. VPS scheduler chỉ chạy khi canonical/runtime đủ dữ liệu; không chuyển bài sang Metricool."
             : "Đã ghi nhận Owner approval và đưa vào hàng chờ Metricool. Google canonical sync đang PENDING_REAUTH; quyết định Owner được giữ trong runtime và không bị hạ cấp.",
     };
   } catch (error) {

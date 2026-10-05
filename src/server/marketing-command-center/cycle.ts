@@ -298,7 +298,7 @@ async function syncWorkbookPlans(db: UntypedDb, nowIso: string) {
         payload.publish_status =
           str(current?.publish_status) ||
           (currentApproval === "OWNER_APPROVED_FOR_PERSONAL_FACEBOOK"
-            ? "READY_FOR_PERSONAL_FACEBOOK"
+            ? "READY_FOR_FACEBOOK_NATIVE_SCHEDULE"
             : "APPROVED_FOR_METRICOOL");
         const currentMetadata = obj(current?.metadata);
         payload.metadata = {

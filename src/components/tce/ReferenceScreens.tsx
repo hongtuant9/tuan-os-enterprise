@@ -6,6 +6,7 @@ import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 import VerificationHelp from "@/components/tce/VerificationHelp";
 import { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/verification-guide";
 import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
+import { recordBusinessCashDeposit } from "@/app/finance/actions";
 
 type ScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -616,6 +617,30 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
               rows={5}
               data={data?.tables.financePosition}
             />
+          </Section>
+
+          <Section
+            title="Tiền mặt tháng hiện tại"
+            subtitle="Theo dõi tiền mặt chưa nộp ngân hàng · Cozy riêng · Homestay tổng kèm Lavender/Ruby · nộp ngân hàng không ghi doanh thu lần hai"
+            className="col-span-12 h-[330px]"
+            icon="₫"
+          >
+            <DataTable
+              columns={["Khu vực","Doanh thu tiền mặt tháng","Đã nộp tài khoản","Tiền mặt còn giữ","Ghi chú / tài khoản đích","Trạng thái"]}
+              rows={4}
+              data={data?.tables.financeCashRevenue}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-2 px-3">
+              <form action={recordBusinessCashDeposit}>
+                <input type="hidden" name="scope" value="COZY"/>
+                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0874eb] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Chuyển Cozy → TPBank 888</button>
+              </form>
+              <form action={recordBusinessCashDeposit}>
+                <input type="hidden" name="scope" value="HOMESTAY"/>
+                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0c9d63] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Chuyển Homestay → TK KINH DOANH</button>
+              </form>
+              <span className="text-[8px] font-semibold text-[#7488a5]">{data?.lists.financeCashTransferGate?.[1] ?? "Chỉ ghi nhận sau khi tiền đã thực sự được nộp/chuyển; bank side vẫn chờ đối soát."}</span>
+            </div>
           </Section>
 
           <Section

@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getRequestContainer } from "@/server/container";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
@@ -26,6 +27,7 @@ import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
 import { readFinanceCutoverSnapshot } from "@/server/finance/finance-cutover";
 import { readBusinessExpenseActual, type BusinessExpenseActualSnapshot } from "@/server/finance/business-expense-actual";
+import { readBusinessCashRevenue, type BusinessCashRevenueSnapshot } from "@/server/finance/business-cash-revenue";
 import { AI_RECEPTIONIST_FRESHNESS_POLICY, evaluateFreshness, type DataRecencyStatus, type FreshnessStatus, type PipelineFreshnessStatus } from "@/server/tce/data-freshness";
 
 export type TceTabScreen =
@@ -590,7 +592,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       ? (sameAsCurrentMonth ? businessPeriodExpensePromise : readBusinessExpenseActual(container.db, monthStart, today))
       : Promise.resolve(null);
     const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessPeriodExpense, businessMonthExpense, businessOccupancy] = await Promise.all([
+    const cashRevenueFallback: BusinessCashRevenueSnapshot = { month: monthStart.slice(0,7), through: today, state: "HOLD", cozy:{collected:0,deposited:0,onHand:0,status:"HOLD"}, lavender:{collected:0,deposited:0,onHand:0,status:"HOLD"}, ruby:{collected:0,deposited:0,onHand:0,status:"HOLD"}, homestay:{collected:0,deposited:0,onHand:0,status:"HOLD"}, unknownHotelCash:0, note:"Không đọc được KiotViet cash payment trong thời gian giới hạn." };
+    const cashRevenuePromise = screen === "finance" ? financeReadWithTimeout(readBusinessCashRevenue(container.db as SupabaseClient, monthStart, today), cashRevenueFallback) : Promise.resolve(null);
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessPeriodExpense, businessMonthExpense, businessOccupancy, cashRevenue] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
@@ -600,6 +604,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       businessPeriodExpensePromise,
       businessMonthExpensePromise,
       occupancyPromise,
+      cashRevenuePromise,
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -1276,6 +1281,15 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
 
     const activeDebt401 = cutoverSnapshot?.facilities.find((x) => x.code === "BIDV-OD-401");
     const emergency407 = cutoverSnapshot?.facilities.find((x) => x.code === "BIDV-OD-407");
+    const cashTransferOpenDay = Math.min(30, new Date(Date.UTC(Number(today.slice(0,4)), Number(today.slice(5,7)), 0)).getUTCDate());
+    const cashTransferOpen = Number(today.slice(8,10)) >= cashTransferOpenDay && cashRevenue?.state === "VERIFIED";
+    const financeCashRevenueRows = cashRevenue ? [
+      ["Cozy Garden", money(cashRevenue.cozy.collected), money(cashRevenue.cozy.deposited), money(cashRevenue.cozy.onHand), "Cuối tháng → TPBank 888 · Tài khoản doanh thu Cozy Garden", cashRevenue.cozy.status],
+      ["Homestay — Tổng", money(cashRevenue.homestay.collected), money(cashRevenue.homestay.deposited), money(cashRevenue.homestay.onHand), "Tổng Lavender + Ruby · cuối tháng → TK KINH DOANH Homestay", cashRevenue.homestay.status],
+      ["↳ Lavender", money(cashRevenue.lavender.collected), money(cashRevenue.lavender.deposited), money(cashRevenue.lavender.onHand), "Theo dõi riêng tiền mặt Lavender", cashRevenue.lavender.status],
+      ["↳ Ruby", money(cashRevenue.ruby.collected), money(cashRevenue.ruby.deposited), money(cashRevenue.ruby.onHand), "Theo dõi riêng tiền mặt Ruby", cashRevenue.ruby.status],
+    ] : [];
+
     const financePositionRows = [
       ["Nguồn tiền cutover 30/09", money(cutoverSnapshot?.knownCash ?? 214_073_495), "Dùng thanh toán nghĩa vụ kỳ 30/09", cutoverSnapshot?.liquidityStatus ?? "VERIFIED"],
       ["OTA đã duyệt thanh toán", money(cutoverSnapshot?.businessAr ?? 77_424_037), "Đã nằm trong nguồn tiền quản trị; nhận tiền không ghi doanh thu lần hai", "VERIFIED"],
@@ -1392,6 +1406,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         financePosition: financePositionRows,
         financeAccountStructure: financeAccountStructureRows,
         financeFundBuckets: financeFundRows,
+        financeCashRevenue: financeCashRevenueRows,
         financeCutoverOpening: cutoverOpeningRows,
         financeCutoverFacilities: cutoverFacilityRows,
         financeCutoverAr: cutoverArRows,
@@ -1462,6 +1477,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         financeApiCapabilities: KIOTVIET_API_CAPABILITIES.map((row, i) => [String(i + 1), ...row]),
       },
       {
+        financeCashTransferGate: cashRevenue ? [cashTransferOpen ? "OPEN" : "LOCKED", `Mở từ ngày ${cashTransferOpenDay} hoặc ngày cuối tháng · nguồn phải VERIFIED`, cashRevenue.state, cashRevenue.note] : ["LOCKED","Chưa có dữ liệu tiền mặt","HOLD"],
         financeActions: [
           "1. Từ 01/10 ghi đủ giao dịch mỗi ngày: TKK chỉ nhận doanh thu; mọi khoản chi vận hành qua đúng tài khoản/module và gắn Business Unit Cozy/Lavender/Ruby.",
           "2. Cuối ngày đối soát KiotViet ↔ TKK/BIDV 888 ↔ tiền mặt/OTA; tiền OTA về chỉ là thu công nợ của kỳ cũ, không ghi doanh thu lần hai.",

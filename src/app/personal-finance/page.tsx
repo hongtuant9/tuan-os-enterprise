@@ -109,7 +109,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
   const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes, otaReceivedCurrentRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -129,9 +129,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.rpc("finance_cutover_snapshot"),
     raw.rpc("finance_operating_snapshot", { p_month: month }),
     raw.from("finance_accounts").select("account_code,display_name,business_unit,current_balance,balance_as_of,verification_status,reconciliation_status").in("account_code", ["CASH-COZY","CASH-LAVENDER","CASH-RUBY"]).eq("record_status","ACTIVE").order("account_code"),
+    raw.from("finance_opening_positions").select("position_code,cutover_date,amount,verification_status,source,record_status,notes").eq("position_code","OTA-RECEIVED-CURRENT-20261005").eq("record_status","ACTIVE").maybeSingle(),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes, businessCashAccountsRes, otaReceivedCurrentRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -150,6 +151,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const snapshots = (snapshotsRes.data ?? []) as Row[];
   const operating = operatingRes.data && typeof operatingRes.data === "object" && !Array.isArray(operatingRes.data) ? operatingRes.data as Row : null;
   const businessCashAccounts = (businessCashAccountsRes.data ?? []) as Row[];
+  const otaReceivedCurrent = otaReceivedCurrentRes.data as Row | null;
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -207,6 +209,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         debts={debts}
         personalAccounts={accounts}
         businessCashAccounts={businessCashAccounts}
+        otaReceivedCurrent={otaReceivedCurrent}
         migrationMissing={migrationMissing}
       />
 

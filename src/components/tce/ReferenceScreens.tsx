@@ -6,7 +6,7 @@ import type { TceTabLiveData } from "@/server/tce/tab-live-data";
 import VerificationHelp from "@/components/tce/VerificationHelp";
 import { fallbackVerificationGuide, type VerificationGuide } from "@/components/tce/verification-guide";
 import DataFreshnessBar from "@/components/tce/DataFreshnessBar";
-import { recordBusinessCashDeposit } from "@/app/finance/actions";
+import { approveProfitAllocation, generateProfitAllocationSuggestion, recordBusinessCashDeposit, saveProfitAllocationDraft } from "@/app/finance/actions";
 
 type ScreenKey =
   | "business" | "marketing" | "operations" | "reception"
@@ -444,6 +444,46 @@ function TileGrid({ items, columns = 3 }: { items: string[]; columns?: number })
   );
 }
 
+
+function ProfitAllocationPanel({data}:{data?:TceTabLiveData}){
+  const m=data?.lists.financeProfitAllocationMeta ?? ["","NO_DATA","NO_DATA","2026-10-01","","","0","0","0","0"];
+  const [id,status,verification,month,pat,reserve,ceo,debt,safety,reinvest]=m;
+  const input="w-full rounded-md border border-[#d7e4f1] bg-white px-2 py-1.5 text-[9px] text-[#18365f]";
+  const label="mb-1 block text-[8px] font-bold text-[#526d90]";
+  return <Section title="Phân chia lợi nhuận sau thuế" subtitle="Waterfall chuẩn: giữ vốn lưu động → CEO Draw theo nhu cầu gia đình → phần còn lại 60% trả nợ / 25% quỹ an toàn / 15% tái đầu tư" className="col-span-12" icon="◎">
+    <div className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-[1fr_1.4fr]">
+      <div className="space-y-3 rounded-lg border border-[#e0eaf5] bg-[#f9fcff] p-3">
+        <div className="flex items-center justify-between gap-2"><div><b className="text-[10px] text-[#17375f]">1. Tạo gợi ý AI Agent</b><p className="mt-1 text-[8px] text-[#7186a4]">Nhập số đã chốt cuối tháng. AI chỉ tính toán/gợi ý, không tự duyệt.</p></div><span className="rounded bg-[#eef5ff] px-2 py-1 text-[8px] font-bold text-[#1768df]">{status} · {verification}</span></div>
+        <form action={generateProfitAllocationSuggestion} className="grid grid-cols-2 gap-2">
+          <input type="hidden" name="proposal_month" value={month}/>
+          <label><span className={label}>Lợi nhuận sau thuế đã chốt</span><input className={input} name="profit_after_tax" defaultValue={pat} inputMode="numeric" placeholder="0" required/></label>
+          <label><span className={label}>Vốn lưu động giữ lại</span><input className={input} name="working_capital_reserve" defaultValue={reserve} inputMode="numeric" placeholder="0" required/></label>
+          <button className="col-span-2 rounded-md bg-[#176fe5] px-3 py-2 text-[9px] font-black text-white">Tạo / cập nhật gợi ý AI</button>
+        </form>
+        <Link href="/personal-finance#input-transaction" className="block rounded-md border border-[#bfd5f3] bg-white px-3 py-2 text-center text-[8px] font-bold text-[#1768df]">Nhập chi phí gia đình thực tế → Tài chính cá nhân</Link>
+        <p className="text-[8px] leading-4 text-[#7186a4]">CEO Draw gợi ý = phần cần bổ sung để tiền gia đình khả dụng đạt ngân sách sống khỏe 75.762.500đ. Nếu còn nhiều tiền, CEO Draw giảm; nếu thiếu/âm, CEO Draw tăng trước khi chia 60/25/15.</p>
+      </div>
+      <div className="space-y-3">
+        <DataTable columns={["Chỉ tiêu","Giá trị","Cách tính / nguồn","Trạng thái"]} data={data?.tables.financeProfitAllocation}/>
+        {id ? <form action={saveProfitAllocationDraft} className="grid grid-cols-2 gap-2 rounded-lg border border-[#e0eaf5] p-3 md:grid-cols-4">
+          <input type="hidden" name="proposal_id" value={id}/>
+          <label><span className={label}>CEO Draw → TPBank 501</span><input className={input} name="ceo_draw" defaultValue={ceo} inputMode="numeric" required/></label>
+          <label><span className={label}>Trả nợ 401</span><input className={input} name="debt_repayment" defaultValue={debt} inputMode="numeric" required/></label>
+          <label><span className={label}>Quỹ an toàn A01</span><input className={input} name="emergency_fund" defaultValue={safety} inputMode="numeric" required/></label>
+          <label><span className={label}>Tái đầu tư / dự phòng</span><input className={input} name="reinvestment" defaultValue={reinvest} inputMode="numeric" required/></label>
+          <button disabled={status==="APPROVED"} className="col-span-2 rounded-md bg-[#244c78] px-3 py-2 text-[9px] font-black text-white disabled:bg-slate-300 md:col-span-4">Lưu phương án phân chia</button>
+        </form>:null}
+        {id && status==="READY_FOR_CEO" ? <form action={approveProfitAllocation} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <input type="hidden" name="proposal_id" value={id}/>
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]"><input className={input} name="confirmation" placeholder="Nhập: DUYỆT PHÂN CHIA" required/><button className="rounded-md bg-[#b56b00] px-4 py-2 text-[9px] font-black text-white">Duyệt phân chia</button></div>
+          <p className="mt-2 text-[8px] leading-4 text-amber-800">Sau khi duyệt, hệ thống sinh các yêu cầu chuyển tiền và cập nhật trạng thái phân bổ. Số dư ngân hàng thực tế chỉ đổi sau khi có bằng chứng chuyển tiền/đối soát.</p>
+        </form>:null}
+        {status==="APPROVED" ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><b className="text-[9px] text-emerald-800">Phương án đã được CEO duyệt · chờ chuyển tiền / đối soát ngân hàng</b><div className="mt-2"><DataTable columns={["#","Mục đích","Số tiền","Đích","Trạng thái","Xác minh"]} data={data?.tables.financeProfitTransfers}/></div></div>:null}
+      </div>
+    </div>
+  </Section>
+}
+
 function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; data?: TceTabLiveData; businessView?: "main" | "data-control" }) {
   switch (screen) {
     case "business": {
@@ -621,7 +661,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Tiền mặt tháng hiện tại"
-            subtitle="Theo dõi tiền mặt chưa nộp ngân hàng · Cozy riêng · Homestay tổng kèm Lavender/Ruby · nộp ngân hàng không ghi doanh thu lần hai"
+            subtitle="Theo dõi tiền mặt chưa nộp ngân hàng · cuối tháng Cozy/Lavender/Ruby đều nộp BIDV 888 · không ghi doanh thu lần hai"
             className="col-span-12 h-[330px]"
             icon="₫"
           >
@@ -633,11 +673,11 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
             <div className="mt-3 flex flex-wrap items-center gap-2 px-3">
               <form action={recordBusinessCashDeposit}>
                 <input type="hidden" name="scope" value="COZY"/>
-                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0874eb] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Chuyển Cozy → TPBank 888</button>
+                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0874eb] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Nộp Cozy → BIDV 888</button>
               </form>
               <form action={recordBusinessCashDeposit}>
                 <input type="hidden" name="scope" value="HOMESTAY"/>
-                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0c9d63] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Chuyển Homestay → TK KINH DOANH</button>
+                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0c9d63] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Nộp Homestay → BIDV 888</button>
               </form>
               <span className="text-[8px] font-semibold text-[#7488a5]">{data?.lists.financeCashTransferGate?.[1] ?? "Chỉ ghi nhận sau khi tiền đã thực sự được nộp/chuyển; bank side vẫn chờ đối soát."}</span>
             </div>
@@ -645,7 +685,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Cấu trúc tài khoản chuẩn"
-            subtitle="TK KINH DOANH nhận doanh thu Homestay · TPBank 888 nhận doanh thu Cozy · BIDV 888 chi phí kinh doanh · TPBank 501 và TKTK_A01 thuộc Personal Finance"
+            subtitle="TK KINH DOANH/TPBank 888 theo dõi dòng tiền thực thu từng mảng; cuối tháng gom BIDV 888 để quyết toán; TPBank 501 chỉ nhận lợi nhuận sau thuế phân phối CEO"
             className="col-span-12 h-[320px]"
             icon="▣"
           >
@@ -669,6 +709,8 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
             />
           </Section>
 
+          <ProfitAllocationPanel data={data}/>
+
           <Section
             title="Doanh thu theo mảng kinh doanh"
             subtitle="P&L phải phân loại theo Business Unit Cozy Garden · Lavender · Ruby, không theo tài khoản TKK nhận tiền"
@@ -683,16 +725,12 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           </Section>
 
           <Section
-            title="OTA đã duyệt thanh toán"
-            subtitle="Agoda / Expedia là khoản thu tiền của kỳ lưu trú trước; ngày tiền về không làm phát sinh doanh thu lần hai"
-            className="col-span-12 h-[245px]"
+            title="OTA đã nhận hiện tại"
+            subtitle="Không theo dõi OTA phải thu riêng; OTA thường thanh toán ngày 5–7 tháng kế tiếp và cuối kỳ gom về BIDV 888"
+            className="col-span-12 h-[180px]"
             icon="▤"
           >
-            <DataTable
-              columns={["#","Đơn vị","OTA","Số tiền","Ngày dự kiến","Trạng thái","Xác minh"]}
-              rows={4}
-              data={data?.tables.financeCutoverAr}
-            />
+            <DataTable columns={["Đơn vị","Đã nhận","As of","Quy tắc","Trạng thái"]} rows={1} data={data?.tables.financeOtaReceived}/>
           </Section>
 
           <Section

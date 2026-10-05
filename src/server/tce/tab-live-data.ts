@@ -594,7 +594,13 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
     const cashRevenueFallback: BusinessCashRevenueSnapshot = { month: monthStart.slice(0,7), through: today, state: "HOLD", cozy:{collected:0,deposited:0,onHand:0,status:"HOLD"}, lavender:{collected:0,deposited:0,onHand:0,status:"HOLD"}, ruby:{collected:0,deposited:0,onHand:0,status:"HOLD"}, homestay:{collected:0,deposited:0,onHand:0,status:"HOLD"}, unknownHotelCash:0, note:"Không đọc được KiotViet cash payment trong thời gian giới hạn." };
     const cashRevenuePromise = screen === "finance" ? financeReadWithTimeout(readBusinessCashRevenue(container.db as SupabaseClient, monthStart, today), cashRevenueFallback) : Promise.resolve(null);
-    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessPeriodExpense, businessMonthExpense, businessOccupancy, cashRevenue] = await Promise.all([
+    const financeDb = container.db as unknown as SupabaseClient;
+    const financeAllocationPromise = screen === "finance" ? financeDb.from("finance_allocation_proposals").select("*").eq("proposal_month",monthStart).eq("business_unit","CONSOLIDATED").order("updated_at",{ascending:false}).limit(1).maybeSingle() : Promise.resolve({data:null,error:null});
+    const personal501Promise = screen === "finance" ? financeDb.from("personal_finance_accounts").select("current_balance,balance_as_of,verification_status").eq("external_key","TPBANK-501").eq("record_status","ACTIVE").maybeSingle() : Promise.resolve({data:null,error:null});
+    const personalMonthPromise = screen === "finance" ? financeDb.from("personal_finance_monthly_v").select("personal_income_actual,personal_expense_actual,verified_business_distribution_received,personal_net_cash_flow").eq("month",monthStart).maybeSingle() : Promise.resolve({data:null,error:null});
+    const otaReceivedPromise = screen === "finance" ? financeDb.from("finance_opening_positions").select("amount,cutover_date,verification_status").eq("position_code","OTA-RECEIVED-CURRENT-20261005").eq("record_status","ACTIVE").maybeSingle() : Promise.resolve({data:null,error:null});
+    const transferRequestsPromise = screen === "finance" ? financeDb.from("finance_transfer_requests").select("purpose,amount,status,verification_status,destination_label").eq("proposal_id",(await financeAllocationPromise).data?.id ?? "00000000-0000-0000-0000-000000000000").order("created_at",{ascending:true}) : Promise.resolve({data:[],error:null});
+    const [hotelPeriod, fnbPeriod, hotelMonth, fnbMonth, foundationReadiness, businessOperating, businessPeriodExpense, businessMonthExpense, businessOccupancy, cashRevenue, financeAllocationRes, personal501Res, personalMonthRes, otaReceivedRes, transferRequestsRes] = await Promise.all([
       hotelPeriodPromise,
       fnbPeriodPromise,
       hotelMonthPromise,
@@ -605,6 +611,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       businessMonthExpensePromise,
       occupancyPromise,
       cashRevenuePromise,
+      financeAllocationPromise,
+      personal501Promise,
+      personalMonthPromise,
+      otaReceivedPromise,
+      transferRequestsPromise,
     ]);
 
     const periodHotel = hotelPeriod.state === "VERIFIED" ? hotelPeriod.revenue : 0;
@@ -615,6 +626,18 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const monthRevenue = monthHotel + monthFnb;
     const bothPeriodVerified = hotelPeriod.state === "VERIFIED" && fnbPeriod.state === "VERIFIED";
     const bothMonthVerified = hotelMonth.state === "VERIFIED" && fnbMonth.state === "VERIFIED";
+    const financeAllocation = financeAllocationRes?.data as Record<string,unknown> | null;
+    const personal501 = personal501Res?.data as Record<string,unknown> | null;
+    const personalMonth = personalMonthRes?.data as Record<string,unknown> | null;
+    const otaReceived = otaReceivedRes?.data as Record<string,unknown> | null;
+    const transferRequests = (transferRequestsRes?.data ?? []) as Array<Record<string,unknown>>;
+    const allocationRecommendation = financeAllocation?.recommendation && typeof financeAllocation.recommendation === "object" ? financeAllocation.recommendation as Record<string,unknown> : {};
+    const allocationAdjustment = financeAllocation?.owner_adjustment && typeof financeAllocation.owner_adjustment === "object" ? financeAllocation.owner_adjustment as Record<string,unknown> : {};
+    const familyBudgetCanonical = 75_762_500;
+    const personalOpening = Number(personal501?.current_balance ?? 0);
+    const personalExpenseActual = Number(personalMonth?.personal_expense_actual ?? 0);
+    const personalIncomeActual = Number(personalMonth?.personal_income_actual ?? 0);
+    const personalAvailableBeforeDraw = Number(allocationRecommendation.personalAvailableBeforeDraw ?? (personalOpening + personalIncomeActual - personalExpenseActual));
     const arCandidateReady =
       hotelMonth.receivable.state === "VERIFIED" &&
       fnbMonth.receivable.state === "VERIFIED";
@@ -1237,24 +1260,25 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     ]) ?? [];
 
     const accountRoleLabel = (code: string) => {
-      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY") return "TKK — chỉ nhận doanh thu";
-      if (code === "OPEN-BIDV-TUAN") return "Chi vận hành toàn TCE";
+      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY" || code === "ROLE-TPBANK-COZY-888") return "Theo dõi dòng tiền thực thu";
+      if (code === "OPEN-BIDV-TUAN") return "Tập trung chi phí & quyết toán TCE";
       if (code === "ROLE-TPBANK-TCE-RESERVE-1984") return "Quỹ chung TCE";
       if (code === "ROLE-TPBANK-PERSONAL-501") return "Cá nhân / gia đình";
       if (code === "ROLE-TPBANK-SAFETY") return "Quỹ an toàn cá nhân";
       return "Tài khoản khác";
     };
     const accountScopeLabel = (code: string) => {
-      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY") return "Doanh thu Cozy · Lavender · Ruby";
+      if (code === "OPEN-HKD-TUAN" || code === "ROLE-HKD-RUBY" || code === "ROLE-TPBANK-COZY-888") return "Dòng tiền thực thu từng mảng vs KiotViet · cuối tháng gom BIDV 888";
       if (code === "OPEN-BIDV-TUAN") return "OPEX / COGS / nghĩa vụ TCE";
       if (code === "ROLE-TPBANK-TCE-RESERVE-1984") return "Thuế · Thưởng T13 · Dự phòng";
-      if (code === "ROLE-TPBANK-PERSONAL-501") return "CEO Compensation 40 triệu/tháng";
+      if (code === "ROLE-TPBANK-PERSONAL-501") return "Chi tiêu gia đình + lợi nhuận sau thuế phân phối CEO";
       if (code === "ROLE-TPBANK-SAFETY") return "Tài sản cá nhân · tự do tài chính";
       return "—";
     };
     const canonicalAccountCodes = new Set([
       "OPEN-HKD-TUAN",
       "ROLE-HKD-RUBY",
+      "ROLE-TPBANK-COZY-888",
       "OPEN-BIDV-TUAN",
       "ROLE-TPBANK-TCE-RESERVE-1984",
       "ROLE-TPBANK-PERSONAL-501",
@@ -1284,19 +1308,32 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const cashTransferOpenDay = Math.min(30, new Date(Date.UTC(Number(today.slice(0,4)), Number(today.slice(5,7)), 0)).getUTCDate());
     const cashTransferOpen = Number(today.slice(8,10)) >= cashTransferOpenDay && cashRevenue?.state === "VERIFIED";
     const financeCashRevenueRows = cashRevenue ? [
-      ["Cozy Garden", money(cashRevenue.cozy.collected), money(cashRevenue.cozy.deposited), money(cashRevenue.cozy.onHand), "Cuối tháng → TPBank 888 · Tài khoản doanh thu Cozy Garden", cashRevenue.cozy.status],
-      ["Homestay — Tổng", money(cashRevenue.homestay.collected), money(cashRevenue.homestay.deposited), money(cashRevenue.homestay.onHand), "Tổng Lavender + Ruby · cuối tháng → TK KINH DOANH Homestay", cashRevenue.homestay.status],
+      ["Cozy Garden", money(cashRevenue.cozy.collected), money(cashRevenue.cozy.deposited), money(cashRevenue.cozy.onHand), "Cuối tháng → BIDV 888 · tài khoản tập trung quyết toán", cashRevenue.cozy.status],
+      ["Homestay — Tổng", money(cashRevenue.homestay.collected), money(cashRevenue.homestay.deposited), money(cashRevenue.homestay.onHand), "Tổng Lavender + Ruby · cuối tháng → BIDV 888", cashRevenue.homestay.status],
       ["↳ Lavender", money(cashRevenue.lavender.collected), money(cashRevenue.lavender.deposited), money(cashRevenue.lavender.onHand), "Theo dõi riêng tiền mặt Lavender", cashRevenue.lavender.status],
       ["↳ Ruby", money(cashRevenue.ruby.collected), money(cashRevenue.ruby.deposited), money(cashRevenue.ruby.onHand), "Theo dõi riêng tiền mặt Ruby", cashRevenue.ruby.status],
     ] : [];
 
     const financePositionRows = [
       ["Nguồn tiền cutover 30/09", money(cutoverSnapshot?.knownCash ?? 214_073_495), "Dùng thanh toán nghĩa vụ kỳ 30/09", cutoverSnapshot?.liquidityStatus ?? "VERIFIED"],
-      ["OTA đã duyệt thanh toán", money(cutoverSnapshot?.businessAr ?? 77_424_037), "Đã nằm trong nguồn tiền quản trị; nhận tiền không ghi doanh thu lần hai", "VERIFIED"],
+      ["OTA đã nhận hiện tại", otaReceived?.verification_status === "VERIFIED" ? money(Number(otaReceived.amount??0)) : "NEED VERIFY", "Không theo dõi OTA phải thu riêng; OTA thường thanh toán ngày 5–7 tháng kế tiếp", String(otaReceived?.verification_status??"NEED VERIFY")],
       ["Quỹ tái đầu tư Cozy", money(planByCode.get("COZY_REINVESTMENT_EARMARK")?.baseline ?? 31_473_816), "Earmark trong business cash; không cộng lại", "VERIFIED"],
       ["Dư nợ thấu chi 401", money(activeDebt401?.usedPrincipal ?? 2_850_413_761), "Lãi suất 5,9%/năm; theo dõi giảm dần", activeDebt401?.verificationStatus ?? "VERIFIED"],
       ["Hạn mức 407 chưa sử dụng", money(emergency407?.availableCredit ?? 882_000_000), "Không phải cash; mục tiêu used principal = 0", emergency407?.verificationStatus ?? "VERIFIED"],
     ];
+
+    const financeProfitAllocationRows = [
+      ["Ngân sách gia đình chuẩn", money(familyBudgetCanonical), "FIN-MASTER-001 · 06_NGAN_SACH_MUC_TIEU", "VERIFIED"],
+      ["Tiền gia đình còn khả dụng trước CEO Draw", money(personalAvailableBeforeDraw), `TPBank 501 ${money(personalOpening)} + thu nhập/phân phối − chi phí Actual ${money(personalExpenseActual)}`, personal501?.verification_status === "VERIFIED" ? "VERIFIED" : "NEED VERIFY"],
+      ["Lợi nhuận sau thuế", financeAllocation?.profit_after_tax == null ? "CHƯA NHẬP" : money(Number(financeAllocation.profit_after_tax)), "Owner nhập sau Month-End Close", String(financeAllocation?.verification_status ?? "NO DATA")],
+      ["Vốn lưu động giữ lại", financeAllocation?.operating_reserve_required == null ? "CHƯA NHẬP" : money(Number(financeAllocation.operating_reserve_required)), "Giữ trong kinh doanh trước khi phân phối", String(financeAllocation?.verification_status ?? "NO DATA")],
+      ["CEO Draw", financeAllocation ? money(Number(allocationAdjustment.ceoDraw ?? allocationRecommendation.ceoDraw ?? 0)) : "—", "Ưu tiên bù TPBank 501 tới mức ngân sách gia đình chuẩn", String(financeAllocation?.status ?? "NO DATA")],
+      ["Trả nợ", financeAllocation ? money(Number(allocationAdjustment.debtRepayment ?? allocationRecommendation.debtRepayment ?? 0)) : "—", "60% phần còn lại sau CEO Draw", String(financeAllocation?.status ?? "NO DATA")],
+      ["Quỹ an toàn", financeAllocation ? money(Number(allocationAdjustment.emergencyFund ?? allocationRecommendation.emergencyFund ?? 0)) : "—", "25% phần còn lại sau CEO Draw", String(financeAllocation?.status ?? "NO DATA")],
+      ["Tái đầu tư", financeAllocation ? money(Number(allocationAdjustment.reinvestment ?? allocationRecommendation.reinvestment ?? 0)) : "—", "15% phần còn lại sau CEO Draw", String(financeAllocation?.status ?? "NO DATA")],
+    ];
+    const financeProfitTransferRows = transferRequests.map((x,i)=>[String(i+1),String(x.purpose??"—"),money(Number(x.amount??0)),String(x.destination_label??"—"),String(x.status??"—"),String(x.verification_status??"—")]);
+    const financeOtaReceivedRows = [["Homestay", otaReceived?.verification_status === "VERIFIED" ? money(Number(otaReceived.amount??0)) : "NEED VERIFY", String(otaReceived?.cutover_date??"—"), "OTA thường thanh toán ngày 5–7 tháng kế tiếp; khi nhận cuối kỳ gom BIDV 888", String(otaReceived?.verification_status??"NEED VERIFY")]];
 
     const cutoverCloseRows = cutoverSnapshot?.monthEndClose.map((x) => [
       String(x.step), x.description, x.domain, x.dueDate ?? "—", x.status, x.verificationStatus,
@@ -1407,6 +1444,9 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         financeAccountStructure: financeAccountStructureRows,
         financeFundBuckets: financeFundRows,
         financeCashRevenue: financeCashRevenueRows,
+        financeProfitAllocation: financeProfitAllocationRows,
+        financeProfitTransfers: financeProfitTransferRows,
+        financeOtaReceived: financeOtaReceivedRows,
         financeCutoverOpening: cutoverOpeningRows,
         financeCutoverFacilities: cutoverFacilityRows,
         financeCutoverAr: cutoverArRows,
@@ -1478,10 +1518,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       },
       {
         financeCashTransferGate: cashRevenue ? [cashTransferOpen ? "OPEN" : "LOCKED", `Mở từ ngày ${cashTransferOpenDay} hoặc ngày cuối tháng · nguồn phải VERIFIED`, cashRevenue.state, cashRevenue.note] : ["LOCKED","Chưa có dữ liệu tiền mặt","HOLD"],
+        financeProfitAllocationMeta: financeAllocation ? [String(financeAllocation.id??""),String(financeAllocation.status??""),String(financeAllocation.verification_status??""),String(financeAllocation.proposal_month??monthStart),String(financeAllocation.profit_after_tax??""),String(financeAllocation.operating_reserve_required??""),String(allocationAdjustment.ceoDraw??allocationRecommendation.ceoDraw??0),String(allocationAdjustment.debtRepayment??allocationRecommendation.debtRepayment??0),String(allocationAdjustment.emergencyFund??allocationRecommendation.emergencyFund??0),String(allocationAdjustment.reinvestment??allocationRecommendation.reinvestment??0)] : ["","NO_DATA","NO_DATA",monthStart,"","","0","0","0","0"],
         financeActions: [
-          "1. Từ 01/10 ghi đủ giao dịch mỗi ngày: TKK chỉ nhận doanh thu; mọi khoản chi vận hành qua đúng tài khoản/module và gắn Business Unit Cozy/Lavender/Ruby.",
-          "2. Cuối ngày đối soát KiotViet ↔ TKK/BIDV 888 ↔ tiền mặt/OTA; tiền OTA về chỉ là thu công nợ của kỳ cũ, không ghi doanh thu lần hai.",
-          "3. Hàng tháng trích quỹ trước khi phân phối: Thuế + Thưởng tháng 13 + Dự phòng vào TPBank TTKTK_A02; CEO Compensation 40 triệu chuyển TPBank 501; BIDV 888 có số dư chi phí kinh doanh 31.473.816đ chốt 30/09/2026; không phải tiền cá nhân.",
+          "1. Hàng ngày đối soát dòng tiền thực thu theo từng mảng với KiotViet; tài khoản doanh thu chỉ để tracking, không phải nơi giữ tiền cuối kỳ.",
+          "2. Cuối tháng gom tiền mặt, OTA đã nhận và số dư các tài khoản doanh thu về BIDV 888 để chốt lỗ–lãi; không ghi doanh thu lần hai.",
+          "3. Sau khi chốt lợi nhuận sau thuế: giữ vốn lưu động → CEO Draw theo nhu cầu gia đình → phần còn lại 60% trả nợ / 25% quỹ an toàn / 15% tái đầu tư; chỉ cập nhật Actual sau khi đối soát ngân hàng.",
         ],
         financeCoverageNotes: [
           kiotVietOnlyCoverage,

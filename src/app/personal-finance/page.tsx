@@ -120,11 +120,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("owner_business_transfers").select("*").eq("record_status","ACTIVE").gte("transfer_date", month).order("transfer_date", { ascending: false }).limit(100),
     raw.from("personal_finance_audit_log").select("metadata,created_at").eq("entity_type","IMPORT").order("created_at",{ascending:false}).limit(1).maybeSingle(),
     raw.from("finance_master_data").select("*").order("master_data_type").order("display_order").order("name"),
-    raw.from("personal_finance_transactions").select("*").order("transaction_date", { ascending: false }).limit(500),
-    raw.from("personal_finance_accounts").select("*").order("updated_at", { ascending: false }).limit(500),
-    raw.from("personal_finance_debts").select("*").order("updated_at", { ascending: false }).limit(500),
-    raw.from("personal_finance_assets").select("*").order("updated_at", { ascending: false }).limit(500),
-    raw.from("owner_business_transfers").select("*").order("transfer_date", { ascending: false }).limit(500),
+    raw.from("personal_finance_transactions").select("*").eq("record_status","ACTIVE").order("transaction_date", { ascending: false }).limit(500),
+    raw.from("personal_finance_accounts").select("*").eq("record_status","ACTIVE").order("updated_at", { ascending: false }).limit(500),
+    raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("updated_at", { ascending: false }).limit(500),
+    raw.from("personal_finance_assets").select("*").eq("record_status","ACTIVE").order("updated_at", { ascending: false }).limit(500),
+    raw.from("owner_business_transfers").select("*").eq("record_status","ACTIVE").order("transfer_date", { ascending: false }).limit(500),
     raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
     raw.rpc("finance_cutover_snapshot"),
     raw.rpc("finance_operating_snapshot", { p_month: month }),
@@ -229,7 +229,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
       </section>
 
       <details id="data-list" className="rounded-xl border border-[#dce8f4] bg-white p-4">
-        <summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Chi tiết dữ liệu & thao tác an toàn</summary>
+        <summary className="cursor-pointer text-[12px] font-extrabold text-[#102456]">Quản trị nâng cao · Dữ liệu hiện hành & thao tác an toàn</summary>
         <p className="mt-1 text-[10px] text-[#445b7d]">Không hard delete. Giao dịch/transfer dùng Hủy; account/asset/debt dùng Ngừng sử dụng/HOLD. Mọi thao tác ghi lý do và audit before/after.</p>
         <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px_auto]" action="/personal-finance">
           <input className={inputClass} name="q" defaultValue={firstParam(params.q)} placeholder="Tìm theo tên, ngày, danh mục, số tiền..."/>

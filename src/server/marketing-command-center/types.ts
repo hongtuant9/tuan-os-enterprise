@@ -52,6 +52,7 @@ export type MarketingCommandCenterSnapshot = {
   channels: MarketingPerformanceRow[];
   campaigns: Array<Record<string, unknown>>;
   content: Array<Record<string, unknown>>;
+  publications: Array<Record<string, unknown>>;
   attribution: Array<Record<string, unknown>>;
   connectors: Array<Record<string, unknown>>;
   recommendations: Array<Record<string, unknown>>;

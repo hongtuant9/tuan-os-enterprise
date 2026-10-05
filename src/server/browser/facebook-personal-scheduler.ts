@@ -36,6 +36,16 @@ type ContentItem = {
 const STATE_ROOT =
   process.env.TCE_AUTH_BROWSER_STATE_DIR?.trim() || "/var/lib/tce-auth-browser";
 const PROFILE_DIR = join(STATE_ROOT, "facebook-recruitment-profile");
+const BOOTSTRAP_LOCK = join(STATE_ROOT, "facebook-recruitment-bootstrap.lock");
+
+async function bootstrapActive() {
+  try {
+    await access(BOOTSTRAP_LOCK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function enabled() {
   return (
@@ -440,6 +450,12 @@ async function verifyInCalendar(
 
 export async function facebookPersonalSchedulerTick() {
   if (!enabled()) return { state: "DISABLED" as SchedulerState, processed: 0 };
+  if (await bootstrapActive())
+    return {
+      state: "HOLD_LOGIN" as SchedulerState,
+      processed: 0,
+      reason: "LOGIN_BOOTSTRAP_ACTIVE",
+    };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1564,6 +1564,55 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         ];
       });
 
+    const performanceMetric = (row: Record<string, unknown>, key: string) => {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") return "NEED VERIFY";
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? new Intl.NumberFormat("vi-VN").format(parsed) : "NEED VERIFY";
+    };
+    const publicationRows = mcc.publications.slice(0, 80).map((row, i) => {
+      const destinationType = textField(row, "destination_type");
+      const destinationName = textField(row, "destination_name");
+      const destination =
+        destinationType === "PERSONAL_PROFILE"
+          ? "Facebook cá nhân"
+          : destinationType === "FANPAGE"
+            ? "Fanpage · " + (destinationName || textField(row, "brand") || "Facebook")
+            : destinationType === "FACEBOOK_GROUP"
+              ? "Group · " + (destinationName || "NEED VERIFY")
+              : destinationType === "INSTAGRAM"
+                ? "Instagram · " + (destinationName || textField(row, "brand") || "Business")
+                : destinationName || destinationType || textField(row, "channel_id") || "NEED VERIFY";
+      const publicUrl = textField(row, "public_url");
+      const publishedAt = textField(row, "published_at") || textField(row, "scheduled_at");
+      const metricSource = textField(row, "metric_source") || "NEED VERIFY";
+      const metricVerification = textField(row, "metric_verification") || "NEED_VERIFY";
+      const readBack = textField(row, "read_back_status") || "NEED_VERIFY";
+      const verification =
+        readBack === "READ_BACK_VERIFIED" || readBack === "VERIFIED"
+          ? metricVerification === "VERIFIED"
+            ? "POST + METRICS VERIFIED"
+            : "POST VERIFIED · METRICS NEED VERIFY"
+          : "NEED VERIFY";
+      return [
+        String(i + 1),
+        textField(row, "content_id"),
+        destination,
+        textField(row, "provider") || "MANUAL",
+        publishedAt ? formatTceLocalDateTime(publishedAt) : "Chưa xác minh",
+        publicUrl ? `LINK:${publicUrl}|Mở bài` : "NEED VERIFY",
+        performanceMetric(row, "reach"),
+        performanceMetric(row, "reactions"),
+        performanceMetric(row, "comments"),
+        performanceMetric(row, "shares"),
+        performanceMetric(row, "clicks"),
+        performanceMetric(row, "meaningful_conversations"),
+        metricSource === "NEED VERIFY"
+          ? verification
+          : verification + " · " + metricSource,
+      ];
+    });
+
     const attributionRows = mcc.attribution.slice(0, 14).map((row, i) => [
       String(i + 1),
       textField(row, "occurred_at").slice(0, 16).replace("T", " "),
@@ -1665,6 +1714,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         marketingChannels,
         marketingCampaigns: campaignRows,
         marketingContent: contentRows,
+        marketingPublishedPerformance: publicationRows,
         marketingAttribution: attributionRows,
         marketingDataHealth: healthRows,
         marketingRecommendations: recommendationRows,

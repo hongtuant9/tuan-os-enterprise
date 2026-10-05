@@ -35,8 +35,8 @@ type ContentItem = {
 
 const STATE_ROOT =
   process.env.TCE_AUTH_BROWSER_STATE_DIR?.trim() || "/var/lib/tce-auth-browser";
-const PROFILE_DIR = join(STATE_ROOT, "facebook-recruitment-profile");
-const BOOTSTRAP_LOCK = join(STATE_ROOT, "facebook-recruitment-bootstrap.lock");
+const PROFILE_DIR = join(STATE_ROOT, "facebook-personal-profile");
+const BOOTSTRAP_LOCK = join(STATE_ROOT, "facebook-personal-bootstrap.lock");
 
 async function bootstrapActive() {
   try {

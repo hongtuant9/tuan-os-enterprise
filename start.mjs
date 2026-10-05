@@ -10,6 +10,13 @@ const cmiWorkerEnabled = cmiBrowserEnabled && !cmiWorkerExplicitlyDisabled;
 const cmiIntervalMs = Math.max(5000, Number(process.env.CMI_QUEUE_WORKER_INTERVAL_MS || 15000));
 const facebookRecruitmentWorkerEnabled = companyAutopilotEnabled && process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() !== "false";
 const facebookRecruitmentWorkerIntervalMs = Math.max(120000, Number(process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_INTERVAL_MS || 300000));
+const facebookPersonalSchedulerEnabled =
+  companyAutopilotEnabled &&
+  process.env.TCE_FACEBOOK_PERSONAL_SCHEDULER_ENABLED?.trim().toLowerCase() !== "false";
+const facebookPersonalSchedulerIntervalMs = Math.max(
+  120000,
+  Number(process.env.TCE_FACEBOOK_PERSONAL_SCHEDULER_INTERVAL_MS || 180000),
+);
 
 const staffOpsWorkerEnabled = companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const staffOpsIntervalMs = Math.max(60_000, Number(process.env.TCE_STAFF_OPS_WORKER_INTERVAL_MS || 300_000));
@@ -68,6 +75,9 @@ const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
 const trelloWorkerToken = deriveToken("tce-trello-worker-v1");
 const knowledgeGovernanceWorkerToken = deriveToken("tce-knowledge-governance-worker-v1");
 const facebookRecruitmentWorkerToken = deriveToken("tce-facebook-recruitment-browser-worker-v1");
+const facebookPersonalSchedulerToken = deriveToken(
+  "tce-facebook-personal-scheduler-worker-v1",
+);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function postInternal(path, headerName, token, timeoutMs) {
@@ -141,6 +151,59 @@ async function facebookRecruitmentWorkerLoop() {
   while (!stopping) {
     await facebookRecruitmentWorkerTick();
     await sleep(facebookRecruitmentWorkerIntervalMs);
+  }
+}
+
+async function facebookPersonalSchedulerTick() {
+  if (
+    !facebookPersonalSchedulerEnabled ||
+    !facebookPersonalSchedulerToken ||
+    stopping
+  )
+    return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/browser/facebook-personal-scheduler/worker",
+      "x-tce-facebook-personal-scheduler-token",
+      facebookPersonalSchedulerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(
+        `[Facebook Personal Scheduler] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`,
+      );
+      return;
+    }
+    const result = payload?.result ?? {};
+    if (result?.state !== "IDLE" || (result?.processed ?? 0) > 0) {
+      console.log(
+        `[Facebook Personal Scheduler] state=${result?.state ?? "n/a"} processed=${result?.processed ?? 0} content_id=${result?.contentId ?? "none"} scheduled_at=${result?.scheduledAt ?? "n/a"}`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[Facebook Personal Scheduler] ${message}`);
+  }
+}
+
+async function facebookPersonalSchedulerLoop() {
+  if (!facebookPersonalSchedulerEnabled) {
+    console.log("[Facebook Personal Scheduler] disabled");
+    return;
+  }
+  if (!facebookPersonalSchedulerToken) {
+    console.error(
+      "[Facebook Personal Scheduler] disabled: SUPABASE_SERVICE_ROLE_KEY is not set",
+    );
+    return;
+  }
+  console.log(
+    `[Facebook Personal Scheduler] enabled interval_ms=${facebookPersonalSchedulerIntervalMs} runtime=VPS_ALWAYS_ON`,
+  );
+  await sleep(60000);
+  while (!stopping) {
+    await facebookPersonalSchedulerTick();
+    await sleep(facebookPersonalSchedulerIntervalMs);
   }
 }
 
@@ -595,6 +658,7 @@ server.on("exit", (code, signal) => {
 
 void cmiWorkerLoop();
 void facebookRecruitmentWorkerLoop();
+void facebookPersonalSchedulerLoop();
 void staffOpsWorkerLoop();
 void executiveWorkerLoop();
 void syncWorkerLoop();

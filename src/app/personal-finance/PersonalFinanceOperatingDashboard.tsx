@@ -2,7 +2,7 @@ import { approveFinanceAllocationProposal, prepareFinanceTransfer, saveFinanceAl
 import { FREEDOM_KPIS, canonicalKpiStatus, gapToTarget, kpiTrend, targetProgress, type FreedomKpiCode } from "@/server/finance/financial-freedom-core";
 
 type Row=Record<string,unknown>;
-type Props={month:string;operating:Row|null;position:Row|null;monthly:Row|null;goals:Row[];snapshots:Row[];transactions:Row[];historyTransactions:Row[];debts:Row[];personalAccounts:Row[];openingNetCash:Row|null;migrationMissing:boolean};
+type Props={month:string;operating:Row|null;position:Row|null;monthly:Row|null;goals:Row[];snapshots:Row[];transactions:Row[];historyTransactions:Row[];debts:Row[];personalAccounts:Row[];migrationMissing:boolean};
 const nf=new Intl.NumberFormat("vi-VN",{maximumFractionDigits:0});
 const money=(v:unknown)=>v===null||v===undefined||v===""?"—":Number.isFinite(Number(v))?`${nf.format(Number(v))} đ`:"—";
 const num=(v:unknown)=>v===null||v===undefined||v===""?null:Number.isFinite(Number(v))?Number(v):null;
@@ -19,8 +19,8 @@ function Bars({rows,month}:{rows:Row[];month:string}){const now=new Date(`${mont
 export function PersonalFinanceOperatingDashboard(p:Props){
  const summary=(p.operating?.summary??{}) as Row, accounts=(p.operating?.accounts??[]) as Row[], facilities=(p.operating?.facilities??[]) as Row[], ar=(p.operating?.ar??[]) as Row[], ap=(p.operating?.ap??[]) as Row[], pnl=(p.operating?.pnl??[]) as Row[], close=(p.operating?.closeChecklist??[]) as Row[], plan=(p.operating?.plan??[]) as Row[], allocation=(p.operating?.latestAllocation??null) as Row|null;
  const debt401=facilities.find(x=>String(x.code).includes("401")), debt407=facilities.find(x=>String(x.code).includes("407")), family=p.debts.find(x=>x.debt_type==="FAMILY");
- const ota=num(summary.otaReceivable), dist=num(summary.ownerDistributableCash), tax=num(summary.taxReserve), usedDebt=num(summary.bankDebtUsed), variance=num(summary.bankBookVariance), cf=num(p.monthly?.personal_net_cash_flow);
- const openingNetCash=num(p.openingNetCash?.amount), profitAfter=num(summary.profitAfterTax);
+ const ota=num(summary.otaReceivable), dist=num(summary.ownerDistributableCash), usedDebt=num(summary.bankDebtUsed), variance=num(summary.bankBookVariance), cf=num(p.monthly?.personal_net_cash_flow);
+ const profitAfter=num(summary.profitAfterTax);
  const financeAccounts=(p.operating?.accounts??[]) as Row[];
  const personalOperatingAccount=p.personalAccounts.find(x=>String(x.external_key??"")==="TPBANK-501"||String(x.name??"").includes("501"));
  const safetyAccount=p.personalAccounts.find(x=>x.is_emergency_fund===true);
@@ -28,17 +28,19 @@ export function PersonalFinanceOperatingDashboard(p:Props){
  const emergency=num(safetyAccount?.current_balance);
  const accountStatus=(row:Row|undefined)=>{if(!row||row.verification_status!=="VERIFIED")return "NEED_VERIFY";const asOf=String(row.balance_as_of??"");if(asOf&&asOf.slice(0,7)<p.month.slice(0,7))return "STALE";return "VERIFIED"};
  const reserveAccount=financeAccounts.find(x=>((x.roles as string[]|undefined)??[]).includes("BUSINESS_TAX_RESERVE_ACCOUNT"));
+ const businessExpenseAccount=financeAccounts.find(x=>String(x.code??"")==="OPEN-BIDV-TUAN");
+ const businessExpenseBalance=num(businessExpenseAccount?.bankBalance);
+ const reserveBalance=num(reserveAccount?.bankBalance);
  const personalCashStatus=accountStatus(personalOperatingAccount);
  const emergencyStatus=accountStatus(safetyAccount);
  const reserveStatus=reserveAccount?.verificationStatus==="VERIFIED"&&reserveAccount?.reconciliationStatus==="MATCHED"?"VERIFIED":"NEED_VERIFY";
- const openingStatus=p.openingNetCash?.verification_status==="VERIFIED"?"VERIFIED":"NEED_VERIFY";
  const otaStatus=ar.length===0?"NO_DATA":ar.every(x=>x.verificationStatus==="VERIFIED")?"VERIFIED":"NEED_VERIFY";
  const cards=[
   ["Tiền cá nhân khả dụng",money(personalCash),"TPBank 501 · chi tiêu cá nhân/gia đình",personalCashStatus,"wallet","bg-blue-50 text-blue-600"],
   ["Quỹ dự phòng",money(emergency),"Quỹ an toàn cá nhân · hiện chưa có",emergencyStatus,"shield","bg-emerald-50 text-emerald-600"],
   ["Nợ ngân hàng đang dùng",money(usedDebt),"Dư nợ thấu chi thực tế đang sử dụng",usedDebt!==null?"VERIFIED":"NEED_VERIFY","wallet","bg-rose-50 text-rose-600"],
-  ["Tiền ròng đầu kỳ",money(openingNetCash),`Baseline ${viDate(p.openingNetCash?.cutover_date)}`,openingStatus,"chart","bg-blue-50 text-blue-600"],
-  ["Quỹ nghĩa vụ & dự phòng",reserveStatus==="VERIFIED"?money(tax):"—","TPBank 1985 · Thuế / thưởng / khoản năm",reserveStatus,"shield","bg-amber-50 text-amber-600"],
+  ["Chi phí kinh doanh khả dụng",money(businessExpenseBalance),"BIDV 888 · tiền kinh doanh, không phải tiền cá nhân",businessExpenseAccount?.verificationStatus==="VERIFIED"?"VERIFIED":"NEED_VERIFY","chart","bg-blue-50 text-blue-600"],
+  ["Thuế & dự phòng kinh doanh",reserveStatus==="VERIFIED"?money(reserveBalance):"—","TPBank TTKTK_A02 · thuế / thưởng cuối năm / dự phòng",reserveStatus,"shield","bg-amber-50 text-amber-600"],
   ["Tiền có thể phân phối",money(dist),"Chỉ mở khi P&L, KiotViet, AP và reserve đủ dữ liệu",dist!==null?"VERIFIED":"HOLD","chart","bg-emerald-50 text-emerald-600"],
   ["OTA chờ về",otaStatus==="VERIFIED"?money(ota):"—","Khoản phải thu OTA · nhận về BIDV hộ kinh doanh",otaStatus,"plane","bg-blue-50 text-blue-600"],
   [`P&L tháng ${Number(p.month.slice(5,7))}`,money(profitAfter),"Lợi nhuận sau thuế theo Actual tháng",profitAfter!==null?"VERIFIED":"NO_DATA","chart","bg-violet-50 text-violet-600"]

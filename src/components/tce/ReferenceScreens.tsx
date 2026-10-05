@@ -616,7 +616,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Cấu trúc tài khoản chuẩn"
-            subtitle="TKK chỉ nhận doanh thu · BIDV 888 chi vận hành · TPBank 1985 giữ quỹ TCE · TPBank 501 và TPBank 888 thuộc Personal Finance"
+            subtitle="TK KINH DOANH nhận doanh thu Homestay · TPBank 888 nhận doanh thu Cozy · BIDV 888 chi phí kinh doanh · TPBank 501 và TKTK_A01 thuộc Personal Finance"
             className="col-span-12 h-[320px]"
             icon="▣"
           >
@@ -629,7 +629,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Các quỹ & phân bổ bắt buộc"
-            subtitle="Một tài khoản vật lý TPBank 1985, nhiều quỹ logic trên bảng điều hành; tổng quỹ logic phải đối soát với số dư thật"
+            subtitle="TPBank TTKTK_A02 giữ Thuế + Thưởng cuối năm + Dự phòng; tổng quỹ logic phải đối soát với số dư thật"
             className="col-span-12 h-[300px]"
             icon="▮"
           >
@@ -723,8 +723,8 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           >
             <ListRows items={[
               "TKK chỉ nhận doanh thu; mọi doanh thu phải gắn đúng Business Unit Cozy/Lavender/Ruby để tính P&L.",
-              "TPBank 1985 là tài khoản quỹ TCE duy nhất: Thuế + Thưởng tháng 13 + Dự phòng; TPBank 888 là quỹ an toàn cá nhân.",
-              "Quỹ tái đầu tư Cozy 31.473.816đ là earmark trong business cash, không cộng thêm vào tổng tiền. CEO Compensation 40 triệu/tháng chuyển TPBank 501 và sau đó thuộc Personal Finance.",
+              "TPBank TTKTK_A02 là tài khoản Thuế + Thưởng cuối năm + Dự phòng kinh doanh; TPBank TKTK_A01 là quỹ an toàn cá nhân; TPBank 888 là tài khoản doanh thu Cozy Garden.",
+              "BIDV 888 là tài khoản chi phí kinh doanh toàn hệ thống; số dư chốt 30/09/2026 là 31.473.816đ và không được tính là tiền cá nhân. TPBank 501 chỉ nhận tiền đã được phân phối từ kinh doanh.",
             ]}/>
           </Section>
         </div>

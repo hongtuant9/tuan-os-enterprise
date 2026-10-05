@@ -1267,11 +1267,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
 
     const planByCode = new Map((cutoverSnapshot?.octoberPlan ?? []).map((x) => [x.code, x]));
     const financeFundRows = [
-      ["Quỹ thuế", "Theo kỳ", "TPBank 1985", "Dự phòng quản trị 7% lợi nhuận; Actual Tax theo chứng từ/tờ khai", planByCode.get("TAX_RESERVE_POLICY")?.verificationStatus ?? "VERIFIED"],
-      ["Quỹ thưởng tháng 13", "1/12 quỹ lương đủ điều kiện", "TPBank 1985", "Trích hàng tháng, sử dụng vào kỳ thưởng", planByCode.get("BONUS_13_RESERVE")?.verificationStatus ?? "VERIFIED"],
-      ["Quỹ dự phòng TCE", planByCode.get("BUSINESS_RESERVE")?.baseline === null || planByCode.get("BUSINESS_RESERVE")?.baseline === undefined ? "0 đ" : money(planByCode.get("BUSINESS_RESERVE")!.baseline!), "TPBank 1985", "Không dùng cho chi tiêu hàng ngày; chỉ theo policy/approval", planByCode.get("BUSINESS_RESERVE")?.verificationStatus ?? "VERIFIED"],
-      ["Quỹ tái đầu tư Cozy", money(planByCode.get("COZY_REINVESTMENT_EARMARK")?.baseline ?? 31_473_816), "BIDV 888 / business cash", "Earmark, không cộng thêm vào tổng tiền; sửa đèn/trang trí/menu phở/dinner garden", planByCode.get("COZY_REINVESTMENT_EARMARK")?.verificationStatus ?? "VERIFIED"],
-      ["CEO Compensation — Tuấn", money(planByCode.get("CEO_COMPENSATION")?.baseline ?? 40_000_000) + "/tháng", "TPBank 501", "Sau khi chuyển thuộc Personal Finance; không trộn OPEX TCE", planByCode.get("CEO_COMPENSATION")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ thuế", "Theo kỳ", "TPBank TTKTK_A02", "Dự phòng quản trị 7% lợi nhuận; Actual Tax theo chứng từ/tờ khai", planByCode.get("TAX_RESERVE_POLICY")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ thưởng tháng 13", "1/12 quỹ lương đủ điều kiện", "TPBank TTKTK_A02", "Trích hàng tháng, sử dụng vào kỳ thưởng", planByCode.get("BONUS_13_RESERVE")?.verificationStatus ?? "VERIFIED"],
+      ["Quỹ dự phòng TCE", planByCode.get("BUSINESS_RESERVE")?.baseline === null || planByCode.get("BUSINESS_RESERVE")?.baseline === undefined ? "0 đ" : money(planByCode.get("BUSINESS_RESERVE")!.baseline!), "TPBank TTKTK_A02", "Không dùng cho chi tiêu hàng ngày; chỉ theo policy/approval", planByCode.get("BUSINESS_RESERVE")?.verificationStatus ?? "VERIFIED"],
+      ["Tài khoản chi phí kinh doanh", "31.473.816 đ", "BIDV 888", "Số dư chốt 30/09/2026; chi phí toàn hệ thống và phải gắn La / Ru / Cozy; không phải tiền cá nhân", "VERIFIED"],
+      ["Tài khoản cá nhân / gia đình", "40.000.000 đ", "TPBank 501", "Số dư chốt 30/09/2026; chỉ nhận tiền được phân phối từ kinh doanh và dùng cho sinh hoạt gia đình", "VERIFIED"],
     ];
 
     const activeDebt401 = cutoverSnapshot?.facilities.find((x) => x.code === "BIDV-OD-401");
@@ -1465,7 +1465,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         financeActions: [
           "1. Từ 01/10 ghi đủ giao dịch mỗi ngày: TKK chỉ nhận doanh thu; mọi khoản chi vận hành qua đúng tài khoản/module và gắn Business Unit Cozy/Lavender/Ruby.",
           "2. Cuối ngày đối soát KiotViet ↔ TKK/BIDV 888 ↔ tiền mặt/OTA; tiền OTA về chỉ là thu công nợ của kỳ cũ, không ghi doanh thu lần hai.",
-          "3. Hàng tháng trích quỹ trước khi phân phối: Thuế + Thưởng tháng 13 + Dự phòng vào TPBank 1985; CEO Compensation 40 triệu chuyển TPBank 501; quỹ Cozy 31.473.816đ chỉ dùng đúng mục đích tái đầu tư đã chốt.",
+          "3. Hàng tháng trích quỹ trước khi phân phối: Thuế + Thưởng tháng 13 + Dự phòng vào TPBank TTKTK_A02; CEO Compensation 40 triệu chuyển TPBank 501; BIDV 888 có số dư chi phí kinh doanh 31.473.816đ chốt 30/09/2026; không phải tiền cá nhân.",
         ],
         financeCoverageNotes: [
           kiotVietOnlyCoverage,

@@ -520,8 +520,12 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           <Section title="Chiến dịch & thực thi" subtitle="Kế hoạch từ tài liệu CMO; số thực tế từ nhà cung cấp khi kết nối hoạt động" className="col-span-12 h-[250px]" icon="▣">
             <DataTable columns={["#","Chiến dịch","Kênh","Ngân sách","Đã chi","Trạng thái","Mục tiêu","Xác minh"]} data={data?.tables.marketingCampaigns}/>
           </Section>
-          <Section title="Lịch nội dung & xuất bản" subtitle="App là nguồn duyệt: TAIB Personal Brand → VPS tự lên lịch native Facebook cá nhân → Content Calendar read-back; TCE/Cozy/Lavender/Ruby → Metricool → read-back" className="col-span-12" icon="♟">
+          <Section title="Lịch nội dung & xuất bản" subtitle="App là nguồn duyệt: TAIB Personal Brand → Facebook native/trusted browser; TCE/Cozy/Lavender/Ruby → Metricool; Group → Group Queue + trusted browser/manual" className="col-span-12" icon="♟">
             <DataTable columns={["#","Mã nội dung","Thương hiệu","Định dạng","Kênh","Lịch","Xuất bản","Phê duyệt","Xác minh","Hành động"]} data={data?.tables.marketingContent}/>
+          </Section>
+
+          <Section title="Nội dung đã đăng & hiệu quả theo kênh" subtitle="Một CONTENT_ID có thể có nhiều publication. Thiếu metric source/read-back phải giữ NEED VERIFY, không mặc định bằng 0." className="col-span-12" icon="◉">
+            <DataTable columns={["#","Mã nội dung","Đích đăng","Provider","Ngày đăng","Bài public","Reach","Reactions","Comments","Shares","Clicks","Meaningful conversations","Xác minh / nguồn"]} data={data?.tables.marketingPublishedPerformance}/>
           </Section>
 
           <Section title="Đối chiếu nguồn – Nguồn → Khách tiềm năng → Đặt chỗ → Doanh thu" subtitle="Đối chiếu đường dẫn, khách hàng, hội thoại và đặt chỗ; tránh đếm trùng chuyển đổi từ nhà cung cấp" className="col-span-12 h-[240px]" icon="↗">

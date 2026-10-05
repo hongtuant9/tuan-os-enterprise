@@ -280,7 +280,7 @@ export default function ContentReviewWorkbench(props: {
     /OWNER_APPROVED_FOR_METRICOOL|OWNER_APPROVED_FOR_PERSONAL_FACEBOOK/i.test(
       approvalStatus,
     ) ||
-    /APPROVED_FOR_METRICOOL|READY_FOR_PERSONAL_FACEBOOK/i.test(publishStatus);
+    /APPROVED_FOR_METRICOOL|READY_FOR_PERSONAL_FACEBOOK|READY_FOR_FACEBOOK_NATIVE_SCHEDULE/i.test(publishStatus);
   const locked =
     approvalDone ||
     /SCHEDULED|PUBLISHED|FB_SCHEDULED|SCHEDULED_MANUAL/i.test(publishStatus);
@@ -355,9 +355,9 @@ export default function ContentReviewWorkbench(props: {
       ? isTaibPersonalBrand
         ? {
             label: "Bình luận / nhắn tin",
-            mode: "Facebook cá nhân · đăng thủ công",
-            providerStatus: "MANUAL",
-            destination: "Facebook cá nhân của Owner",
+            mode: "Facebook cá nhân · VPS native scheduler",
+            providerStatus: "VPS_SCHEDULER",
+            destination: "Facebook Professional Dashboard / Content Calendar",
           }
         : {
             label: "Nhắn tin",
@@ -925,7 +925,7 @@ export default function ContentReviewWorkbench(props: {
             </div>
             <p className="mt-1 text-xs leading-5 text-[#6e82a2]">
               {isTaibPersonalBrand
-                ? "Chỉ duyệt khi nội dung, QA và media đã đạt. TAIB Personal Brand sau duyệt sẽ chờ đăng thủ công trên Facebook cá nhân theo ngày dự kiến; không chuyển qua Metricool/Cozy Garden."
+                ? "Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, VPS sẽ tự lên lịch native trên Facebook cá nhân theo ngày/giờ đã chốt; chỉ chuyển SCHEDULED_VERIFIED sau khi read-back Content Calendar PASS."
                 : "Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, bài vào hàng chờ đồng bộ Metricool; chỉ chuyển SCHEDULED sau provider read-back PASS."}
             </p>
           </div>

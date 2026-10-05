@@ -72,6 +72,53 @@ function parseAssets(value: string) {
     });
 }
 
+
+function suggestPublishSchedule(contentId: string, existing: string) {
+  const existingEpoch = Date.parse(existing);
+  if (existing && Number.isFinite(existingEpoch) && existingEpoch > Date.now() + 60_000)
+    return existing;
+
+  const nowVn = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const y = nowVn.getUTCFullYear();
+  const m = nowVn.getUTCMonth() + 1;
+  const d = nowVn.getUTCDate();
+  const todayKey = y * 10000 + m * 100 + d;
+  const idMatch = contentId.match(/CNT-(\d{4})(\d{2})(\d{2})/);
+  let target = new Date(Date.UTC(y, m - 1, d));
+  if (idMatch) {
+    const iy = Number(idMatch[1]);
+    const im = Number(idMatch[2]);
+    const iday = Number(idMatch[3]);
+    const idKey = iy * 10000 + im * 100 + iday;
+    if (idKey >= todayKey) target = new Date(Date.UTC(iy, im - 1, iday));
+  }
+
+  const slotByWeekday: Record<number, string> = {
+    0: "20:15",
+    1: "20:30",
+    2: "07:45",
+    3: "12:15",
+    4: "20:45",
+    5: "07:30",
+    6: "09:15",
+  };
+  const localNowMinutes = nowVn.getUTCHours() * 60 + nowVn.getUTCMinutes();
+  let slot = slotByWeekday[target.getUTCDay()];
+  const [hh, mm] = slot.split(":").map(Number);
+  const sameDay =
+    target.getUTCFullYear() === y &&
+    target.getUTCMonth() + 1 === m &&
+    target.getUTCDate() === d;
+  if (sameDay && hh * 60 + mm <= localNowMinutes + 30) {
+    target = new Date(target.getTime() + 86_400_000);
+    slot = slotByWeekday[target.getUTCDay()];
+  }
+  const yyyy = target.getUTCFullYear();
+  const mon = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(target.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mon}-${day}T${slot}:00+07:00`;
+}
+
 function providerSyncState(publishStatus: string, note: string) {
   const scheduled = /SCHEDULED|PUBLISHED/i.test(publishStatus);
   const readBackRecorded =
@@ -367,6 +414,12 @@ export default async function ContentReviewPage({
             scheduled: scheduledAssetStatus,
             audit: latestAssetAudit || null,
           }}
+          scheduledAt={s(content.scheduled_at)}
+          aiSuggestedScheduledAt={
+            s(metadata.ai_suggested_scheduled_at) ||
+            suggestPublishSchedule(contentId, s(content.scheduled_at))
+          }
+          scheduleSource={s(metadata.schedule_source)}
           providerSync={providerSync}
         />
       </div>

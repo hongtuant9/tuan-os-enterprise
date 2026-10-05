@@ -880,6 +880,367 @@ export async function approveMarketingContentForMetricool(
   }
 }
 
+
+function normalizeOwnerSchedule(value: string) {
+  const match = clean(value).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) throw new Error("Thời gian đăng không hợp lệ.");
+  const [, year, month, day, hour, minute] = match;
+  const iso = `${year}-${month}-${day}T${hour}:${minute}:00+07:00`;
+  const epoch = Date.parse(iso);
+  if (!Number.isFinite(epoch)) throw new Error("Thời gian đăng không hợp lệ.");
+  if (epoch < Date.now() + 60_000)
+    throw new Error("Thời gian đăng phải ở tương lai.");
+  return {
+    iso,
+    token: `scheduled ${day}/${month}/${year} ${hour}:${minute}`,
+  };
+}
+
+function replaceScheduledToken(note: string, token: string) {
+  const withoutSchedule = clean(note)
+    .replace(/scheduled\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return [withoutSchedule, token].filter(Boolean).join(" ");
+}
+
+export async function saveMarketingContentSchedule(
+  contentId: string,
+  scheduledLocal: string,
+  aiSuggestedScheduledAt?: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const actor = session.email ?? session.userId;
+    const savedAt = new Date().toISOString();
+    const schedule = normalizeOwnerSchedule(scheduledLocal);
+
+    const contentResult = await dbOf(admin.db)
+      .from("marketing_content_items")
+      .select("content_id,publish_status,approval_status,scheduled_at,metadata")
+      .eq("content_id", contentId)
+      .maybeSingle();
+    const content = obj(contentResult.data);
+    if (!clean(content.content_id))
+      return { ok: false, error: "Không tìm thấy nội dung runtime." };
+
+    const publishStatus = clean(content.publish_status).toUpperCase();
+    if (/PUBLISHED/.test(publishStatus))
+      return { ok: false, error: "Bài đã xuất bản; không thể đổi lịch." };
+    if (/^(SCHEDULED|FB_SCHEDULED|SCHEDULED_MANUAL|SCHEDULED_VERIFIED)/.test(publishStatus))
+      return {
+        ok: false,
+        error:
+          "HOLD: Bài đã được provider/Facebook xác nhận lịch. Cần hoàn/hủy lịch provider trước khi đổi giờ.",
+      };
+
+    const workbookId = await getWorkbookId();
+    const auth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const found = await findContentRow(workbookId, contentId, auth);
+    const nextNote = replaceScheduledToken(clean(found.row[13]), schedule.token);
+    await setSheetValue(
+      workbookId,
+      `${q(CONTENT_TAB)}!N${found.rowNumber}`,
+      nextNote,
+      auth,
+    );
+    const verify = await findContentRow(workbookId, contentId, auth);
+    if (!clean(verify.row[13]).includes(schedule.token))
+      throw new Error("Read-back lịch đăng canonical không khớp.");
+
+    const syncSummary = await admin.sync.run(
+      "marketing-shadow-content",
+      "manual",
+      actor,
+    );
+    if (syncSummary.status === "failed")
+      throw new Error(
+        "Đã ghi lịch vào Workbook nhưng runtime sync thất bại: " +
+          (syncSummary.errorMessage || "unknown error"),
+      );
+    await runMarketingCommandCenterCycle(new Date());
+
+    const metadata = obj(content.metadata);
+    const normalizedAiSuggestion = clean(aiSuggestedScheduledAt);
+    const source =
+      normalizedAiSuggestion &&
+      Date.parse(normalizedAiSuggestion) === Date.parse(schedule.iso)
+        ? "AI_SUGGESTED_ACCEPTED"
+        : "OWNER_OVERRIDE";
+    const runtimeUpdate = await dbOf(admin.db)
+      .from("marketing_content_items")
+      .update({
+        scheduled_at: schedule.iso,
+        metadata: {
+          ...metadata,
+          ai_suggested_scheduled_at:
+            normalizedAiSuggestion || clean(metadata.ai_suggested_scheduled_at) || null,
+          owner_scheduled_at: schedule.iso,
+          schedule_source: source,
+          schedule_updated_at: savedAt,
+          schedule_updated_by: actor,
+        },
+        updated_at: savedAt,
+      })
+      .eq("content_id", contentId);
+    if (runtimeUpdate.error)
+      throw new Error(runtimeUpdate.error.message ?? "Không cập nhật được lịch runtime.");
+
+    const variantsResult = await dbOf(admin.db)
+      .from("marketing_content_variants")
+      .select("id,publish_status")
+      .eq("content_id", contentId);
+    for (const variant of rows(variantsResult.data)) {
+      const variantStatus = clean(variant.publish_status).toUpperCase();
+      if (/SCHEDULED|PUBLISHED/.test(variantStatus)) continue;
+      await dbOf(admin.db)
+        .from("marketing_content_variants")
+        .update({ scheduled_at: schedule.iso, updated_at: savedAt })
+        .eq("id", clean(variant.id));
+    }
+
+    await admin.activityLog.record({
+      agent: "AI Marketing Manager",
+      unit: "Marketing",
+      message: `Owner schedule updated ${contentId} → ${schedule.iso} (${source})`,
+      type: "action",
+    });
+    revalidatePath("/marketing");
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message:
+        source === "AI_SUGGESTED_ACCEPTED"
+          ? "Đã chọn thời gian AI đề xuất và lưu canonical/read-back PASS."
+          : "Đã lưu thời gian Owner điều chỉnh và canonical/read-back PASS.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Lỗi không xác định",
+    };
+  }
+}
+
+export async function reopenMarketingContentForEdit(
+  contentId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireManager();
+    const admin = getAdminContainer();
+    const actor = session.email ?? session.userId;
+    const reopenedAt = new Date().toISOString();
+
+    const contentResult = await dbOf(admin.db)
+      .from("marketing_content_items")
+      .select("content_id,publish_status,approval_status,metadata")
+      .eq("content_id", contentId)
+      .maybeSingle();
+    const content = obj(contentResult.data);
+    if (!clean(content.content_id))
+      return { ok: false, error: "Không tìm thấy nội dung runtime." };
+
+    const publishStatus = clean(content.publish_status).toUpperCase();
+    if (/PUBLISHED/.test(publishStatus))
+      return {
+        ok: false,
+        error: "Bài đã xuất bản. Không thể Hoàn duyệt bản đã public; hãy tạo revision/bài thay thế.",
+      };
+    if (/^(SCHEDULED|FB_SCHEDULED|SCHEDULED_MANUAL|SCHEDULED_VERIFIED)/.test(publishStatus))
+      return {
+        ok: false,
+        error:
+          "HOLD: Bài đã có lịch provider/Facebook được xác nhận. Cần hủy/hoàn lịch provider trước để tránh bản cũ tự đăng.",
+      };
+
+    const variantsResult = await dbOf(admin.db)
+      .from("marketing_content_variants")
+      .select("id,publish_status,metadata")
+      .eq("content_id", contentId);
+    const variants = rows(variantsResult.data);
+    const providerCommitted = variants.some((variant) => {
+      const status = clean(variant.publish_status).toUpperCase();
+      const metadata = obj(variant.metadata);
+      return (
+        /SCHEDULED|PUBLISHED/.test(status) ||
+        metadata.read_back_verified === true
+      );
+    });
+    if (providerCommitted)
+      return {
+        ok: false,
+        error:
+          "HOLD: Provider đã có read-back/lịch. Hệ thống không mở khóa editor cho tới khi lịch cũ được hủy xác minh.",
+      };
+
+    const metadata = obj(content.metadata);
+    const runtimeHold = await dbOf(admin.db)
+      .from("marketing_content_items")
+      .update({
+        publish_status: "READY_FOR_OWNER_REVIEW",
+        approval_status: "PENDING_OWNER_APPROVAL",
+        reviewed_by: null,
+        metadata: {
+          ...metadata,
+          approval_status: "PENDING_OWNER_APPROVAL",
+          approval_decision_id: null,
+          reopened_for_edit_at: reopenedAt,
+          reopened_for_edit_by: actor,
+          canonical_sync_status: "PENDING",
+          hold_reason: "OWNER_REOPENED_FOR_EDIT",
+        },
+        updated_at: reopenedAt,
+      })
+      .eq("content_id", contentId);
+    if (runtimeHold.error)
+      throw new Error(runtimeHold.error.message ?? "Không đưa runtime về trạng thái review.");
+
+    for (const variant of variants) {
+      const variantId = clean(variant.id);
+      if (!variantId) continue;
+      const variantMetadata = obj(variant.metadata);
+      await dbOf(admin.db)
+        .from("marketing_content_variants")
+        .update({
+          approval_status: "PENDING_OWNER_APPROVAL",
+          publish_status: "HOLD_REAPPROVAL",
+          metadata: {
+            ...variantMetadata,
+            hold_reason: "OWNER_REOPENED_FOR_EDIT",
+            read_back_verified: false,
+            reopened_at: reopenedAt,
+          },
+          updated_at: reopenedAt,
+        })
+        .eq("id", variantId);
+
+      const attemptsResult = await dbOf(admin.db)
+        .from("marketing_publish_attempts")
+        .select("id,status,metadata")
+        .eq("content_variant_id", variantId);
+      for (const attempt of rows(attemptsResult.data)) {
+        const attemptStatus = clean(attempt.status).toUpperCase();
+        if (["CANCELLED", "FAILED", "PUBLISHED", "READ_BACK_VERIFIED"].includes(attemptStatus))
+          continue;
+        await dbOf(admin.db)
+          .from("marketing_publish_attempts")
+          .update({
+            status: "CANCELLED",
+            error_code: "OWNER_REOPENED_FOR_EDIT",
+            error_message: "Owner hoàn duyệt để sửa bài; attempt cũ không còn authority.",
+            metadata: {
+              ...obj(attempt.metadata),
+              cancelled_by_owner_reopen: true,
+              cancelled_at: reopenedAt,
+            },
+            updated_at: reopenedAt,
+          })
+          .eq("id", clean(attempt.id));
+      }
+    }
+
+    const workbookId = await getWorkbookId();
+    const auth =
+      await new GoogleOAuthTokenStore().getSystemAuthorizedClientForSheetsWrite();
+    const found = await findContentRow(workbookId, contentId, auth);
+    const note = [
+      clean(found.row[13]),
+      `Owner reopened for edit at ${reopenedAt}; previous approval superseded.`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    await Promise.all([
+      setSheetValue(
+        workbookId,
+        `${q(CONTENT_TAB)}!J${found.rowNumber}`,
+        "READY_FOR_OWNER_REVIEW",
+        auth,
+      ),
+      setSheetValue(
+        workbookId,
+        `${q(CONTENT_TAB)}!N${found.rowNumber}`,
+        note,
+        auth,
+      ),
+      setSheetValue(
+        workbookId,
+        `${q(CONTENT_TAB)}!V${found.rowNumber}`,
+        "PENDING_OWNER_APPROVAL",
+        auth,
+      ),
+      setSheetValue(
+        workbookId,
+        `${q(CONTENT_TAB)}!AH${found.rowNumber}`,
+        "",
+        auth,
+      ),
+    ]);
+    const verify = await findContentRow(workbookId, contentId, auth);
+    if (
+      clean(verify.row[9]) !== "READY_FOR_OWNER_REVIEW" ||
+      clean(verify.row[21]) !== "PENDING_OWNER_APPROVAL"
+    )
+      throw new Error("Read-back canonical sau Hoàn duyệt không khớp.");
+
+    const syncSummary = await admin.sync.run(
+      "marketing-shadow-content",
+      "manual",
+      actor,
+    );
+    if (syncSummary.status === "failed")
+      throw new Error(
+        "Canonical đã HOLD nhưng runtime sync thất bại: " +
+          (syncSummary.errorMessage || "unknown error"),
+      );
+    await runMarketingCommandCenterCycle(new Date());
+
+    await dbOf(admin.db)
+      .from("marketing_recommendations")
+      .insert({
+        recommendation_key: `CONTENT_REOPEN:${contentId}:${Date.now()}`,
+        category: "CONTENT",
+        severity: "INFO",
+        title: `Owner reopened content — ${contentId}`,
+        summary: "Owner hoàn duyệt để sửa nội dung/lịch; approval trước bị superseded.",
+        evidence: {
+          content_id: contentId,
+          decision_type: "OWNER_REOPEN_FOR_EDIT",
+          reopened_at: reopenedAt,
+          reopened_by: actor,
+        },
+        recommended_action:
+          "Cho phép sửa canonical. Sau khi sửa xong phải Duyệt đăng lại trước khi provider/public mutation.",
+        action_class: "BUSINESS_WRITE_APPROVED",
+        approval_required: false,
+        approval_id: null,
+        status: "ACKNOWLEDGED",
+        generated_at: reopenedAt,
+        expires_at: null,
+      });
+
+    await admin.activityLog.record({
+      agent: "AI Marketing Manager",
+      unit: "Marketing",
+      message: `Owner reopened ${contentId} for edit; previous approval superseded`,
+      type: "action",
+    });
+    revalidatePath("/marketing");
+    revalidatePath(`/marketing/content/${encodeURIComponent(contentId)}`);
+    return {
+      ok: true,
+      message:
+        "Đã Hoàn duyệt. Bài trở lại trạng thái có thể sửa; sau khi sửa/lịch xong phải Duyệt đăng lại.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Lỗi không xác định",
+    };
+  }
+}
+
 export async function requestAiContentRevision(
   contentId: string,
   instruction: string,

@@ -6,6 +6,7 @@ import {
   applyAiContentRevision,
   approveMarketingContentForMetricool,
   approvePlatformImageCreative,
+  reopenMarketingContentForEdit,
   createContentSnapshot,
   requestAiContentRevision,
   requestMediaCreative,
@@ -13,6 +14,7 @@ import {
   rejectPlatformImageCreative,
   saveContentOwnerNote,
   saveMarketingContentDraft,
+  saveMarketingContentSchedule,
   savePlatformMediaRendition,
   type PlatformMediaKey,
 } from "@/app/actions/content-review";
@@ -201,6 +203,25 @@ const PLATFORM_META: Array<{
   },
 ];
 
+
+function toDateTimeLocal(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatScheduleDisplay(value: string) {
+  if (!value) return "Chưa có";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Chưa có";
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function libraryMatches(serviceLine: string, library: Library) {
   const s = serviceLine.toUpperCase();
   if (s.includes("COZY")) return library.key === "cozy";
@@ -228,6 +249,9 @@ export default function ContentReviewWorkbench(props: {
   platformMedia: PlatformMediaRendition[];
   aiPlatformMedia: PlatformAiDraft[];
   ownerNote: string;
+  scheduledAt: string;
+  aiSuggestedScheduledAt: string;
+  scheduleSource: string;
   assetStatus: {
     original: string;
     creative: string;
@@ -255,6 +279,9 @@ export default function ContentReviewWorkbench(props: {
     platformMedia,
     aiPlatformMedia,
     ownerNote,
+    scheduledAt,
+    aiSuggestedScheduledAt,
+    scheduleSource,
     assetStatus,
     providerSync,
   } = props;
@@ -272,6 +299,9 @@ export default function ContentReviewWorkbench(props: {
   const [uploading, setUploading] = useState(false);
   const [removingAsset, setRemovingAsset] = useState(false);
   const [renditionBusy, setRenditionBusy] = useState(false);
+  const [chosenSchedule, setChosenSchedule] = useState(
+    toDateTimeLocal(scheduledAt || aiSuggestedScheduledAt),
+  );
 
   const isTaibPersonalBrand =
     /TUAN PERSONAL BRAND\s*\/\s*TAIB/i.test(brand) ||
@@ -281,9 +311,11 @@ export default function ContentReviewWorkbench(props: {
       approvalStatus,
     ) ||
     /APPROVED_FOR_METRICOOL|READY_FOR_PERSONAL_FACEBOOK|READY_FOR_FACEBOOK_NATIVE_SCHEDULE/i.test(publishStatus);
-  const locked =
-    approvalDone ||
-    /SCHEDULED|PUBLISHED|FB_SCHEDULED|SCHEDULED_MANUAL/i.test(publishStatus);
+  const providerLocked =
+    /^(SCHEDULED|PUBLISHED|FB_SCHEDULED|SCHEDULED_MANUAL|SCHEDULED_VERIFIED)/i.test(
+      publishStatus,
+    );
+  const locked = approvalDone || providerLocked;
   const latest =
     revisions.find((revision) => revision.revisionStatus === "REVIEW_READY") ||
     revisions.find(
@@ -355,8 +387,8 @@ export default function ContentReviewWorkbench(props: {
       ? isTaibPersonalBrand
         ? {
             label: "Bình luận / nhắn tin",
-            mode: "Facebook cá nhân · VPS native scheduler",
-            providerStatus: "VPS_SCHEDULER",
+            mode: "Facebook cá nhân · native/trusted browser",
+            providerStatus: "TRUSTED_BROWSER",
             destination: "Facebook Professional Dashboard / Content Calendar",
           }
         : {
@@ -517,10 +549,45 @@ export default function ContentReviewWorkbench(props: {
   const approveForMetricool = () =>
     startTransition(async () => {
       setMessage("");
+      if (!chosenSchedule)
+        return setMessage("Hãy chọn ngày/giờ đăng trước khi Duyệt đăng.");
+      const scheduleResult = await saveMarketingContentSchedule(
+        contentId,
+        chosenSchedule,
+        aiSuggestedScheduledAt,
+      );
+      if (!scheduleResult.ok) return setMessage(scheduleResult.error);
       const result = await approveMarketingContentForMetricool(contentId);
       setMessage(result.ok ? result.message : result.error);
       if (result.ok) router.refresh();
     });
+
+  const saveSchedule = () =>
+    startTransition(async () => {
+      setMessage("");
+      if (!chosenSchedule)
+        return setMessage("Hãy chọn ngày/giờ đăng.");
+      const result = await saveMarketingContentSchedule(
+        contentId,
+        chosenSchedule,
+        aiSuggestedScheduledAt,
+      );
+      setMessage(result.ok ? result.message : result.error);
+      if (result.ok) router.refresh();
+    });
+
+  const reopenForEdit = () => {
+    if (!window.confirm(
+      "Hoàn duyệt bài này để sửa lại?\n\nApproval hiện tại sẽ bị superseded. Sau khi sửa xong anh phải Duyệt đăng lại.",
+    ))
+      return;
+    startTransition(async () => {
+      setMessage("");
+      const result = await reopenMarketingContentForEdit(contentId);
+      setMessage(result.ok ? result.message : result.error);
+      if (result.ok) router.refresh();
+    });
+  };
 
   const saveNote = () =>
     startTransition(async () => {
@@ -925,14 +992,73 @@ export default function ContentReviewWorkbench(props: {
             </div>
             <p className="mt-1 text-xs leading-5 text-[#6e82a2]">
               {isTaibPersonalBrand
-                ? "Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, VPS sẽ tự lên lịch native trên Facebook cá nhân theo ngày/giờ đã chốt; chỉ chuyển SCHEDULED_VERIFIED sau khi read-back Content Calendar PASS."
-                : "Chỉ duyệt khi nội dung, QA và media đã đạt. Sau duyệt, bài vào hàng chờ đồng bộ Metricool; chỉ chuyển SCHEDULED sau provider read-back PASS."}
+                ? "Chỉ duyệt khi nội dung, QA, media và lịch đăng đã đạt. Sau duyệt, bài vào hàng chờ Facebook native/trusted browser; chỉ chuyển SCHEDULED_VERIFIED sau read-back Content Calendar PASS."
+                : "Chỉ duyệt khi nội dung, QA, media và lịch đăng đã đạt. Sau duyệt, bài vào hàng chờ Metricool; chỉ chuyển SCHEDULED sau provider read-back PASS."}
             </p>
           </div>
-          <button onClick={approveForMetricool} disabled={pending || approvalDone} className="rounded-lg bg-[#1768df] px-5 py-2.5 text-sm font-extrabold text-white disabled:bg-[#a9bad2]">
-            {approvalDone ? "Đã duyệt đăng" : "Duyệt đăng"}
+          <div className="flex flex-wrap gap-2">
+            {approvalDone ? (
+              <button
+                onClick={reopenForEdit}
+                disabled={pending || providerLocked}
+                className="rounded-lg border border-[#d39a28] bg-[#fff8e8] px-5 py-2.5 text-sm font-extrabold text-[#8b5c00] disabled:border-[#d8e1ec] disabled:bg-[#f3f6fa] disabled:text-[#94a4ba]"
+              >
+                {providerLocked ? "Đã lên lịch/đã đăng" : "Hoàn duyệt"}
+              </button>
+            ) : (
+              <button onClick={approveForMetricool} disabled={pending} className="rounded-lg bg-[#1768df] px-5 py-2.5 text-sm font-extrabold text-white disabled:bg-[#a9bad2]">
+                Duyệt đăng
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 rounded-xl border border-[#e0e9f4] bg-[#f8fbff] p-3 lg:grid-cols-[1fr_1.3fr_auto] lg:items-end">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[#6d82a1]">AI Agent đề xuất</p>
+            <div className="mt-1 text-sm font-bold text-[#23486f]">
+              {formatScheduleDisplay(aiSuggestedScheduledAt)}
+            </div>
+            <button
+              type="button"
+              onClick={() => setChosenSchedule(toDateTimeLocal(aiSuggestedScheduledAt))}
+              disabled={locked || pending}
+              className="mt-1 text-xs font-bold text-[#1768df] disabled:text-[#9aaabd]"
+            >
+              Dùng giờ AI đề xuất
+            </button>
+          </div>
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-[#6d82a1]">Ngày/giờ đăng Owner chọn</span>
+            <input
+              type="datetime-local"
+              value={chosenSchedule}
+              onChange={(event) => setChosenSchedule(event.target.value)}
+              disabled={locked || pending}
+              className="mt-1 w-full rounded-lg border border-[#cfddeb] bg-white px-3 py-2 text-sm font-bold text-[#173964] outline-none focus:border-[#1768df] disabled:bg-[#eef2f7]"
+            />
+            <span className="mt-1 block text-[11px] text-[#8192aa]">
+              {scheduleSource === "OWNER_OVERRIDE"
+                ? "Lịch hiện tại do Owner điều chỉnh."
+                : scheduleSource === "AI_SUGGESTED_ACCEPTED"
+                  ? "Owner đã chấp nhận lịch AI đề xuất."
+                  : "Có thể sửa trước khi Duyệt đăng."}
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={saveSchedule}
+            disabled={locked || pending || !chosenSchedule}
+            className="rounded-lg border border-[#1768df] bg-white px-4 py-2 text-sm font-extrabold text-[#1768df] disabled:border-[#cbd6e3] disabled:text-[#9aaabd]"
+          >
+            Lưu lịch
           </button>
         </div>
+        {providerLocked && approvalDone ? (
+          <p className="mt-2 text-xs font-semibold text-[#a25d18]">
+            Bài đã có lịch/provider state. Muốn sửa nội dung hoặc giờ đăng phải hủy/hoàn lịch provider trước; hệ thống đang khóa fail-closed để tránh bản cũ tự đăng.
+          </p>
+        ) : null}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-12">

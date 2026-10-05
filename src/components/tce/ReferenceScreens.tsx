@@ -616,7 +616,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Cấu trúc tài khoản chuẩn"
-            subtitle="TKK chỉ nhận doanh thu · BIDV 888 chi vận hành · TPBank 1984 giữ quỹ TCE · TPBank 501 và TPBank 888 thuộc Personal Finance"
+            subtitle="TKK chỉ nhận doanh thu · BIDV 888 chi vận hành · TPBank 1985 giữ quỹ TCE · TPBank 501 và TPBank 888 thuộc Personal Finance"
             className="col-span-12 h-[320px]"
             icon="▣"
           >
@@ -629,7 +629,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
 
           <Section
             title="Các quỹ & phân bổ bắt buộc"
-            subtitle="Một tài khoản vật lý TPBank 1984, nhiều quỹ logic trên bảng điều hành; tổng quỹ logic phải đối soát với số dư thật"
+            subtitle="Một tài khoản vật lý TPBank 1985, nhiều quỹ logic trên bảng điều hành; tổng quỹ logic phải đối soát với số dư thật"
             className="col-span-12 h-[300px]"
             icon="▮"
           >
@@ -723,7 +723,7 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
           >
             <ListRows items={[
               "TKK chỉ nhận doanh thu; mọi doanh thu phải gắn đúng Business Unit Cozy/Lavender/Ruby để tính P&L.",
-              "TPBank 1984 là tài khoản quỹ TCE duy nhất: Thuế + Thưởng tháng 13 + Dự phòng; TPBank 888 là quỹ an toàn cá nhân.",
+              "TPBank 1985 là tài khoản quỹ TCE duy nhất: Thuế + Thưởng tháng 13 + Dự phòng; TPBank 888 là quỹ an toàn cá nhân.",
               "Quỹ tái đầu tư Cozy 31.473.816đ là earmark trong business cash, không cộng thêm vào tổng tiền. CEO Compensation 40 triệu/tháng chuyển TPBank 501 và sau đó thuộc Personal Finance.",
             ]}/>
           </Section>

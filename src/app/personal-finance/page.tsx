@@ -23,6 +23,13 @@ export const revalidate = 0;
 
 type Row = Record<string, unknown>;
 
+function currentMonthInHoChiMinh() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
+  const month = parts.find((part) => part.type === "month")?.value ?? "10";
+  return `${year}-${month}-01`;
+}
+
 function money(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   const n = Number(value);
@@ -60,6 +67,7 @@ const sourceMap = [
   ["Tiền khả dụng","Personal/Family Finance","personal_finance_accounts","owner_finance_position_v","SUM balance VERIFIED + is_liquid","Tài khoản"],
   ["Thu nhập tháng","Personal + Business→Personal","personal_finance_transactions + owner_business_transfers","personal_finance_monthly_v","INCOME VERIFIED + transfer BUSINESS_TO_PERSONAL VERIFIED","Giao dịch / Business ↔ Personal"],
   ["Chi phí tháng","Personal/Family Finance","personal_finance_transactions","personal_finance_monthly_v","EXPENSE VERIFIED","Giao dịch"],
+  ["Tiền ròng đầu kỳ","Personal/Family Finance","finance_opening_positions","direct query","Owner-confirmed opening baseline theo tháng; không phải Monthly Net Cash Flow","Opening Snapshot"],
   ["Dòng tiền ròng tháng","Personal + Business→Personal","transactions + owner_business_transfers","personal_finance_monthly_v","Income − Expense − Debt payment ± owner transfer","Giao dịch / Business ↔ Personal"],
   ["Quỹ dự phòng","Personal/Family Finance","personal_finance_accounts","owner_finance_position_v","SUM account VERIFIED + is_emergency_fund","Tài khoản"],
   ["Dòng tiền cá nhân","Personal/Family Finance","personal_finance_transactions","direct query","Current-month transaction ledger","Giao dịch"],
@@ -98,11 +106,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   if (profile?.role !== "owner") return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Khu vực riêng của chủ sở hữu" generatedAt={new Date().toISOString()}><div className="p-6"><div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-700">Bạn không có quyền truy cập dữ liệu Tài chính cá nhân.</div></div></TceWorkspaceShell>;
 
   const raw = db as unknown as SupabaseClient;
-  const month = /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth + "-01" : "2026-10-01";
+  const month = /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth + "-01" : currentMonthInHoChiMinh();
   const snapshotStartDate = new Date(month + "T00:00:00Z"); snapshotStartDate.setUTCMonth(snapshotStartDate.getUTCMonth()-11);
   const snapshotStart = snapshotStartDate.toISOString().slice(0,10);
 
-  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes] = await Promise.all([
+  const [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, auditRes, masterRes, historyTxRes, historyAccountRes, historyDebtRes, historyAssetRes, historyTransferRes, snapshotsRes, cutoverRes, operatingRes, openingNetCashRes] = await Promise.all([
     raw.from("owner_finance_position_v").select("*").maybeSingle(),
     raw.from("personal_finance_monthly_v").select("*").eq("month", month).maybeSingle(),
     raw.from("personal_finance_debts").select("*").eq("status","ACTIVE").order("current_principal", { ascending: false }),
@@ -121,9 +129,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
     raw.from("personal_finance_kpi_snapshots").select("*").gte("period",snapshotStart).order("period",{ascending:true}),
     raw.rpc("finance_cutover_snapshot"),
     raw.rpc("finance_operating_snapshot", { p_month: month }),
+    raw.from("finance_opening_positions").select("*").eq("financial_domain", "PERSONAL").eq("position_type", "OTHER").eq("cutover_date", month).eq("record_status", "ACTIVE").maybeSingle(),
   ]);
 
-  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes];
+  const allResults = [positionRes, monthRes, debtsRes, assetsRes, accountsRes, goalsRes, txRes, transferRes, masterRes, snapshotsRes, cutoverRes, operatingRes, openingNetCashRes];
   const migrationMissing = allResults.some((r) => r.error?.code === "42P01" || r.error?.code === "42703");
   const position = positionRes.data as Row | null;
   const monthly = monthRes.data as Row | null;
@@ -141,6 +150,7 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const historyTransfers = (historyTransferRes.data ?? []) as Row[];
   const snapshots = (snapshotsRes.data ?? []) as Row[];
   const operating = operatingRes.data && typeof operatingRes.data === "object" && !Array.isArray(operatingRes.data) ? operatingRes.data as Row : null;
+  const openingNetCash = openingNetCashRes.data as Row | null;
   const activeMaster = (type: string) => masterData
     .filter((x) => x.master_data_type === type && x.is_active === true && x.record_status === "ACTIVE")
     .map((x) => ({ code: String(x.code), name: String(x.name) }));
@@ -154,11 +164,11 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
   const paymentMethods = activeMaster("PAYMENT_METHOD");
   const incomeSources = activeMaster("INCOME_SOURCE");
 
-  const editTransaction = editType === "transaction" ? transactions.find((x)=>String(x.id)===editId) ?? null : null;
-  const editAccount = editType === "account" ? accounts.find((x)=>String(x.id)===editId) ?? null : null;
-  const editDebt = editType === "debt" ? debts.find((x)=>String(x.id)===editId) ?? null : null;
-  const editAsset = editType === "asset" ? assets.find((x)=>String(x.id)===editId) ?? null : null;
-  const editTransfer = editType === "transfer" ? transfers.find((x)=>String(x.id)===editId) ?? null : null;
+  const editTransaction = editType === "transaction" ? historyTransactions.find((x)=>String(x.id)===editId) ?? null : null;
+  const editAccount = editType === "account" ? historyAccounts.find((x)=>String(x.id)===editId) ?? null : null;
+  const editDebt = editType === "debt" ? historyDebts.find((x)=>String(x.id)===editId) ?? null : null;
+  const editAsset = editType === "asset" ? historyAssets.find((x)=>String(x.id)===editId) ?? null : null;
+  const editTransfer = editType === "transfer" ? historyTransfers.find((x)=>String(x.id)===editId) ?? null : null;
   const editMaster = editType === "master" ? masterData.find((x)=>String(x.id)===editId) ?? null : null;
 
   const matchesList = (row: Row) => {
@@ -180,6 +190,10 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
 
   return <TceWorkspaceShell title="Tài chính cá nhân" subtitle="Theo dõi tiền thực tế, tiền trên sổ và tiến độ Tự do tài chính." generatedAt={new Date().toISOString()} headerVariant="personal-finance">
     <div className="space-y-4 p-4 text-[#17233d] [color-scheme:light] lg:p-5">
+      <section className="flex flex-col gap-3 rounded-xl border border-[#dce8f4] bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><div className="text-[10px] font-bold uppercase tracking-[.12em] text-[#6d83a3]">Kỳ theo dõi</div><div className="mt-1 text-[13px] font-extrabold text-[#102456]">Tài chính cá nhân theo tháng</div><p className="mt-1 text-[10px] text-[#7185a5]">Chọn tháng để xem Actual, P&L, dòng tiền và sức khỏe tài chính tại thời điểm cần kiểm tra.</p></div>
+        <form method="get" className="flex items-center gap-2"><input type="month" name="month" defaultValue={month.slice(0,7)} className="rounded-lg border border-[#b7c9dd] bg-white px-3 py-2 text-[11px] font-bold text-[#183252]"/><button className="rounded-lg bg-[#0874eb] px-4 py-2 text-[11px] font-bold text-white">Xem kỳ</button></form>
+      </section>
       {migrationMissing ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] font-semibold text-amber-800">HOLD: Personal Finance production schema chưa đầy đủ. Không suy 0đ từ NO DATA và tạm khóa form ghi dữ liệu cho tới khi migration + RLS PASS.</div> : null}
 
       <PersonalFinanceOperatingDashboard
@@ -192,6 +206,8 @@ export default async function PersonalFinancePage({ searchParams }: PageProps) {
         transactions={transactions}
         historyTransactions={historyTransactions}
         debts={debts}
+        personalAccounts={accounts}
+        openingNetCash={openingNetCash}
         migrationMissing={migrationMissing}
       />
 

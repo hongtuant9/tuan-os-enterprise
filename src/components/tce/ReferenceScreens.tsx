@@ -119,15 +119,14 @@ const meta: Record<ScreenKey, ScreenMeta> = {
     ],
   },
   finance: {
-    title: "Tài chính – Dòng tiền, công nợ & ngân sách",
-    subtitle: "Dữ liệu từ KiotViet | Hệ thống quản lý phòng | Ngân hàng | Ngân sách",
+    title: "Tài chính – Revenue → Cash → Expense → Profit → Allocation",
+    subtitle: "Trung tâm kiểm soát tài chính TCE · tiền thực thu, chi phí Actual, lợi nhuận sau thuế và phân bổ cuối tháng",
     metrics: [
-      { label: "Doanh thu thuần", value: "—", delta: "↗", note: "Số thực tế theo nguồn", tone: "blue", icon: "▮▮" },
-      { label: "Chi phí vận hành", value: "—", delta: "↗", note: "Chỉ khi đủ chứng từ", tone: "red", icon: "▣" },
-      { label: "Dòng tiền ròng", value: "—", delta: "↗", note: "Tiền vào − tiền ra", tone: "green", icon: "↗" },
-      { label: "Nguồn tiền cutover", value: "—", delta: "↗", note: "Nguồn tiền quản trị tại 30/09", tone: "blue", icon: "▣" },
-      { label: "Công nợ phải trả", value: "—", delta: "↘", note: "Khoản phải trả / nghĩa vụ thanh toán", tone: "amber", icon: "▱" },
-      { label: "Nợ vay", value: "—", delta: "↗", note: "KiotViet Sổ quỹ · Cần xác minh", tone: "violet", icon: "▥" },
+      { label: "Revenue", value: "—", delta: "↗", note: "Doanh thu Actual từ KiotViet", tone: "blue", icon: "▮▮" },
+      { label: "Cash", value: "—", delta: "↗", note: "Tiền thực thu / dòng tiền", tone: "green", icon: "↗" },
+      { label: "Expense", value: "—", delta: "↗", note: "Chi phí Actual đã xác minh", tone: "red", icon: "▣" },
+      { label: "Profit After Tax", value: "—", delta: "↗", note: "PAT đủ điều kiện phân bổ", tone: "amber", icon: "◈" },
+      { label: "Allocation", value: "—", delta: "↗", note: "Trạng thái phân chia lợi nhuận", tone: "violet", icon: "◎" },
     ],
   },
   reports: {
@@ -494,17 +493,11 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
               <div><b className="text-[13px] text-[#102a5c]">Nguồn dữ liệu & Kiểm soát</b><p className="mt-1 text-[9px] text-[#7186a5]">Dùng để truy vết nguồn, blocker và nơi cần cập nhật. Không phải màn hình điều hành hằng ngày.</p></div>
               <Link href="/business" className="rounded-[6px] bg-[#2375ee] px-4 py-2 text-[9px] font-bold text-white">← Quay lại Kinh doanh</Link>
             </div>
-            <Section title="Chuỗi tài chính kinh doanh" subtitle="Revenue → COGS → Gross Profit → Operating Profit → PBT → Tax → PAT; Cash/AR/AP giữ semantic riêng" className="col-span-12" icon="▦">
-              <DataTable columns={["KPI","Giá trị","Nguồn","Cập nhật","Trạng thái","Giải thích"]} data={data?.tables.businessFinancialStack}/>
-            </Section>
             <Section id="business-data-gaps" title="Nguồn thiếu & nơi cần cập nhật" subtitle="Mỗi dòng cho biết thiếu gì, nguồn nào cần bổ sung, ai chịu trách nhiệm và hành động tiếp theo" className="col-span-12" icon="!">
               <DataTable columns={["KPI","Thiếu gì","Nguồn cần","Trạng thái","Owner","Cần cập nhật","Ảnh hưởng"]} data={data?.tables.businessDataGaps}/>
             </Section>
             <Section title="Mức độ hoàn thiện dữ liệu" subtitle="Theo dõi độ đầy đủ của dữ liệu trước khi dùng cho báo cáo tài chính chốt kỳ" className="col-span-12 h-[210px]" icon="✓">
               <DataTable columns={["Nhóm","Tổng mục","Đã xác minh","Cần xác minh","Tạm dừng","Kết luận"]} data={data?.tables.businessCompletionSummary}/>
-            </Section>
-            <Section title="Ảnh chụp quyết định tài chính" subtitle="Nguồn tiền, phải thu, phải trả, thuế và tiền có thể phân phối" className="col-span-12 h-[300px]" icon="●">
-              <DataTable columns={["Chỉ số","Giá trị","Trạng thái","Nguồn","Hành động / Giới hạn sử dụng"]} data={data?.tables.businessDecisionSnapshot}/>
             </Section>
           </div>
         );
@@ -646,154 +639,50 @@ function Board({ screen, data, businessView = "main" }: { screen: ScreenKey; dat
     case "finance":
       return (
         <div className="grid grid-cols-12 gap-2">
-          <Section
-            title="Tổng quan tài chính từ 01/10/2026"
-            subtitle="Mốc cutover 30/09 · Tách rõ Tiền, Doanh thu, Lợi nhuận, Quỹ và Nợ · không cộng trùng OTA hoặc khoản earmark"
-            className="col-span-12 h-[285px]"
-            icon="◫"
-          >
-            <DataTable
-              columns={["Chỉ tiêu","Giá trị","Cách hiểu / Quy tắc","Trạng thái"]}
-              rows={5}
-              data={data?.tables.financePosition}
-            />
-          </Section>
-
-          <Section
-            title="Tiền mặt tháng hiện tại"
-            subtitle="Theo dõi tiền mặt chưa nộp ngân hàng · cuối tháng Cozy/Lavender/Ruby đều nộp BIDV 888 · không ghi doanh thu lần hai"
-            className="col-span-12 h-[330px]"
-            icon="₫"
-          >
-            <DataTable
-              columns={["Khu vực","Doanh thu tiền mặt tháng","Đã nộp tài khoản","Tiền mặt còn giữ","Ghi chú / tài khoản đích","Trạng thái"]}
-              rows={4}
-              data={data?.tables.financeCashRevenue}
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-2 px-3">
-              <form action={recordBusinessCashDeposit}>
-                <input type="hidden" name="scope" value="COZY"/>
-                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0874eb] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Nộp Cozy → BIDV 888</button>
-              </form>
-              <form action={recordBusinessCashDeposit}>
-                <input type="hidden" name="scope" value="HOMESTAY"/>
-                <button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0c9d63] px-3 py-2 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Nộp Homestay → BIDV 888</button>
-              </form>
-              <span className="text-[8px] font-semibold text-[#7488a5]">{data?.lists.financeCashTransferGate?.[1] ?? "Chỉ ghi nhận sau khi tiền đã thực sự được nộp/chuyển; bank side vẫn chờ đối soát."}</span>
+          <Section title="1. Revenue — Doanh thu & đối chiếu dòng tiền thực thu" subtitle="Kinh doanh tạo Revenue; Tài chính kiểm tra tiền thực thu từng mảng có khớp KiotViet hay không" className="col-span-12" icon="▮▮">
+            <div className="grid gap-3 p-3 xl:grid-cols-2">
+              <div className="rounded-lg border border-[#e1eaf4] bg-white p-2"><b className="px-2 text-[9px] text-[#17375f]">Doanh thu theo mảng</b><DataTable columns={["Mảng / nguồn","Revenue","Hóa đơn","Trạng thái"]} rows={6} data={data?.tables.financeBranches}/></div>
+              <div className="rounded-lg border border-[#e1eaf4] bg-white p-2"><b className="px-2 text-[9px] text-[#17375f]">Tài khoản đo dòng tiền thực thu</b><DataTable columns={["Tài khoản","Vai trò","Phạm vi","Số dư / cách theo dõi","Trạng thái"]} rows={6} data={data?.tables.financeAccountStructure}/></div>
             </div>
           </Section>
 
-          <Section
-            title="Cấu trúc tài khoản chuẩn"
-            subtitle="TK KINH DOANH/TPBank 888 theo dõi dòng tiền thực thu từng mảng; cuối tháng gom BIDV 888 để quyết toán; TPBank 501 chỉ nhận lợi nhuận sau thuế phân phối CEO"
-            className="col-span-12 h-[320px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["Tài khoản","Vai trò","Phạm vi","Số dư / cách theo dõi","Trạng thái"]}
-              rows={6}
-              data={data?.tables.financeAccountStructure}
-            />
+          <Section title="2. Cash — Tiền thực tế đang ở đâu?" subtitle="Tiền mặt, OTA đã nhận và tài khoản ngân hàng; cuối tháng tiền kinh doanh được gom về BIDV 888 để quyết toán" className="col-span-12" icon="₫">
+            <div className="grid gap-3 p-3 xl:grid-cols-[1.4fr_.6fr]">
+              <div><DataTable columns={["Khu vực","Doanh thu tiền mặt tháng","Đã nộp","Đang giữ","Đích cuối tháng","Trạng thái"]} rows={4} data={data?.tables.financeCashRevenue}/><div className="mt-3 flex flex-wrap gap-2">
+                <form action={recordBusinessCashDeposit}><input type="hidden" name="scope" value="COZY"/><button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0874eb] px-3 py-2 text-[9px] font-bold text-white disabled:bg-slate-300">Nộp Cozy → BIDV 888</button></form>
+                <form action={recordBusinessCashDeposit}><input type="hidden" name="scope" value="HOMESTAY"/><button disabled={data?.lists.financeCashTransferGate?.[0] !== "OPEN"} className="rounded-md bg-[#0c9d63] px-3 py-2 text-[9px] font-bold text-white disabled:bg-slate-300">Nộp Homestay → BIDV 888</button></form>
+              </div></div>
+              <div className="rounded-lg border border-[#e1eaf4] bg-[#fbfdff] p-2"><b className="px-2 text-[9px] text-[#17375f]">OTA đã nhận</b><DataTable columns={["Đơn vị","Đã nhận","As of","Quy tắc","Trạng thái"]} rows={1} data={data?.tables.financeOtaReceived}/></div>
+            </div>
           </Section>
 
-          <Section
-            title="Các quỹ & phân bổ bắt buộc"
-            subtitle="TPBank TTKTK_A02 giữ Thuế + Thưởng cuối năm + Dự phòng; tổng quỹ logic phải đối soát với số dư thật"
-            className="col-span-12 h-[300px]"
-            icon="▮"
-          >
-            <DataTable
-              columns={["Khoản","Mức / chính sách","Nơi giữ","Quy tắc","Trạng thái"]}
-              rows={5}
-              data={data?.tables.financeFundBuckets}
-            />
+          <Section id="cost-analysis" title="3. Expense — Chi phí Actual" subtitle="Chỉ dùng KiotViet/chứng từ authority; Cash Out không tự động là Expense" className="col-span-12" icon="▣">
+            <DataTable columns={["#","Đơn vị","Nhóm chi phí","Actual","Số khoản","Bằng chứng","Bao phủ"]} rows={7} data={data?.tables.financePeriodCostGroups}/>
+            <details className="mx-3 mb-3 mt-2 rounded-lg border border-[#e0e9f3] bg-[#fbfdff] p-3"><summary className="cursor-pointer text-[9px] font-black text-[#244b77]">Xem chi tiết khoản chi đã đọc được</summary><div className="mt-2"><DataTable columns={["#","Ngày","Đơn vị","Nhóm","Hạng mục","Số tiền","KQKD","Nguồn"]} rows={8} data={data?.tables.financePeriodCostEvents}/></div></details>
+          </Section>
+
+          <Section title="4. Profit — Lợi nhuận sau thuế & điều kiện phân bổ" subtitle="Chỉ PAT đã chốt và đủ vốn lưu động mới được đưa sang bước Allocation" className="col-span-12" icon="◈">
+            <DataTable columns={["Chỉ tiêu","Giá trị","Cách hiểu / nguồn","Trạng thái"]} rows={8} data={data?.tables.financeProfitAllocation}/>
           </Section>
 
           <ProfitAllocationPanel data={data}/>
 
-          <Section
-            title="Doanh thu theo mảng kinh doanh"
-            subtitle="P&L phải phân loại theo Business Unit Cozy Garden · Lavender · Ruby, không theo tài khoản TKK nhận tiền"
-            className="col-span-12 h-[245px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["Mảng / nguồn","Doanh thu","Số hóa đơn","Trạng thái"]}
-              rows={6}
-              data={data?.tables.financeBranches}
-            />
+          <Section title="5. Allocation — Chuyển tiền & đối soát sau duyệt" subtitle="Approved allocation không đồng nghĩa tiền ngân hàng đã chuyển; chỉ Actual sau evidence/reconciliation" className="col-span-12" icon="↔">
+            <DataTable columns={["#","Mục đích","Số tiền","Đích","Trạng thái","Xác minh"]} rows={4} data={data?.tables.financeProfitTransfers}/>
           </Section>
 
-          <Section
-            title="OTA đã nhận hiện tại"
-            subtitle="Không theo dõi OTA phải thu riêng; OTA thường thanh toán ngày 5–7 tháng kế tiếp và cuối kỳ gom về BIDV 888"
-            className="col-span-12 h-[180px]"
-            icon="▤"
-          >
-            <DataTable columns={["Đơn vị","Đã nhận","As of","Quy tắc","Trạng thái"]} rows={1} data={data?.tables.financeOtaReceived}/>
+          <Section title="Đóng sổ cuối tháng" subtitle="Revenue → Cash → Expense → PAT → Allocation → Bank reconciliation → Month Lock" className="col-span-12" icon="✓">
+            <DataTable columns={["#","Bước","Owner","Gate","Trạng thái","Evidence"]} rows={26} data={data?.tables.financeMonthEndClose}/>
           </Section>
 
-          <Section
-            title="Nợ & hạn mức tín dụng"
-            subtitle="Used principal là nợ; hạn mức chưa sử dụng không phải tài sản/cash"
-            className="col-span-12 h-[220px]"
-            icon="▣"
-          >
-            <DataTable
-              columns={["Facility","Phân loại","Dư nợ","Hạn mức còn lại","Lãi suất","Lãi/tháng ước tính","Đáo hạn","Kỳ lãi tới","Trạng thái"]}
-              rows={2}
-              data={data?.tables.financeCutoverFacilities}
-            />
-          </Section>
-
-          <Section
-            id="cost-analysis"
-            title={"Chi phí theo nhóm — " + (data?.period.label ?? "Hôm nay")}
-            subtitle="Actual chỉ lấy từ KiotViet / chứng từ authority; Cash Out không tự động là Expense"
-            className="col-span-12 h-[300px]"
-            icon="◫"
-          >
-            <DataTable
-              columns={["#","Đơn vị","Nhóm chi phí","Đã ghi nhận","Số khoản","Bằng chứng","Bao phủ"]}
-              rows={7}
-              data={data?.tables.financePeriodCostGroups}
-            />
-          </Section>
-
-          <Section
-            title="Chi tiết khoản chi đã đọc được"
-            subtitle="Chỉ hiển thị giao dịch có source; khoản chưa đủ bằng chứng giữ NEED VERIFY/HOLD"
-            className="col-span-12 h-[250px]"
-            icon="▤"
-          >
-            <DataTable
-              columns={["#","Ngày","Đơn vị","Nhóm","Hạng mục","Số tiền","KQKD","Nguồn"]}
-              rows={8}
-              data={data?.tables.financePeriodCostEvents}
-            />
-          </Section>
-
-          <Section
-            title="3 hành động tài chính ưu tiên"
-            subtitle="Chỉ giữ các việc ảnh hưởng trực tiếp đến chất lượng dữ liệu, dòng tiền và khả năng chốt P&L"
-            className="col-span-12 h-[220px]"
-            icon="!"
-          >
-            <ListRows items={data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]}/>
-          </Section>
-
-          <Section
-            title="Nguyên tắc kiểm soát"
-            subtitle="Áp dụng từ 01/10/2026"
-            className="col-span-12 h-[165px]"
-            icon="✓"
-          >
-            <ListRows items={[
-              "TKK chỉ nhận doanh thu; mọi doanh thu phải gắn đúng Business Unit Cozy/Lavender/Ruby để tính P&L.",
-              "TPBank TTKTK_A02 là tài khoản Thuế + Thưởng cuối năm + Dự phòng kinh doanh; TPBank TKTK_A01 là quỹ an toàn cá nhân; TPBank 888 là tài khoản doanh thu Cozy Garden.",
-              "BIDV 888 là tài khoản chi phí kinh doanh toàn hệ thống; số dư chốt 30/09/2026 là 31.473.816đ và không được tính là tiền cá nhân. TPBank 501 chỉ nhận tiền đã được phân phối từ kinh doanh.",
-            ]}/>
-          </Section>
+          <details className="col-span-12 rounded-[10px] border border-[#d9e5f2] bg-white p-3">
+            <summary className="cursor-pointer text-[10px] font-black text-[#17375f]">Quản trị nâng cao · Nợ, quỹ, account policy & audit</summary>
+            <div className="mt-3 grid gap-3 xl:grid-cols-2">
+              <div className="rounded-lg border border-[#e1eaf4] p-2"><b className="px-2 text-[9px] text-[#17375f]">Nợ & hạn mức</b><DataTable columns={["Facility","Phân loại","Dư nợ","Hạn mức còn lại","Lãi suất","Lãi/tháng ước tính","Đáo hạn","Kỳ lãi tới","Trạng thái"]} rows={2} data={data?.tables.financeCutoverFacilities}/></div>
+              <div className="rounded-lg border border-[#e1eaf4] p-2"><b className="px-2 text-[9px] text-[#17375f]">Các quỹ & chính sách</b><DataTable columns={["Khoản","Mức / chính sách","Nơi giữ","Quy tắc","Trạng thái"]} rows={5} data={data?.tables.financeFundBuckets}/></div>
+              <div className="xl:col-span-2 rounded-lg border border-[#e1eaf4] p-2"><b className="px-2 text-[9px] text-[#17375f]">Hành động ưu tiên / kiểm soát</b><ListRows items={data?.lists.financeActions?.length ? data.lists.financeActions : ["Chưa đủ dữ liệu để kết luận."]}/></div>
+            </div>
+          </details>
         </div>
       );
     case "reports":

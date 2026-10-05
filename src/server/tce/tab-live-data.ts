@@ -1388,8 +1388,17 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
       owner: "AI CFO + AI CTO / Finance",
     };
 
+    const financeExpenseMetricReady = expenseSummary.unknownExpenseRows === 0 && expenseSummary.ambiguousAmount === 0 && cashflowReadReady;
+    const financePatReady = financeAllocation?.verification_status === "VERIFIED" && financeAllocation?.profit_after_tax != null;
+    const financeAllocationStatus = String(financeAllocation?.status ?? "NO DATA");
+
     return makeResult(
       {
+        "Revenue": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
+        "Cash": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
+        "Expense": financeExpenseMetricReady ? money(expenseSummary.directMappedAmount) : "NEED VERIFY",
+        "Profit After Tax": financePatReady ? money(Number(financeAllocation?.profit_after_tax ?? 0)) : "NEED VERIFY",
+        "Allocation": financeAllocationStatus,
         "Doanh thu thuần": bothTodayVerified ? money(todayRevenue) : "NEED VERIFY",
         "Chi phí vận hành": "NEED VERIFY",
         "Cash In": cashflowSummary.cashIn === null ? "NEED VERIFY" : money(cashflowSummary.cashIn),
@@ -1407,6 +1416,11 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         "Biên lợi nhuận gộp": "NEED VERIFY",
       },
       {
+        "Revenue": "KiotViet Hotel + KiotViet F&B Actual · " + period.label + ". Kinh doanh tạo Revenue; Finance dùng để reconciliation.",
+        "Cash": cashflowReadReady ? "Cash In Actual từ KiotViet Sổ quỹ / nguồn tiền thực thu; không suy từ Revenue." : "HOLD: Cashflow chưa VERIFIED.",
+        "Expense": financeExpenseMetricReady ? "P&L Expense canonical đã map và reconcile đủ coverage." : "NEED VERIFY: còn khoản chưa map/ambiguous hoặc cashflow chưa PASS.",
+        "Profit After Tax": financePatReady ? "PAT đã Owner nhập, phương án arithmetic VERIFIED; đủ điều kiện sang Allocation." : "NEED VERIFY: chỉ hiện PAT khi Month-End Close và allocation proposal đã VERIFIED.",
+        "Allocation": financeAllocation ? `Proposal ${financeAllocationStatus}; bank Actual chỉ đổi sau reconciliation.` : "NO DATA: chưa có phương án phân chia tháng hiện tại.",
         "Doanh thu thuần": "KiotViet Hotel + KiotViet F&B Actual · " + period.label,
         "Chi phí vận hành": "NEED VERIFY: Expense coverage " + foundationReadiness.expense.coveragePct.toFixed(1) +
           "%; required=" + foundationReadiness.expense.requiredRows +

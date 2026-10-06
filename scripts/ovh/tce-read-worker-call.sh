@@ -84,7 +84,10 @@ if mode == "reception-ota":
         f"[TCE read worker] mode={mode} ok={data.get('ok', False)} "
         f"configured={data.get('configured', False)} mailboxes={data.get('mailboxesConfigured',0)} "
         f"scanned={data.get('scanned',0)} actionable={data.get('actionable',0)} "
-        f"drafted={data.get('drafted',0)} duplicates={data.get('duplicates',0)} failed={data.get('failed',0)}"
+        f"drafted={data.get('drafted',0)} duplicates={data.get('duplicates',0)} failed={data.get('failed',0)} "
+        f"direct_enabled={data.get('directReceiveEnabled',False)} direct_scanned={data.get('directScanned',0)} "
+        f"direct_drafted={data.get('directDrafted',0)} direct_duplicates={data.get('directDuplicates',0)} "
+        f"direct_filtered={data.get('directFiltered',0)}"
     )
 else:
     if mode in ("finance-expense-probe", "finance-expense-backfill"):

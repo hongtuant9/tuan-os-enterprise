@@ -129,7 +129,13 @@ export function invoiceRevenueByOrderUuid(invoices: Row[]): Map<string, RevenueE
 
 export function saleChannelNameMap(payload: unknown): Map<string, string> {
   const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Row : {};
-  const candidates = objectRows(root.data).length ? objectRows(root.data) : objectRows(root.result);
+  const nested = root.result && typeof root.result === "object" && !Array.isArray(root.result)
+    ? root.result as Row
+    : {};
+  const candidates =
+    objectRows(root.data).length ? objectRows(root.data) :
+    objectRows(root.result).length ? objectRows(root.result) :
+    objectRows(nested.data);
   const map = new Map<string, string>();
   for (const row of candidates) {
     const id = row.id === null || row.id === undefined ? "" : String(row.id);

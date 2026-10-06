@@ -33,6 +33,7 @@ import {
   isKiotVietDirectBookingWriteEnabled,
   isPilotConversationAllowed,
   isPilotOutboundEnabled,
+  isReceptionistAutoReplyApproved,
 } from "@/server/ai-receptionist/config";
 
 const HOTEL_BRANCH_BY_PROPERTY = {
@@ -151,10 +152,12 @@ function toMessage(row: {
   sender_type: string;
   content: string;
   status: string;
+  evidence: Json;
   metadata: Json;
   created_at: string;
 }): ReceptionistMessage {
   const metadata = AiReceptionistRepository.toObject(row.metadata);
+  const evidence = AiReceptionistRepository.toObject(row.evidence);
   const detectedLanguage = typeof metadata.detected_language === "string"
     ? metadata.detected_language
     : detectGuestLanguage(row.content).code;
@@ -186,6 +189,36 @@ function toMessage(row: {
           : senderType === "manager"
             ? "Người vận hành"
             : "Hệ thống";
+  const qaEvidence = AiReceptionistRepository.toObject(evidence.conversation_qa as Json);
+  const qaReasons = Array.isArray(qaEvidence.reasons)
+    ? qaEvidence.reasons.filter((value): value is string => typeof value === "string")
+    : Array.isArray(metadata.qa_reasons)
+      ? metadata.qa_reasons.filter((value): value is string => typeof value === "string")
+      : [];
+  const evidenceSources = Array.isArray(evidence.knowledge_sources)
+    ? evidence.knowledge_sources.filter((value): value is string => typeof value === "string")
+    : [];
+  const evidenceFacts = Array.isArray(evidence.knowledge_facts)
+    ? evidence.knowledge_facts.map((value) => AiReceptionistRepository.toObject(value as Json)).map((fact) => ({
+        sourceKey: typeof fact.sourceKey === "string" ? fact.sourceKey : "",
+        externalId: typeof fact.externalId === "string" ? fact.externalId : "",
+        label: typeof fact.label === "string" ? fact.label : "",
+        status: typeof fact.status === "string" ? fact.status : "",
+        allowedUse: typeof fact.allowedUse === "string" ? fact.allowedUse : "",
+        syncedAt: typeof fact.syncedAt === "string" ? fact.syncedAt : "",
+      })).filter((fact) => Boolean(fact.sourceKey))
+    : [];
+  const rawReviewStatus = typeof metadata.review_status === "string" ? metadata.review_status : "";
+  const reviewStatus: ReceptionistMessage["reviewStatus"] =
+    rawReviewStatus === "approved"
+      || rawReviewStatus === "edited"
+      || rawReviewStatus === "rejected"
+      || rawReviewStatus === "taken_over"
+      || rawReviewStatus === "pending"
+      ? rawReviewStatus
+      : senderType === "ai" && (row.status === "draft" || row.status === "simulated")
+        ? "pending"
+        : null;
   return {
     id: row.id,
     direction: row.direction as ReceptionistMessage["direction"],
@@ -205,7 +238,21 @@ function toMessage(row: {
         ? metadata.sent_at
         : null,
     deliveryDetail: typeof metadata.delivery_detail === "string" ? metadata.delivery_detail : null,
-    qaPass: typeof metadata.qa_pass === "boolean" ? metadata.qa_pass : null,
+    qaPass: typeof metadata.qa_pass === "boolean"
+      ? metadata.qa_pass
+      : typeof qaEvidence.pass === "boolean"
+        ? qaEvidence.pass
+        : null,
+    qaReasons,
+    evidenceSources,
+    evidenceFacts,
+    knowledgeFactCount: typeof evidence.knowledge_fact_count === "number" ? evidence.knowledge_fact_count : evidenceFacts.length,
+    reviewStatus,
+    reviewNote: typeof metadata.review_note === "string" ? metadata.review_note : null,
+    reviewedBy: typeof metadata.reviewed_by === "string" ? metadata.reviewed_by : null,
+    reviewedAt: typeof metadata.reviewed_at === "string" ? metadata.reviewed_at : null,
+    reviewedContent: typeof metadata.reviewed_content === "string" ? metadata.reviewed_content : null,
+    sourceAiMessageId: typeof metadata.source_ai_message_id === "string" ? metadata.source_ai_message_id : null,
     editedByHuman: metadata.edited_by_human === true,
     historicalImport: metadata.historical_import === true,
     createdAt: row.created_at,
@@ -545,6 +592,7 @@ export class AiReceptionistService {
         status: row.status as ReceptionistConversation["status"],
         mode: row.mode as ReceptionistConversation["mode"],
         responseMode: metadata.response_mode === "auto" ? "auto" : "manual",
+        humanTakeover: metadata.human_takeover === true,
         lastMessageAt: row.last_message_at,
         messages,
       };
@@ -573,10 +621,22 @@ export class AiReceptionistService {
 
     const managerReviews = reviewRows.map(toReview);
     const knowledgeCandidates = candidateRows.map(toCandidate);
+    const aiDraftMessages = conversations.flatMap((item) => item.messages).filter((message) => message.authorship === "ai");
+    const reviewedAiDrafts = aiDraftMessages.filter((message) =>
+      message.reviewStatus === "approved"
+      || message.reviewStatus === "edited"
+      || message.reviewStatus === "rejected"
+      || message.reviewStatus === "taken_over"
+    );
+    const approvedUnchangedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "approved").length;
+    const editedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "edited").length;
+    const rejectedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "rejected").length;
+    const takenOverAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "taken_over").length;
 
     return {
       mode: getReceptionistMode(),
       writeEnabled: isKiotVietDirectBookingWriteEnabled(),
+      autoReplyApproved: isReceptionistAutoReplyApproved(),
       conversations,
       bookings,
       managerReviews,
@@ -586,6 +646,12 @@ export class AiReceptionistService {
         pendingManagerReviews: managerReviews.filter((item) => item.status === "pending").length,
         verifiedAiBookings: bookings.filter((item) => item.verificationStatus === "verified").length,
         pendingKnowledgeCandidates: knowledgeCandidates.filter((item) => item.status === "pending").length,
+        reviewedAiDrafts: reviewedAiDrafts.length,
+        approvedUnchangedAiDrafts,
+        editedAiDrafts,
+        rejectedAiDrafts,
+        takenOverAiDrafts,
+        humanCorrectionRate: reviewedAiDrafts.length > 0 ? editedAiDrafts / reviewedAiDrafts.length : 0,
       },
       missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),
     };
@@ -742,6 +808,14 @@ export class AiReceptionistService {
         ...decision.evidence,
         knowledge_sources: knowledge.checkedSources,
         knowledge_fact_count: knowledge.facts.length,
+        knowledge_facts: knowledge.facts.map((fact) => ({
+          sourceKey: fact.sourceKey,
+          externalId: fact.externalId,
+          label: fact.label,
+          status: fact.status,
+          allowedUse: fact.allowedUse,
+          syncedAt: fact.syncedAt,
+        })) as unknown as Json,
         conversation_renderer: rendered.usedGenerativeRenderer ? "generative" : "fallback",
         conversation_qa: rendered.qa as unknown as Json,
       },
@@ -933,6 +1007,7 @@ export class AiReceptionistService {
         actor_label: "AI Lễ tân",
         authorship: "ai",
         generated_at: new Date().toISOString(),
+        review_status: "pending",
         edited_by_human: false,
       },
     });
@@ -1430,11 +1505,90 @@ export class AiReceptionistService {
     });
   }
 
+  async reviewAiDraft(input: {
+    conversationId: string;
+    messageId: string;
+    decision: "approved" | "edited" | "rejected" | "taken_over";
+    editedContent?: string;
+    note?: string;
+    actorLabel: string;
+  }): Promise<{ reviewStatus: "approved" | "edited" | "rejected" | "taken_over"; reviewedContent: string | null }> {
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const message = await this.repo.findMessageById(input.messageId);
+    if (!message || message.conversation_id !== input.conversationId || message.sender_type !== "ai" || message.direction !== "outbound") {
+      throw new Error("Không tìm thấy bản nháp AI hợp lệ trong hội thoại này.");
+    }
+    const metadata = AiReceptionistRepository.toObject(message.metadata);
+    if (typeof metadata.human_sent_at === "string") {
+      throw new Error("Bản nháp này đã được gửi bởi người vận hành; không thể thay đổi quyết định duyệt.");
+    }
+
+    const note = input.note?.trim() || "";
+    if ((input.decision === "rejected" || input.decision === "taken_over") && !note) {
+      throw new Error("Cần ghi lý do khi từ chối hoặc tiếp quản hội thoại.");
+    }
+    const editedContent = input.editedContent?.trim() || "";
+    if (input.decision === "edited") {
+      if (!editedContent) throw new Error("Bản sửa không được để trống.");
+      if (editedContent === message.content.trim()) throw new Error("Nội dung chưa thay đổi; hãy dùng Duyệt nguyên văn.");
+    }
+
+    const reviewedAt = new Date().toISOString();
+    const reviewedContent = input.decision === "edited"
+      ? editedContent
+      : input.decision === "approved"
+        ? message.content.trim()
+        : null;
+
+    await this.repo.updateMessage(message.id, {
+      metadata: {
+        ...metadata,
+        review_status: input.decision,
+        review_note: note || null,
+        reviewed_by: input.actorLabel,
+        reviewed_at: reviewedAt,
+        reviewed_content: reviewedContent,
+        edited_by_human: input.decision === "edited",
+      },
+    });
+
+    const conversationMetadata = AiReceptionistRepository.toObject(conversation.metadata);
+    if (input.decision === "taken_over") {
+      await this.repo.updateConversation(conversation.id, {
+        metadata: {
+          ...conversationMetadata,
+          response_mode: "manual",
+          human_takeover: true,
+          human_takeover_at: reviewedAt,
+          human_takeover_by: input.actorLabel,
+        },
+      });
+    } else if (input.decision === "approved" || input.decision === "edited") {
+      await this.repo.updateConversation(conversation.id, {
+        metadata: {
+          ...conversationMetadata,
+          response_mode: "manual",
+          human_takeover: false,
+        },
+      });
+    }
+
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: `Shadow Review: AI draft ${message.id.slice(0, 8)} → ${input.decision}; customer outbound chưa tự động gửi.`,
+      type: input.decision === "approved" || input.decision === "edited" ? "approval" : "action",
+    });
+    return { reviewStatus: input.decision, reviewedContent };
+  }
+
   async sendManualConversationReply(input: {
     conversationId: string;
     content: string;
     actorLabel: string;
     requestId: string;
+    sourceAiMessageId?: string | null;
   }): Promise<{ messageId: string; externalMessageId: string }> {
     const content = input.content.trim();
     const requestId = input.requestId.trim();
@@ -1446,6 +1600,29 @@ export class AiReceptionistService {
     if (metadata.response_mode === "auto") {
       throw new Error("Hội thoại đang ở chế độ Tự động. Chuyển sang Manual trước khi người thật gửi.");
     }
+
+    let reviewedAiMessage: Awaited<ReturnType<AiReceptionistRepository["findMessageById"]>> = null;
+    let reviewedAiMetadata: Record<string, Json> = {};
+    if (input.sourceAiMessageId) {
+      reviewedAiMessage = await this.repo.findMessageById(input.sourceAiMessageId);
+      if (!reviewedAiMessage || reviewedAiMessage.conversation_id !== conversation.id || reviewedAiMessage.sender_type !== "ai") {
+        throw new Error("Bản nháp AI tham chiếu không hợp lệ.");
+      }
+      reviewedAiMetadata = AiReceptionistRepository.toObject(reviewedAiMessage.metadata);
+      const reviewStatus = reviewedAiMetadata.review_status;
+      if (reviewStatus !== "approved" && reviewStatus !== "edited") {
+        throw new Error("Bản nháp AI chưa được Duyệt hoặc Lưu bản sửa.");
+      }
+      const approvedContent = reviewStatus === "edited"
+        ? String(reviewedAiMetadata.reviewed_content ?? "").trim()
+        : reviewedAiMessage.content.trim();
+      if (!approvedContent || approvedContent !== content) {
+        throw new Error("Nội dung gửi khác bản đã duyệt. Hãy Lưu bản sửa trước khi gửi.");
+      }
+    } else if (metadata.human_takeover !== true) {
+      throw new Error("Cần duyệt bản nháp AI hoặc chọn Tôi tiếp quản trước khi gửi cho khách.");
+    }
+
     const eligibility = manualSendEligibility(conversation.channel, metadata);
     if (!eligibility.ready) throw new Error(eligibility.reason);
 
@@ -1489,7 +1666,9 @@ export class AiReceptionistService {
       metadata: {
         authorship: "human",
         actor_label: input.actorLabel,
-        edited_by_human: true,
+        source_ai_message_id: reviewedAiMessage?.id ?? null,
+        review_status: reviewedAiMetadata.review_status ?? (metadata.human_takeover === true ? "taken_over" : null),
+        edited_by_human: reviewedAiMetadata.review_status === "edited",
         detected_language: detected,
         translated_vi: detected === "vi" ? content : "",
         translation_status: detected === "vi" ? "not_needed" : "pending_provider",
@@ -1558,6 +1737,15 @@ export class AiReceptionistService {
         last_message_at: deliveredAt,
         status: "active",
       });
+      if (reviewedAiMessage) {
+        await this.repo.updateMessage(reviewedAiMessage.id, {
+          metadata: {
+            ...reviewedAiMetadata,
+            human_sent_at: deliveredAt,
+            human_sent_message_id: pendingMessage.id,
+          },
+        });
+      }
       await this.activityLog.record({
         agent: input.actorLabel,
         unit: "Tam Cốc",
@@ -1588,6 +1776,9 @@ export class AiReceptionistService {
   ): Promise<void> {
     const conversation = await this.repo.findConversationById(conversationId);
     if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    if (responseMode === "auto" && !isReceptionistAutoReplyApproved()) {
+      throw new Error("Auto Reply đang khóa theo quyết định SHADOW/HUMAN APPROVAL. Cần approval riêng trước khi bật.");
+    }
     const metadata = AiReceptionistRepository.toObject(conversation.metadata);
     await this.repo.updateConversation(conversationId, {
       metadata: {

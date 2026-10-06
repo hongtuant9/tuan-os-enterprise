@@ -15,6 +15,14 @@ export function isPilotOutboundEnabled(): boolean {
   return enabled("AI_PILOT_OUTBOUND_ENABLED");
 }
 
+export function isReceptionistAutoReplyApproved(): boolean {
+  const mode = getReceptionistMode();
+  return (
+    (mode === "limited_auto" || mode === "live") &&
+    enabled("TCE_RECEPTIONIST_AUTO_REPLY_APPROVED")
+  );
+}
+
 export function isKiotVietDirectBookingWriteEnabled(): boolean {
   const mode = getReceptionistMode();
   return (

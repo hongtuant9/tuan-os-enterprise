@@ -10,6 +10,16 @@ export type ConversationStatus =
   | "closed";
 export type ManagerReviewStatus = "pending" | "approved" | "rejected" | "needs_info";
 export type KnowledgeCandidateStatus = "pending" | "approved" | "rejected" | "published";
+export type AiDraftReviewStatus = "pending" | "approved" | "edited" | "rejected" | "taken_over";
+
+export type ReceptionistEvidenceFact = {
+  sourceKey: string;
+  externalId: string;
+  label: string;
+  status: string;
+  allowedUse: string;
+  syncedAt: string;
+};
 
 export type ReceptionistMessage = {
   id: string;
@@ -27,6 +37,16 @@ export type ReceptionistMessage = {
   deliveredAt: string | null;
   deliveryDetail: string | null;
   qaPass: boolean | null;
+  qaReasons: string[];
+  evidenceSources: string[];
+  evidenceFacts: ReceptionistEvidenceFact[];
+  knowledgeFactCount: number;
+  reviewStatus: AiDraftReviewStatus | null;
+  reviewNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewedContent: string | null;
+  sourceAiMessageId: string | null;
   editedByHuman: boolean;
   historicalImport: boolean;
   createdAt: string;
@@ -74,6 +94,7 @@ export type ReceptionistConversation = {
   status: ConversationStatus;
   mode: ReceptionistMode;
   responseMode: "manual" | "auto";
+  humanTakeover: boolean;
   lastMessageAt: string;
   messages: ReceptionistMessage[];
 };
@@ -129,6 +150,7 @@ export type KnowledgeCandidate = {
 export type ReceptionistDashboard = {
   mode: ReceptionistMode;
   writeEnabled: boolean;
+  autoReplyApproved: boolean;
   conversations: ReceptionistConversation[];
   bookings: AiBookingRecord[];
   managerReviews: ManagerReview[];
@@ -138,6 +160,12 @@ export type ReceptionistDashboard = {
     pendingManagerReviews: number;
     verifiedAiBookings: number;
     pendingKnowledgeCandidates: number;
+    reviewedAiDrafts: number;
+    approvedUnchangedAiDrafts: number;
+    editedAiDrafts: number;
+    rejectedAiDrafts: number;
+    takenOverAiDrafts: number;
+    humanCorrectionRate: number;
   };
   missingDataBacklog: string[];
 };

@@ -47,6 +47,7 @@ export type OtaEmailWorkerResult = {
   directDrafted: number;
   directDuplicates: number;
   directFiltered: number;
+  directReceiveEnabled: boolean;
   nextPageTokens: Record<string, string | null>;
 };
 
@@ -331,12 +332,17 @@ export async function runOtaEmailWorker(
     directDrafted: 0,
     directDuplicates: 0,
     directFiltered: 0,
+    directReceiveEnabled: false,
     nextPageTokens: {},
   };
 
   const allMailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
   const mailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity !== "cozy");
-  const directMailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity === "cozy");
+  const directEmailReceiveEnabled = process.env.TCE_DIRECT_EMAIL_RECEIVE_ENABLED?.trim().toLowerCase() === "true";
+  const directMailboxClients = directEmailReceiveEnabled
+    ? allMailboxClients.filter((mailbox) => mailbox.entity === "cozy")
+    : [];
+  result.directReceiveEnabled = directEmailReceiveEnabled;
   result.mailboxesConfigured = allMailboxClients.length;
   result.configured = allMailboxClients.length > 0;
   if (!result.configured) return result;

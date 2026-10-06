@@ -6,6 +6,7 @@ import {
   getReceptionistMode,
   isPilotConversationAllowed,
   isPilotOutboundEnabled,
+  isReceptionistAutoReplyApproved,
 } from "@/server/ai-receptionist/config";
 
 type InstagramMessage = {
@@ -58,6 +59,7 @@ async function sendInstagram(recipientId: string, text: string): Promise<string 
     !token ||
     !accountId ||
     !isPilotOutboundEnabled() ||
+    !isReceptionistAutoReplyApproved() ||
     !isPilotConversationAllowed("instagram", recipientId) ||
     !["limited_auto", "live"].includes(getReceptionistMode())
   ) {

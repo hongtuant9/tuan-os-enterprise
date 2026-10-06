@@ -9,6 +9,7 @@ export type GoogleBusinessProfileBrowserState =
   | "HOLD_LOGIN"
   | "HOLD_MFA"
   | "HOLD_CAPTCHA"
+  | "HOLD_ACCOUNT_SELECTION"
   | "READY"
   | "ERROR";
 

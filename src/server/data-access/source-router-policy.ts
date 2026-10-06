@@ -16,6 +16,7 @@ export type DataAccessInput = {
   operation: OperationMode;
   risk: DataRisk;
   cacheFresh: boolean;
+  cacheVerified: boolean;
   webhookAvailable: boolean;
   apiCost: ApiCostClass;
   browser: BrowserCapability;
@@ -52,7 +53,7 @@ function browserRoute(capability: BrowserCapability): DataAccessRoute {
  * DEC-TCE-DATA-ROUTING-20261006-001
  * Cheapest Reliable Source First.
  *
- * - Fresh canonical cache is preferred for reads.
+ * - Canonical cache is eligible only when BOTH fresh and VERIFIED.
  * - Free/included webhook/API outrank browser automation.
  * - Verified OpenClaw Network/DOM may outrank a paid API for non-critical reads.
  * - Critical READ may use verified browser extraction only when official API is unavailable.
@@ -63,7 +64,7 @@ export function selectDataAccessRoute(input: DataAccessInput): DataAccessRoute {
   const critical = CRITICAL_RISKS.has(input.risk);
   const browser = browserRoute(input.browser);
 
-  if (input.operation === "READ" && input.cacheFresh) return "CACHE";
+  if (input.operation === "READ" && input.cacheFresh && input.cacheVerified) return "CACHE";
   if (input.webhookAvailable) return "WEBHOOK";
   if (input.apiCost === "FREE" || input.apiCost === "INCLUDED") return "API";
 

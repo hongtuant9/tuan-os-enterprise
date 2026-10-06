@@ -108,7 +108,7 @@ jobs:
                  f"omnichannelWorkerEnabled={signals.get('omnichannelWorkerEnabled')!r}")
           expect(signals.get("trelloWorkerEnabled") is True,
                  f"trelloWorkerEnabled={signals.get('trelloWorkerEnabled')!r}")
-          expect(signals.get("executionGovernanceVersion") == "2026-09-26.v5",
+          expect(signals.get("executionGovernanceVersion") == "2026-09-29.v6",
                  f"executionGovernanceVersion={signals.get('executionGovernanceVersion')!r}")
           expect(signals.get("trelloExecutionMirror") in ("ACTIVE", "HOLD_NO_RUNTIME_CREDENTIALS"),
                  f"trelloExecutionMirror={signals.get('trelloExecutionMirror')!r}")

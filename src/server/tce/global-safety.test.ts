@@ -46,7 +46,7 @@ test("Business route exposes scoped current-data freshness without static snapsh
   assert.match(page,/dynamic = "force-dynamic"/);
   assert.match(page,/getTceTabLiveData\("business"/);
   assert.match(data,/businessFreshness/);
-  assert.match(data,/KiotViet Hotel \+ F&B · direct authenticated API read \+ Property runtime/);
+  assert.match(data,/KiotViet Hotel \+ F&B · direct authenticated API \+ KiotViet Report Runtime/);
   assert.match(data,/Không đọc được đầy đủ nguồn KiotViet trực tiếp ở lần tải này\. Không dùng 0 để thay dữ liệu lỗi\./);
 });
 
@@ -191,15 +191,14 @@ test("TCE tab loader fails closed instead of taking the whole route down",()=>{
 });
 
 
-test("business dashboard exposes canonical finance stack without fake completion",()=>{
+test("business dashboard stays scoped to operating performance while finance stack stays out",()=>{
   const loader=read("src/server/tce/tab-live-data.ts");
   const ui=read("src/components/tce/ReferenceScreens.tsx");
-  assert.match(loader,/businessFinancialStack/);
   assert.match(loader,/businessDataGaps/);
-  assert.match(loader,/Business Cash ≠ Revenue ≠ Profit ≠ Owner Distributable Cash/);
-  assert.match(loader,/NEED_VERIFY — COGS chưa PASS/);
-  assert.match(loader,/HOLD — Tax Rule chưa VERIFIED/);
-  assert.match(ui,/Chuỗi tài chính kinh doanh/);
+  assert.match(loader,/DIRECT KIOTVIET REPORT/);
+  assert.match(loader,/KiotViet Hotel \+ F&B · direct authenticated API \+ KiotViet Report Runtime/);
+  assert.doesNotMatch(ui,/Chuỗi tài chính kinh doanh/);
+  assert.doesNotMatch(ui,/Ảnh chụp quyết định tài chính/);
   assert.match(ui,/Nguồn thiếu & nơi cần cập nhật/);
 });
 

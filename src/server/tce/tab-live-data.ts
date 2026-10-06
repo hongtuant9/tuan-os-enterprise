@@ -631,7 +631,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
         dataThrough: businessPipelineReadable ? now.toISOString() : null,
         lastSyncAt: businessPipelineReadable ? now.toISOString() : null,
         appRefreshedAt: now.toISOString(),
-        source: "KiotViet Hotel + F&B · direct authenticated API read + Property runtime",
+        source: "KiotViet Hotel + F&B · direct authenticated API + KiotViet Report Runtime",
         freshnessStatus: businessPipelineReadable ? "LIVE" : "ERROR",
         pipelineStatus: businessPipelineReadable ? "LIVE" : "ERROR",
         dataRecencyStatus: businessPipelineReadable ? "CURRENT" : "NO_DATA",

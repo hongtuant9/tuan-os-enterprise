@@ -15,7 +15,7 @@ import { AiReceptionistRepository } from "@/server/repositories/ai-receptionist.
 import { ActivityLogService } from "@/server/services/activity-log.service";
 import { KiotVietHotelClient } from "@/server/integrations/kiotviet/hotel-client";
 import { GoogleOAuthTokenStore } from "@/server/integrations/google/token-store";
-import { findGmailMailbox } from "@/server/integrations/google/gmail-mailboxes";
+import { findGmailMailbox, googleMailboxEmailMatches } from "@/server/integrations/google/gmail-mailboxes";
 import { upsertCozyRecruitmentCandidate } from "@/server/recruitment/cozy-intake";
 import { decidePilotMessage } from "@/server/ai-receptionist/decision-engine";
 import { buildKiotVietOrderPayload, makeBookingIdempotencyKey, validateBookingDraftInput, type BookingDraftInput } from "@/server/ai-receptionist/booking-orchestration";
@@ -127,14 +127,33 @@ function safeEmailSubject(subject: string): string {
 
 function manualSendEligibility(channel: string, metadata: Record<string, Json>): { ready: boolean; reason: string } {
   if (process.env.TCE_OTA_EMAIL_MANUAL_SEND_ENABLED?.trim().toLowerCase() !== "true") {
-    return { ready: false, reason: "Manual Send chưa được bật ở runtime; cần mở cổng Manual Send sau khi QA/approval đạt yêu cầu." };
+    return { ready: false, reason: "Manual Send chưa được bật ở runtime; cần mở cổng sau khi QA/approval đạt yêu cầu." };
   }
-  const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.toLowerCase() : "";
-  const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox : "";
-  const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id : "";
+
+  const replyTo = typeof metadata.provider_reply_to === "string" ? metadata.provider_reply_to.trim().toLowerCase() : "";
+  const replyMailbox = typeof metadata.reply_mailbox === "string" ? metadata.reply_mailbox.trim() : "";
+  const threadId = typeof metadata.provider_thread_id === "string" ? metadata.provider_thread_id.trim() : "";
   if (!replyMailbox || !replyTo || !threadId) {
-    return { ready: false, reason: "Thiếu relay address/thread đã xác minh; cần đồng bộ lại email OTA của đúng mã đặt chỗ trước khi gửi." };
+    return { ready: false, reason: "Thiếu địa chỉ trả lời hoặc Gmail thread đã xác minh; cần đồng bộ lại email nguồn trước khi gửi." };
   }
+
+  if (channel === "email") {
+    const entity = typeof metadata.page_entity === "string" ? metadata.page_entity : "";
+    const mailbox = findGmailMailbox(entity);
+    const validDirectAddress =
+      /^[A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(replyTo)
+      && !/^(?:no-?reply|notifications?|mailer-daemon|postmaster)@/i.test(replyTo);
+    const directReady = Boolean(
+      mailbox
+      && mailbox.purpose === "direct_guest_care"
+      && googleMailboxEmailMatches(replyMailbox, mailbox.canonicalEmail)
+      && validDirectAddress,
+    );
+    return directReady
+      ? { ready: true, reason: "Manual Send sẵn sàng qua Gmail chăm sóc khách trực tiếp." }
+      : { ready: false, reason: "Email trực tiếp chưa đạt mailbox/reply-address gate." };
+  }
+
   const approved =
     (channel === "booking" && replyTo.endsWith("@guest.booking.com"))
     || (channel === "agoda" && replyTo.endsWith("@agoda-messaging.com") && !replyTo.startsWith("notifications@"))
@@ -1633,9 +1652,15 @@ export class AiReceptionistService {
 
     const entity = typeof metadata.page_entity === "string" ? metadata.page_entity : "";
     const mailbox = findGmailMailbox(entity);
-    if (!mailbox || mailbox.purpose !== "ota_guest_care") {
-      throw new Error("Không xác định được mailbox OTA của cơ sở.");
+    const mailboxPurposeReady = conversation.channel === "email"
+      ? mailbox?.purpose === "direct_guest_care"
+      : mailbox?.purpose === "ota_guest_care";
+    if (!mailbox || !mailboxPurposeReady) {
+      throw new Error(conversation.channel === "email"
+        ? "Không xác định được mailbox chăm sóc khách trực tiếp của cơ sở."
+        : "Không xác định được mailbox OTA của cơ sở.");
     }
+    const transport = conversation.channel === "email" ? "direct_email" : "ota_email_relay";
     const clients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
     const mailboxClient = clients.find((item) => item.entity === mailbox.entity);
     if (!mailboxClient) throw new Error("Mailbox Gmail của cơ sở chưa được OAuth hợp lệ.");
@@ -1662,7 +1687,7 @@ export class AiReceptionistService {
       content,
       status: "draft",
       evidence: {
-        transport: "ota_email_relay",
+        transport,
         manual_send: true,
         outbound_sent: false,
         channel: conversation.channel,
@@ -1723,7 +1748,7 @@ export class AiReceptionistService {
       await this.repo.updateMessage(pendingMessage.id, {
         status: "sent",
         evidence: {
-          transport: "ota_email_relay",
+          transport,
           manual_send: true,
           outbound_sent: true,
           channel: conversation.channel,
@@ -1734,7 +1759,7 @@ export class AiReceptionistService {
           provider_message_id: data.id,
           delivery_status: "sent",
           delivered_at: deliveredAt,
-          delivery_detail: `Manual Send qua ${conversation.channel} relay / ${mailbox.propertyLabel}`,
+          delivery_detail: `Manual Send qua ${conversation.channel === "email" ? "Gmail trực tiếp" : `${conversation.channel} relay`} / ${mailbox.propertyLabel}`,
         },
       });
 

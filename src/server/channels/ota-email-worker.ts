@@ -37,6 +37,11 @@ export type OtaEmailWorkerResult = {
   duplicates: number;
   contextOnly: number;
   failed: number;
+  otaListFailed: number;
+  otaMessageFailed: number;
+  otaSendFailed: number;
+  directListFailed: number;
+  directMessageFailed: number;
   autoSent: number;
   autoSendHeld: number;
   contextStored: number;
@@ -322,6 +327,11 @@ export async function runOtaEmailWorker(
     duplicates: 0,
     contextOnly: 0,
     failed: 0,
+    otaListFailed: 0,
+    otaMessageFailed: 0,
+    otaSendFailed: 0,
+    directListFailed: 0,
+    directMessageFailed: 0,
     autoSent: 0,
     autoSendHeld: 0,
     contextStored: 0,
@@ -378,6 +388,7 @@ export async function runOtaEmailWorker(
       result.nextPageTokens[mailbox.entity] = list.data.nextPageToken ?? null;
     } catch {
       result.failed += 1;
+      result.otaListFailed += 1;
       continue;
     }
 
@@ -543,9 +554,11 @@ export async function runOtaEmailWorker(
             });
           }
           result.failed += 1;
+          result.otaSendFailed += 1;
         }
       } catch {
         result.failed += 1;
+        result.otaMessageFailed += 1;
       }
     }
   }
@@ -634,10 +647,12 @@ export async function runOtaEmailWorker(
           result.autoSendHeld += 1;
         } catch {
           result.failed += 1;
+          result.directMessageFailed += 1;
         }
       }
     } catch {
       result.failed += 1;
+      result.directListFailed += 1;
     }
   }
 

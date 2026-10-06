@@ -150,6 +150,7 @@ export type KnowledgeCandidate = {
 export type ReceptionistDashboard = {
   mode: ReceptionistMode;
   writeEnabled: boolean;
+  autoReplyApproved: boolean;
   conversations: ReceptionistConversation[];
   bookings: AiBookingRecord[];
   managerReviews: ManagerReview[];

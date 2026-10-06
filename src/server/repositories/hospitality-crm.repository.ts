@@ -8,6 +8,16 @@ type BookingRow = Database["public"]["Tables"]["ai_booking_records"]["Row"];
 type UpsellRow = Database["public"]["Tables"]["ai_upsell_events"]["Row"];
 type MessageRow = Database["public"]["Tables"]["ai_messages"]["Row"];
 
+const IN_FILTER_BATCH_SIZE = 100;
+
+function batches<T>(values: T[], size = IN_FILTER_BATCH_SIZE): T[][] {
+  const out: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    out.push(values.slice(index, index + size));
+  }
+  return out;
+}
+
 export class HospitalityCrmRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
@@ -26,36 +36,57 @@ export class HospitalityCrmRepository {
 
   async messages(conversationIds: string[]): Promise<MessageRow[]> {
     if (!conversationIds.length) return [];
-    const { data, error } = await this.db.from("ai_messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: true });
-    if (error) throw error;
-    return data ?? [];
+    const rows: MessageRow[] = [];
+    for (const ids of batches(Array.from(new Set(conversationIds)))) {
+      const { data, error } = await this.db.from("ai_messages").select("*").in("conversation_id", ids).order("created_at", { ascending: true });
+      if (error) throw error;
+      rows.push(...(data ?? []));
+    }
+    return rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
   }
 
   async identities(customerIds: string[]): Promise<IdentityRow[]> {
     if (!customerIds.length) return [];
-    const { data, error } = await this.db.from("hospitality_customer_identities").select("*").in("customer_id", customerIds);
-    if (error) throw error;
-    return data ?? [];
+    const rows: IdentityRow[] = [];
+    for (const ids of batches(Array.from(new Set(customerIds)))) {
+      const { data, error } = await this.db.from("hospitality_customer_identities").select("*").in("customer_id", ids);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+    }
+    return rows;
   }
+
   async conversations(customerIds: string[]): Promise<ConversationRow[]> {
     if (!customerIds.length) return [];
-    const { data, error } = await this.db.from("ai_conversations").select("*").in("customer_id", customerIds).order("last_message_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
+    const rows: ConversationRow[] = [];
+    for (const ids of batches(Array.from(new Set(customerIds)))) {
+      const { data, error } = await this.db.from("ai_conversations").select("*").in("customer_id", ids).order("last_message_at", { ascending: false });
+      if (error) throw error;
+      rows.push(...(data ?? []));
+    }
+    return rows.sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? ""));
   }
 
   async bookings(customerIds: string[]): Promise<BookingRow[]> {
     if (!customerIds.length) return [];
-    const { data, error } = await this.db.from("ai_booking_records").select("*").in("customer_id", customerIds).order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
+    const rows: BookingRow[] = [];
+    for (const ids of batches(Array.from(new Set(customerIds)))) {
+      const { data, error } = await this.db.from("ai_booking_records").select("*").in("customer_id", ids).order("created_at", { ascending: false });
+      if (error) throw error;
+      rows.push(...(data ?? []));
+    }
+    return rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
   async upsellEvents(customerIds: string[]): Promise<UpsellRow[]> {
     if (!customerIds.length) return [];
-    const { data, error } = await this.db.from("ai_upsell_events").select("*").in("customer_id", customerIds).order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
+    const rows: UpsellRow[] = [];
+    for (const ids of batches(Array.from(new Set(customerIds)))) {
+      const { data, error } = await this.db.from("ai_upsell_events").select("*").in("customer_id", ids).order("created_at", { ascending: false });
+      if (error) throw error;
+      rows.push(...(data ?? []));
+    }
+    return rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
   async recentUpsellEvents(limit = 200): Promise<UpsellRow[]> {

@@ -636,6 +636,7 @@ export class AiReceptionistService {
     return {
       mode: getReceptionistMode(),
       writeEnabled: isKiotVietDirectBookingWriteEnabled(),
+      autoReplyApproved: isReceptionistAutoReplyApproved(),
       conversations,
       bookings,
       managerReviews,

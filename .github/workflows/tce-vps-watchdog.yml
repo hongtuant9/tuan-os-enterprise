@@ -76,6 +76,8 @@ jobs:
                  f"businessOperatingPlan={features.get('businessOperatingPlan')!r}")
           expect(features.get("aiReceptionistShadowControl") == "v1",
                  f"aiReceptionistShadowControl={features.get('aiReceptionistShadowControl')!r}")
+          expect(features.get("aiReceptionistMetaTransportOwnerGate") == "v1",
+                 f"aiReceptionistMetaTransportOwnerGate={features.get('aiReceptionistMetaTransportOwnerGate')!r}")
 
           signals = data.get("runtimeSignals") or {}
           expect(signals.get("companyAutopilotEnabled") is True,

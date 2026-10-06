@@ -114,8 +114,8 @@ export const CUSTOMER_CHANNELS: readonly ChannelDefinition[] = [
   },
   {
     id: "email", label: "Email", group: "email",
-    purpose: "Direct enquiries and pre/in/post-service follow-up", readiness: "PENDING_AUTH", transport: "poll",
-    automaticUpsell: false, activationNote: "Requires dedicated mailbox OAuth/API scope, idempotent polling and reply UAT.",
+    purpose: "Direct enquiries and pre/in/post-service follow-up", readiness: "ADAPTER_READY", transport: "poll",
+    automaticUpsell: false, activationNote: "Direct-email adapter is ready; activation still requires canonical mailbox OAuth, receive gate and reply UAT.",
   },
   {
     id: "whatsapp", label: "WhatsApp", group: "messaging",

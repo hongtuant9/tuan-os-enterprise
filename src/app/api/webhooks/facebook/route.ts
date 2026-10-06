@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { assertCustomerChannelReceiveEnabled } from "@/server/channels/channel-policy";
-import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
+import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled, isReceptionistAutoReplyApproved } from "@/server/ai-receptionist/config";
 import {
   facebookLegacyPageId,
   facebookPageEntityMap,
@@ -67,6 +67,7 @@ async function sendMessenger(
   const generalPilotAllowed =
     process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() === "true" &&
     isPilotOutboundEnabled() &&
+    isReceptionistAutoReplyApproved() &&
     isPilotConversationAllowed("facebook", `${pageId}:${recipientId}`) &&
     ["limited_auto", "live"].includes(getReceptionistMode());
 

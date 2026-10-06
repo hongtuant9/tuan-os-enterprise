@@ -52,27 +52,33 @@ function browserRoute(capability: BrowserCapability): DataAccessRoute {
  * DEC-TCE-DATA-ROUTING-20261006-001
  * Cheapest Reliable Source First.
  *
- * Rules:
- * - Fresh canonical cache is the preferred read path.
+ * - Fresh canonical cache is preferred for reads.
  * - Free/included webhook/API outrank browser automation.
  * - Verified OpenClaw Network/DOM may outrank a paid API for non-critical reads.
- * - Critical data and external writes never downgrade authority only to save API cost.
- * - Vision/mouse is the final fallback and is never accepted for critical writes.
+ * - Critical READ may use verified browser extraction only when official API is unavailable.
+ * - Critical WRITE never downgrades to browser to save API cost.
+ * - Vision/mouse is final fallback and never accepted for critical operations.
  */
 export function selectDataAccessRoute(input: DataAccessInput): DataAccessRoute {
   const critical = CRITICAL_RISKS.has(input.risk);
+  const browser = browserRoute(input.browser);
 
   if (input.operation === "READ" && input.cacheFresh) return "CACHE";
-
   if (input.webhookAvailable) return "WEBHOOK";
-
   if (input.apiCost === "FREE" || input.apiCost === "INCLUDED") return "API";
 
-  if (critical || input.operation === "WRITE") {
+  if (input.operation === "WRITE") {
     return input.apiCost === "PAID" ? "API" : "HOLD";
   }
 
-  const browser = browserRoute(input.browser);
+  if (critical) {
+    if (input.apiCost === "PAID") return "API";
+    if (input.apiCost === "UNAVAILABLE" && (browser === "OPENCLAW_NETWORK" || browser === "OPENCLAW_DOM")) {
+      return browser;
+    }
+    return "HOLD";
+  }
+
   if (browser === "OPENCLAW_NETWORK" || browser === "OPENCLAW_DOM") {
     if (input.apiCost !== "PAID") return browser;
 
@@ -83,6 +89,5 @@ export function selectDataAccessRoute(input: DataAccessInput): DataAccessRoute {
   }
 
   if (input.apiCost === "PAID") return "API";
-
   return browser === "OPENCLAW_VISION" ? "OPENCLAW_VISION" : "HOLD";
 }

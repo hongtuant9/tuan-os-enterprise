@@ -74,6 +74,8 @@ jobs:
                  f"companyAutopilot={features.get('companyAutopilot')!r}")
           expect(features.get("businessOperatingPlan") == "2026-2027-v1",
                  f"businessOperatingPlan={features.get('businessOperatingPlan')!r}")
+          expect(features.get("aiReceptionistShadowControl") == "v1",
+                 f"aiReceptionistShadowControl={features.get('aiReceptionistShadowControl')!r}")
 
           signals = data.get("runtimeSignals") or {}
           expect(signals.get("companyAutopilotEnabled") is True,
@@ -116,6 +118,8 @@ jobs:
                  f"kiotVietWriteEnabled={signals.get('kiotVietWriteEnabled')!r}")
           expect(signals.get("directBookingAutoCreateEnabled") is False,
                  f"directBookingAutoCreateEnabled={signals.get('directBookingAutoCreateEnabled')!r}")
+          expect(signals.get("receptionistAutoReplyApproved") is False,
+                 f"receptionistAutoReplyApproved={signals.get('receptionistAutoReplyApproved')!r}")
 
           open_channels = signals.get("openCustomerChannels") or []
           expect("facebook" in open_channels,

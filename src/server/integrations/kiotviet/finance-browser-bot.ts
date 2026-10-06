@@ -10,6 +10,7 @@ import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
 import { parseCashbookRowText } from "@/server/finance/cashbook-row-parser";
 import { summarizeKiotVietOccupancyRows } from "./occupancy-report-core";
+import { cashbookPaginationComplete } from "./cashbook-pagination";
 import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
@@ -1061,8 +1062,12 @@ async function cashbookSnapshot(page: Page) {
     closingBalance,
     rows: reconciliationRows,
   });
-  const paginationEvidence =
-    reportedTotalRows === null ? terminalPagerObserved : rawRows.length >= reportedTotalRows;
+  const paginationEvidence = cashbookPaginationComplete({
+    reportedTotalRows,
+    rawRowCount: rawRows.length,
+    terminalPagerObserved,
+    reconciliationVerified: reconciliation.verified,
+  });
   const exportCapture = !reconciliation.verified && exportControlLabels.length > 0
     ? await captureCashbookExport(page, "HOTEL", exportControlLabels)
     : { attempted: false, state: "SKIPPED" as const, detail: reconciliation.verified ? "Reconciliation already VERIFIED." : "No export control detected." };

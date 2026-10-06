@@ -81,17 +81,6 @@ async function connectOrLaunch(): Promise<{ browser: Browser; external: boolean 
   return { browser, external: false };
 }
 
-async function legacyLaunchRemoved(): Promise<Browser> {
-  await mkdir(PROFILE_DIR,{recursive:true});
-  await clearStaleChromiumSingleton(PROFILE_DIR);
-  return puppeteer.launch({
-    executablePath: await chromium(),
-    headless: true,
-    userDataDir: PROFILE_DIR,
-    args:["--no-sandbox","--disable-gpu","--disable-dev-shm-usage","--no-first-run","--window-size=1440,1400"],
-  });
-}
-
 async function pageText(page: Page) {
   return (await page.evaluate(() => document.body?.innerText || "")).slice(0,60000);
 }
@@ -110,7 +99,7 @@ export async function googleBusinessProfileBrowserStatus() {
   if (!enabled()) return { state:"DISABLED" as GoogleBusinessProfileBrowserState, authenticated:false };
 
   return withBrowserLock(async () => {
-    let browser: Browser | null = null;
+    let browser: Browser | null = null;\n    let external = false;
     try {
       const connected = await connectOrLaunch();
       browser = connected.browser;

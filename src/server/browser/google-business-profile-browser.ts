@@ -63,7 +63,25 @@ async function chromium() {
   throw new Error("Chromium not found");
 }
 
-async function launch(): Promise<Browser> {
+async function connectOrLaunch(): Promise<{ browser: Browser; external: boolean }> {
+  const browserURL = process.env.TCE_GBP_CDP_URL?.trim() || "http://tce-gbp-browser:9222";
+  try {
+    const browser = await puppeteer.connect({ browserURL });
+    return { browser, external: true };
+  } catch {}
+
+  await mkdir(PROFILE_DIR,{recursive:true});
+  await clearStaleChromiumSingleton(PROFILE_DIR);
+  const browser = await puppeteer.launch({
+    executablePath: await chromium(),
+    headless: true,
+    userDataDir: PROFILE_DIR,
+    args:["--no-sandbox","--disable-gpu","--disable-dev-shm-usage","--no-first-run","--window-size=1440,1400"],
+  });
+  return { browser, external: false };
+}
+
+async function legacyLaunchRemoved(): Promise<Browser> {
   await mkdir(PROFILE_DIR,{recursive:true});
   await clearStaleChromiumSingleton(PROFILE_DIR);
   return puppeteer.launch({
@@ -94,7 +112,9 @@ export async function googleBusinessProfileBrowserStatus() {
   return withBrowserLock(async () => {
     let browser: Browser | null = null;
     try {
-      browser = await launch();
+      const connected = await connectOrLaunch();
+      browser = connected.browser;
+      const external = connected.external;
       const page = await browser.newPage();
       await page.goto("https://business.google.com/locations",{waitUntil:"domcontentloaded",timeout:45000}).catch(() => undefined);
       await new Promise((r)=>setTimeout(r,2200));
@@ -141,7 +161,10 @@ export async function googleBusinessProfileBrowserStatus() {
         "BROWSER_RUNTIME_ERROR";
       return { state:"ERROR" as GoogleBusinessProfileBrowserState, authenticated:false, checkedAt:new Date().toISOString(), reason, scope:"READ_ONLY" as const };
     } finally {
-      await browser?.close().catch(() => undefined);
+      if (browser) {
+        const connected = browser as Browser;
+        await connected.disconnect().catch(() => undefined);
+      }
     }
   });
 }

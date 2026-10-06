@@ -226,9 +226,10 @@ function providerEvidence(id: CustomerChannelId): {
       const hasPublicKey = envConfigured("TCE_WEBSITE_BRIDGE_PUBLIC_KEY");
       const hasHmacSecret = envConfigured("TCE_WEBSITE_BRIDGE_SECRET");
       const providerConfig: ProviderConfigStatus = hasPublicKey || hasHmacSecret ? "CONFIGURED" : "NOT_CONFIGURED";
+      const pilotVerified = process.env.TCE_WEBSITE_BRIDGE_VERIFIED?.trim().toLowerCase() === "true";
       return {
         providerConfig,
-        providerVerification: providerConfig === "CONFIGURED" ? "NEED_VERIFY" : "NEED_VERIFY",
+        providerVerification: providerConfig === "CONFIGURED" && pilotVerified ? "VERIFIED_PILOT" : "NEED_VERIFY",
       };
     }
     case "facebook": {

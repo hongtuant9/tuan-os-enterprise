@@ -93,6 +93,7 @@ function runtimeSignals() {
     syncWorkerEnabled: companyAutopilotEnabled && process.env.TCE_SYNC_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     omnichannelWorkerEnabled: companyAutopilotEnabled && process.env.TCE_OMNICHANNEL_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     otaEmailWorkerEnabled: companyAutopilotEnabled && process.env.TCE_OTA_EMAIL_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    directEmailReceiveEnabled: process.env.TCE_DIRECT_EMAIL_RECEIVE_ENABLED?.trim().toLowerCase() === "true",
     otaEmailGmailConfig: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() && process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()
       ? "GOOGLE_OAUTH_CLIENT_CONFIGURED"
       : "NOT_CONFIGURED",

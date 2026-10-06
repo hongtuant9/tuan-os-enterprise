@@ -9,6 +9,7 @@ import { reconcileCashbookTotals } from "@/server/finance/foundation";
 import { KiotVietFnbClient } from "./fnb-client";
 import { KiotVietHotelClient } from "./hotel-client";
 import { parseCashbookRowText } from "@/server/finance/cashbook-row-parser";
+import { summarizeKiotVietOccupancyRows } from "./occupancy-report-core";
 import {
   cashflowGroupDisplayName,
   cashflowGroupsFor,
@@ -1777,6 +1778,51 @@ export async function readKiotVietActualRange(
   });
 }
 
+
+export type KiotVietHotelOccupancySnapshot = {
+  state: "VERIFIED" | "HOLD_CONFIG" | "HOLD_MFA" | "HOLD_UI_CHANGED" | "ERROR";
+  from: string;
+  to: string;
+  checkedAt: string;
+  branches: Array<{ id: string; name: string; roomDay: number; usageRooms: number; bookingRooms: number; occupancy: number | null }>;
+  combined: number | null;
+  note: string;
+};
+
+function localMidnightUtcIso(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00+07:00`).toISOString();
+}
+
+export async function readKiotVietHotelOccupancyReport(from: string, to: string): Promise<KiotVietHotelOccupancySnapshot> {
+  return withLock(async () => {
+    const checkedAt = new Date().toISOString();
+    const cleanFrom = from.slice(0,10), cleanTo = to.slice(0,10);
+    const fail = (state: KiotVietHotelOccupancySnapshot["state"], note: string): KiotVietHotelOccupancySnapshot => ({state,from:cleanFrom,to:cleanTo,checkedAt,branches:[],combined:null,note});
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(cleanTo) || cleanFrom > cleanTo) return fail("ERROR","Invalid occupancy date range.");
+    if (!flag("TCE_KIOTVIET_FINANCE_BOT_ENABLED")) return fail("HOLD_CONFIG","KiotViet authenticated browser runtime is disabled.");
+    const branches = (await actualRangeBranches("HOTEL")).filter((b)=>/Lavender Homestay|Ruby Homestay/i.test(b.name));
+    if (!branches.length) return fail("HOLD_CONFIG","KiotViet Hotel branches unavailable.");
+    let browser: Browser;
+    try { browser = await launch("HOTEL"); } catch (error) { return fail("ERROR", error instanceof Error ? error.message : "Browser launch failed."); }
+    try {
+      const page = await browser.newPage();
+      const auth = await login(page,"HOTEL");
+      if (!auth.ok) return fail(auth.state === "HOLD_MFA" ? "HOLD_MFA" : auth.state === "HOLD_UI_CHANGED" ? "HOLD_UI_CHANGED" : "HOLD_CONFIG", auth.detail ?? "KiotViet login failed.");
+      const nextDate = (()=>{const d=new Date(`${cleanTo}T00:00:00Z`);d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)})();
+      const raw = await page.evaluate(async ({branchIds,startIso,endIso})=>{
+        const filter={StartDate:startIso,EndDate:endIso,TimeRange:"O",BranchIds:branchIds};
+        const url="/reportapi/charts/room-class-productivity?format=json&Filter="+encodeURIComponent(JSON.stringify(filter));
+        const response=await fetch(url,{credentials:"include",headers:{Accept:"application/json"}});
+        const text=await response.text(); let rows:unknown=[]; try{rows=JSON.parse(text)}catch{}
+        if(!response.ok||!Array.isArray(rows)) throw new Error(`KiotViet occupancy report HTTP ${response.status}`);
+        return rows as Array<Record<string,unknown>>;
+      },{branchIds:branches.map(b=>Number(b.id)),startIso:localMidnightUtcIso(cleanFrom),endIso:localMidnightUtcIso(nextDate)});
+      const summary=summarizeKiotVietOccupancyRows(raw,branches.map((b)=>({id:String(b.id),name:b.name})));
+      return {state:"VERIFIED",from:cleanFrom,to:cleanTo,checkedAt,branches:summary.branches,combined:summary.combined,note:`KiotViet Hotel reportapi room-class-productivity · ${cleanFrom}..${cleanTo}`};
+    } catch(error){return fail("ERROR",error instanceof Error?error.message:"KiotViet occupancy report read failed.");}
+    finally { await browser.close().catch(()=>undefined); }
+  });
+}
 export async function runFinanceBotRead(system: FinanceBotSystem, setupTaxonomy = false): Promise<FinanceBotSnapshot> {
   return withLock(async () => {
     const checkedAt = new Date().toISOString();

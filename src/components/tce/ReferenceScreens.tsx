@@ -49,7 +49,7 @@ const meta: Record<ScreenKey, ScreenMeta> = {
       { label: "Doanh thu hôm nay", value: "—", delta: "↗", note: "Actual từ KiotViet", tone: "blue", icon: "▮▮" },
       { label: "Chi phí", value: "—", delta: "↗", note: "Actual chỉ từ KiotViet", tone: "red", icon: "▥" },
       { label: "Lợi nhuận ước tính", value: "—", delta: "↗", note: "Doanh thu Actual − Chi phí Actual", tone: "amber", icon: "⌕" },
-      { label: "Công suất phòng", value: "—", delta: "↗", note: "Property runtime", tone: "teal", icon: "▰" },
+      { label: "Công suất phòng", value: "—", delta: "", note: "KiotViet Room Occupancy Report", tone: "teal", icon: "▰" },
     ],
   },
   marketing: {

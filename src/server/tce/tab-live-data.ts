@@ -21,7 +21,7 @@ import { getMarketingCommandCenterSnapshot } from "@/server/marketing-command-ce
 import { ensureMarketingWorkbookFresh } from "@/server/marketing-command-center/workbook-freshness";
 import { isTaskOverdue } from "@/server/tasks/overdue";
 import { summarizeCashflow } from "@/server/finance/foundation";
-import { readFinanceBotSummary } from "@/server/integrations/kiotviet/finance-browser-bot";
+import { readFinanceBotSummary, readKiotVietHotelOccupancyReport } from "@/server/integrations/kiotviet/finance-browser-bot";
 import { readHospitalityDebtSnapshot } from "@/server/finance/hospitality-ssot";
 import { readFinanceFoundationReadiness } from "@/server/finance/readiness";
 import { summarizeExpenseActualRows } from "@/server/finance/expense-actual-core";
@@ -243,8 +243,17 @@ export function resolveTcePeriod(query: TcePeriodQuery = {}, now = new Date()): 
   let to = today;
 
   if (key === "7d") from = dateAdd(today, -6);
-  if (key === "month") from = today.slice(0, 7) + "-01";
-  if (key === "year") from = today.slice(0, 4) + "-01-01";
+  if (key === "month") {
+    from = today.slice(0, 7) + "-01";
+    const d = new Date(from + "T00:00:00Z");
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    d.setUTCDate(0);
+    to = d.toISOString().slice(0, 10);
+  }
+  if (key === "year") {
+    from = today.slice(0, 4) + "-01-01";
+    to = today.slice(0, 4) + "-12-31";
+  }
   if (key === "custom") {
     if (validDateKey(query.from) && validDateKey(query.to) && query.from! <= query.to!) {
       from = query.from!;
@@ -394,91 +403,16 @@ type BusinessOccupancySnapshot = {
   note: string;
 };
 
-function genericRows(payload: unknown): Array<Record<string, unknown>> {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
-  const root = payload as Record<string, unknown>;
-  const nested = root.result && typeof root.result === "object" && !Array.isArray(root.result)
-    ? root.result as Record<string, unknown>
-    : root;
-  const value = Array.isArray(nested.data) ? nested.data : Array.isArray(root.data) ? root.data : [];
-  return value.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)));
-}
-
-async function safeBusinessOccupancy(
-  db: Awaited<ReturnType<typeof getRequestContainer>>["db"],
-  from: string,
-  to: string,
-): Promise<BusinessOccupancySnapshot> {
+async function safeBusinessOccupancy(from: string,to: string): Promise<BusinessOccupancySnapshot> {
+  const days=Math.max(1,Math.round((Date.parse(to+"T00:00:00Z")-Date.parse(from+"T00:00:00Z"))/86_400_000)+1);
   try {
-    const earliest = await db.from("hospitality_bookings")
-      .select("check_in")
-      .eq("source_system", "KIOTVIET_HOTEL")
-      .not("check_in", "is", null)
-      .order("check_in", { ascending: true })
-      .limit(1);
-    if (earliest.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được coverage booking runtime." };
-    const earliestDate = String(genericRows(earliest)[0]?.check_in ?? "") || null;
-    if (!earliestDate || earliestDate > from) {
-      return {
-        state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0,
-        note: earliestDate ? `Booking runtime hiện có coverage từ ${earliestDate}; kỳ lọc bắt đầu ${from} nên chưa đủ dữ liệu occupancy.` : "Booking runtime chưa có coverage occupancy.",
-      };
-    }
-
-    const toExclusive = addDateDays(to, 1);
-    const result = await db.from("hospitality_bookings")
-      .select("check_in,check_out,room_count,room_names,booking_status,verification_status")
-      .eq("source_system", "KIOTVIET_HOTEL")
-      .eq("verification_status", "VERIFIED")
-      .in("booking_status", ["CONFIRMED", "COMPLETED"])
-      .lt("check_in", toExclusive)
-      .gt("check_out", from);
-    if (result.error) return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được booking runtime cho occupancy." };
-
-    const dayMs = 86_400_000;
-    const days = Math.max(0, Math.round((Date.parse(toExclusive + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) / dayMs));
-    if (days <= 0) return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days: 0, note: "Kỳ occupancy không hợp lệ." };
-
-    let lavenderRoomNights = 0;
-    let rubyRoomNights = 0;
-    let unresolved = 0;
-    for (const row of genericRows(result)) {
-      const checkIn = String(row.check_in ?? "");
-      const checkOut = String(row.check_out ?? "");
-      if (!checkIn || !checkOut || checkOut <= checkIn) { unresolved += 1; continue; }
-      const overlapStart = Math.max(Date.parse(checkIn + "T00:00:00Z"), Date.parse(from + "T00:00:00Z"));
-      const overlapEnd = Math.min(Date.parse(checkOut + "T00:00:00Z"), Date.parse(toExclusive + "T00:00:00Z"));
-      const nights = Math.max(0, Math.round((overlapEnd - overlapStart) / dayMs));
-      if (nights <= 0) continue;
-      const roomNames = Array.isArray(row.room_names) ? row.room_names.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
-      const roomCount = Math.max(0, Number(row.room_count ?? 0));
-      if (!roomNames.length || roomCount > roomNames.length) unresolved += 1;
-      for (const roomName of roomNames) {
-        if (/_la$/i.test(roomName)) lavenderRoomNights += nights;
-        else if (/(double|dobule|twin)$/i.test(roomName)) rubyRoomNights += nights;
-        else unresolved += 1;
-      }
-    }
-    if (unresolved > 0) {
-      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: `${unresolved} booking/room chưa map được Lavender/Ruby; occupancy giữ fail-closed.` };
-    }
-
-    const lavenderCapacity = 7 * days;
-    const rubyCapacity = 6 * days;
-    if (lavenderRoomNights > lavenderCapacity || rubyRoomNights > rubyCapacity) {
-      return { state: "NEED_VERIFY", lavender: null, ruby: null, combined: null, days, note: "Occupied room-nights vượt canonical capacity; cần đối chiếu booking overlap/room mapping." };
-    }
-    const lavender = lavenderCapacity > 0 ? lavenderRoomNights / lavenderCapacity * 100 : null;
-    const ruby = rubyCapacity > 0 ? rubyRoomNights / rubyCapacity * 100 : null;
-    const combinedCapacity = lavenderCapacity + rubyCapacity;
-    const combined = combinedCapacity > 0 ? (lavenderRoomNights + rubyRoomNights) / combinedCapacity * 100 : null;
-    return {
-      state: "VERIFIED", lavender, ruby, combined, days,
-      note: `KiotViet Hotel booking runtime room-nights × canonical inventory L3 (Lavender 7, Ruby 6), ${days} ngày.`,
-    };
-  } catch {
-    return { state: "ERROR", lavender: null, ruby: null, combined: null, days: 0, note: "Không đọc được occupancy runtime." };
-  }
+    const report=await readKiotVietHotelOccupancyReport(from,to);
+    if(report.state!=="VERIFIED") return {state: report.state === "ERROR" ? "ERROR" : "NEED_VERIFY",lavender:null,ruby:null,combined:null,days,note:`KiotViet report runtime ${report.state}: ${report.note}`};
+    const lavender=report.branches.find((b)=>/Lavender Homestay/i.test(b.name));
+    const ruby=report.branches.find((b)=>/Ruby Homestay/i.test(b.name));
+    if(!lavender||!ruby||lavender.occupancy===null||ruby.occupancy===null||report.combined===null) return {state:"NEED_VERIFY",lavender:null,ruby:null,combined:null,days,note:"KiotViet occupancy report thiếu branch Lavender/Ruby hoặc RoomDay; không fallback sang booking mirror."};
+    return {state:"VERIFIED",lavender:lavender.occupancy,ruby:ruby.occupancy,combined:report.combined,days,note:`DIRECT KIOTVIET REPORT · room-class-productivity · ${from} → ${to} · Lavender RoomDay ${lavender.roomDay}, Ruby RoomDay ${ruby.roomDay}.`};
+  } catch(error){return {state:"ERROR",lavender:null,ruby:null,combined:null,days,note:error instanceof Error?error.message:"Không đọc được KiotViet occupancy report."};}
 }
 
 function priorityRank(priority: string) {
@@ -591,7 +525,7 @@ async function getTceTabLiveDataUnsafe(screen: TceTabScreen, query: TcePeriodQue
     const businessMonthExpensePromise = screen === "business"
       ? (sameAsCurrentMonth ? businessPeriodExpensePromise : readBusinessExpenseActual(container.db, monthStart, today))
       : Promise.resolve(null);
-    const occupancyPromise = screen === "business" ? safeBusinessOccupancy(container.db, period.from, period.to) : Promise.resolve(null);
+    const occupancyPromise = screen === "business" ? safeBusinessOccupancy(period.from, period.to) : Promise.resolve(null);
     const cashRevenueFallback: BusinessCashRevenueSnapshot = { month: monthStart.slice(0,7), through: today, state: "HOLD", cozy:{collected:0,deposited:0,onHand:0,status:"HOLD"}, lavender:{collected:0,deposited:0,onHand:0,status:"HOLD"}, ruby:{collected:0,deposited:0,onHand:0,status:"HOLD"}, homestay:{collected:0,deposited:0,onHand:0,status:"HOLD"}, unknownHotelCash:0, note:"Không đọc được KiotViet cash payment trong thời gian giới hạn." };
     const cashRevenuePromise = screen === "finance" ? financeReadWithTimeout(readBusinessCashRevenue(container.db as SupabaseClient, monthStart, today), cashRevenueFallback) : Promise.resolve(null);
     const financeDb = container.db as unknown as SupabaseClient;

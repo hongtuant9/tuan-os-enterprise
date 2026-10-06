@@ -6,7 +6,7 @@ import { selectDataAccessRoute } from "./source-router-policy.ts";
 test("Cozy revenue refresh remains API-backed", () => {
   const p = DATA_SOURCE_POLICIES.KIOTVIET_FNB_REVENUE;
   assert.equal(selectDataAccessRoute({
-    operation:"READ", risk:p.risk, cacheFresh:false, webhookAvailable:false,
+    operation:"READ", risk:p.risk, cacheFresh:false, cacheVerified:false, webhookAvailable:false,
     apiCost:p.apiCost, browser:p.browser,
   }), "API");
 });
@@ -14,7 +14,15 @@ test("Cozy revenue refresh remains API-backed", () => {
 test("Cozy cashflow may use verified browser because official API is unavailable", () => {
   const p = DATA_SOURCE_POLICIES.KIOTVIET_FNB_CASHFLOW;
   assert.equal(selectDataAccessRoute({
-    operation:"READ", risk:p.risk, cacheFresh:false, webhookAvailable:false,
+    operation:"READ", risk:p.risk, cacheFresh:false, cacheVerified:false, webhookAvailable:false,
+    apiCost:p.apiCost, browser:p.browser,
+  }), "OPENCLAW_DOM");
+});
+
+test("Cozy cashflow does not trust fresh NEED_VERIFY cache", () => {
+  const p = DATA_SOURCE_POLICIES.KIOTVIET_FNB_CASHFLOW;
+  assert.equal(selectDataAccessRoute({
+    operation:"READ", risk:p.risk, cacheFresh:true, cacheVerified:false, webhookAvailable:false,
     apiCost:p.apiCost, browser:p.browser,
   }), "OPENCLAW_DOM");
 });

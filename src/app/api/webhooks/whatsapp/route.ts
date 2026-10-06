@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminContainer } from "@/server/container";
 import { assertCustomerChannelReceiveEnabled } from "@/server/channels/channel-policy";
-import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled } from "@/server/ai-receptionist/config";
+import { getReceptionistMode, isPilotConversationAllowed, isPilotOutboundEnabled, isReceptionistAutoReplyApproved } from "@/server/ai-receptionist/config";
 
 type WaTextMessage = { id?: string; from?: string; type?: string; text?: { body?: string } };
 type WaContact = { wa_id?: string; profile?: { name?: string } };
@@ -33,7 +33,7 @@ function verifySignature(raw: string, signature: string | null): boolean {
 async function sendWhatsApp(recipientId: string, text: string): Promise<string | null> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  if (process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true" || !token || !phoneNumberId || !isPilotOutboundEnabled() || !isPilotConversationAllowed("whatsapp", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) return null;
+  if (process.env.TCE_META_REPLY_GATE_APPROVED?.trim().toLowerCase() !== "true" || !token || !phoneNumberId || !isPilotOutboundEnabled() || !isReceptionistAutoReplyApproved() || !isPilotConversationAllowed("whatsapp", recipientId) || !["limited_auto", "live"].includes(getReceptionistMode())) return null;
   const version = process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v23.0";
   const response = await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: "POST",

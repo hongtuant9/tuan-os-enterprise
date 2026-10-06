@@ -32,7 +32,7 @@ test("paid API wins when browser TCO is higher", () => {
   }), "API");
 });
 
-test("critical financial read does not downgrade to browser to save API cost", () => {
+test("critical financial read uses API when paid API exists", () => {
   assert.equal(selectDataAccessRoute({
     operation:"READ", risk:"FINANCIAL", cacheFresh:false, webhookAvailable:false,
     apiCost:"PAID", browser:"NETWORK_VERIFIED",
@@ -40,10 +40,24 @@ test("critical financial read does not downgrade to browser to save API cost", (
   }), "API");
 });
 
+test("critical financial read may use verified browser when official API is unavailable", () => {
+  assert.equal(selectDataAccessRoute({
+    operation:"READ", risk:"FINANCIAL", cacheFresh:false, webhookAvailable:false,
+    apiCost:"UNAVAILABLE", browser:"NETWORK_VERIFIED",
+  }), "OPENCLAW_NETWORK");
+});
+
 test("critical write without API/webhook fails closed", () => {
   assert.equal(selectDataAccessRoute({
     operation:"WRITE", risk:"EXTERNAL_WRITE", cacheFresh:false, webhookAvailable:false,
     apiCost:"UNAVAILABLE", browser:"NETWORK_VERIFIED",
+  }), "HOLD");
+});
+
+test("critical read does not fall back to vision", () => {
+  assert.equal(selectDataAccessRoute({
+    operation:"READ", risk:"BOOKING", cacheFresh:false, webhookAvailable:false,
+    apiCost:"UNAVAILABLE", browser:"VISION_ONLY",
   }), "HOLD");
 });
 

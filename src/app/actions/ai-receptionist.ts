@@ -124,10 +124,37 @@ export async function decideManagerReviewAction(input: {
   }
 }
 
+export async function reviewAiDraftAction(input: {
+  conversationId: string;
+  messageId: string;
+  decision: "approved" | "edited" | "rejected" | "taken_over";
+  editedContent?: string;
+  note?: string;
+}): Promise<ActionResult<{ reviewStatus: "approved" | "edited" | "rejected" | "taken_over"; reviewedContent: string | null }>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để duyệt bản nháp AI." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được duyệt nội dung AI trước khi gửi khách." };
+  }
+  try {
+    const data = await getAdminContainer().aiReceptionist.reviewAiDraft({
+      ...input,
+      actorLabel: session.email ?? "Quản lý Homestay",
+    });
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể cập nhật quyết định duyệt bản nháp AI." };
+  }
+}
+
 export async function sendManualConversationReplyAction(
   conversationId: string,
   content: string,
   requestId: string,
+  sourceAiMessageId?: string | null,
 ): Promise<ActionResult<{ messageId: string }>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
@@ -142,6 +169,7 @@ export async function sendManualConversationReplyAction(
       content: content.trim(),
       requestId: requestId.trim(),
       actorLabel: session.email ?? "Lễ tân",
+      sourceAiMessageId: sourceAiMessageId ?? null,
     });
     revalidatePath("/ai-le-tan");
     revalidatePath("/ai-le-tan/workspace");

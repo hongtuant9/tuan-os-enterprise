@@ -9,6 +9,7 @@ export type GoogleBusinessProfileBrowserState =
   | "HOLD_LOGIN"
   | "HOLD_MFA"
   | "HOLD_CAPTCHA"
+  | "HOLD_ACCOUNT_SELECTION"
   | "READY"
   | "ERROR";
 
@@ -81,7 +82,8 @@ export function detectGoogleBusinessProfileState(url: string, text: string): Goo
   const haystack = `${url} ${text}`;
   if (/challenge|two.factor|verify.it.s.you|enter code|mã xác minh|xác minh 2 bước|2-step verification/i.test(haystack)) return "HOLD_MFA";
   if (/captcha|confirm you.re not a robot|prove you.re not a robot|xác nhận bạn không phải robot/i.test(haystack)) return "HOLD_CAPTCHA";
-  if (/accounts\.google\.com.*(signin|login)|sign in|đăng nhập|choose an account/i.test(haystack)) return "HOLD_LOGIN";
+  if (/accounts\.google\.com.*accountchooser|choose an account|chọn một tài khoản/i.test(haystack)) return "HOLD_ACCOUNT_SELECTION";
+  if (/accounts\.google\.com.*(signin|login)|sign in|đăng nhập/i.test(haystack)) return "HOLD_LOGIN";
   if (/business\.google\.com|google\.com\/business|your business on google|hồ sơ doanh nghiệp|business profile/i.test(haystack)) return "READY";
   return "HOLD_LOGIN";
 }
@@ -96,6 +98,30 @@ export async function googleBusinessProfileBrowserStatus() {
       const page = await browser.newPage();
       await page.goto("https://business.google.com/locations",{waitUntil:"domcontentloaded",timeout:45000}).catch(() => undefined);
       await new Promise((r)=>setTimeout(r,2200));
+
+      if (/accounts\.google\.com\/.*accountchooser/i.test(page.url())) {
+        const choiceCount = await page.evaluate(() => {
+          const visible = (el: Element) => {
+            const node = el as HTMLElement;
+            const style = window.getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+          };
+          return Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).filter(visible).length;
+        }).catch(() => 0);
+        if (choiceCount === 1) {
+          await page.evaluate(() => {
+            const node = Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).find((el) => {
+              const style = window.getComputedStyle(el);
+              const rect = el.getBoundingClientRect();
+              return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+            });
+            node?.click();
+          }).catch(() => undefined);
+          await new Promise((r)=>setTimeout(r,2500));
+        }
+      }
+
       const text = await pageText(page);
       const state = detectGoogleBusinessProfileState(page.url(),text);
       const title = await page.title().catch(() => "");

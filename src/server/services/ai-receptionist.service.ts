@@ -986,7 +986,12 @@ export class AiReceptionistService {
       },
     });
 
-    const outboundEnabled = input.forceAssistMode !== true && pilotConversationAllowed && isPilotOutboundEnabled() && (mode === "limited_auto" || mode === "live");
+    const outboundEnabled =
+      input.forceAssistMode !== true
+      && pilotConversationAllowed
+      && isPilotOutboundEnabled()
+      && isReceptionistAutoReplyApproved()
+      && (mode === "limited_auto" || mode === "live");
     const outboundStatus = outboundEnabled ? "draft" : "simulated";
     const outbound = await this.repo.createMessage({
       conversation_id: conversation.id,

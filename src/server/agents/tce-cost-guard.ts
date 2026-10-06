@@ -14,6 +14,25 @@ const PRICE: Record<string, { input: number; cached: number; output: number }> =
     "gpt-5.6-sol": { input: 5.0, cached: 0.5, output: 30.0 },
   };
 
+type ImageUsage = {
+  input_tokens?: number;
+  input_tokens_details?: { image_tokens?: number; text_tokens?: number };
+  output_tokens?: number;
+  output_tokens_details?: { image_tokens?: number; text_tokens?: number };
+};
+
+const IMAGE_PRICE: Record<
+  string,
+  { textInput: number; imageInput: number; imageOutput: number }
+> = {
+  "gpt-image-2.5-sunburst": {
+    textInput: 5.0,
+    imageInput: 8.0,
+    imageOutput: 30.0,
+  },
+  "gpt-image-2.5-flare": { textInput: 5.0, imageInput: 8.0, imageOutput: 30.0 },
+};
+
 function numberEnv(name: string): number {
   const value = Number(process.env[name] ?? "0");
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -61,7 +80,6 @@ export function estimateCostUsd(model: string, usage: Usage): number {
 
 async function usageTotals(
   agentId?: string,
-  sourceMode: "OPENAI" | "BFL" | "ALL" = "ALL",
 ): Promise<{ monthly: number; daily: number }> {
   const { db } = getAdminContainer();
   const { monthStart, dayStart } = bangkokPeriodStarts();
@@ -78,18 +96,11 @@ async function usageTotals(
     monthQuery = monthQuery.eq("agent_id", agentId);
     dayQuery = dayQuery.eq("agent_id", agentId);
   }
-  if (sourceMode === "BFL") {
-    monthQuery = monthQuery.like("model", "flux-%");
-    dayQuery = dayQuery.like("model", "flux-%");
-  } else if (sourceMode === "OPENAI") {
-    monthQuery = monthQuery.not("model", "like", "flux-%");
-    dayQuery = dayQuery.not("model", "like", "flux-%");
-  }
 
   const [monthResult, dayResult] = await Promise.all([monthQuery, dayQuery]);
   if (monthResult.error || dayResult.error) {
     throw new Error(
-      "HOLD_COST_LEDGER: không đọc được AI usage ledger; fail closed.",
+      "HOLD_COST_LEDGER: không đọc được OpenAI usage ledger; fail closed.",
     );
   }
 
@@ -113,7 +124,7 @@ async function assertGlobalOpenAiBudget(reservedCostUsd = 0): Promise<void> {
     );
   }
 
-  const usage = await usageTotals(undefined, "OPENAI");
+  const usage = await usageTotals();
   const reserve = Math.max(0, reservedCostUsd);
   if (usage.monthly + reserve > cap.monthly) {
     throw new Error(
@@ -201,50 +212,50 @@ export function estimatePreflightCostUsd(
   });
 }
 
-export async function assertTceBflImageBudget(
-  reservedCostUsd = 0,
-): Promise<void> {
-  const monthly = numberEnv("TCE_BFL_IMAGE_MONTHLY_BUDGET_USD");
-  const daily = numberEnv("TCE_BFL_IMAGE_DAILY_BUDGET_USD");
-  if (monthly <= 0 || daily <= 0) {
-    throw new Error(
-      "HOLD_COST_APPROVAL: BFL image budget chưa được duyệt/cấu hình.",
-    );
-  }
-
-  const usage = await usageTotals(undefined, "BFL");
-  const reserve = Math.max(0, reservedCostUsd);
-  if (usage.monthly + reserve > monthly) {
-    throw new Error("HOLD_COST: monthly BFL image budget would be exceeded.");
-  }
-  if (usage.daily + reserve > daily) {
-    throw new Error("HOLD_COST: daily BFL image budget would be exceeded.");
-  }
+export function estimateImageCostUsd(model: string, usage: ImageUsage): number {
+  const price = IMAGE_PRICE[model] ?? IMAGE_PRICE["gpt-image-2.5-sunburst"];
+  const inputTotal = Math.max(0, usage.input_tokens ?? 0);
+  const textInput = Math.max(0, usage.input_tokens_details?.text_tokens ?? 0);
+  const imageInput = Math.max(
+    0,
+    usage.input_tokens_details?.image_tokens ??
+      Math.max(0, inputTotal - textInput),
+  );
+  const outputImage = Math.max(
+    0,
+    usage.output_tokens_details?.image_tokens ?? usage.output_tokens ?? 0,
+  );
+  return (
+    (textInput * price.textInput +
+      imageInput * price.imageInput +
+      outputImage * price.imageOutput) /
+    1_000_000
+  );
 }
 
-export async function recordTceBflImageUsage(
+export async function recordTceImageUsage(
   agentId: string,
   model: string,
-  estimatedCostUsd: number,
-  requestSource = "bfl-marketing-image",
+  usage: ImageUsage,
+  requestSource = "marketing-image",
+  fallbackCostUsd = 0.5,
 ) {
   const { db } = getAdminContainer();
-  const cost = Math.max(0, Number(estimatedCostUsd || 0));
+  const measured = estimateImageCostUsd(model, usage);
+  const estimatedCostUsd =
+    measured > 0 ? measured : Math.max(0, fallbackCostUsd);
   const { error } = await db.from("tce_ai_usage_ledger").insert({
     agent_id: agentId,
     model,
-    input_tokens: 0,
+    input_tokens: usage.input_tokens ?? 0,
     cached_input_tokens: 0,
-    output_tokens: 0,
-    estimated_cost_usd: cost,
-    request_source: requestSource.startsWith("bfl-")
-      ? requestSource
-      : `bfl-${requestSource}`,
+    output_tokens: usage.output_tokens ?? 0,
+    estimated_cost_usd: estimatedCostUsd,
+    request_source: requestSource,
   });
-  if (error) {
+  if (error)
     throw new Error(
-      "HOLD_COST_LEDGER: không ghi được BFL image usage ledger; fail closed.",
+      "HOLD_COST_LEDGER: không ghi được OpenAI image usage ledger; fail closed.",
     );
-  }
-  return cost;
+  return estimatedCostUsd;
 }

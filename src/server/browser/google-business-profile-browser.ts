@@ -22,7 +22,11 @@ async function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
   let release!: () => void;
   browserMutex = new Promise<void>((resolve) => { release = resolve; });
   await previous.catch(() => undefined);
-  try { return await fn(); } finally { release(); }
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
 }
 
 async function clearStaleChromiumSingleton(profile: string) {
@@ -40,10 +44,13 @@ async function clearStaleChromiumSingleton(profile: string) {
         try { process.kill(pid, 0); } catch { stale = true; }
       }
     }
-  } catch { return; }
+  } catch {
+    return;
+  }
+
   if (!stale) return;
-  for (const name of ["SingletonLock","SingletonCookie","SingletonSocket"]) {
-    await unlink(join(profile,name)).catch(() => undefined);
+  for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
+    await unlink(join(profile, name)).catch(() => undefined);
   }
 }
 
@@ -52,30 +59,41 @@ function enabled() {
 }
 
 async function chromium() {
-  for (const p of [
+  for (const path of [
     process.env.CMI_CHROMIUM_PATH,
     process.env.CHROMIUM_PATH,
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
   ].filter(Boolean) as string[]) {
-    try { await access(p); return p; } catch {}
+    try {
+      await access(path);
+      return path;
+    } catch {}
   }
   throw new Error("Chromium not found");
 }
 
-async function launch(): Promise<Browser> {
-  await mkdir(PROFILE_DIR,{recursive:true});
+async function connectOrLaunch(): Promise<{ browser: Browser; external: boolean }> {
+  const browserURL = process.env.TCE_GBP_CDP_URL?.trim() || "http://tce-gbp-browser:9222";
+
+  try {
+    const browser = await puppeteer.connect({ browserURL });
+    return { browser, external: true };
+  } catch {}
+
+  await mkdir(PROFILE_DIR, { recursive: true });
   await clearStaleChromiumSingleton(PROFILE_DIR);
-  return puppeteer.launch({
+  const browser = await puppeteer.launch({
     executablePath: await chromium(),
     headless: true,
     userDataDir: PROFILE_DIR,
-    args:["--no-sandbox","--disable-gpu","--disable-dev-shm-usage","--no-first-run","--window-size=1440,1400"],
+    args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run", "--window-size=1440,1400"],
   });
+  return { browser, external: false };
 }
 
 async function pageText(page: Page) {
-  return (await page.evaluate(() => document.body?.innerText || "")).slice(0,60000);
+  return (await page.evaluate(() => document.body?.innerText || "")).slice(0, 60000);
 }
 
 export function detectGoogleBusinessProfileState(url: string, text: string): GoogleBusinessProfileBrowserState {
@@ -89,15 +107,25 @@ export function detectGoogleBusinessProfileState(url: string, text: string): Goo
 }
 
 export async function googleBusinessProfileBrowserStatus() {
-  if (!enabled()) return { state:"DISABLED" as GoogleBusinessProfileBrowserState, authenticated:false };
+  if (!enabled()) {
+    return { state: "DISABLED" as GoogleBusinessProfileBrowserState, authenticated: false };
+  }
 
   return withBrowserLock(async () => {
     let browser: Browser | null = null;
+    let external = false;
+
     try {
-      browser = await launch();
+      const connected = await connectOrLaunch();
+      browser = connected.browser;
+      external = connected.external;
+
       const page = await browser.newPage();
-      await page.goto("https://business.google.com/locations",{waitUntil:"domcontentloaded",timeout:45000}).catch(() => undefined);
-      await new Promise((r)=>setTimeout(r,2200));
+      await page.goto("https://business.google.com/locations", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 2200));
 
       if (/accounts\.google\.com\/.*accountchooser/i.test(page.url())) {
         const choiceCount = await page.evaluate(() => {
@@ -109,6 +137,7 @@ export async function googleBusinessProfileBrowserStatus() {
           };
           return Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).filter(visible).length;
         }).catch(() => 0);
+
         if (choiceCount === 1) {
           await page.evaluate(() => {
             const node = Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).find((el) => {
@@ -118,20 +147,22 @@ export async function googleBusinessProfileBrowserStatus() {
             });
             node?.click();
           }).catch(() => undefined);
-          await new Promise((r)=>setTimeout(r,2500));
+          await new Promise((resolve) => setTimeout(resolve, 2500));
         }
       }
 
       const text = await pageText(page);
-      const state = detectGoogleBusinessProfileState(page.url(),text);
+      const state = detectGoogleBusinessProfileState(page.url(), text);
       const title = await page.title().catch(() => "");
+      await page.close().catch(() => undefined);
+
       return {
         state,
         authenticated: state === "READY",
         checkedAt: new Date().toISOString(),
         url: page.url(),
-        title: title.slice(0,200),
-        scope:"READ_ONLY" as const,
+        title: title.slice(0, 200),
+        scope: "READ_ONLY" as const,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -139,24 +170,33 @@ export async function googleBusinessProfileBrowserStatus() {
         /singleton|profile.*lock|process is still running/i.test(message) ? "PROFILE_BUSY" :
         /chromium.*not found|executable.*not found/i.test(message) ? "CHROMIUM_UNAVAILABLE" :
         "BROWSER_RUNTIME_ERROR";
-      return { state:"ERROR" as GoogleBusinessProfileBrowserState, authenticated:false, checkedAt:new Date().toISOString(), reason, scope:"READ_ONLY" as const };
+      return {
+        state: "ERROR" as GoogleBusinessProfileBrowserState,
+        authenticated: false,
+        checkedAt: new Date().toISOString(),
+        reason,
+        scope: "READ_ONLY" as const,
+      };
     } finally {
-      await browser?.close().catch(() => undefined);
+      if (browser) {
+        if (external) await browser.disconnect().catch(() => undefined);
+        else await browser.close().catch(() => undefined);
+      }
     }
   });
 }
 
 export function googleBusinessProfileBrowserPolicy() {
   return {
-    scope:"GOOGLE_BUSINESS_PROFILE_READ_ONLY",
-    allowedHosts:["business.google.com","google.com"],
-    externalMutation:false,
-    posting:false,
-    reply:false,
-    paidApi:false,
-    accountPermissionChanges:false,
-    secretLogging:false,
-    profileDir:"PERSISTENT_SERVER_PROFILE",
-    antiBotPolicy:"FAIL_CLOSED_ON_LOGIN_MFA_CAPTCHA",
+    scope: "GOOGLE_BUSINESS_PROFILE_READ_ONLY",
+    allowedHosts: ["business.google.com", "google.com"],
+    externalMutation: false,
+    posting: false,
+    reply: false,
+    paidApi: false,
+    accountPermissionChanges: false,
+    secretLogging: false,
+    profileDir: "PERSISTENT_SERVER_PROFILE",
+    antiBotPolicy: "FAIL_CLOSED_ON_LOGIN_MFA_CAPTCHA",
   };
 }

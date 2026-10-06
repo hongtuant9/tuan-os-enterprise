@@ -407,6 +407,13 @@ function agodaDateRange(text: string): { checkInText: string | null; checkOutTex
   return { checkInText: null, checkOutText: null };
 }
 
+function expediaGuestName(subject: string): string | null {
+  return firstMatch(subject, [
+    /^Expedia guest message from\s+(.+?)\s*$/i,
+    /^Message from Expedia guest\s*[:\-]\s*(.+?)\s*$/i,
+  ]);
+}
+
 function agodaGuestName(subject: string, body: string): string | null {
   const subjectName = firstMatch(subject, [
     /^Reply from\s+(.+?)\s*\(/i,
@@ -466,7 +473,9 @@ export function parseOtaReservationContext(input: {
     ? normalizeAgodaGuestName(agodaGuestName(subject, body) || genericGuestName)
     : channel === "airbnb"
       ? (airbnbGuestName(subject, body) || genericGuestName)
-      : genericGuestName;
+      : channel === "expedia"
+        ? (expediaGuestName(subject) || genericGuestName)
+        : genericGuestName;
 
   const genericCheckInText = strictBlockValue(body, ["Check-in", "Nhận phòng"]);
   const genericCheckOutText = strictBlockValue(body, ["Check-out", "Trả phòng"]);

@@ -43,6 +43,10 @@ export type OtaEmailWorkerResult = {
   filteredNonGuest: number;
   extractionMiss: number;
   mailboxesConfigured: number;
+  directScanned: number;
+  directDrafted: number;
+  directDuplicates: number;
+  directFiltered: number;
   nextPageTokens: Record<string, string | null>;
 };
 
@@ -66,6 +70,25 @@ function extractAddress(value: string): string {
   if (angle?.[1]) return angle[1].trim().toLowerCase();
   const plain = value.match(/([A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
   return plain?.[1]?.trim().toLowerCase() ?? "";
+}
+
+function extractDisplayName(value: string): string | undefined {
+  const angle = value.match(/^\s*"?([^"<]{1,160}?)"?\s*<[^<>\s]+@[^<>\s]+>\s*$/);
+  const name = angle?.[1]?.trim();
+  return name && !name.includes("@") ? name : undefined;
+}
+
+function isDirectGuestEmailCandidate(headers: Record<string, string>, mailboxEmail: string): boolean {
+  const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
+  if (!replyTo || replyTo === mailboxEmail.toLowerCase()) return false;
+  if (/^(?:no-?reply|notifications?|mailer-daemon|postmaster)@/i.test(replyTo)) return false;
+  if (/@(?:booking\.com|guest\.booking\.com|agoda\.com|agoda-messaging\.com|airbnb\.com|reply\.airbnb\.com|expedia\.com|expediapartnercentral\.com|m\.expediapartnercentral\.com)$/i.test(replyTo)) return false;
+
+  const autoSubmitted = (headers["auto-submitted"] || "").trim().toLowerCase();
+  if (autoSubmitted && autoSubmitted !== "no") return false;
+  if (/^(?:bulk|list|junk)$/i.test((headers["precedence"] || "").trim())) return false;
+  if (headers["list-id"]) return false;
+  return true;
 }
 
 function automaticReplyGateOpen(): boolean {
@@ -304,13 +327,18 @@ export async function runOtaEmailWorker(
     filteredNonGuest: 0,
     extractionMiss: 0,
     mailboxesConfigured: 0,
+    directScanned: 0,
+    directDrafted: 0,
+    directDuplicates: 0,
+    directFiltered: 0,
     nextPageTokens: {},
   };
 
   const allMailboxClients = await new GoogleOAuthTokenStore().getSystemAuthorizedClientsForGmail();
   const mailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity !== "cozy");
-  result.mailboxesConfigured = mailboxClients.length;
-  result.configured = mailboxClients.length > 0;
+  const directMailboxClients = allMailboxClients.filter((mailbox) => mailbox.entity === "cozy");
+  result.mailboxesConfigured = allMailboxClients.length;
+  result.configured = allMailboxClients.length > 0;
   if (!result.configured) return result;
 
   const providerQuery = "(from:(booking.com) OR from:(agoda.com) OR from:(agoda-messaging.com) OR from:(airbnb.com) OR from:(expediapartnercentral.com) OR from:(expedia.com) OR from:(hotro@kiotviet.com)) -in:spam -in:trash -in:sent";
@@ -513,6 +541,97 @@ export async function runOtaEmailWorker(
       } catch {
         result.failed += 1;
       }
+    }
+  }
+
+  for (const mailbox of directMailboxClients) {
+    const gmail = google.gmail({ version: "v1", auth: mailbox.auth });
+    const query = options.backfill
+      ? "-in:spam -in:trash -in:sent"
+      : (process.env.TCE_DIRECT_GMAIL_QUERY?.trim() || "newer_than:2d -in:spam -in:trash -in:sent");
+    const maxResults = options.backfill ? 100 : 50;
+
+    try {
+      const list = await gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults,
+        pageToken: options.pageTokens?.[mailbox.entity] || undefined,
+      });
+      result.nextPageTokens[mailbox.entity] = list.data.nextPageToken ?? null;
+
+      for (const item of list.data.messages ?? []) {
+        if (!item.id) continue;
+        result.scanned += 1;
+        result.directScanned += 1;
+
+        try {
+          const { data } = await gmail.users.messages.get({
+            userId: "me",
+            id: item.id,
+            format: "full",
+          });
+          const message = data as GmailMessage;
+          const headers = headerValues(message);
+          if (!isDirectGuestEmailCandidate(headers, mailbox.googleEmail)) {
+            result.filteredNonGuest += 1;
+            result.directFiltered += 1;
+            continue;
+          }
+
+          const body = bodyText(message).trim();
+          if (!body) {
+            result.extractionMiss += 1;
+            result.directFiltered += 1;
+            continue;
+          }
+
+          const from = header(message, "From");
+          const subject = header(message, "Subject");
+          const replyTo = extractAddress(headers["reply-to"] || headers["from"] || "");
+          const conversationReference = message.threadId ?? replyTo ?? item.id;
+          const conversationKey = `email:${mailbox.entity}:${conversationReference}`;
+
+          result.actionable += 1;
+          const ingest = await service.ingestGuestMessage({
+            channel: "email",
+            externalConversationId: conversationKey,
+            externalMessageId: `gmail:${mailbox.entity}:${item.id}`,
+            customerName: extractDisplayName(from),
+            customerContact: replyTo || undefined,
+            content: body.slice(0, 4_000),
+            scenarioTag: "DIRECT_EMAIL_INGRESS",
+            acquisitionSource: "email",
+            pageEntity: mailbox.entity,
+            carePhase: "general",
+            providerMessageType: "direct_email",
+            sourceMailbox: mailbox.googleEmail,
+            replyMailbox: mailbox.googleEmail,
+            providerThreadId: message.threadId ?? null,
+            providerReplyTo: replyTo || null,
+            providerSubject: subject || null,
+            providerMessageIdHeader: headers["message-id"] || null,
+            providerReferences: headers["references"] || null,
+            historicalImport: options.backfill === true,
+            forceAssistMode: true,
+            testerUserId: null,
+          });
+
+          if (ingest.duplicate) {
+            result.duplicates += 1;
+            result.directDuplicates += 1;
+            continue;
+          }
+
+          result.drafted += 1;
+          result.directDrafted += 1;
+          result.autoSendHeld += 1;
+        } catch {
+          result.failed += 1;
+        }
+      }
+    } catch {
+      result.failed += 1;
     }
   }
 

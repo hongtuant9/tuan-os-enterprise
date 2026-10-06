@@ -6,6 +6,7 @@ import {
   backfillConversationTranslationsAction,
   captureConversationStyleFeedbackAction,
   markConversationReadAction,
+  reviewAiDraftAction,
   sendManualConversationReplyAction,
   setConversationResponseModeAction,
   decideKnowledgeCandidateAction,
@@ -145,6 +146,16 @@ const CUSTOMER_JOURNEY_STEPS = [
   "Sau lưu trú",
 ] as const;
 
+function latestAiDraftForConversation(item?: ReceptionistConversation) {
+  if (!item) return undefined;
+  return [...item.messages].reverse().find((message) => message.authorship === "ai" && message.direction === "outbound");
+}
+
+function aiDraftText(item?: ReceptionistConversation) {
+  const draft = latestAiDraftForConversation(item);
+  return draft?.reviewedContent ?? draft?.content ?? "";
+}
+
 function currentJourneyStep(item: ReceptionistConversation) {
   if (item.journeyStage === "post_stay") return 5;
   if (item.journeyStage === "in_house" || item.journeyStage === "departure_today") return 4;
@@ -227,7 +238,7 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: number; hint: string }) {
+function Metric({ label, value, hint }: { label: string; value: number | string; hint: string }) {
   return (
     <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">{label}</p>
@@ -275,7 +286,7 @@ function journeyPhaseAt(
   return "general";
 }
 
-function Conversations({ items, canManage }: { items: ReceptionistConversation[]; canManage: boolean }) {
+function Conversations({ items, canManage, autoReplyApproved }: { items: ReceptionistConversation[]; canManage: boolean; autoReplyApproved: boolean }) {
   const router = useRouter();
   const initialDirectItems = items.filter((item) => !isOtaConversation(item));
   const initialScope: InboxScope = initialDirectItems.length > 0 ? "direct" : "ota";
@@ -289,12 +300,12 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
-  const [replyDraft, setReplyDraft] = useState(
-    [...(firstConversation?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
-  );
+  const [replyDraft, setReplyDraft] = useState(aiDraftText(firstConversation));
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
   const [sendPending, startSendTransition] = useTransition();
+  const [reviewPending, startReviewTransition] = useTransition();
+  const [reviewNote, setReviewNote] = useState("");
   const [styleFeedback, setStyleFeedback] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
@@ -319,6 +330,9 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
   const selected = propertyItems.find((item) => item.id === selectedId) ?? propertyItems[0];
   const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
     ?? selected?.messages[selected.messages.length - 1];
+  const latestAiDraft = latestAiDraftForConversation(selected);
+  const reviewedDraftReady = latestAiDraft?.reviewStatus === "approved" || latestAiDraft?.reviewStatus === "edited";
+  const manualReplyAuthorized = Boolean(selected?.humanTakeover || reviewedDraftReady);
   const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
   const filteredItems = propertyItems.filter((item) =>
     inboxFilter === "all" || (item.unread && !readLocally.has(item.id))
@@ -332,9 +346,8 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
     setResponseMode(first?.responseMode ?? "manual");
-    setReplyDraft(
-      [...(first?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
-    );
+    setReplyDraft(aiDraftText(first));
+    setReviewNote("");
   }
 
   function changeProperty(next: PropertyFilter) {
@@ -346,9 +359,8 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
     setResponseMode(first?.responseMode ?? "manual");
-    setReplyDraft(
-      [...(first?.messages ?? [])].reverse().find((message) => message.authorship === "ai")?.content ?? ""
-    );
+    setReplyDraft(aiDraftText(first));
+    setReviewNote("");
   }
 
   function selectConversation(item: ReceptionistConversation) {
@@ -356,9 +368,8 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     const last = item.messages[item.messages.length - 1];
     setSelectedMessageId(last?.id ?? "");
     setResponseMode(item.responseMode);
-    setReplyDraft(
-      [...item.messages].reverse().find((message) => message.authorship === "ai")?.content ?? ""
-    );
+    setReplyDraft(aiDraftText(item));
+    setReviewNote("");
 
     if (!canManage || !item.unread || readLocally.has(item.id)) return;
     setReadLocally((current) => {
@@ -376,6 +387,10 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
 
   function changeResponseMode(next: "manual" | "auto") {
     if (!selected || !canManage || responseModePending) return;
+    if (next === "auto" && !autoReplyApproved) {
+      setFeedbackStatus("Auto Reply đang khóa trong giai đoạn SHADOW/HUMAN APPROVAL. Chưa có quyền bật tự động.");
+      return;
+    }
     setFeedbackStatus("");
     setResponseMode(next);
     startResponseModeTransition(async () => {
@@ -394,11 +409,51 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
     });
   }
 
+  function reviewDraft(decision: "approved" | "edited" | "rejected" | "taken_over") {
+    if (!selected || !latestAiDraft || reviewPending) return;
+    setFeedbackStatus("");
+    const note = reviewNote.trim()
+      || (decision === "approved"
+        ? "Duyệt nguyên văn."
+        : decision === "edited"
+          ? "Đã chỉnh sửa trước khi gửi."
+          : "");
+    startReviewTransition(async () => {
+      const result = await reviewAiDraftAction({
+        conversationId: selected.id,
+        messageId: latestAiDraft.id,
+        decision,
+        editedContent: decision === "edited" ? replyDraft.trim() : undefined,
+        note,
+      });
+      if (!result.ok) {
+        setFeedbackStatus(result.error);
+        return;
+      }
+      if (decision === "approved") setReplyDraft(latestAiDraft.content);
+      if (decision === "edited" && result.data?.reviewedContent) setReplyDraft(result.data.reviewedContent);
+      if (decision === "rejected" || decision === "taken_over") setReplyDraft("");
+      if (decision === "taken_over") setResponseMode("manual");
+      setReviewNote("");
+      setFeedbackStatus(
+        decision === "approved"
+          ? "Đã duyệt nguyên văn. Chưa gửi khách."
+          : decision === "edited"
+            ? "Đã lưu bản sửa. Chưa gửi khách."
+            : decision === "rejected"
+              ? "Đã từ chối bản nháp AI. Không gửi khách."
+              : "Đã tiếp quản hội thoại. AI không được tự gửi."
+      );
+      router.refresh();
+    });
+  }
+
   function sendManualReply() {
-    if (!selected || responseMode !== "manual" || !replyDraft.trim() || sendPending) return;
+    if (!selected || responseMode !== "manual" || !manualReplyAuthorized || !replyDraft.trim() || sendPending) return;
     setFeedbackStatus("");
     startSendTransition(async () => {
-      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID());
+      const sourceAiMessageId = reviewedDraftReady ? latestAiDraft?.id ?? null : null;
+      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID(), sourceAiMessageId);
       if (!result.ok) {
         setFeedbackStatus(result.error);
         return;
@@ -761,7 +816,8 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               <button
                 type="button"
                 onClick={() => changeResponseMode("auto")}
-                disabled={!canManage || responseModePending}
+                disabled={!canManage || responseModePending || !autoReplyApproved}
+                title={!autoReplyApproved ? "Auto Reply đang khóa theo SHADOW/HUMAN APPROVAL" : undefined}
                 className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
                   responseMode === "auto"
                     ? "bg-[var(--accent)] text-white"
@@ -772,6 +828,115 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
               </button>
             </div>
           </div>
+
+          {latestAiDraft ? (
+            <div className="mb-3 rounded-xl border border-[var(--accent)]/25 bg-[var(--surface)] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Cổng duyệt AI · SHADOW</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--ink-secondary)]">
+                    AI chỉ tạo nháp. Người vận hành phải duyệt, sửa, từ chối hoặc tiếp quản trước khi có thể gửi.
+                  </p>
+                </div>
+                <Pill
+                  label={
+                    latestAiDraft.reviewStatus === "approved" ? "ĐÃ DUYỆT"
+                    : latestAiDraft.reviewStatus === "edited" ? "ĐÃ SỬA & DUYỆT"
+                    : latestAiDraft.reviewStatus === "rejected" ? "ĐÃ TỪ CHỐI"
+                    : latestAiDraft.reviewStatus === "taken_over" ? "NGƯỜI THẬT TIẾP QUẢN"
+                    : "CHỜ DUYỆT"
+                  }
+                  tone={
+                    latestAiDraft.reviewStatus === "approved" ? "good"
+                    : latestAiDraft.reviewStatus === "edited" ? "warn"
+                    : latestAiDraft.reviewStatus === "rejected" ? "bad"
+                    : latestAiDraft.reviewStatus === "taken_over" ? "accent"
+                    : "warn"
+                  }
+                />
+              </div>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg bg-[var(--page)] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Quality Gate</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--ink-primary)]">
+                    {latestAiDraft.qaPass === true ? "PASS" : latestAiDraft.qaPass === false ? "HOLD / FAIL" : "CHƯA CÓ KẾT QUẢ"}
+                  </p>
+                  {latestAiDraft.qaReasons.length > 0 ? (
+                    <p className="mt-1 text-[10px] leading-4 text-[var(--ink-muted)]">{latestAiDraft.qaReasons.join(" · ")}</p>
+                  ) : null}
+                </div>
+                <div className="rounded-lg bg-[var(--page)] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Fact đã xác minh dùng cho nháp</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--ink-primary)]">{latestAiDraft.knowledgeFactCount}</p>
+                </div>
+                <div className="rounded-lg bg-[var(--page)] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nguồn đã kiểm tra</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[var(--ink-secondary)]">
+                    {latestAiDraft.evidenceSources.length ? latestAiDraft.evidenceSources.join(" · ") : "Chưa ghi nhận nguồn"}
+                  </p>
+                </div>
+              </div>
+
+              {latestAiDraft.evidenceFacts.length > 0 ? (
+                <div className="mt-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Căn cứ đã sử dụng</p>
+                  <div className="mt-2 space-y-2">
+                    {latestAiDraft.evidenceFacts.slice(0, 6).map((fact) => (
+                      <div key={`${fact.sourceKey}:${fact.externalId}`} className="text-[10px] leading-4 text-[var(--ink-secondary)]">
+                        <strong>{fact.label || fact.sourceKey}</strong> · {fact.status || "VERIFIED"} · {fact.sourceKey}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <textarea
+                value={reviewNote}
+                onChange={(event) => setReviewNote(event.target.value)}
+                disabled={!canManage || reviewPending}
+                placeholder="Ghi chú khi từ chối/tiếp quản; có thể để trống khi duyệt hoặc sửa."
+                className="mt-3 min-h-16 w-full rounded-lg border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-xs text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => reviewDraft("approved")}
+                  disabled={!canManage || reviewPending || latestAiDraft.reviewStatus === "approved"}
+                  className="rounded-lg bg-[var(--status-good)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  Duyệt nguyên văn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reviewDraft("edited")}
+                  disabled={!canManage || reviewPending || !replyDraft.trim() || replyDraft.trim() === latestAiDraft.content.trim()}
+                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  Lưu bản sửa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reviewDraft("rejected")}
+                  disabled={!canManage || reviewPending || !reviewNote.trim()}
+                  className="rounded-lg border border-[var(--status-bad)]/40 px-3 py-2 text-xs font-semibold text-[var(--status-bad)] disabled:opacity-40"
+                >
+                  Từ chối
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reviewDraft("taken_over")}
+                  disabled={!canManage || reviewPending || !reviewNote.trim()}
+                  className="rounded-lg border border-[var(--accent)]/40 px-3 py-2 text-xs font-semibold text-[var(--accent)] disabled:opacity-40"
+                >
+                  Tôi tiếp quản
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-[var(--ink-muted)]">
+                Không hiển thị suy luận nội bộ của mô hình. Phần trên chỉ hiển thị nguồn dữ liệu, facts đã xác minh, Quality Gate và quyết định của người duyệt.
+              </p>
+            </div>
+          ) : null}
 
           <div className="flex items-end gap-2">
             <textarea
@@ -788,6 +953,7 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
                 !canManage
                 || responseMode !== "manual"
                 || !selected.manualSendReady
+                || !manualReplyAuthorized
                 || !replyDraft.trim()
                 || sendPending
               }
@@ -799,13 +965,15 @@ function Conversations({ items, canManage }: { items: ReceptionistConversation[]
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {responseMode === "manual" && selected.manualSendReady
-              ? <Pill label="Gửi thủ công: SẴN SÀNG" tone="good" />
-              : <Pill label={responseMode === "auto" ? "Gửi tự động: ĐANG KHÓA" : "Gửi thủ công: CHƯA SẴN SÀNG"} tone="warn" />}
+            {responseMode === "manual" && selected.manualSendReady && manualReplyAuthorized
+              ? <Pill label="Bản đã duyệt · SẴN SÀNG GỬI" tone="good" />
+              : <Pill label={responseMode === "auto" ? "Gửi tự động: ĐANG KHÓA" : "Chờ duyệt / transport"} tone="warn" />}
             <span className="text-[10px] text-[var(--ink-muted)]">
               {responseMode === "auto"
                 ? "AI có thể tạo nháp nhưng chưa được tự gửi. Tự động chỉ mở sau kiểm tra chất lượng và phê duyệt riêng."
-                : selected.manualSendReason}
+                : !manualReplyAuthorized
+                  ? "Cần Duyệt nguyên văn, Lưu bản sửa hoặc Tôi tiếp quản trước khi gửi."
+                  : selected.manualSendReason}
             </span>
           </div>
           {feedbackStatus ? <p className="mt-2 text-xs text-[var(--ink-secondary)]">{feedbackStatus}</p> : null}
@@ -1524,11 +1692,13 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       <ChannelMatrix channels={channels} />
       <MailboxReadiness mailboxes={mailboxStatuses} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Khách trực tiếp và OTA được tách riêng trong Hộp thư" />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Khách trực tiếp + OTA" />
+        <Metric label="AI draft đã kiểm duyệt" value={dashboard.metrics.reviewedAiDrafts} hint="Đã duyệt / sửa / từ chối / tiếp quản" />
+        <Metric label="Bản AI bị sửa" value={dashboard.metrics.editedAiDrafts} hint="Dữ liệu học chất lượng, không tự cập nhật policy" />
+        <Metric label="Human Correction Rate" value={`${(dashboard.metrics.humanCorrectionRate * 100).toFixed(1)}%`} hint="Bị sửa / tổng draft đã review" />
         <Metric label="Cần Quản lý xác nhận" value={dashboard.metrics.pendingManagerReviews} hint="Thiếu căn cứ hoặc ngoại lệ" />
-        <Metric label="Đặt phòng AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Không bao gồm kênh đặt phòng" />
-        <Metric label="Đề xuất tri thức" value={dashboard.metrics.pendingKnowledgeCandidates} hint="Chưa tự động xuất bản" />
+        <Metric label="Booking AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Booking write vẫn theo gate riêng" />
       </div>
 
       <div className="mb-5 overflow-x-auto border-b border-[var(--border-hairline)]">
@@ -1537,7 +1707,7 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
         </div>
       </div>
 
-      {tab === "hop-thu" && <Conversations items={dashboard.conversations} canManage={canManage} />}
+      {tab === "hop-thu" && <Conversations items={dashboard.conversations} canManage={canManage} autoReplyApproved={dashboard.autoReplyApproved} />}
       {tab === "nhat-ky" && <AuditLog items={dashboard.conversations} />}
       {tab === "xac-nhan" && (dashboard.managerReviews.length ? <div className="space-y-4">{dashboard.managerReviews.map((review) => <ReviewCard key={review.id} review={review} canManage={canManage} />)}</div> : <EmptyState title="Chưa có yêu cầu cần xác nhận" description="Khi AI gặp dữ liệu thiếu, mâu thuẫn hoặc yêu cầu ngoài chính sách, yêu cầu sẽ xuất hiện tại đây." />)}
       {tab === "dat-phong" && <><BookingDraftLab conversations={dashboard.conversations} canManage={canManage} />{dashboard.bookings.length ? <div className="space-y-4">{dashboard.bookings.map((booking) => <article key={booking.id} className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-[var(--ink-primary)]">{booking.guestName}</h3><p className="mt-1 text-xs text-[var(--ink-muted)]">{booking.propertyName ?? "Chưa xác định cơ sở"} · {booking.checkIn} → {booking.checkOut}</p></div><div className="flex gap-2"><Pill label={bookingStatusLabel(booking.status)} tone="accent" /><Pill label={booking.verificationStatus === "verified" ? "Đã xác minh" : "Chờ xác minh"} tone={booking.verificationStatus === "verified" ? "good" : "warn"} /></div></div><p className="mt-4 rounded-lg bg-[var(--surface-raised)] p-3 text-xs leading-5 text-[var(--ink-secondary)]">{booking.bookingNote}</p></article>)}</div> : <EmptyState title="Chưa có đặt phòng do AI tạo" description="Chỉ đặt phòng AI_DIRECT đã qua cổng an toàn mới xuất hiện. Tính năng ghi KiotViet đang khóa trong giai đoạn thử nghiệm riêng." />}</>}

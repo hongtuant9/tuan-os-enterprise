@@ -21,6 +21,7 @@ function emptyDashboard(): ReceptionistDashboard {
   return {
     mode: getReceptionistMode(),
     writeEnabled: isKiotVietDirectBookingWriteEnabled(),
+    autoReplyApproved: false,
     conversations: [],
     bookings: [],
     managerReviews: [],

@@ -31,6 +31,9 @@ jobs:
       - name: Kiểm tra attribution foundation
         run: npm run test:attribution-foundation
 
+      - name: Kiểm tra Customer AI Shadow Gate
+        run: npm run test:ai-receptionist-shadow
+
       - name: Kiểm tra finance foundation
         run: npm run test:finance-foundation
 

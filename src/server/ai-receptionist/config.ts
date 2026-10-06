@@ -1,5 +1,6 @@
 import type { ReceptionistMode } from "@/data/ai-receptionist";
 import { isCustomerChannelEnabled, isCustomerConversationChannel } from "@/server/channels/channel-policy";
+import { autoReplyGate, directBookingWriteGate } from "./safety-gates";
 
 function enabled(name: string): boolean {
   return process.env[name]?.toLowerCase() === "true";
@@ -16,19 +17,17 @@ export function isPilotOutboundEnabled(): boolean {
 }
 
 export function isReceptionistAutoReplyApproved(): boolean {
-  const mode = getReceptionistMode();
-  return (
-    (mode === "limited_auto" || mode === "live") &&
-    enabled("TCE_RECEPTIONIST_AUTO_REPLY_APPROVED")
+  return autoReplyGate(
+    getReceptionistMode(),
+    enabled("TCE_RECEPTIONIST_AUTO_REPLY_APPROVED"),
   );
 }
 
 export function isKiotVietDirectBookingWriteEnabled(): boolean {
-  const mode = getReceptionistMode();
-  return (
-    (mode === "limited_auto" || mode === "live") &&
-    enabled("AI_PILOT_KIOTVIET_WRITE_ENABLED") &&
-    enabled("KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED")
+  return directBookingWriteGate(
+    getReceptionistMode(),
+    enabled("AI_PILOT_KIOTVIET_WRITE_ENABLED"),
+    enabled("KIOTVIET_HOTEL_DIRECT_BOOKING_AUTO_CREATE_ENABLED"),
   );
 }
 

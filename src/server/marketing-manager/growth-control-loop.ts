@@ -122,7 +122,7 @@ export async function runMarketingGrowthCycle(now = new Date()): Promise<Marketi
     total: contentData.length,
     shadowQa: contentStates.filter((item) => item.publish === "SHADOW_QA").length,
     readyForPublish: contentStates.filter((item) => ["APPROVED", "READY", "READY_TO_PUBLISH"].includes(item.publish)).length,
-    published: contentStates.filter((item) => ["PUBLISHED", "LIVE"].includes(item.publish)).length,
+    published: contentStates.filter((item) => item.publish.includes("PUBLISHED") || item.publish === "LIVE" || item.publish.endsWith("_LIVE")).length,
     hold: contentStates.filter((item) =>
       item.publish.includes("HOLD") || item.publish === "SHADOW_ONLY" ||
       item.verification === "HOLD" || item.verification === "HOLD_DYNAMIC" || item.verification === "NEED VERIFY"

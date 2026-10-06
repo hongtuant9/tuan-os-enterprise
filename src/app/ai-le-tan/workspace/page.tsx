@@ -31,6 +31,12 @@ function emptyDashboard(): ReceptionistDashboard {
       pendingManagerReviews: 0,
       verifiedAiBookings: 0,
       pendingKnowledgeCandidates: 0,
+      reviewedAiDrafts: 0,
+      approvedUnchangedAiDrafts: 0,
+      editedAiDrafts: 0,
+      rejectedAiDrafts: 0,
+      takenOverAiDrafts: 0,
+      humanCorrectionRate: 0,
     },
     missingDataBacklog: [],
   };

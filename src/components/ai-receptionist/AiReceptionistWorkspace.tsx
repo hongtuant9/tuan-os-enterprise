@@ -332,7 +332,13 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     ?? selected?.messages[selected.messages.length - 1];
   const latestAiDraft = latestAiDraftForConversation(selected);
   const reviewedDraftReady = latestAiDraft?.reviewStatus === "approved" || latestAiDraft?.reviewStatus === "edited";
-  const manualReplyAuthorized = Boolean(selected?.humanTakeover || reviewedDraftReady);
+  const reviewedReplyContent = latestAiDraft?.reviewStatus === "edited"
+    ? latestAiDraft.reviewedContent?.trim() ?? ""
+    : latestAiDraft?.reviewStatus === "approved"
+      ? latestAiDraft.content.trim()
+      : "";
+  const replyMatchesReviewedDraft = reviewedDraftReady && Boolean(reviewedReplyContent) && replyDraft.trim() === reviewedReplyContent;
+  const manualReplyAuthorized = Boolean(selected?.humanTakeover || replyMatchesReviewedDraft);
   const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
   const filteredItems = propertyItems.filter((item) =>
     inboxFilter === "all" || (item.unread && !readLocally.has(item.id))

@@ -92,6 +92,54 @@ async function connectOrLaunch(): Promise<{ browser: Browser; external: boolean 
   return { browser, external: false };
 }
 
+
+const TARGET_BUSINESS_PATTERN = /Tam Coc Cozy Garden|Tam Coc Lavender Homestay/i;
+
+async function resolveAuthorizedTargetAccount(page: Page) {
+  if (!/accounts\.google\.com\/.*accountchooser/i.test(page.url())) return false;
+
+  const count = await page.evaluate(() => {
+    const visible = (el: Element) => {
+      const node = el as HTMLElement;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+    };
+    return Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).filter(visible).length;
+  }).catch(() => 0);
+
+  const maxAttempts = Math.min(count, 6);
+  for (let index = 0; index < maxAttempts; index += 1) {
+    if (index > 0) {
+      await page.goto("https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Fbusiness.google.com%2Flocations&service=lbc", {
+        waitUntil: "domcontentloaded",
+        timeout: 45000,
+      }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+
+    const clicked = await page.evaluate((targetIndex) => {
+      const visible = (el: Element) => {
+        const node = el as HTMLElement;
+        const style = window.getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+      };
+      const options = Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).filter(visible);
+      const node = options[targetIndex];
+      node?.click();
+      return Boolean(node);
+    }, index).catch(() => false);
+
+    if (!clicked) continue;
+    await new Promise((resolve) => setTimeout(resolve, 2800));
+    const body = await pageText(page);
+    if (TARGET_BUSINESS_PATTERN.test(body)) return true;
+  }
+
+  return false;
+}
+
 async function pageText(page: Page) {
   return (await page.evaluate(() => document.body?.innerText || "")).slice(0, 60000);
 }
@@ -128,27 +176,7 @@ export async function googleBusinessProfileBrowserStatus() {
       await new Promise((resolve) => setTimeout(resolve, 2200));
 
       if (/accounts\.google\.com\/.*accountchooser/i.test(page.url())) {
-        const choiceCount = await page.evaluate(() => {
-          const visible = (el: Element) => {
-            const node = el as HTMLElement;
-            const style = window.getComputedStyle(node);
-            const rect = node.getBoundingClientRect();
-            return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
-          };
-          return Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).filter(visible).length;
-        }).catch(() => 0);
-
-        if (choiceCount === 1) {
-          await page.evaluate(() => {
-            const node = Array.from(document.querySelectorAll<HTMLElement>("[data-identifier]")).find((el) => {
-              const style = window.getComputedStyle(el);
-              const rect = el.getBoundingClientRect();
-              return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
-            });
-            node?.click();
-          }).catch(() => undefined);
-          await new Promise((resolve) => setTimeout(resolve, 2500));
-        }
+        await resolveAuthorizedTargetAccount(page);
       }
 
       const text = await pageText(page);

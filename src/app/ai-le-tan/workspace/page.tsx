@@ -38,6 +38,9 @@ function emptyDashboard(): ReceptionistDashboard {
       rejectedAiDrafts: 0,
       takenOverAiDrafts: 0,
       humanCorrectionRate: 0,
+      pendingTrustReviewDrafts: 0,
+      trustEligibleReviewedAiDrafts: 0,
+      excludedNonRealReviewedAiDrafts: 0,
     },
     missingDataBacklog: [],
   };

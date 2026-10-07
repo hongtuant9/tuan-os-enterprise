@@ -5,8 +5,8 @@ PROVIDER="${1:-}"
 ACTION="${2:-status}"
 STATE_ROOT="${TCE_AUTH_BROWSER_STATE_DIR:-/opt/tuan-ai/auth-browser}"
 IMAGE="${TCE_OTA_BROWSER_IMAGE:-selenium/standalone-chromium:4.49.0}"
-APP_UID="${TCE_APP_UID:-1001}"
-APP_GID="${TCE_APP_GID:-1001}"
+SELENIUM_UID="${TCE_OTA_BROWSER_UID:-1200}"
+SELENIUM_GID="${TCE_OTA_BROWSER_GID:-1201}"
 
 case "$PROVIDER" in
   agoda)
@@ -43,7 +43,9 @@ start(){
   touch "$LOCK_FILE"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$PROFILE_DIR/SingletonLock" "$PROFILE_DIR/SingletonCookie" "$PROFILE_DIR/SingletonSocket" || true
-  chmod -R ugo+rwX "$PROFILE_DIR"
+  chown -R "${SELENIUM_UID:-1200}:${SELENIUM_GID:-1201}" "$PROFILE_DIR"
+  find "$PROFILE_DIR" -type d -exec chmod 700 {} +
+  find "$PROFILE_DIR" -type f -exec chmod 600 {} +
 
   docker pull "$IMAGE" >/dev/null
   docker run -d \
@@ -81,7 +83,7 @@ start(){
 stop(){
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$PROFILE_DIR/SingletonLock" "$PROFILE_DIR/SingletonCookie" "$PROFILE_DIR/SingletonSocket" || true
-  chown -R "${APP_UID}:${APP_GID}" "$PROFILE_DIR"
+  chown -R "$SELENIUM_UID:$SELENIUM_GID" "$PROFILE_DIR"
   find "$PROFILE_DIR" -type d -exec chmod 700 {} +
   find "$PROFILE_DIR" -type f -exec chmod 600 {} +
   rm -f "$LOCK_FILE"

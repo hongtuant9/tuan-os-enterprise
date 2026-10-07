@@ -49,6 +49,7 @@ export type ReceptionistMessage = {
   sourceAiMessageId: string | null;
   editedByHuman: boolean;
   historicalImport: boolean;
+  trustEvidenceEligible: boolean;
   customerVisible: boolean;
   createdAt: string;
 };

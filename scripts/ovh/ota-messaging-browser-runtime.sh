@@ -33,7 +33,9 @@ start(){
   mkdir -p "$PROFILE_DIR"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$PROFILE_DIR/SingletonLock" "$PROFILE_DIR/SingletonCookie" "$PROFILE_DIR/SingletonSocket" || true
-  chmod -R ugo+rwX "$PROFILE_DIR"
+  chown -R "${SELENIUM_UID:-1200}:${SELENIUM_GID:-1201}" "$PROFILE_DIR"
+  find "$PROFILE_DIR" -type d -exec chmod 700 {} +
+  find "$PROFILE_DIR" -type f -exec chmod 600 {} +
   local net
   net="$(network_name)"
   [ -n "$net" ] || { echo "Cannot resolve app docker network" >&2; exit 1; }

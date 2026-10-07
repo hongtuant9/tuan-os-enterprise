@@ -258,6 +258,22 @@ export type PilotMessageInput = {
   testerUserId?: string | null;
 };
 
+export type OtaHistoryMessageInput = {
+  channel: "booking" | "agoda" | "airbnb" | "expedia";
+  provider: "booking" | "agoda" | "hotellink";
+  propertyExternalId: string;
+  externalConversationId: string;
+  providerConversationId: string;
+  externalMessageId: string;
+  participant: "guest" | "property" | "provider";
+  content: string;
+  createdAt: string;
+  reservationReference?: string | null;
+  customerName?: string | null;
+  pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
+  providerAutoTranslated?: boolean;
+};
+
 export type ManagerDecisionInput = {
   reviewId: string;
   decision: Exclude<ManagerReviewStatus, "pending">;

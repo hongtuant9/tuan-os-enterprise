@@ -23,6 +23,7 @@ import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-exe
 import { buildIdentityCandidates, canResolveCanonicalCustomer } from "@/server/ai-receptionist/customer-identity";
 import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
 import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
+import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
@@ -464,10 +465,22 @@ export class AiReceptionistService {
       this.repo.findKnowledgeCandidates(),
     ]);
 
-    const messages = await this.repo.findMessages(conversationRows.map((row) => row.id));
+    const internalOpsConversationIds = new Set(
+      conversationRows
+        .filter((row) => isInternalOpsConversation({
+          externalConversationId: row.external_conversation_id,
+          metadata: row.metadata,
+        }))
+        .map((row) => row.id),
+    );
+    const customerConversationRows = conversationRows.filter((row) => !internalOpsConversationIds.has(row.id));
+    const customerBookingRows = bookingRows.filter((row) => !internalOpsConversationIds.has(row.conversation_id));
+    const customerReviewRows = reviewRows.filter((row) => !row.conversation_id || !internalOpsConversationIds.has(row.conversation_id));
+
+    const messages = await this.repo.findMessages(customerConversationRows.map((row) => row.id));
     const propertyIds = [
-      ...conversationRows.map((row) => row.property_id),
-      ...bookingRows.map((row) => row.property_id),
+      ...customerConversationRows.map((row) => row.property_id),
+      ...customerBookingRows.map((row) => row.property_id),
     ].filter((value): value is string => Boolean(value));
     const propertyNames = await this.repo.getPropertyNames([...new Set(propertyIds)]);
 
@@ -478,7 +491,7 @@ export class AiReceptionistService {
       messagesByConversation.set(row.conversation_id, list);
     }
 
-    const conversations: ReceptionistConversation[] = conversationRows.map((row) => {
+    const conversations: ReceptionistConversation[] = customerConversationRows.map((row) => {
       const metadata = AiReceptionistRepository.toObject(row.metadata);
       const upsellOffers = Array.isArray(metadata.upsell_offers)
         ? metadata.upsell_offers.filter((value): value is string => typeof value === "string")
@@ -617,7 +630,7 @@ export class AiReceptionistService {
       };
     });
 
-    const bookings: AiBookingRecord[] = bookingRows.map((row) => ({
+    const bookings: AiBookingRecord[] = customerBookingRows.map((row) => ({
       id: row.id,
       conversationId: row.conversation_id,
       propertyName: row.property_id ? propertyNames.get(row.property_id) ?? null : null,
@@ -638,7 +651,7 @@ export class AiReceptionistService {
       createdAt: row.created_at,
     }));
 
-    const managerReviews = reviewRows.map(toReview);
+    const managerReviews = customerReviewRows.map(toReview);
     const knowledgeCandidates = candidateRows.map(toCandidate);
     const aiDraftMessages = conversations.flatMap((item) => item.messages).filter((message) => message.authorship === "ai");
     const reviewedAiDrafts = aiDraftMessages.filter((message) =>

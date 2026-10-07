@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 export type AgodaDomHistoryItem = {
   index: number;
   text: string;
+  className?: string | null;
 };
 
 export type AgodaDomParsedMessage = {
@@ -12,8 +13,13 @@ export type AgodaDomParsedMessage = {
   fingerprint: string;
 };
 
-function parseDateLabel(label: string): { year: number; month: number; day: number } | null {
-  const match = label.trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+function parseDateLabel(label: string, snapshotDate?: string): { year: number; month: number; day: number } | null {
+  const trimmed = label.trim();
+  if (/^(Hôm nay|Today)$/i.test(trimmed) && snapshotDate) {
+    const matchToday = snapshotDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (matchToday) return { year: Number(matchToday[1]), month: Number(matchToday[2]), day: Number(matchToday[3]) };
+  }
+  const match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
   if (!match) return null;
   const months: Record<string, number> = {
     Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
@@ -63,6 +69,7 @@ export function parseAgodaDomHistory(input: {
   propertyId: string;
   reservationReference: string;
   items: AgodaDomHistoryItem[];
+  snapshotDate?: string;
 }): AgodaDomParsedMessage[] {
   let currentDate: { year: number; month: number; day: number } | null = null;
   const messages: AgodaDomParsedMessage[] = [];
@@ -71,23 +78,41 @@ export function parseAgodaDomHistory(input: {
     const text = item.text.trim();
     if (!text) continue;
 
-    const date = parseDateLabel(text);
+    const date = parseDateLabel(text, input.snapshotDate);
     if (date) {
       currentDate = date;
       continue;
     }
 
-    if (isAgodaSystemDisclaimer(text)) continue;
+    const className = item.className ?? "";
+    if (isAgodaSystemDisclaimer(text) || className.includes("CwYcsChatMessage__Agoda") || /^Đã yêu cầu:/i.test(text)) continue;
     if (!currentDate) continue;
 
     const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    if (lines.length < 3) continue;
+    if (lines.length < 2) continue;
 
     let participant: "guest" | "property";
     let time: string;
     let contentLines: string[];
 
-    if (/^Đọc$/i.test(lines[0] ?? "") || /^Read$/i.test(lines[0] ?? "")) {
+    const propertyByLayout = /(?:^|\s)a1f74-pl-32(?:\s|$)/.test(className);
+    const guestByLayout = /(?:^|\s)a1f74-pr-32(?:\s|$)/.test(className)
+      || /(?:^|\s)a1f74-pl-16(?:\s|$)/.test(className);
+
+    if (propertyByLayout) {
+      participant = "property";
+      if (/^Đọc$/i.test(lines[0] ?? "") || /^Read$/i.test(lines[0] ?? "")) {
+        time = lines[1] ?? "";
+        contentLines = lines.slice(2);
+      } else {
+        time = lines[0] ?? "";
+        contentLines = lines.slice(1);
+      }
+    } else if (guestByLayout) {
+      participant = "guest";
+      time = lines[1] ?? "";
+      contentLines = lines.slice(2);
+    } else if (/^Đọc$/i.test(lines[0] ?? "") || /^Read$/i.test(lines[0] ?? "")) {
       participant = "property";
       time = lines[1] ?? "";
       contentLines = lines.slice(2);

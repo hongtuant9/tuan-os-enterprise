@@ -17,6 +17,14 @@ APP_DOCKER_NETWORK="${APP_DOCKER_NETWORK:-}"
 if [ -z "$APP_DOCKER_NETWORK" ] && docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
   APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}}{{"\\n"}}{{end}}{{end}}' "$APP_CONTAINER" 2>/dev/null | head -n1 | tr -d '\\r' || true)"
 fi
+if [ -z "$APP_DOCKER_NETWORK" ]; then
+  for browser_container in tce-ota-agoda-browser tce-ota-booking-browser; do
+    if docker inspect "$browser_container" >/dev/null 2>&1; then
+      APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}}{{"\\n"}}{{end}}{{end}}' "$browser_container" 2>/dev/null | head -n1 | tr -d '\\r' || true)"
+      [ -n "$APP_DOCKER_NETWORK" ] && break
+    fi
+  done
+fi
 EXPECTED_RUNTIME="tce-executive-org-v1"
 EXPECTED_AUTOPILOT="v1"
 

@@ -8,7 +8,7 @@ import type { ReceptionistMessage } from "@/data/ai-receptionist";
 import type { PilotDecision } from "./decision-engine";
 import type { KnowledgeResolution } from "./knowledge-resolver";
 import type { GuestLanguage } from "./language";
-import { languageInstruction } from "./language";
+import { customerLanguageName, languageInstruction } from "./language";
 import type { PagePersona } from "./page-persona";
 import { validateCustomerReply } from "./conversation-qa";
 
@@ -301,25 +301,6 @@ export async function translateToVietnamese(text: string, languageCode?: string)
 }
 
 
-const CUSTOMER_LANGUAGE_NAME: Record<string, string> = {
-  vi: "Vietnamese",
-  en: "English",
-  fr: "French",
-  es: "Spanish",
-  de: "German",
-  it: "Italian",
-  pt: "Portuguese",
-  nl: "Dutch",
-  zh: "Chinese",
-  ja: "Japanese",
-  ko: "Korean",
-  ru: "Russian",
-  th: "Thai",
-};
-
-export function customerLanguageName(code: string): string {
-  return CUSTOMER_LANGUAGE_NAME[code.trim().toLowerCase()] ?? code.trim().toUpperCase();
-}
 
 export async function translateVietnameseToGuestLanguage(text: string, languageCode: string): Promise<string> {
   const input = text.trim();

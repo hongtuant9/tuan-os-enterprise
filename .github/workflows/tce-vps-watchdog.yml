@@ -112,8 +112,11 @@ jobs:
                  f"omnichannelWorkerEnabled={signals.get('omnichannelWorkerEnabled')!r}")
           expect(signals.get("trelloWorkerEnabled") is True,
                  f"trelloWorkerEnabled={signals.get('trelloWorkerEnabled')!r}")
-          expect(signals.get("executionGovernanceVersion") == "2026-09-29.v6",
+          expect(signals.get("executionGovernanceVersion") == "2026-10-07.v8",
                  f"executionGovernanceVersion={signals.get('executionGovernanceVersion')!r}")
+          expected_deployment = "${{ github.sha }}"[:12]
+          expect(data.get("deploymentId") == expected_deployment,
+                 f"deploymentId={data.get('deploymentId')!r}, expected={expected_deployment!r}")
           expect(signals.get("trelloExecutionMirror") in ("ACTIVE", "HOLD_NO_RUNTIME_CREDENTIALS"),
                  f"trelloExecutionMirror={signals.get('trelloExecutionMirror')!r}")
           expect(signals.get("kiotVietWriteEnabled") is False,

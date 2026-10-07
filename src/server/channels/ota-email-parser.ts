@@ -273,10 +273,17 @@ function isReactionOnly(guestText: string | null): boolean {
 
 function isNameOnlyExtraction(channel: OtaEmailChannel | null, subject: string, guestText: string | null): boolean {
   if (channel !== "expedia" || !guestText) return false;
-  const extracted = normalize(guestText).replace(/[^A-ZÀ-Ỹ]/gi, "").toLowerCase();
-  const subjectGuest = normalize(expediaGuestName(subject) ?? "").replace(/[^A-ZÀ-Ỹ]/gi, "").toLowerCase();
-  if (!extracted || !subjectGuest || extracted !== subjectGuest) return false;
-  return /^[A-ZÀ-Ỹ'’ -]+(?:\/[A-ZÀ-Ỹ'’ -]+)?$/u.test(normalize(guestText));
+  const tokens = (value: string) => normalize(value)
+    .toLowerCase()
+    .split(/[^a-zà-ỹ]+/i)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .sort();
+  const extractedTokens = tokens(guestText);
+  const subjectTokens = tokens(expediaGuestName(subject) ?? "");
+  if (extractedTokens.length === 0 || subjectTokens.length === 0) return false;
+  if (extractedTokens.join("|") !== subjectTokens.join("|")) return false;
+  return /^[A-ZÀ-Ỹ'’ /-]+$/u.test(normalize(guestText));
 }
 
 function classifyGuestMessage(guestText: string | null): ParsedOtaEmail["eventType"] {

@@ -121,6 +121,10 @@ function isOtaConversation(item: ReceptionistConversation) {
   return OTA_CHANNELS.has(item.channel);
 }
 
+function customerTimelineMessages(item?: ReceptionistConversation) {
+  return item?.messages.filter((message) => message.customerVisible) ?? [];
+}
+
 function acquisitionSourceLabel(value: string) {
   const key = value.trim().toLowerCase();
   const labels: Record<string, string> = {
@@ -332,7 +336,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const firstConversation = initialScope === "direct"
     ? initialDirectItems[0]
     : items.find(isOtaConversation) ?? items[0];
-  const firstMessage = firstConversation?.messages[firstConversation.messages.length - 1];
+  const firstTimeline = customerTimelineMessages(firstConversation);
+  const firstMessage = firstTimeline[firstTimeline.length - 1];
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
   const [inboxScope, setInboxScope] = useState<InboxScope>(initialScope);
@@ -380,8 +385,9 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       || (inboxFilter === "pending_review" && item.pendingAiReview)
   );
   const selected = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0];
-  const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
-    ?? selected?.messages[selected.messages.length - 1];
+  const selectedTimelineMessages = customerTimelineMessages(selected);
+  const selectedMessage = selectedTimelineMessages.find((message) => message.id === selectedMessageId)
+    ?? selectedTimelineMessages[selectedTimelineMessages.length - 1];
   const latestAiDraft = latestAiDraftForConversation(selected);
   const reviewedDraftReady = latestAiDraft?.reviewStatus === "approved" || latestAiDraft?.reviewStatus === "edited";
   const reviewedReplyContent = latestAiDraft?.reviewStatus === "edited"
@@ -404,7 +410,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     const nextItems = items.filter((item) => next === "ota" ? isOtaConversation(item) : !isOtaConversation(item));
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
-    setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    const firstTimeline = customerTimelineMessages(first);
+    setSelectedMessageId(firstTimeline[firstTimeline.length - 1]?.id ?? "");
     const viDraft = aiDraftVietnameseText(first);
     setResponseMode(first?.responseMode ?? "manual");
     setReplyDraft(aiDraftText(first));
@@ -422,7 +429,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       : scopedItems.filter((item) => item.propertyEntity === next);
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
-    setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    const firstTimeline = customerTimelineMessages(first);
+    setSelectedMessageId(firstTimeline[firstTimeline.length - 1]?.id ?? "");
     const viDraft = aiDraftVietnameseText(first);
     setResponseMode(first?.responseMode ?? "manual");
     setReplyDraft(aiDraftText(first));
@@ -435,7 +443,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
 
   function selectConversation(item: ReceptionistConversation) {
     setSelectedId(item.id);
-    const last = item.messages[item.messages.length - 1];
+    const timeline = customerTimelineMessages(item);
+    const last = timeline[timeline.length - 1];
     setSelectedMessageId(last?.id ?? "");
     const viDraft = aiDraftVietnameseText(item);
     setResponseMode(item.responseMode);
@@ -747,7 +756,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
 
         <div className="max-h-[620px] overflow-y-auto">
           {filteredItems.map((item) => {
-            const last = item.messages[item.messages.length - 1];
+            const timeline = customerTimelineMessages(item);
+            const last = timeline[timeline.length - 1];
             const unread = item.unread && !readLocally.has(item.id);
             return (
               <button
@@ -852,12 +862,11 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-5">
-          {selected.messages.map((message, index) => {
+          {selectedTimelineMessages.map((message, index) => {
             const guest = message.authorship === "guest";
-            const internal = message.direction === "internal";
             const active = selectedMessage?.id === message.id;
             const phase = journeyPhaseAt(message.createdAt, selected.checkInDate, selected.checkOutDate);
-            const previous = index > 0 ? selected.messages[index - 1] : null;
+            const previous = index > 0 ? selectedTimelineMessages[index - 1] : null;
             const previousPhase = previous
               ? journeyPhaseAt(previous.createdAt, selected.checkInDate, selected.checkOutDate)
               : null;
@@ -880,13 +889,11 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                         ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/10"
                         : "border-transparent"
                     } ${
-                      internal
-                        ? "bg-[var(--status-warn)]/5"
-                        : guest
-                          ? "bg-[var(--surface-raised)]"
-                          : message.authorship === "human"
-                            ? "bg-[var(--status-good)]/10"
-                            : "bg-[var(--accent)]/12"
+                      guest
+                        ? "bg-[var(--surface-raised)]"
+                        : message.authorship === "human"
+                          ? "bg-[var(--status-good)]/10"
+                          : "bg-[var(--accent)]/12"
                     }`}
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -907,6 +914,12 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
               </div>
             );
           })}
+          {selectedTimelineMessages.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--border-hairline)] px-4 py-8 text-center">
+              <p className="text-sm font-semibold text-[var(--ink-primary)]">Chưa có lịch sử giao tiếp thực tế</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--ink-muted)]">AI draft, ghi chú nội bộ và tri thức không xuất hiện trong timeline này. Chỉ tin khách đã gửi và phản hồi đã gửi thành công cho khách mới được hiển thị.</p>
+            </div>
+          ) : null}
         </div>
 
         <div className="border-t border-[var(--border-hairline)] bg-[var(--page)] p-4">

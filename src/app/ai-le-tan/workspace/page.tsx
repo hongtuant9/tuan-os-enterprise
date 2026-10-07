@@ -26,6 +26,7 @@ function emptyDashboard(): ReceptionistDashboard {
     bookings: [],
     managerReviews: [],
     knowledgeCandidates: [],
+    intentReviewMetrics: [],
     metrics: {
       openConversations: 0,
       pendingManagerReviews: 0,

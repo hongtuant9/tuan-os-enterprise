@@ -93,6 +93,12 @@ const CARE_PHASE_LABEL: Record<string, string> = {
   general: "Chưa xác định",
 };
 
+const FOLLOW_UP_LABEL: Record<string, string> = {
+  pre_arrival_check: "Kiểm tra nhu cầu trước khi khách đến",
+  in_stay_check: "Hỏi thăm trong thời gian lưu trú",
+  post_stay_feedback: "Xin phản hồi sau lưu trú",
+};
+
 const JOURNEY_STAGE_LABEL: Record<string, string> = {
   pre_arrival: "Trước nhận phòng",
   arrival_today: "Nhận phòng hôm nay",
@@ -1049,6 +1055,25 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
               </dd>
             </div>
             <div><dt className="text-[var(--ink-muted)]">Giai đoạn chăm sóc</dt><dd className="mt-1"><Pill label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage} tone={selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"} /></dd></div>
+            {selected.followUpPlan ? (
+              <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-3">
+                <dt className="text-[var(--ink-muted)]">Đề xuất chăm sóc tiếp theo</dt>
+                <dd className="mt-2 space-y-2">
+                  <p className="font-semibold text-[var(--ink-primary)]">
+                    {FOLLOW_UP_LABEL[selected.followUpPlan.kind] ?? selected.followUpPlan.kind}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Pill label={`Sau khoảng ${selected.followUpPlan.suggestedDelayHours} giờ`} tone="accent" />
+                    <Pill label="Chờ người duyệt" tone="warn" />
+                    <Pill label="Chưa gửi khách" tone="good" />
+                  </div>
+                  <p className="leading-5 text-[var(--ink-secondary)]">{selected.followUpPlan.reason}</p>
+                  <p className="text-[10px] leading-4 text-[var(--ink-muted)]">
+                    Đây chỉ là đề xuất trong chế độ Theo dõi ngầm (Shadow). Hệ thống không tự gửi follow-up.
+                  </p>
+                </dd>
+              </div>
+            ) : null}
             <div><dt className="text-[var(--ink-muted)]">Trạng thái xử lý hội thoại</dt><dd className="mt-1"><Pill label={STATUS_LABEL[selected.status] ?? selected.status} tone={selected.status === "needs_manager" ? "bad" : selected.status === "closed" ? "muted" : "warn"} /></dd></div>
             <div><dt className="text-[var(--ink-muted)]">Trạng thái đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationStatus === "cancelled" ? "Đã hủy" : selected.reservationStatus === "confirmed" ? "Đã xác nhận" : "Chưa xác minh"}</dd></div>
             <div><dt className="text-[var(--ink-muted)]">Nguồn dữ liệu đặt chỗ</dt><dd className="mt-1 text-[var(--ink-primary)]">{selected.reservationDataSource === "channel_manager_notification" ? "Thông báo đặt phòng đã xác minh" : selected.reservationDataSource === "ota_reservation_confirmation" ? "Email xác nhận đặt phòng trực tiếp từ OTA" : selected.reservationDataSource === "ota_guest_relay" ? "Tin nhắn khách được chuyển tiếp từ kênh đặt phòng" : "Chưa đồng bộ được nguồn đặt phòng đã xác minh"}</dd></div>

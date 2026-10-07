@@ -7,6 +7,7 @@ import { buildUpsellPlan } from "./upsell-engine.ts";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
 import { isCustomerTimelineMessage, latestActionableAiDraft } from "./conversation-message-visibility.ts";
 import { canPublishConfirmedKnowledge } from "./knowledge-authority.ts";
+import { validateCustomerReply } from "./conversation-qa.ts";
 import {
   buildKiotVietOrderPayload,
   canDraftConfirmation,
@@ -254,4 +255,36 @@ test("provider auto-translated message reuses prior trustworthy guest language",
   );
   assert.equal(resolved.code, "en");
   assert.equal(resolved.confidence, "medium");
+});
+
+
+test("unsupported operational policy claims fail closed without verified facts", () => {
+  const result = validateCustomerReply({
+    reply: "Homestay không kê thêm giường phụ. Anh/chị có thể gửi hành lý tại quầy lễ tân.",
+    facts: [],
+    runtimeEvidence: {},
+    customerContext: "Khách hỏi về giường phụ và gửi hành lý.",
+    needsManager: false,
+  });
+  assert.equal(result.pass, false);
+  assert.equal(result.reasons.includes("unsupported_operational_claim"), true);
+});
+
+test("verified operational facts allow grounded operational claims", () => {
+  const result = validateCustomerReply({
+    reply: "Anh/chị có thể gửi hành lý tại quầy lễ tân.",
+    facts: [{
+      sourceKey: "l3-policy",
+      externalId: "LUGGAGE-001",
+      label: "Gửi hành lý",
+      value: "Khách có thể gửi hành lý tại quầy lễ tân.",
+      status: "VERIFIED",
+      allowedUse: "AI_RESPONSE",
+      syncedAt: "2026-10-07T00:00:00Z",
+    }],
+    runtimeEvidence: {},
+    customerContext: "Khách hỏi về gửi hành lý.",
+    needsManager: false,
+  });
+  assert.equal(result.pass, true);
 });

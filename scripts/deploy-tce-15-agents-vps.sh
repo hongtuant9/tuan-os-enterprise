@@ -75,6 +75,7 @@ log "Starting candidate on 127.0.0.1:$CANDIDATE_PORT"
 docker run -d --name "$CANDIDATE_CONTAINER" \
   --restart no \
   --env-file "$ENV_FILE" \
+  -e NEXT_DEPLOYMENT_ID="$SHA" \
   -e TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED=false \
   -e TCE_KIOTVIET_INVENTORY_BOT_WORKER_ENABLED=false \
   -v "$FINANCE_BOT_STATE_DIR:/var/lib/tce-finance-bot" \
@@ -110,6 +111,7 @@ docker rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$APP_CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
+  -e NEXT_DEPLOYMENT_ID="$SHA" \
   -e TCE_KIOTVIET_FINANCE_BOT_ENABLED=true \
   -e TCE_KIOTVIET_FINANCE_BOT_WORKER_ENABLED=true \
   -e TCE_KIOTVIET_INVENTORY_BOT_ENABLED=true \

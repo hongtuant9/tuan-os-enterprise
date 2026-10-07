@@ -23,6 +23,7 @@ import type {
   ReceptionistConversation,
   ReceptionistDashboard,
 } from "@/data/ai-receptionist";
+import { latestActionableAiDraft } from "@/server/ai-receptionist/conversation-message-visibility";
 
 const TABS = [
   ["hop-thu", "Hộp thư"],
@@ -159,7 +160,7 @@ const CUSTOMER_JOURNEY_STEPS = [
 
 function latestAiDraftForConversation(item?: ReceptionistConversation) {
   if (!item) return undefined;
-  return [...item.messages].reverse().find((message) => message.authorship === "ai" && message.direction === "outbound");
+  return latestActionableAiDraft(item.messages);
 }
 
 function aiDraftText(item?: ReceptionistConversation) {

@@ -1,5 +1,16 @@
 import type { CustomerCarePhase } from "./customer-care";
 
+const COMPLAINT_SIGNALS = [
+  "complaint", "problem", "not working", "broken", "dirty", "noisy", "unhappy", "dissatisfied",
+  "phàn nàn", "khiếu nại", "vấn đề", "không hoạt động", "bị hỏng", "bẩn", "ồn", "không hài lòng",
+  "réclamation", "problème", "ne fonctionne pas", "cassé", "sale", "bruyant", "mécontent",
+] as const;
+
+export function hasComplaintSignal(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  return normalized.length > 0 && COMPLAINT_SIGNALS.some((signal) => normalized.includes(signal));
+}
+
 export type FollowUpPlan = {
   kind: "pre_arrival_check" | "in_stay_check" | "post_stay_feedback";
   suggestedDelayHours: number;

@@ -555,6 +555,20 @@ export class AiReceptionistService {
           : "Chưa đồng bộ được số lượng khách từ nguồn đặt phòng."
       );
       const manualSend = manualSendEligibility(row.channel, metadata);
+      const followUpMetadata = AiReceptionistRepository.toObject(metadata.follow_up_plan as Json);
+      const followUpKind = followUpMetadata.kind;
+      const followUpPlan =
+        (followUpKind === "pre_arrival_check" || followUpKind === "in_stay_check" || followUpKind === "post_stay_feedback")
+        && typeof followUpMetadata.suggestedDelayHours === "number"
+        && typeof followUpMetadata.reason === "string"
+          ? {
+              kind: followUpKind,
+              suggestedDelayHours: followUpMetadata.suggestedDelayHours,
+              reason: followUpMetadata.reason,
+              humanApprovalRequired: followUpMetadata.humanApprovalRequired === true,
+              autoSendAllowed: followUpMetadata.autoSendAllowed === true,
+            }
+          : null;
       const latestGuestLanguage = [...messages]
         .reverse()
         .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
@@ -606,6 +620,8 @@ export class AiReceptionistService {
         unreadCount: unreadInbound.length,
         managerReadAt,
         upsellOffers,
+        followUpPlan,
+        followUpMode: metadata.follow_up_mode === "shadow_recommendation" ? "shadow_recommendation" : null,
         status: row.status as ReceptionistConversation["status"],
         mode: row.mode as ReceptionistConversation["mode"],
         responseMode: metadata.response_mode === "auto" ? "auto" : "manual",

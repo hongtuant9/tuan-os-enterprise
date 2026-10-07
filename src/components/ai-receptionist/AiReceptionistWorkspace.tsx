@@ -303,7 +303,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
   const [inboxScope, setInboxScope] = useState<InboxScope>(initialScope);
-  const [inboxFilter, setInboxFilter] = useState<"all" | "unread">("all");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "pending_review">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
   const [replyDraft, setReplyDraft] = useState(aiDraftText(firstConversation));
@@ -333,7 +333,14 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const propertyItems = propertyFilter === "all"
     ? scopedItems
     : scopedItems.filter((item) => item.propertyEntity === propertyFilter);
-  const selected = propertyItems.find((item) => item.id === selectedId) ?? propertyItems[0];
+  const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
+  const pendingReviewTotal = propertyItems.filter((item) => item.pendingAiReview).length;
+  const filteredItems = propertyItems.filter((item) =>
+    inboxFilter === "all"
+      || (inboxFilter === "unread" && item.unread && !readLocally.has(item.id))
+      || (inboxFilter === "pending_review" && item.pendingAiReview)
+  );
+  const selected = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0];
   const selectedMessage = selected?.messages.find((message) => message.id === selectedMessageId)
     ?? selected?.messages[selected.messages.length - 1];
   const latestAiDraft = latestAiDraftForConversation(selected);
@@ -345,10 +352,6 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       : "";
   const replyMatchesReviewedDraft = reviewedDraftReady && Boolean(reviewedReplyContent) && replyDraft.trim() === reviewedReplyContent;
   const manualReplyAuthorized = Boolean(selected?.humanTakeover || replyMatchesReviewedDraft);
-  const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
-  const filteredItems = propertyItems.filter((item) =>
-    inboxFilter === "all" || (item.unread && !readLocally.has(item.id))
-  );
 
   function changeScope(next: InboxScope) {
     setInboxScope(next);
@@ -613,7 +616,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
             ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setInboxFilter("all")}
@@ -635,6 +638,17 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
               }`}
             >
               Tin chưa đọc ({unreadTotal})
+            </button>
+            <button
+              type="button"
+              onClick={() => setInboxFilter("pending_review")}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold ${
+                inboxFilter === "pending_review"
+                  ? "border-[var(--status-warn)] bg-[var(--status-warn)]/10 text-[var(--status-warn)]"
+                  : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              Chờ duyệt AI ({pendingReviewTotal})
             </button>
           </div>
         </div>
@@ -664,6 +678,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       <Pill label={CHANNEL_LABEL[item.channel] ?? item.channel} tone="accent" />
                       {unread ? <Pill label={`${item.unreadCount} mới`} tone="warn" /> : null}
+                      {item.pendingAiReview ? <Pill label="Chờ duyệt AI" tone="warn" /> : null}
                     </div>
                     <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--ink-secondary)]">
                       {last?.content ?? "Chưa có nội dung"}
@@ -1723,9 +1738,10 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
       <ChannelMatrix channels={channels} />
       <MailboxReadiness mailboxes={mailboxStatuses} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Khách trực tiếp + OTA" />
         <Metric label="AI draft đã kiểm duyệt" value={dashboard.metrics.reviewedAiDrafts} hint="Đã duyệt / sửa / từ chối / tiếp quản" />
+        <Metric label="Khách thật chờ duyệt" value={dashboard.metrics.pendingTrustReviewDrafts} hint="Draft mới nhất cần người thật đánh giá" />
         <Metric label="Bản AI bị sửa" value={dashboard.metrics.editedAiDrafts} hint="Dữ liệu học chất lượng, không tự cập nhật policy" />
         <Metric label="Human Correction Rate" value={`${(dashboard.metrics.humanCorrectionRate * 100).toFixed(1)}%`} hint="Bị sửa / tổng draft đã review" />
         <Metric label="Cần Quản lý xác nhận" value={dashboard.metrics.pendingManagerReviews} hint="Thiếu căn cứ hoặc ngoại lệ" />
@@ -1736,7 +1752,8 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Độ tin cậy theo loại yêu cầu</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Chỉ dùng để quan sát giai đoạn Shadow. Không loại yêu cầu nào được tự mở trả lời tự động từ bảng này; Owner vẫn phải duyệt quyết định mở từng intent.</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Chỉ tính review từ hội thoại khách thật. UAT, pilot, smoke test, regression và historical import bị loại khỏi Trust Gate. Không intent nào được tự mở trả lời tự động từ bảng này; Owner vẫn phải duyệt riêng.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--ink-muted)]">Khách thật đã review: {dashboard.metrics.trustEligibleReviewedAiDrafts} · Đang chờ review: {dashboard.metrics.pendingTrustReviewDrafts} · Review kiểm thử/không đủ chuẩn bị loại: {dashboard.metrics.excludedNonRealReviewedAiDrafts}</p>
           </div>
           <Pill label="Tự động: Đang khóa" tone="warn" />
         </div>

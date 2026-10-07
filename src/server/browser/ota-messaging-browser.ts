@@ -23,8 +23,8 @@ type AgodaSnapshot = {
 };
 
 const PROVIDER_ENDPOINTS: Record<OtaBrowserProvider, string> = {
-  agoda: process.env.TCE_OTA_AGODA_CDP_URL?.trim() || "http://tce-ota-agoda-browser:9222",
-  booking: process.env.TCE_OTA_BOOKING_CDP_URL?.trim() || "http://tce-ota-booking-browser:9222",
+  agoda: process.env.TCE_OTA_AGODA_CDP_URL?.trim() || "http://tce-ota-agoda-browser:9223",
+  booking: process.env.TCE_OTA_BOOKING_CDP_URL?.trim() || "http://tce-ota-booking-browser:9223",
 };
 
 function enabled() {

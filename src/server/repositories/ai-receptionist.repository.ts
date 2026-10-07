@@ -259,6 +259,18 @@ export class AiReceptionistRepository {
     return data ?? [];
   }
 
+  async findApprovedOperationalKnowledge(limit = 100): Promise<CandidateRow[]> {
+    const { data, error } = await this.db
+      .from("ai_knowledge_candidates")
+      .select("*")
+      .in("status", ["approved", "published"])
+      .neq("field_key", "conversation_style_feedback")
+      .order("reviewed_at", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  }
+
   async createKnowledgeCandidate(input: CandidateInsert): Promise<CandidateRow> {
     const { data, error } = await this.db
       .from("ai_knowledge_candidates")

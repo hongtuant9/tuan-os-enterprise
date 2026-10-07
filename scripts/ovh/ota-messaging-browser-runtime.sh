@@ -110,7 +110,8 @@ PY
     ' >/dev/null
 
   for _ in $(seq 1 60); do
-    if docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9223/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    container_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
+    if [ -n "$container_ip" ] && docker exec "$APP_CONTAINER" node -e "fetch('http://$container_ip:9223/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
       log "READY — internal CDP only, persistent profile=$PROFILE_DIR"
       return 0
     fi
@@ -127,7 +128,10 @@ stop(){
 
 status(){
   docker ps --format '{{.Names}} {{.Status}}' | grep "^$CONTAINER " || true
-  docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9223/json/version').then(async r=>{const t=await r.text();process.stdout.write(t.slice(0,300))}).catch(()=>process.exit(1))" 2>/dev/null || true
+  container_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
+  if [ -n "$container_ip" ]; then
+    docker exec "$APP_CONTAINER" node -e "fetch('http://$container_ip:9223/json/version').then(async r=>{const t=await r.text();process.stdout.write(t.slice(0,300))}).catch(()=>process.exit(1))" 2>/dev/null || true
+  fi
   printf '\n'
 }
 

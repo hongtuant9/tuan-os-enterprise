@@ -1,4 +1,5 @@
 import "server-only";
+import { lookup } from "node:dns/promises";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { getAdminContainer } from "@/server/container";
 import type { AgodaDomHistoryItem } from "@/server/channels/agoda-browser-dom";
@@ -32,8 +33,11 @@ function enabled() {
 }
 
 async function cdpWebSocket(provider: OtaBrowserProvider): Promise<string> {
-  const endpoint = PROVIDER_ENDPOINTS[provider];
-  const response = await fetch(`${endpoint}/json/version`, {
+  const endpoint = new URL(PROVIDER_ENDPOINTS[provider]);
+  const resolved = await lookup(endpoint.hostname);
+  const internalEndpoint = new URL(endpoint.toString());
+  internalEndpoint.hostname = resolved.address;
+  const response = await fetch(new URL("/json/version", internalEndpoint), {
     cache: "no-store",
     signal: AbortSignal.timeout(5000),
   });
@@ -41,9 +45,8 @@ async function cdpWebSocket(provider: OtaBrowserProvider): Promise<string> {
   const payload = await response.json() as { webSocketDebuggerUrl?: string };
   if (!payload.webSocketDebuggerUrl) throw new Error("CDP_WEBSOCKET_MISSING");
   const ws = new URL(payload.webSocketDebuggerUrl);
-  const host = new URL(endpoint);
-  ws.hostname = host.hostname;
-  ws.port = host.port;
+  ws.hostname = resolved.address;
+  ws.port = endpoint.port;
   return ws.toString();
 }
 

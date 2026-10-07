@@ -30,6 +30,11 @@ export type ReceptionistMessage = {
   content: string;
   translatedVi: string;
   detectedLanguage?: string;
+  displayLanguage: string;
+  sourceLanguage: string | null;
+  providerTranslated: boolean;
+  languageNeedsVerify: boolean;
+  languageSource: string;
   translationStatus: "not_needed" | "pending" | "translated" | "failed";
   translationError: string | null;
   status: "received" | "draft" | "simulated" | "sent" | "failed";
@@ -63,6 +68,9 @@ export type ReceptionistConversation = {
   propertyName: string | null;
   propertyEntity: "lavender" | "ruby" | "cozy" | "tce" | "unknown";
   language: string;
+  languageNeedsVerify: boolean;
+  languageSource: string;
+  languageOverride: string | null;
   intent: string;
   routedAgent: string;
   journeyEntry: string;
@@ -234,6 +242,9 @@ export type PilotMessageInput = {
   providerSubject?: string | null;
   providerMessageIdHeader?: string | null;
   providerReferences?: string | null;
+  providerTranslated?: boolean;
+  providerTranslationMarker?: string | null;
+  sourceLanguage?: string | null;
   historicalImport?: boolean;
   reservationContext?: {
     checkInText?: string | null;

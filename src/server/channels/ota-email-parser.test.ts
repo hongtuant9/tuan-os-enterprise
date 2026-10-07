@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseOtaReservationContext } from "./ota-email-parser.ts";
+import { parseOtaEmail, parseOtaReservationContext } from "./ota-email-parser.ts";
 
 test("Expedia verified relay subject provides guest name", () => {
   const parsed = parseOtaReservationContext({
@@ -54,4 +54,34 @@ test("Agoda parser does not infer guest name from ordinary sign-off", () => {
 
   assert.equal(parsed.channel, "agoda");
   assert.equal(parsed.context.guestName, null);
+});
+
+
+test("Agoda marks provider auto-translated guest text as provenance, not original language", () => {
+  const parsed = parseOtaEmail({
+    from: "Agoda <no-reply@agoda.com>",
+    replyTo: "relay@agoda-messaging.com",
+    subject: "Inquiry by Vanessa Garcia (Nov 13-15, 2026)",
+    body: [
+      "Thắc mắc mới từ khách hiện tại",
+      "Mã số đặt phòng: 2056603669",
+      "Xin chào, chúng tôi rất mong chờ được lưu trú tại chỗ của bạn!",
+      "Nội dung trên được tự động dịch",
+      "Replying to this email will be sent directly to the guest",
+    ].join("\n"),
+  });
+  assert.equal(parsed.actionable, true);
+  assert.equal(parsed.providerAutoTranslated, true);
+  assert.match(parsed.guestText ?? "", /Xin chào/);
+});
+
+test("normal OTA relay without translation marker keeps original-language provenance", () => {
+  const parsed = parseOtaEmail({
+    from: "Expedia Partner Central <no-reply@expediapartnercentral.com>",
+    replyTo: "m4odpekqok@m.expediapartnercentral.com",
+    subject: "Expedia guest message from WENBING CHEN",
+    body: "WENBING CHEN sent you a message\n\n“Hello, we will arrive late.”\n\nReply",
+  });
+  assert.equal(parsed.actionable, true);
+  assert.equal(parsed.providerAutoTranslated, false);
 });

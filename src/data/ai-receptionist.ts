@@ -49,6 +49,7 @@ export type ReceptionistMessage = {
   sourceAiMessageId: string | null;
   editedByHuman: boolean;
   historicalImport: boolean;
+  customerVisible: boolean;
   createdAt: string;
 };
 
@@ -261,4 +262,5 @@ export type ManagerDecisionInput = {
   note: string;
   actorUserId: string;
   actorLabel: string;
+  actorRole: "agent" | "manager" | "admin" | "owner";
 };

@@ -5,6 +5,8 @@ import { isInternalOpsConversation } from "./conversation-scope.ts";
 import { customerLanguageName, detectGuestLanguage } from "./language.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
+import { isCustomerTimelineMessage } from "./conversation-message-visibility.ts";
+import { canPublishConfirmedKnowledge } from "./knowledge-authority.ts";
 import {
   buildKiotVietOrderPayload,
   canDraftConfirmation,
@@ -198,4 +200,23 @@ test("manual Vietnamese reply target uses the guest language vocabulary", () => 
   assert.equal(customerLanguageName("en"), "English");
   assert.equal(customerLanguageName("ko"), "Korean");
   assert.equal(customerLanguageName("vi"), "Vietnamese");
+});
+
+
+test("customer timeline shows only real inbound and successfully sent outbound", () => {
+  assert.equal(isCustomerTimelineMessage({ direction: "inbound", senderType: "guest", status: "received" }), true);
+  assert.equal(isCustomerTimelineMessage({ direction: "outbound", senderType: "manager", status: "sent" }), true);
+  assert.equal(isCustomerTimelineMessage({ direction: "outbound", senderType: "ai", status: "sent" }), true);
+  assert.equal(isCustomerTimelineMessage({ direction: "outbound", senderType: "ai", status: "simulated" }), false);
+  assert.equal(isCustomerTimelineMessage({ direction: "outbound", senderType: "ai", status: "draft" }), false);
+  assert.equal(isCustomerTimelineMessage({ direction: "internal", senderType: "manager", status: "received" }), false);
+  assert.equal(isCustomerTimelineMessage({ direction: "outbound", senderType: "manager", status: "failed" }), false);
+});
+
+test("only admin or owner approved decisions can publish reusable operational knowledge", () => {
+  assert.equal(canPublishConfirmedKnowledge("owner", "approved"), true);
+  assert.equal(canPublishConfirmedKnowledge("admin", "approved"), true);
+  assert.equal(canPublishConfirmedKnowledge("manager", "approved"), false);
+  assert.equal(canPublishConfirmedKnowledge("owner", "needs_info"), false);
+  assert.equal(canPublishConfirmedKnowledge("owner", "rejected"), false);
 });

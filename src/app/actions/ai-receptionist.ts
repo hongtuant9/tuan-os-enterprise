@@ -113,6 +113,7 @@ export async function decideManagerReviewAction(input: {
       note: input.note.trim(),
       actorUserId: session.userId,
       actorLabel: session.email ?? "Quản lý Homestay",
+      actorRole: session.role,
     });
     revalidatePath("/ai-le-tan");
     return { ok: true };

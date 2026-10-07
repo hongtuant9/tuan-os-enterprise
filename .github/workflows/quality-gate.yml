@@ -34,6 +34,9 @@ jobs:
       - name: Kiểm tra Customer AI Shadow Gate
         run: npm run test:ai-receptionist-shadow
 
+      - name: Kiểm tra Customer AI Core Safety
+        run: npm run test:customer-ai-core
+
       - name: Kiểm tra finance foundation
         run: npm run test:finance-foundation
 

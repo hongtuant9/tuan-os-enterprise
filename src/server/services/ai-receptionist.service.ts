@@ -678,7 +678,7 @@ export class AiReceptionistService {
     const editedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "edited").length;
     const rejectedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "rejected").length;
     const takenOverAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "taken_over").length;
-    const trustEligibleReviewedAiDrafts = conversations
+    const trustEligibleReviewedMessages = conversations
       .filter((conversation) => conversation.trustEvidenceEligible)
       .flatMap((conversation) => conversation.messages)
       .filter((message) =>
@@ -689,7 +689,9 @@ export class AiReceptionistService {
           || message.reviewStatus === "rejected"
           || message.reviewStatus === "taken_over"
         )
-      ).length;
+      );
+    const trustEligibleReviewedAiDrafts = trustEligibleReviewedMessages.length;
+    const trustEligibleEditedAiDrafts = trustEligibleReviewedMessages.filter((message) => message.reviewStatus === "edited").length;
     const pendingTrustReviewDrafts = conversations.filter((conversation) => conversation.pendingAiReview).length;
     const excludedNonRealReviewedAiDrafts = Math.max(0, reviewedAiDrafts.length - trustEligibleReviewedAiDrafts);
     const intentReviewMetrics = buildIntentReviewMetrics(
@@ -724,9 +726,10 @@ export class AiReceptionistService {
         editedAiDrafts,
         rejectedAiDrafts,
         takenOverAiDrafts,
-        humanCorrectionRate: reviewedAiDrafts.length > 0 ? editedAiDrafts / reviewedAiDrafts.length : 0,
+        humanCorrectionRate: trustEligibleReviewedAiDrafts > 0 ? trustEligibleEditedAiDrafts / trustEligibleReviewedAiDrafts : 0,
         pendingTrustReviewDrafts,
         trustEligibleReviewedAiDrafts,
+        trustEligibleEditedAiDrafts,
         excludedNonRealReviewedAiDrafts,
       },
       missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { inferCustomerCarePhase } from "./customer-care.ts";
+import { isInternalOpsConversation } from "./conversation-scope.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
 import {
   buildKiotVietOrderPayload,
@@ -106,4 +107,26 @@ test("KiotViet payload requires guest phone", () => {
     quotedPrice: 500000,
     priceSource: "VERIFIED_UAT_SOURCE",
   }), /số điện thoại/i);
+});
+
+
+test("Morning Ops conversations are excluded from Customer AI scope", () => {
+  assert.equal(isInternalOpsConversation({
+    externalConversationId: "morning-ops:2026-10-07:front_desk",
+    metadata: { source: "MORNING_BRIEF_DEPARTMENT" },
+  }), true);
+});
+
+test("normal customer conversations remain in Customer AI scope", () => {
+  assert.equal(isInternalOpsConversation({
+    externalConversationId: "website:cf7:4955:test",
+    metadata: { source: "website" },
+  }), false);
+});
+
+test("source marker alone is enough to exclude internal operations", () => {
+  assert.equal(isInternalOpsConversation({
+    externalConversationId: "legacy-internal-123",
+    metadata: { source: "MORNING_BRIEF_DEPARTMENT" },
+  }), true);
 });

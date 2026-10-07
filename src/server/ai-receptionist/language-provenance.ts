@@ -1,4 +1,4 @@
-import { detectGuestLanguage, type GuestLanguage } from "./language.ts";
+import { customerLanguageName, detectGuestLanguage, type GuestLanguage } from "./language.ts";
 
 export type LanguageProvenanceInput = {
   content: string;
@@ -28,7 +28,7 @@ export function resolveLanguageProvenance(input: LanguageProvenanceInput): Langu
       languageNeedsVerify: false,
       renderLanguage: {
         code: manualOverride,
-        name: manualOverride.toUpperCase(),
+        name: customerLanguageName(manualOverride),
         confidence: "high",
       },
     };
@@ -44,7 +44,7 @@ export function resolveLanguageProvenance(input: LanguageProvenanceInput): Langu
       languageNeedsVerify: false,
       renderLanguage: {
         code: sourceLanguage,
-        name: sourceLanguage.toUpperCase(),
+        name: customerLanguageName(sourceLanguage),
         confidence: "high",
       },
     };

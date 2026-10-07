@@ -23,7 +23,7 @@ import { executeBookingStateMachine } from "@/server/ai-receptionist/booking-exe
 import { buildIdentityCandidates, canResolveCanonicalCustomer } from "@/server/ai-receptionist/customer-identity";
 import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/upsell-engine";
 import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
-import { buildFollowUpPlan } from "@/server/ai-receptionist/follow-up-engine";
+import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/follow-up-engine";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { detectGuestLanguage } from "@/server/ai-receptionist/language";
@@ -859,7 +859,8 @@ export class AiReceptionistService {
     const followUpPlan = buildFollowUpPlan(carePhase, {
       openComplaint:
         decision.metadataPatch.primary_intent === "complaint"
-        || existingMetadata.open_complaint === true,
+        || existingMetadata.open_complaint === true
+        || hasComplaintSignal(input.content),
       humanTakeover: existingMetadata.human_takeover === true,
       customerDeclinedFollowUp: existingMetadata.customer_declined_follow_up === true,
     });

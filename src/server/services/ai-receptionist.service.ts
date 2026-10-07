@@ -261,6 +261,7 @@ function toMessage(row: {
     sourceAiMessageId: typeof metadata.source_ai_message_id === "string" ? metadata.source_ai_message_id : null,
     editedByHuman: metadata.edited_by_human === true,
     historicalImport: metadata.historical_import === true,
+    trustEvidenceEligible: metadata.trust_evidence_eligible !== false,
     customerVisible: isCustomerTimelineMessage({
       direction: row.direction,
       senderType: row.sender_type,
@@ -589,7 +590,9 @@ export class AiReceptionistService {
       const latestAiMessage = [...messages]
         .reverse()
         .find((message) => message.authorship === "ai" && message.direction === "outbound");
-      const pendingAiReview = trustEvidenceEligible && latestAiMessage?.reviewStatus === "pending";
+      const pendingAiReview = trustEvidenceEligible
+        && latestAiMessage?.trustEvidenceEligible !== false
+        && latestAiMessage?.reviewStatus === "pending";
       return {
         id: row.id,
         channel: row.channel,
@@ -690,6 +693,7 @@ export class AiReceptionistService {
       .flatMap((conversation) => conversation.messages)
       .filter((message) =>
         message.authorship === "ai"
+        && message.trustEvidenceEligible !== false
         && (
           message.reviewStatus === "approved"
           || message.reviewStatus === "edited"
@@ -709,7 +713,7 @@ export class AiReceptionistService {
             intent: conversation.intent || "general",
             reviewStatus: message.reviewStatus,
             qaPass: message.qaPass,
-            trustEligible: conversation.trustEvidenceEligible,
+            trustEligible: conversation.trustEvidenceEligible && message.trustEvidenceEligible !== false,
           }))
       )
     );

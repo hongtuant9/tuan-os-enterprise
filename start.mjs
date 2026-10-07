@@ -43,6 +43,11 @@ const omnichannelWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OMNI
 const omnichannelWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OMNICHANNEL_WORKER_INTERVAL_MS || 60_000));
 const otaEmailWorkerEnabled = companyAutopilotEnabled && process.env.TCE_OTA_EMAIL_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const otaEmailWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_OTA_EMAIL_WORKER_INTERVAL_MS || 60_000));
+const otaBrowserWorkerEnabled =
+  companyAutopilotEnabled &&
+  process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true" &&
+  process.env.TCE_OTA_BROWSER_WORKER_ENABLED?.trim().toLowerCase() !== "false";
+const otaBrowserWorkerIntervalMs = Math.max(120_000, Number(process.env.TCE_OTA_BROWSER_WORKER_INTERVAL_MS || 120_000));
 const trelloWorkerEnabled = companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const trelloWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_TRELLO_WORKER_INTERVAL_MS || 300_000));
 const knowledgeGovernanceWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
@@ -72,6 +77,7 @@ const kiotVietFinanceBotWorkerToken = deriveToken("kiotviet-finance-bot-worker-v
 const kiotVietInventoryBotWorkerToken = deriveToken("kiotviet-inventory-bot-worker-v1");
 const omnichannelWorkerToken = deriveToken("tce-omnichannel-worker-v1");
 const otaEmailWorkerToken = deriveToken("tce-ota-email-worker-v1");
+const otaBrowserWorkerToken = deriveToken("tce-ota-browser-worker-v1");
 const trelloWorkerToken = deriveToken("tce-trello-worker-v1");
 const knowledgeGovernanceWorkerToken = deriveToken("tce-knowledge-governance-worker-v1");
 const facebookRecruitmentWorkerToken = deriveToken("tce-facebook-recruitment-browser-worker-v1");
@@ -527,6 +533,49 @@ async function otaEmailWorkerLoop() {
   }
 }
 
+async function otaBrowserWorkerTick() {
+  if (!otaBrowserWorkerEnabled || !otaBrowserWorkerToken || stopping) return;
+  try {
+    const { response, payload } = await postInternal(
+      "/api/internal/tce/browser/ota-messaging/worker",
+      "x-tce-ota-browser-worker-token",
+      otaBrowserWorkerToken,
+      180000,
+    );
+    if (!response.ok) {
+      console.error(`[TCE OTA Browser] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    const result = payload?.result ?? {};
+    const providers = Array.isArray(result.providers)
+      ? result.providers.map((item) => `${item.provider}:${item.state}`).join(",")
+      : "n/a";
+    console.log(
+      `[TCE OTA Browser] state=${result.state ?? "n/a"} processed=${result.processed ?? 0} providers=${providers} outbound=false`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE OTA Browser] ${message}`);
+  }
+}
+
+async function otaBrowserWorkerLoop() {
+  if (!otaBrowserWorkerEnabled) {
+    console.log("[TCE OTA Browser] disabled");
+    return;
+  }
+  if (!otaBrowserWorkerToken) {
+    console.error("[TCE OTA Browser] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
+    return;
+  }
+  console.log(`[TCE OTA Browser] enabled interval_ms=${otaBrowserWorkerIntervalMs} runtime=VPS_ALWAYS_ON read_only=true`);
+  await sleep(50000);
+  while (!stopping) {
+    await otaBrowserWorkerTick();
+    await sleep(otaBrowserWorkerIntervalMs);
+  }
+}
+
 async function cozyPurchaseWorkerTick() {
   if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
   try {
@@ -667,5 +716,6 @@ void kiotVietFinanceBotWorkerLoop();
 void kiotVietInventoryBotWorkerLoop();
 void omnichannelWorkerLoop();
 void otaEmailWorkerLoop();
+void otaBrowserWorkerLoop();
 void trelloWorkerLoop();
 void knowledgeGovernanceWorkerLoop();

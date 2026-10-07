@@ -156,6 +156,16 @@ function runtimeSignals() {
     taskExecutionWritebackVersion: TASK_EXECUTION_WRITEBACK_VERSION,
     departmentExecutionEngineEnabled: companyAutopilotEnabled && process.env.TCE_DEPARTMENT_EXECUTION_ENGINE_ENABLED?.trim().toLowerCase() !== "false",
     authenticatedBrowserExecutorEnabled: process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true",
+    otaBrowserWorkerEnabled:
+      companyAutopilotEnabled &&
+      process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true" &&
+      process.env.TCE_OTA_BROWSER_WORKER_ENABLED?.trim().toLowerCase() !== "false",
+    otaBrowserWorkerIntervalMs: Math.max(
+      120_000,
+      Number(process.env.TCE_OTA_BROWSER_WORKER_INTERVAL_MS || 120_000),
+    ),
+    otaBrowserRuntimeScope: "VPS_ONLY_READ_FIRST",
+    otaBrowserOutboundEnabled: false,
     facebookRecruitmentBrowserEnabled: process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() === "true",
     facebookRecruitmentBrowserPolicy: facebookRecruitmentBrowserPolicy(),
     departmentalPaidAiReasoning: process.env.TCE_AGENT_AI_ENABLED?.trim().toLowerCase() !== "false" && tceAiBudgetApproved && Boolean(process.env.OPENAI_API_KEY?.trim()) ? "ENABLED" : "DISABLED_APPROVAL_OR_CONFIG",

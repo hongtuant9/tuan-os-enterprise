@@ -225,7 +225,7 @@ test("only admin or owner approved decisions can publish reusable operational kn
 
 test("provider-translated Vietnamese never becomes trusted guest language without source evidence", () => {
   const provenance = resolveLanguageProvenance({
-    content: "Xin chào, chúng tôi sẽ đến sớm vào ngày mai.",
+    displayLanguage: detectGuestLanguage("Xin chào, chúng tôi sẽ đến sớm vào ngày mai."),
     providerTranslated: true,
     sourceLanguage: null,
     manualOverride: null,
@@ -242,7 +242,7 @@ test("provider-translated Vietnamese never becomes trusted guest language withou
 
 test("manual language override makes provider-translated conversation send-eligible without changing displayed text", () => {
   const provenance = resolveLanguageProvenance({
-    content: "Xin chào, chúng tôi sẽ đến sớm vào ngày mai.",
+    displayLanguage: detectGuestLanguage("Xin chào, chúng tôi sẽ đến sớm vào ngày mai."),
     providerTranslated: true,
     sourceLanguage: null,
     manualOverride: "en",
@@ -259,7 +259,7 @@ test("manual language override makes provider-translated conversation send-eligi
 
 test("untranslated English remains trusted by content detection", () => {
   const provenance = resolveLanguageProvenance({
-    content: "Good morning, can we leave our luggage before check-in?",
+    displayLanguage: detectGuestLanguage("Good morning, can we leave our luggage before check-in?"),
   });
   assert.equal(provenance.displayLanguage, "en");
   assert.equal(provenance.customerLanguage, "en");

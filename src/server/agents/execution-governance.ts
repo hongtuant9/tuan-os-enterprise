@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-09-29.v6";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-10-07.v7";
 
 export const TCE_GLOBAL_UI_DATA_SAFETY_STANDARD = {
   name: "TCE GLOBAL UI & DATA SAFETY STANDARD",
@@ -20,6 +20,38 @@ export const TCE_GLOBAL_UI_DATA_SAFETY_STANDARD = {
     "Approval requirement đã xác định.",
   ],
 } as const;
+export const FAST_BUILD_FAIL_CLOSED_POLICY = {
+  name: "FAST BUILD BUT FAIL CLOSED",
+  objective: "Giảm thời gian xử lý TUAN OS/TCE bằng batching, tái sử dụng evidence còn hiệu lực và đường tool ngắn nhất; không giảm safety, authority, approval hay verification.",
+  executionOrder: [
+    "SPEC_ONCE",
+    "COHESIVE_PATCH",
+    "CI_ONCE_PER_COHERENT_PATCH",
+    "CANONICAL_DEPLOY",
+    "SINGLE_ACCEPTANCE_READBACK",
+  ] as const,
+  speedRules: [
+    "Batch các read-only check độc lập trong cùng chu kỳ thay vì gọi tuần tự từng bước nhỏ.",
+    "Không đọc lại hoặc chạy lại bước đã PASS nếu evidence còn current và dependency không thay đổi.",
+    "Ưu tiên đường thực thi API_CONNECTOR -> SSH -> DOM -> COMPUTER_OPERATOR; browser/mouse chỉ là fallback.",
+    "Gom thay đổi cùng scope thành cohesive patch; tránh micro-commit và micro-task không tạo thêm audit value.",
+    "Chỉ polling khi có state transition cần chờ; ưu tiên đọc đúng job/run/result thay vì kiểm tra lặp lại.",
+    "Sau mutation, thực hiện một acceptance read-back đủ backend/runtime + UI khi material; không lặp UAT đã có evidence còn hiệu lực.",
+    "Trao đổi với Owner theo milestone PASS / FAIL / BLOCKED / NEED_APPROVAL; không spam từng tool step.",
+    "L0/L1 tiếp tục tự động theo checkpoint; L2 chỉ khi approval đúng scope; L3 luôn dừng ở Owner gate.",
+  ] as const,
+  failClosedRules: [
+    "Không bỏ test, read-back, rollback, evidence hoặc security check để đổi lấy tốc độ.",
+    "Pricing, availability, booking, policy, financial write, security-sensitive mutation và customer-facing commitment phải fail closed khi authority/freshness/evidence chưa đủ.",
+    "Nguồn stale, conflict chưa giải quyết, approval thiếu, owner auth/MFA, secret-sensitive step hoặc irreversible mutation phải chuyển BLOCKED/HOLD/WAITING_APPROVAL thay vì đoán hoặc đi đường vòng.",
+    "Backend PASS nhưng app/read-model/UI material sai hoặc stale thì chưa DONE.",
+    "Không tự nới quyền/autonomy chỉ vì metric tốt; mọi quyền customer-facing/financial write vẫn theo Trust Gate + approval hiện hành.",
+  ] as const,
+  preserveByDefault: true,
+  noRepeatPassedStep: true,
+  milestoneReportingOnly: true,
+} as const;
+
 export const TRELLO_EXECUTION_BOARD = {
   name: "TUAN OS Enterprise — TCE Execution Board",
   boardObjectId: "6aa89e205549d35a039608ab",
@@ -77,6 +109,7 @@ export const AUTONOMOUS_CONTINUATION_POLICY = {
 
 export const EXECUTION_GOVERNANCE_RULES = [
   TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.guardrail,
+  `${FAST_BUILD_FAIL_CLOSED_POLICY.name}: ${FAST_BUILD_FAIL_CLOSED_POLICY.objective}`,
   "Freshness Status, Data Recency và Verification Status là ba khái niệm độc lập; không dùng một badge VERIFIED để suy ra dữ liệu đang current.",
   "Mọi thay đổi App/UI/Database/API/Deploy/Data Sync/Automation phải khai báo target scope; mọi non-target module mặc định PRESERVE_BY_DEFAULT và phải có regression evidence trước DONE.",
   "TASK-001 là nguồn task chính thức; Trello là lớp phản chiếu thực thi trực quan, không tạo SSOT cạnh tranh.",
@@ -121,6 +154,9 @@ export function executionGovernanceInstruction(): string {
     `Execution governance ${EXECUTION_GOVERNANCE_VERSION}:`,
     `Autonomous continuation: runtime=${AUTONOMOUS_CONTINUATION_POLICY.runtimeAuthority}; checkpoint=${AUTONOMOUS_CONTINUATION_POLICY.checkpointAuthority}; session_failure=${AUTONOMOUS_CONTINUATION_POLICY.sessionFailurePolicy}.`,
     TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.guardrail,
+    `${FAST_BUILD_FAIL_CLOSED_POLICY.name}: ${FAST_BUILD_FAIL_CLOSED_POLICY.objective}`,
+    `FAST speed rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.speedRules.join(" | ")}`,
+    `FAIL-CLOSED rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.failClosedRules.join(" | ")}`,
     `Pre-flight bắt buộc: ${TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.preflight.join(" | ")}`,
     `Observability: each_cycle=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredEachCycle}; pre_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredBeforeMutation}; post_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredAfterMutation}; ui_policy=${AUTONOMOUS_CONTINUATION_POLICY.observability.uiPolicy}.`,
     ...EXECUTION_GOVERNANCE_RULES.map((rule, index) => `${index + 1}) ${rule}`),

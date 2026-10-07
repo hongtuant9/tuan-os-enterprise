@@ -103,6 +103,8 @@ export type ReceptionistConversation = {
   mode: ReceptionistMode;
   responseMode: "manual" | "auto";
   humanTakeover: boolean;
+  trustEvidenceEligible: boolean;
+  pendingAiReview: boolean;
   lastMessageAt: string;
   messages: ReceptionistMessage[];
 };
@@ -187,6 +189,9 @@ export type ReceptionistDashboard = {
     rejectedAiDrafts: number;
     takenOverAiDrafts: number;
     humanCorrectionRate: number;
+    pendingTrustReviewDrafts: number;
+    trustEligibleReviewedAiDrafts: number;
+    excludedNonRealReviewedAiDrafts: number;
   };
   missingDataBacklog: string[];
 };

@@ -9,6 +9,7 @@ import {
   reviewAiDraftAction,
   sendManualConversationReplyAction,
   setConversationResponseModeAction,
+  setConversationLanguageOverrideAction,
   decideKnowledgeCandidateAction,
   decideManagerReviewAction,
   getHomestayRoomOptionsAction,
@@ -196,8 +197,25 @@ const LANGUAGE_NAME_VI: Record<string, string> = {
 };
 
 function languageNameVi(code: string) {
+  if (!code || code.toLowerCase() === "und") return "Cần xác minh";
   return LANGUAGE_NAME_VI[code.toLowerCase()] ?? code.toUpperCase();
 }
+
+const CUSTOMER_LANGUAGE_OPTIONS = [
+  ["en", "Tiếng Anh"],
+  ["fr", "Tiếng Pháp"],
+  ["es", "Tiếng Tây Ban Nha"],
+  ["de", "Tiếng Đức"],
+  ["it", "Tiếng Ý"],
+  ["pt", "Tiếng Bồ Đào Nha"],
+  ["nl", "Tiếng Hà Lan"],
+  ["zh", "Tiếng Trung"],
+  ["ja", "Tiếng Nhật"],
+  ["ko", "Tiếng Hàn"],
+  ["ru", "Tiếng Nga"],
+  ["th", "Tiếng Thái"],
+  ["vi", "Tiếng Việt"],
+] as const;
 
 function currentJourneyStep(item: ReceptionistConversation) {
   if (item.journeyStage === "post_stay") return 5;
@@ -350,6 +368,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [translatedSourceVi, setTranslatedSourceVi] = useState(firstVietnameseDraft);
   const [translationTargetLanguage, setTranslationTargetLanguage] = useState(firstConversation?.language ?? "en");
   const [operatorTranslationPrepared, setOperatorTranslationPrepared] = useState(false);
+  const [languageOverrideDraft, setLanguageOverrideDraft] = useState(firstConversation?.languageOverride ?? (firstConversation?.language !== "und" ? firstConversation?.language ?? "en" : "en"));
+  const [languageOverridePending, startLanguageOverrideTransition] = useTransition();
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
   const [sendPending, startSendTransition] = useTransition();
@@ -417,8 +437,9 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraft(aiDraftText(first));
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
-    setTranslationTargetLanguage(first?.language ?? "en");
+    setTranslationTargetLanguage(first?.language && first.language !== "und" ? first.language : "en");
     setOperatorTranslationPrepared(false);
+    setLanguageOverrideDraft(first?.languageOverride ?? (first?.language && first.language !== "und" ? first.language : "en"));
     setReviewNote("");
   }
 
@@ -436,8 +457,9 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraft(aiDraftText(first));
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
-    setTranslationTargetLanguage(first?.language ?? "en");
+    setTranslationTargetLanguage(first?.language && first.language !== "und" ? first.language : "en");
     setOperatorTranslationPrepared(false);
+    setLanguageOverrideDraft(first?.languageOverride ?? (first?.language && first.language !== "und" ? first.language : "en"));
     setReviewNote("");
   }
 
@@ -451,8 +473,9 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraft(aiDraftText(item));
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
-    setTranslationTargetLanguage(item.language);
+    setTranslationTargetLanguage(item.language !== "und" ? item.language : "en");
     setOperatorTranslationPrepared(false);
+    setLanguageOverrideDraft(item.languageOverride ?? (item.language !== "und" ? item.language : "en"));
     setReviewNote("");
 
     if (!canManage || !item.unread || readLocally.has(item.id)) return;
@@ -466,6 +489,26 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       if (!result.ok) {
         setFeedbackStatus(result.error);
       }
+    });
+  }
+
+  function saveLanguageOverride() {
+    if (!selected || !canManage || languageOverridePending || !languageOverrideDraft) return;
+    setFeedbackStatus("");
+    startLanguageOverrideTransition(async () => {
+      const result = await setConversationLanguageOverrideAction({
+        conversationId: selected.id,
+        languageCode: languageOverrideDraft,
+      });
+      if (!result.ok) {
+        setFeedbackStatus(result.error);
+        return;
+      }
+      setTranslationTargetLanguage(languageOverrideDraft);
+      setOperatorTranslationPrepared(false);
+      setTranslatedSourceVi("");
+      setFeedbackStatus(`Đã xác minh ngôn ngữ khách: ${languageNameVi(languageOverrideDraft)}. Chưa gửi nội dung nào cho khách.`);
+      router.refresh();
     });
   }
 
@@ -650,8 +693,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
 
   const translationLooksMissing = Boolean(
     selectedMessage
-      && selectedMessage.detectedLanguage
-      && selectedMessage.detectedLanguage !== "vi"
+      && selectedMessage.displayLanguage !== "vi"
       && (
         !selectedMessage.translatedVi.trim()
         || selectedMessage.translatedVi.trim() === selectedMessage.content.trim()
@@ -819,7 +861,10 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                 label={JOURNEY_STAGE_LABEL[selected.journeyStage] ?? selected.journeyStage}
                 tone={selected.journeyStage === "cancelled" ? "bad" : selected.journeyStage === "post_stay" ? "muted" : selected.journeyStage === "unknown" ? "warn" : "accent"}
               />
-              <Pill label={`AI trả lời: ${selected.language.toUpperCase()}`} tone="good" />
+              <Pill
+                label={selected.languageNeedsVerify ? "Ngôn ngữ khách: CẦN XÁC MINH" : `Ngôn ngữ khách: ${languageNameVi(selected.language)}`}
+                tone={selected.languageNeedsVerify ? "warn" : "good"}
+              />
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--ink-muted)]">
@@ -857,6 +902,34 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
           {selected.historyCompleteness === "partial_email_only" ? (
             <div className="mt-3 rounded-lg border border-[var(--status-warn)]/20 bg-[var(--status-warn)]/5 px-3 py-2 text-[10px] leading-5 text-[var(--ink-secondary)]">
               <strong>Lịch sử trao đổi chưa đầy đủ — cần kiểm tra trên kênh đặt phòng.</strong> Dữ liệu hiện lấy từ email relay nên có thể thiếu phản hồi đã gửi trực tiếp trong hộp chat của kênh đặt phòng. Không mặc định khách chưa được trả lời chỉ vì email không có phản hồi.
+            </div>
+          ) : null}
+          {selected.languageNeedsVerify ? (
+            <div className="mt-3 rounded-lg border border-[var(--status-warn)]/30 bg-[var(--status-warn)]/5 p-3">
+              <p className="text-xs font-semibold text-[var(--status-warn)]">Ngôn ngữ gốc của khách chưa xác minh</p>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--ink-secondary)]">Nội dung nhận từ OTA có dấu hiệu đã được nhà cung cấp dịch. Hệ thống không dùng bản tiếng Việt này để suy ra ngôn ngữ trả lời.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select
+                  value={languageOverrideDraft}
+                  onChange={(event) => setLanguageOverrideDraft(event.target.value)}
+                  disabled={!canManage || languageOverridePending}
+                  className="rounded-lg border border-[var(--border-hairline)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--ink-primary)]"
+                >
+                  {CUSTOMER_LANGUAGE_OPTIONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={saveLanguageOverride}
+                  disabled={!canManage || languageOverridePending}
+                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  {languageOverridePending ? "Đang lưu..." : "Xác nhận ngôn ngữ khách"}
+                </button>
+              </div>
+            </div>
+          ) : selected.languageOverride ? (
+            <div className="mt-3 flex items-center gap-2 text-[10px] text-[var(--ink-secondary)]">
+              <Pill label={`Đã xác minh thủ công: ${languageNameVi(selected.languageOverride)}`} tone="good" />
             </div>
           ) : null}
         </div>
@@ -898,7 +971,12 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Pill label={authorLabel(message)} tone={authorTone(message)} />
-                      {message.detectedLanguage ? <Pill label={message.detectedLanguage.toUpperCase()} tone="muted" /> : null}
+                      {message.languageNeedsVerify
+                        ? <Pill label="Ngôn ngữ gốc: CẦN XÁC MINH" tone="warn" />
+                        : message.detectedLanguage && message.detectedLanguage !== "und"
+                          ? <Pill label={languageNameVi(message.detectedLanguage)} tone="muted" />
+                          : null}
+                      {message.providerTranslated ? <Pill label="OTA đã dịch nội dung" tone="warn" /> : null}
                       <Pill label={`Nguồn: ${CHANNEL_LABEL[selected.channel] ?? selected.channel}`} tone="muted" />
                       {message.editedByHuman ? <Pill label="AI viết · người thật đã sửa" tone="warn" /> : null}
                       {message.historicalImport ? <Pill label="Lịch sử đã nhập" tone="muted" /> : null}
@@ -1077,7 +1155,10 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                   <p className="text-xs font-semibold text-[var(--ink-primary)]">1. Soạn bằng tiếng Việt</p>
                   <p className="mt-1 text-[10px] leading-4 text-[var(--ink-muted)]">Anh/lễ tân viết nội dung muốn nói với khách bằng tiếng Việt. Hệ thống sẽ dịch theo ngôn ngữ tin nhắn khách mới nhất.</p>
                 </div>
-                <Pill label={`Khách: ${languageNameVi(selected.language)}`} tone="accent" />
+                <Pill
+                  label={selected.languageNeedsVerify ? "Khách: CẦN XÁC MINH NGÔN NGỮ" : `Khách: ${languageNameVi(selected.language)}`}
+                  tone={selected.languageNeedsVerify ? "warn" : "accent"}
+                />
               </div>
               <textarea
                 value={replyDraftVi}
@@ -1102,14 +1183,16 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                 <button
                   type="button"
                   onClick={translateVietnameseReply}
-                  disabled={!canManage || !replyDraftVi.trim() || composerTranslationPending}
+                  disabled={!canManage || selected.languageNeedsVerify || !replyDraftVi.trim() || composerTranslationPending}
                   className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
                 >
                   {composerTranslationPending
                     ? "Đang dịch..."
-                    : selected.language === "vi"
-                      ? "Dùng bản tiếng Việt"
-                      : `Dịch sang ${languageNameVi(selected.language)}`}
+                    : selected.languageNeedsVerify
+                      ? "Chọn ngôn ngữ khách trước"
+                      : selected.language === "vi"
+                        ? "Dùng bản tiếng Việt"
+                        : `Dịch sang ${languageNameVi(selected.language)}`}
                 </button>
                 {composerTranslationStale ? <Pill label="Đã sửa tiếng Việt · CẦN DỊCH LẠI" tone="warn" /> : null}
               </div>
@@ -1140,6 +1223,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                   !canManage
                   || responseMode !== "manual"
                   || !selected.manualSendReady
+                  || selected.languageNeedsVerify
                   || !manualReplyAuthorized
                   || !replyDraft.trim()
                   || composerTranslationStale
@@ -1204,10 +1288,16 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
             </div>
 
             <div className="mt-4 rounded-xl border border-[var(--border-hairline)] bg-[var(--page)] p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">Nội dung gốc</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+                {selectedMessage.providerTranslated ? "Nội dung nhận từ OTA (đã/có thể được dịch)" : "Nội dung gốc"}
+              </p>
               <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[var(--ink-secondary)]">{selectedMessage.content}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Pill label={selectedMessage.detectedLanguage?.toUpperCase() ?? selected.language.toUpperCase()} tone="muted" />
+                <Pill
+                  label={selectedMessage.languageNeedsVerify ? "Ngôn ngữ gốc: CẦN XÁC MINH" : languageNameVi(selectedMessage.detectedLanguage ?? selected.language)}
+                  tone={selectedMessage.languageNeedsVerify ? "warn" : "muted"}
+                />
+                {selectedMessage.providerTranslated ? <Pill label={`Ngôn ngữ hiển thị: ${languageNameVi(selectedMessage.displayLanguage)}`} tone="warn" /> : null}
                 {selectedMessage.authorship === "ai" ? <Pill label="Do AI viết" tone="accent" /> : null}
                 {selectedMessage.authorship === "human" ? <Pill label="Do người thật viết" tone="good" /> : null}
               </div>

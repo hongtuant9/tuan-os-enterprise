@@ -2,6 +2,14 @@ export type IntentReviewSample = {
   intent: string;
   reviewStatus: "pending" | "approved" | "edited" | "rejected" | "taken_over" | null;
   qaPass: boolean | null;
+  trustEligible: boolean;
+};
+
+export type TrustEvidenceInput = {
+  channel: string;
+  externalConversationId: string;
+  scenarioTag?: string | null;
+  historicalImport?: boolean;
 };
 
 export type IntentReviewMetric = {
@@ -18,10 +26,20 @@ export type IntentReviewMetric = {
   automationCandidate: false;
 };
 
+const NON_REAL_MARKER = /(^|[-:_\s])(uat|pilot|test|smoke|regression)([-:_\s]|$)/i;
+
+export function isTrustEligibleEvidence(input: TrustEvidenceInput): boolean {
+  if (input.historicalImport) return false;
+  if (input.channel.trim().toLowerCase() === "pilot") return false;
+  const marker = `${input.scenarioTag ?? ""} ${input.externalConversationId}`.trim();
+  return !NON_REAL_MARKER.test(marker);
+}
+
 export function buildIntentReviewMetrics(samples: IntentReviewSample[]): IntentReviewMetric[] {
   const groups = new Map<string, IntentReviewSample[]>();
 
   for (const sample of samples) {
+    if (!sample.trustEligible) continue;
     const intent = sample.intent.trim() || "general";
     const reviewed = sample.reviewStatus === "approved"
       || sample.reviewStatus === "edited"

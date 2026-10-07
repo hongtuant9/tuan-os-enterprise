@@ -32,6 +32,7 @@ import { isCustomerTimelineMessage } from "@/server/ai-receptionist/conversation
 import { canPublishConfirmedKnowledge } from "@/server/ai-receptionist/knowledge-authority";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { createOtaDirectTransport, type OtaDirectProvider } from "@/server/channels/ota-direct-messaging";
+import { parseAgodaDomHistory, type AgodaDomHistoryItem } from "@/server/channels/agoda-browser-dom";
 import { customerLanguageName, detectGuestLanguage, resolveGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
@@ -747,6 +748,110 @@ export class AiReceptionistService {
       },
       missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),
     };
+  }
+
+  async ingestAgodaBrowserDomSnapshot(input: {
+    propertyExternalId: string;
+    reservationReference: string;
+    externalConversationId: string;
+    customerName?: string | null;
+    pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
+    items: AgodaDomHistoryItem[];
+  }): Promise<{
+    parsed: number;
+    imported: number;
+    reconciled: number;
+    duplicates: number;
+  }> {
+    const parsed = parseAgodaDomHistory({
+      propertyId: input.propertyExternalId,
+      reservationReference: input.reservationReference,
+      items: input.items,
+    });
+    const conversation = await this.repo.findConversation("agoda", input.externalConversationId);
+    const existingMessages = conversation ? await this.repo.findMessages([conversation.id]) : [];
+    let imported = 0;
+    let reconciled = 0;
+    let duplicates = 0;
+
+    const normalize = (value: string) => value
+      .normalize("NFKC")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+    for (const message of parsed) {
+      const expectedDirection = message.participant === "guest" ? "inbound" : "outbound";
+      const existing = existingMessages.find((row) => {
+        if (row.sender_type === "ai" || row.direction !== expectedDirection) return false;
+        const metadata = AiReceptionistRepository.toObject(row.metadata);
+        const original = typeof metadata.browser_dom_original_content === "string"
+          ? metadata.browser_dom_original_content
+          : "";
+        const contentMatch = normalize(row.content) === normalize(message.content)
+          || normalize(original) === normalize(message.content);
+        if (!contentMatch) return false;
+        const actualMs = Date.parse(row.created_at);
+        const providerMs = Date.parse(message.createdAt);
+        return Number.isFinite(actualMs) && Number.isFinite(providerMs)
+          ? Math.abs(actualMs - providerMs) <= 5 * 60 * 1000
+          : true;
+      });
+
+      if (existing) {
+        const metadata = AiReceptionistRepository.toObject(existing.metadata);
+        await this.repo.updateMessage(existing.id, {
+          metadata: {
+            ...metadata,
+            browser_dom_reconciled: true,
+            browser_dom_reconciled_at: new Date().toISOString(),
+            browser_dom_original_content: message.content,
+            browser_dom_original_timestamp: message.createdAt,
+            browser_dom_fingerprint: message.fingerprint,
+            provider_original_language: "en",
+            provider_original_source: "agoda_ycs_dom",
+          },
+        });
+        reconciled += 1;
+        continue;
+      }
+
+      const result = await this.ingestOtaHistoryMessage({
+        channel: "agoda",
+        provider: "agoda",
+        propertyExternalId: input.propertyExternalId,
+        externalConversationId: input.externalConversationId,
+        providerConversationId: `browser-dom:${input.reservationReference}`,
+        externalMessageId: message.fingerprint,
+        participant: message.participant,
+        content: message.content,
+        createdAt: message.createdAt,
+        reservationReference: input.reservationReference,
+        customerName: input.customerName,
+        pageEntity: input.pageEntity,
+        providerAutoTranslated: false,
+      });
+      if (result.duplicate) duplicates += 1;
+      else imported += 1;
+    }
+
+    const updatedConversation = await this.repo.findConversation("agoda", input.externalConversationId);
+    if (updatedConversation) {
+      const metadata = AiReceptionistRepository.toObject(updatedConversation.metadata);
+      await this.repo.updateConversation(updatedConversation.id, {
+        metadata: {
+          ...metadata,
+          authenticated_browser_sync: true,
+          browser_dom_provider: "agoda_ycs",
+          browser_dom_last_reconciled_at: new Date().toISOString(),
+          browser_dom_last_message_count: parsed.length,
+          history_completeness: "partial_browser_dom_verified",
+          email_relay_role: "fallback_evidence_only",
+        },
+      });
+    }
+
+    return { parsed: parsed.length, imported, reconciled, duplicates };
   }
 
   async ingestOtaHistoryMessage(input: OtaHistoryMessageInput): Promise<{

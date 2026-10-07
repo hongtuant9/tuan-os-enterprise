@@ -54,6 +54,48 @@ start(){
         if [ -x "$p" ]; then BROWSER="$p"; break; fi
       done
       [ -n "$BROWSER" ] || { echo "Chromium executable not found" >&2; exit 1; }
+      python3 - <<PY &
+import socket
+import threading
+
+def pump(src, dst):
+    try:
+        while True:
+            data = src.recv(65536)
+            if not data:
+                break
+            dst.sendall(data)
+    except Exception:
+        pass
+
+def handle(client):
+    upstream = None
+    try:
+        upstream = socket.create_connection(("127.0.0.1", 9222), timeout=5)
+        t = threading.Thread(target=pump, args=(client, upstream), daemon=True)
+        t.start()
+        pump(upstream, client)
+    except Exception:
+        pass
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+        if upstream:
+            try:
+                upstream.close()
+            except Exception:
+                pass
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind(("0.0.0.0", 9223))
+server.listen(32)
+while True:
+    client, _ = server.accept()
+    threading.Thread(target=handle, args=(client,), daemon=True).start()
+PY
       exec "$BROWSER" \
         --headless=new \
         --remote-debugging-address=0.0.0.0 \
@@ -68,7 +110,7 @@ start(){
     ' >/dev/null
 
   for _ in $(seq 1 60); do
-    if docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9222/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    if docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9223/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
       log "READY — internal CDP only, persistent profile=$PROFILE_DIR"
       return 0
     fi
@@ -85,7 +127,7 @@ stop(){
 
 status(){
   docker ps --format '{{.Names}} {{.Status}}' | grep "^$CONTAINER " || true
-  docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9222/json/version').then(async r=>{const t=await r.text();process.stdout.write(t.slice(0,300))}).catch(()=>process.exit(1))" 2>/dev/null || true
+  docker exec "$APP_CONTAINER" node -e "fetch('http://$CONTAINER:9223/json/version').then(async r=>{const t=await r.text();process.stdout.write(t.slice(0,300))}).catch(()=>process.exit(1))" 2>/dev/null || true
   printf '\n'
 }
 

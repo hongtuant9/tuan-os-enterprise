@@ -275,3 +275,10 @@ export function otaDirectProviderReadiness(): OtaDirectProviderReadiness[] {
     new HotelLinkMessagingTransport().readiness(),
   ];
 }
+
+
+export function createOtaDirectTransport(provider: OtaDirectProvider): OtaDirectMessagingTransport {
+  if (provider === "booking") return new BookingMessagingTransport();
+  if (provider === "agoda") return new AgodaMessagingTransport();
+  return new HotelLinkMessagingTransport();
+}

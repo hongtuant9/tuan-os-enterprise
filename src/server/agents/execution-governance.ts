@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EXECUTION_GOVERNANCE_VERSION = "2026-10-07.v7";
+export const EXECUTION_GOVERNANCE_VERSION = "2026-10-07.v8";
 
 export const TCE_GLOBAL_UI_DATA_SAFETY_STANDARD = {
   name: "TCE GLOBAL UI & DATA SAFETY STANDARD",
@@ -40,6 +40,32 @@ export const FAST_BUILD_FAIL_CLOSED_POLICY = {
     "Trao đổi với Owner theo milestone PASS / FAIL / BLOCKED / NEED_APPROVAL; không spam từng tool step.",
     "L0/L1 tiếp tục tự động theo checkpoint; L2 chỉ khi approval đúng scope; L3 luôn dừng ở Owner gate.",
   ] as const,
+  interactionRules: [
+    "Bắt đầu từ checkpoint bền vững hiện hành gồm TASK-001 + APPROVAL-001 + runtime/evidence; không dựng lại toàn bộ bối cảnh từ đầu nếu checkpoint còn current.",
+    "Chỉ đọc đúng Source of Truth có khả năng thay đổi quyết định hiện tại; không audit toàn Drive, toàn database hoặc toàn repo nếu scope hẹp hơn là đủ.",
+    "Các read-only check độc lập phải được batch/parallel trong cùng chu kỳ khi tool/runtime cho phép; tránh chuỗi tool call tuần tự không có dependency.",
+    "Khi đã có kết luận hoặc partial result đủ để Owner hành động, trả kết quả đó trước; phần kiểm tra bổ sung tiếp tục sau nếu vẫn cần cho cùng lượt thực thi.",
+    "Không hỏi lại thông tin đã có trong current conversation, TASK-001, APPROVAL-001 hoặc SSOT đã xác minh. Với ambiguity low-risk, chọn phương án hợp lý nhất và tiếp tục; chỉ hỏi khi câu trả lời có thể làm thay đổi đáng kể kết quả hoặc chạm approval/safety gate.",
+    "Phản hồi mặc định ngắn và hành động được: Kết luận -> Evidence/Blocker -> Next action. Không kể lại từng tool step hoặc phân tích nội bộ nếu không giúp quyết định.",
+    "Không browse/search/re-read external source khi thông tin hiện có đủ current cho quyết định; chỉ verify thêm khi freshness, niche fact, conflict hoặc external truth thực sự material.",
+    "Không mở lại lane/task/UAT đã PASS chỉ để tăng độ chắc chắn nếu evidence còn hiệu lực và dependency không đổi.",
+  ] as const,
+  analysisRules: [
+    "Ưu tiên decision-useful analysis: dừng đào sâu khi đã đạt ngưỡng đủ dữ liệu để quyết định an toàn và thực thi bước kế tiếp.",
+    "Phân biệt FACT / ESTIMATE / ASSUMPTION khi material; không tạo thêm khung phân tích nếu không làm thay đổi quyết định.",
+    "Mặc định đưa một phương án khuyến nghị tốt nhất; chỉ trình bày nhiều phương án khi trade-off thực sự ảnh hưởng cost, risk, time hoặc operations.",
+    "Blocker/P0 finding phải surfaced ngay trong cùng chu kỳ; không chờ hoàn tất toàn bộ audit mới báo.",
+    "Khi chat/session mới tiếp tục công việc cũ, resume từ durable checkpoint thay vì phụ thuộc chat history hoặc yêu cầu Owner kể lại.",
+    "Nếu scope cho phép thực thi L0/L1 an toàn, ưu tiên thực hiện và báo kết quả thay vì chỉ lập kế hoạch.",
+  ] as const,
+  speedKpis: {
+    duplicateCurrentEvidenceRead: 0,
+    repeatPassedStepWithoutChangedDependency: 0,
+    unnecessaryOwnerReconfirmation: 0,
+    safeIndependentReadsParallelByDefault: true,
+    firstActionableResultFirst: true,
+    minimizeToolRoundTrips: true,
+  } as const,
   failClosedRules: [
     "Không bỏ test, read-back, rollback, evidence hoặc security check để đổi lấy tốc độ.",
     "Pricing, availability, booking, policy, financial write, security-sensitive mutation và customer-facing commitment phải fail closed khi authority/freshness/evidence chưa đủ.",
@@ -156,6 +182,9 @@ export function executionGovernanceInstruction(): string {
     TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.guardrail,
     `${FAST_BUILD_FAIL_CLOSED_POLICY.name}: ${FAST_BUILD_FAIL_CLOSED_POLICY.objective}`,
     `FAST speed rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.speedRules.join(" | ")}`,
+    `FAST interaction rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.interactionRules.join(" | ")}`,
+    `FAST analysis rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.analysisRules.join(" | ")}`,
+    `FAST KPIs: duplicate_current_evidence_read=${FAST_BUILD_FAIL_CLOSED_POLICY.speedKpis.duplicateCurrentEvidenceRead}; repeat_passed_step=${FAST_BUILD_FAIL_CLOSED_POLICY.speedKpis.repeatPassedStepWithoutChangedDependency}; unnecessary_owner_reconfirmation=${FAST_BUILD_FAIL_CLOSED_POLICY.speedKpis.unnecessaryOwnerReconfirmation}; parallel_reads=${FAST_BUILD_FAIL_CLOSED_POLICY.speedKpis.safeIndependentReadsParallelByDefault}; first_actionable_result_first=${FAST_BUILD_FAIL_CLOSED_POLICY.speedKpis.firstActionableResultFirst}.`,
     `FAIL-CLOSED rules: ${FAST_BUILD_FAIL_CLOSED_POLICY.failClosedRules.join(" | ")}`,
     `Pre-flight bắt buộc: ${TCE_GLOBAL_UI_DATA_SAFETY_STANDARD.preflight.join(" | ")}`,
     `Observability: each_cycle=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredEachCycle}; pre_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredBeforeMutation}; post_mutation=${AUTONOMOUS_CONTINUATION_POLICY.observability.requiredAfterMutation}; ui_policy=${AUTONOMOUS_CONTINUATION_POLICY.observability.uiPolicy}.`,

@@ -62,7 +62,8 @@ test("Agoda browser DOM parser handles Today label and property bubble without R
       { index: 0, text: "Hôm nay", className: "a1f74-justify-center" },
       { index: 1, text: "EE\n\n10:43\nHi, I will arrive at your homestay around 08:30 PM on 9/10/2026.", className: "a1f74-pr-32 a1f74-pl-16" },
       { index: 2, text: "10/7/2026\nQUAN TRỌNG: safety@agoda.com", className: "CwYcsChatMessage__Agoda CwYcsChatMessage__Left" },
-      { index: 3, text: "11:26\nChào anh Eric, chúng tôi đã nhận được bưu phẩm của bạn.", className: "a1f74-pr-16 a1f74-pl-32" },
+      { index: 3, text: "Đã yêu cầu: Không hút thuốc", className: "CwYcsChatMessage__Agoda CwYcsChatMessage__Left" },
+      { index: 4, text: "11:26\nChào anh Eric, chúng tôi đã nhận được bưu phẩm của bạn.", className: "a1f74-pr-16 a1f74-pl-32" },
     ],
   });
   assert.equal(messages.length, 2);

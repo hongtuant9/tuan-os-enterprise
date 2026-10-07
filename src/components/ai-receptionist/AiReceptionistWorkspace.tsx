@@ -1740,10 +1740,10 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <Metric label="Hội thoại đang mở" value={dashboard.metrics.openConversations} hint="Khách trực tiếp + OTA" />
-        <Metric label="AI draft đã kiểm duyệt" value={dashboard.metrics.reviewedAiDrafts} hint="Đã duyệt / sửa / từ chối / tiếp quản" />
+        <Metric label="AI draft khách thật đã duyệt" value={dashboard.metrics.trustEligibleReviewedAiDrafts} hint="Không tính UAT / pilot / historical" />
         <Metric label="Khách thật chờ duyệt" value={dashboard.metrics.pendingTrustReviewDrafts} hint="Draft mới nhất cần người thật đánh giá" />
-        <Metric label="Bản AI bị sửa" value={dashboard.metrics.editedAiDrafts} hint="Dữ liệu học chất lượng, không tự cập nhật policy" />
-        <Metric label="Human Correction Rate" value={`${(dashboard.metrics.humanCorrectionRate * 100).toFixed(1)}%`} hint="Bị sửa / tổng draft đã review" />
+        <Metric label="Bản khách thật bị sửa" value={dashboard.metrics.trustEligibleEditedAiDrafts} hint="Dữ liệu học chất lượng, không tự cập nhật policy" />
+        <Metric label="Tỷ lệ người thật phải sửa" value={`${(dashboard.metrics.humanCorrectionRate * 100).toFixed(1)}%`} hint="Chỉ tính draft khách thật đã review" />
         <Metric label="Cần Quản lý xác nhận" value={dashboard.metrics.pendingManagerReviews} hint="Thiếu căn cứ hoặc ngoại lệ" />
         <Metric label="Booking AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Booking write vẫn theo gate riêng" />
       </div>

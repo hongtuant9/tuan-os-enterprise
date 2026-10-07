@@ -37,7 +37,9 @@ export type OtaDirectProviderReadiness = {
   replyCapable: boolean;
   reason:
     | "READY"
+    | "BOOKING_CONNECTIVITY_PARTNER_NOT_VERIFIED"
     | "MISSING_BOOKING_MACHINE_ACCOUNT"
+    | "AGODA_CHANNEL_MANAGER_NOT_CERTIFIED"
     | "MISSING_AGODA_SUPPLY_AUTH"
     | "HOTELLINK_NO_DOCUMENTED_API"
     | "DIRECT_REPLY_DISABLED";
@@ -77,6 +79,10 @@ export class BookingMessagingTransport implements OtaDirectMessagingTransport {
   private cachedToken: { value: string; expiresAt: number } | null = null;
 
   readiness(): OtaDirectProviderReadiness {
+    const partnerVerified = process.env.TCE_BOOKING_CONNECTIVITY_PARTNER_VERIFIED?.trim().toLowerCase() === "true";
+    if (!partnerVerified) {
+      return { provider: this.provider, configured: false, historyReadCapable: false, replyCapable: false, reason: "BOOKING_CONNECTIVITY_PARTNER_NOT_VERIFIED" };
+    }
     const configured = envSet("TCE_BOOKING_CONNECTIVITY_CLIENT_ID") && envSet("TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET");
     if (!configured) return { provider: this.provider, configured: false, historyReadCapable: false, replyCapable: false, reason: "MISSING_BOOKING_MACHINE_ACCOUNT" };
     return {
@@ -197,6 +203,10 @@ export class AgodaMessagingTransport implements OtaDirectMessagingTransport {
   readonly provider = "agoda" as const;
 
   readiness(): OtaDirectProviderReadiness {
+    const certified = process.env.TCE_AGODA_CHANNEL_MANAGER_CERTIFIED?.trim().toLowerCase() === "true";
+    if (!certified) {
+      return { provider: this.provider, configured: false, historyReadCapable: false, replyCapable: false, reason: "AGODA_CHANNEL_MANAGER_NOT_CERTIFIED" };
+    }
     const configured = envSet("TCE_AGODA_SUPPLY_AUTHORIZATION");
     if (!configured) return { provider: this.provider, configured: false, historyReadCapable: false, replyCapable: false, reason: "MISSING_AGODA_SUPPLY_AUTH" };
     return {

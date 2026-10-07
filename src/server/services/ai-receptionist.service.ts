@@ -880,7 +880,7 @@ export class AiReceptionistService {
       ? existingMetadata.language_override
       : null;
     const languageProvenance = resolveLanguageProvenance({
-      content: input.content,
+      displayLanguage: detectGuestLanguage(input.content),
       providerTranslated: input.providerTranslated === true,
       sourceLanguage: input.sourceLanguage ?? null,
       manualOverride: existingLanguageOverride,

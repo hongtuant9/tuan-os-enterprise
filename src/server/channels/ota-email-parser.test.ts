@@ -40,7 +40,7 @@ test("Agoda parser accepts only explicit self-introduced guest name", () => {
   });
 
   assert.equal(parsed.channel, "agoda");
-  assert.equal(parsed.context.guestName, "Agnes, tôi có một vài câu hỏi liên quan đến kỳ nghỉ của mình");
+  assert.equal(parsed.context.guestName, "Agnes");
 });
 
 test("Agoda parser does not infer guest name from ordinary sign-off", () => {

@@ -163,6 +163,19 @@ export type ReceptionistDashboard = {
   bookings: AiBookingRecord[];
   managerReviews: ManagerReview[];
   knowledgeCandidates: KnowledgeCandidate[];
+  intentReviewMetrics: Array<{
+    intent: string;
+    reviewed: number;
+    approvedUnchanged: number;
+    edited: number;
+    rejected: number;
+    takenOver: number;
+    qaFailures: number;
+    approvedUnchangedRate: number;
+    humanCorrectionRate: number;
+    rejectedOrTakeoverRate: number;
+    automationCandidate: false;
+  }>;
   metrics: {
     openConversations: number;
     pendingManagerReviews: number;

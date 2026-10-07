@@ -557,7 +557,7 @@ export class AiReceptionistService {
       const manualSend = manualSendEligibility(row.channel, metadata);
       const followUpMetadata = AiReceptionistRepository.toObject(metadata.follow_up_plan as Json);
       const followUpKind = followUpMetadata.kind;
-      const followUpPlan =
+      const followUpPlan: ReceptionistConversation["followUpPlan"] =
         (followUpKind === "pre_arrival_check" || followUpKind === "in_stay_check" || followUpKind === "post_stay_feedback")
         && typeof followUpMetadata.suggestedDelayHours === "number"
         && typeof followUpMetadata.reason === "string"

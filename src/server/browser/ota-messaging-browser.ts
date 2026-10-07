@@ -135,10 +135,9 @@ async function collectAgodaSnapshots(page: Page, maxConversations: number): Prom
     await new Promise((resolve) => setTimeout(resolve, 650));
 
     const raw = await page.evaluate(() => {
-      const testIds = Array.from(document.querySelectorAll<HTMLElement>("[data-testid]"))
-        .map((node) => node.getAttribute("data-testid") || "")
-        .filter((value) => value.startsWith("booking-details-"));
-      const values = testIds.map((value) => value.slice("booking-details-".length).trim()).filter(Boolean);
+      const values = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="booking-details-"]'))
+        .map((node) => (node.innerText || node.textContent || "").trim())
+        .filter(Boolean);
       const root = document.querySelector<HTMLElement>('[data-testid="inbox-message-cards-container"]');
       const items = root
         ? Array.from(root.children).map((node, i) => ({

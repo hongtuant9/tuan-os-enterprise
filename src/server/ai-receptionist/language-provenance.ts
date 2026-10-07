@@ -1,4 +1,4 @@
-import { customerLanguageName, detectGuestLanguage, type GuestLanguage } from "./language.ts";
+import { customerLanguageName, detectGuestLanguage, type GuestLanguage } from "./language";
 
 export type LanguageProvenanceInput = {
   content: string;

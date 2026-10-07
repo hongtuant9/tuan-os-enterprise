@@ -93,6 +93,35 @@ function scoreRow(data: Record<string, Json>, query: string, entity?: string | n
   return score;
 }
 
+function toOperationalFact(row: {
+  id: string;
+  field_key: string;
+  title: string;
+  proposed_value: Json;
+  status: string;
+  reviewed_at: string | null;
+  created_at: string;
+}): KnowledgeFact | null {
+  if (row.status !== "approved" && row.status !== "published") return null;
+  const value = AiReceptionistRepository.toObject(row.proposed_value);
+  if (value.operator_confirmed !== true) return null;
+  if (normalize(value.verification_status).toUpperCase() !== "VERIFIED") return null;
+  if (!/AI_RESPONSE|SALES|PUBLIC/i.test(normalize(value.allowed_use))) return null;
+  const knowledgeValue = normalize(value.knowledge_value);
+  if (!knowledgeValue) return null;
+
+  return {
+    sourceKey: "operator-approved-knowledge",
+    externalId: row.id,
+    entity: normalize(value.entity) || undefined,
+    label: row.title || row.field_key,
+    value: knowledgeValue,
+    status: "VERIFIED",
+    allowedUse: normalize(value.allowed_use) || "AI_RESPONSE",
+    syncedAt: row.reviewed_at ?? row.created_at,
+  };
+}
+
 function toFact(row: {
   source_key: string;
   external_id: string;
@@ -152,9 +181,35 @@ export async function resolveKnowledge(
     if (facts.length >= limit) break;
   }
 
+  const checkedSources = [...RECEPTIONIST_KNOWLEDGE_SOURCES] as string[];
+  if (facts.length === 0) {
+    checkedSources.push("operator-approved-knowledge");
+    const operationalRows = await repo.findApprovedOperationalKnowledge();
+    const rankedOperational = operationalRows
+      .map((row) => {
+        const value = AiReceptionistRepository.toObject(row.proposed_value);
+        const searchData: Record<string, Json> = {
+          field_key: row.field_key,
+          title: row.title,
+          knowledge_value: value.knowledge_value ?? null,
+          entity: value.entity ?? null,
+        };
+        return { row, score: scoreRow(searchData, query, entity) };
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    for (const item of rankedOperational) {
+      const fact = toOperationalFact(item.row);
+      if (!fact) continue;
+      facts.push(fact);
+      if (facts.length >= limit) break;
+    }
+  }
+
   return {
     facts,
     missing: facts.length === 0,
-    checkedSources: [...RECEPTIONIST_KNOWLEDGE_SOURCES],
+    checkedSources,
   };
 }

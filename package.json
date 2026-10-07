@@ -14,7 +14,7 @@
     "test:content-automation": "node --experimental-strip-types --test src/server/marketing-command-center/content-automation.test.ts",
     "test:tce-safety": "node --experimental-strip-types --test src/server/tce/data-freshness.test.ts src/server/tce/global-safety.test.ts",
     "check:tce-diff-scope": "node scripts/check-tce-diff-scope.mjs",
-    "test:ai-receptionist-shadow": "node --experimental-strip-types --test src/server/ai-receptionist/shadow-control.test.ts src/server/ai-receptionist/customer-care.test.ts src/server/ai-receptionist/follow-up-engine.test.ts src/server/ai-receptionist/manual-send-gate.test.ts src/server/channels/ota-email-parser.test.ts src/server/channels/channel-policy.test.ts src/server/channels/ota-direct-messaging.test.ts",
+    "test:ai-receptionist-shadow": "node --experimental-strip-types --test src/server/ai-receptionist/shadow-control.test.ts src/server/ai-receptionist/customer-care.test.ts src/server/ai-receptionist/follow-up-engine.test.ts src/server/ai-receptionist/manual-send-gate.test.ts src/server/channels/ota-email-parser.test.ts src/server/channels/channel-policy.test.ts src/server/channels/ota-direct-messaging.test.ts src/server/channels/agoda-browser-dom.test.ts",
     "test:customer-ai-core": "node --experimental-strip-types --test src/server/ai-receptionist/customer-ai-core.test.ts"
   },
   "dependencies": {

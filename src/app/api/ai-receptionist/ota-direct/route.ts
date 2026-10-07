@@ -70,6 +70,40 @@ export async function POST(request: Request) {
     });
   }
 
+  if (action === "ingest_agoda_browser_snapshot") {
+    const propertyExternalId = typeof payload.propertyExternalId === "string" ? payload.propertyExternalId.trim() : "";
+    const reservationReference = typeof payload.reservationReference === "string" ? payload.reservationReference.trim() : "";
+    const externalConversationId = typeof payload.externalConversationId === "string" ? payload.externalConversationId.trim() : "";
+    const rawItems = Array.isArray(payload.items) ? payload.items : [];
+    const items = rawItems.flatMap((item, index) => {
+      if (!item || typeof item !== "object") return [];
+      const row = item as Record<string, unknown>;
+      const text = typeof row.text === "string" ? row.text.trim() : "";
+      if (!text) return [];
+      return [{ index: typeof row.index === "number" ? row.index : index, text }];
+    });
+    if (!propertyExternalId || !reservationReference || !externalConversationId || items.length === 0) {
+      return NextResponse.json({ error: "Invalid Agoda browser snapshot payload" }, { status: 400 });
+    }
+    const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot({
+      propertyExternalId,
+      reservationReference,
+      externalConversationId,
+      customerName: typeof payload.customerName === "string" ? payload.customerName : null,
+      pageEntity: ["tce", "lavender", "ruby", "cozy", "unknown"].includes(String(payload.pageEntity))
+        ? payload.pageEntity as "tce" | "lavender" | "ruby" | "cozy" | "unknown"
+        : "unknown",
+      items,
+    });
+    return NextResponse.json({
+      ok: true,
+      action: "AGODA_BROWSER_SNAPSHOT_INGESTED",
+      ...result,
+      automaticOutbound: false,
+      processedBy: principalLabel(principal),
+    });
+  }
+
   if (action === "send_approved_reply") {
     const conversationId = typeof payload.conversationId === "string" ? payload.conversationId.trim() : "";
     const sourceAiMessageId = typeof payload.sourceAiMessageId === "string" ? payload.sourceAiMessageId.trim() : "";

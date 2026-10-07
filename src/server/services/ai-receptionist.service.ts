@@ -27,6 +27,8 @@ import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-rece
 import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/follow-up-engine";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "@/server/ai-receptionist/intent-review-metrics";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
+import { isCustomerTimelineMessage } from "@/server/ai-receptionist/conversation-message-visibility";
+import { canPublishConfirmedKnowledge } from "@/server/ai-receptionist/knowledge-authority";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { customerLanguageName, detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
@@ -259,6 +261,11 @@ function toMessage(row: {
     sourceAiMessageId: typeof metadata.source_ai_message_id === "string" ? metadata.source_ai_message_id : null,
     editedByHuman: metadata.edited_by_human === true,
     historicalImport: metadata.historical_import === true,
+    customerVisible: isCustomerTimelineMessage({
+      direction: row.direction,
+      senderType: row.sender_type,
+      status: row.status,
+    }),
     createdAt: row.created_at,
   };
 }
@@ -1482,6 +1489,8 @@ export class AiReceptionistService {
       metadata: {
         decided_at: decidedAt,
         actor: input.actorLabel,
+        internal_note_type: "manager_confirmation",
+        customer_visible: false,
       },
     });
 
@@ -1566,24 +1575,53 @@ export class AiReceptionistService {
       last_message_at: new Date().toISOString(),
     });
 
-    for (const fieldKey of review.missing_fields) {
+    const publishConfirmedKnowledge = canPublishConfirmedKnowledge(input.actorRole, input.decision);
+    const fieldsToCapture = review.missing_fields.length > 0
+      ? review.missing_fields
+      : input.decision === "approved"
+        ? ["manager_confirmed_operational_fact"]
+        : [];
+
+    for (const fieldKey of fieldsToCapture) {
       await this.repo.createKnowledgeCandidate({
         conversation_id: review.conversation_id,
         manager_review_id: review.id,
         field_key: fieldKey,
-        title: `Đề xuất bổ sung dữ liệu: ${fieldKey}`,
+        title: `Tri thức vận hành: ${fieldKey}`,
         current_value: null,
         proposed_value: {
           manager_decision: input.decision,
           manager_note: input.note.trim(),
+          knowledge_value: input.note.trim(),
+          operator_confirmed: publishConfirmedKnowledge,
+          verification_status: publishConfirmedKnowledge ? "VERIFIED" : "NEED VERIFY",
+          allowed_use: publishConfirmedKnowledge ? "AI_RESPONSE" : "INTERNAL_REVIEW_ONLY",
+          entity: typeof conversationMetadata.page_entity === "string"
+            ? conversationMetadata.page_entity
+            : "unknown",
+          actor_label: input.actorLabel,
+          actor_role: input.actorRole,
         },
         source_evidence: {
           guest_request: review.guest_request,
           review_reason: review.reason,
           manager_review_id: review.id,
+          decision: input.decision,
+          authority: input.actorRole,
         },
         scope: "reusable",
-        status: "pending",
+        status: publishConfirmedKnowledge ? "approved" : "pending",
+        reviewed_by: publishConfirmedKnowledge ? input.actorUserId : null,
+        reviewed_at: publishConfirmedKnowledge ? decidedAt : null,
+      });
+    }
+
+    if (publishConfirmedKnowledge && fieldsToCapture.length > 0) {
+      await this.activityLog.record({
+        agent: input.actorLabel,
+        unit: "Tam Cốc",
+        message: `Đã lưu ${fieldsToCapture.length} tri thức vận hành đã xác nhận vào Knowledge; không gửi trực tiếp cho khách.`,
+        type: "approval",
       });
     }
 

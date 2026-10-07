@@ -344,6 +344,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [replyDraftVi, setReplyDraftVi] = useState(firstVietnameseDraft);
   const [translatedSourceVi, setTranslatedSourceVi] = useState(firstVietnameseDraft);
   const [translationTargetLanguage, setTranslationTargetLanguage] = useState(firstConversation?.language ?? "en");
+  const [operatorTranslationPrepared, setOperatorTranslationPrepared] = useState(false);
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
   const [sendPending, startSendTransition] = useTransition();
@@ -410,6 +411,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
     setTranslationTargetLanguage(first?.language ?? "en");
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
   }
 
@@ -427,6 +429,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
     setTranslationTargetLanguage(first?.language ?? "en");
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
   }
 
@@ -440,6 +443,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setReplyDraftVi(viDraft);
     setTranslatedSourceVi(viDraft);
     setTranslationTargetLanguage(item.language);
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
 
     if (!canManage || !item.unread || readLocally.has(item.id)) return;
@@ -535,6 +539,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       setReplyDraft(result.data.translated);
       setTranslatedSourceVi(source);
       setTranslationTargetLanguage(result.data.targetLanguage);
+      setOperatorTranslationPrepared(true);
       setFeedbackStatus(
         result.data.targetLanguage === "vi"
           ? "Khách đang dùng tiếng Việt. Nội dung tiếng Việt đã sẵn sàng để kiểm tra."
@@ -553,8 +558,8 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
         replyDraft.trim(),
         crypto.randomUUID(),
         sourceAiMessageId,
-        replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? replyDraftVi.trim() : null,
-        replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? translationTargetLanguage : null,
+        operatorTranslationPrepared && replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? replyDraftVi.trim() : null,
+        operatorTranslationPrepared && replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? translationTargetLanguage : null,
       );
       if (!result.ok) {
         setFeedbackStatus(result.error);
@@ -1070,8 +1075,10 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
                     setReplyDraft(value);
                     setTranslatedSourceVi(value.trim());
                     setTranslationTargetLanguage("vi");
+                    setOperatorTranslationPrepared(true);
                   } else {
                     setTranslatedSourceVi("");
+                    setOperatorTranslationPrepared(false);
                   }
                 }}
                 disabled={!canManage}

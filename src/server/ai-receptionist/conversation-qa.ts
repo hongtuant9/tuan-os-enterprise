@@ -42,5 +42,20 @@ export function validateCustomerReply(input: {
     reasons.push("commitment_while_held");
   }
 
+  const hasVerifiedOperationalFact = input.facts.length > 0;
+  const definitiveOperationalClaim = [
+    /(?:không|chưa)\s+(?:có|kê|cung cấp)[^.!?]{0,50}(?:giường phụ|extra bed)/i,
+    /(?:do not|don't|does not|doesn't|no)\s+(?:provide|offer|have)[^.!?]{0,50}(?:extra bed|rollaway)/i,
+    /(?:anh\/chị|quý khách|bạn)\s+có thể\s+(?:gửi|để)[^.!?]{0,40}(?:hành lý|ba lô|vali)/i,
+    /\b(?:you|guests?)\s+(?:can|may)\s+(?:leave|store|drop off)[^.!?]{0,40}(?:luggage|bags?)\b/i,
+    /(?:chúng tôi|homestay|khách sạn)\s+(?:có|cung cấp)[^.!?]{0,40}(?:dịch vụ giặt|giặt là)/i,
+    /\b(?:we|the property|the homestay|the hotel)\s+(?:offer|provide|have)[^.!?]{0,40}(?:laundry service|laundry)\b/i,
+    /(?:bữa sáng|breakfast)[^.!?]{0,35}(?:đã bao gồm|được bao gồm|is included|included in)/i,
+  ].some((pattern) => pattern.test(reply));
+
+  if (!hasVerifiedOperationalFact && definitiveOperationalClaim) {
+    reasons.push("unsupported_operational_claim");
+  }
+
   return { pass: reasons.length === 0, reasons };
 }

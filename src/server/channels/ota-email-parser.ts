@@ -426,6 +426,8 @@ function agodaGuestName(subject: string, body: string): string | null {
 
   return firstMatch(body, [
     /(?:Thắc mắc mới từ|Tin nhắn mới từ)\s+([^\n]{2,120})/i,
+    /(?:^|[.!?]\s+|\n)Tên tôi là\s+([A-ZÀ-Ỹ][^.!?\n]{1,80})/i,
+    /(?:^|[.!?]\s+|\n)My name is\s+([A-Z][^.!?\n]{1,80})/i,
   ]);
 }
 

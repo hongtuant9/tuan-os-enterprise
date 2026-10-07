@@ -504,6 +504,7 @@ export async function runOtaEmailWorker(
           providerMessageIdHeader: headers["message-id"] || null,
           providerReferences: headers["references"] || null,
           historicalImport: options.backfill === true,
+          providerAutoTranslated: parsed.providerAutoTranslated,
           forceAssistMode: true,
           testerUserId: null,
         });

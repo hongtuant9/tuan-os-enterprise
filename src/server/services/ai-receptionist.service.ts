@@ -757,6 +757,7 @@ export class AiReceptionistService {
     customerName?: string | null;
     pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
     items: AgodaDomHistoryItem[];
+    snapshotDate?: string;
   }): Promise<{
     parsed: number;
     imported: number;
@@ -767,6 +768,7 @@ export class AiReceptionistService {
       propertyId: input.propertyExternalId,
       reservationReference: input.reservationReference,
       items: input.items,
+      snapshotDate: input.snapshotDate,
     });
     const conversation = await this.repo.findConversation("agoda", input.externalConversationId);
     const existingMessages = conversation ? await this.repo.findMessages([conversation.id]) : [];

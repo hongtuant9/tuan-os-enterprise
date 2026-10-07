@@ -512,7 +512,7 @@ export async function runOtaEmailWorker(
         await service.recordOtaEmailFallbackSignal({
           channel: parsed.channel,
           externalConversationId: conversationKey,
-          signalAt: parsed.receivedAt ?? receivedAt(message),
+          signalAt: receivedAt(message),
         });
 
         if (ingest.duplicate) {

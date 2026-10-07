@@ -14,6 +14,9 @@ FINANCE_BOT_STATE_DIR="${FINANCE_BOT_STATE_DIR:-/opt/tuan-ai/kiotviet-finance-bo
 INVENTORY_BOT_STATE_DIR="${INVENTORY_BOT_STATE_DIR:-/opt/tuan-ai/kiotviet-inventory-bot}"
 AUTH_BROWSER_STATE_DIR="${AUTH_BROWSER_STATE_DIR:-/opt/tuan-ai/auth-browser}"
 APP_DOCKER_NETWORK="${APP_DOCKER_NETWORK:-}"
+if [ -z "$APP_DOCKER_NETWORK" ] && docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
+  APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}}{{"\\n"}}{{end}}{{end}}' "$APP_CONTAINER" 2>/dev/null | head -n1 | tr -d '\\r' || true)"
+fi
 EXPECTED_RUNTIME="tce-executive-org-v1"
 EXPECTED_AUTOPILOT="v1"
 

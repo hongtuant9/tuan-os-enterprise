@@ -85,3 +85,31 @@ test("normal OTA relay without translation marker keeps original-language proven
   assert.equal(parsed.actionable, true);
   assert.equal(parsed.providerAutoTranslated, false);
 });
+
+
+test("Expedia name-only extraction artifact is not actionable", () => {
+  const parsed = parseOtaEmail({
+    from: "Expedia Partner Central <no-reply@expediapartnercentral.com>",
+    replyTo: "m4odpekqok@m.expediapartnercentral.com",
+    subject: "Expedia guest message from WENBING CHEN",
+    body: "WENBING CHEN sent you a message\n\n“CHEN/WENBING”\n\nReply",
+  });
+  assert.equal(parsed.actionable, false);
+  assert.equal(parsed.reason, "guest_name_only_extraction_filtered");
+});
+
+test("Airbnb reaction-only message is not actionable", () => {
+  const parsed = parseOtaEmail({
+    from: "Airbnb <automated@airbnb.com>",
+    replyTo: "thread-123@reply.airbnb.com",
+    subject: "VỀ: Đặt phòng tại Tam Coc Lavender Homestay",
+    body: [
+      "https://www.airbnb.com/hosting/thread/2679021339",
+      "Người đặt",
+      "Đã bày tỏ cảm xúc 😊 với tin nhắn \"Xin chào. Cảm ơn Anh/chị\"",
+      "Được dịch tự động",
+    ].join("\n"),
+  });
+  assert.equal(parsed.actionable, false);
+  assert.equal(parsed.reason, "guest_reaction_no_reply");
+});

@@ -11,6 +11,8 @@ import { isReceptionistAutoReplyApproved } from "@/server/ai-receptionist/config
 
 export const dynamic = "force-dynamic";
 
+const DEPLOYMENT_ID = process.env.NEXT_DEPLOYMENT_ID?.trim() || null;
+
 const MARKETING_GROWTH_SOURCE = "marketing-shadow-content";
 
 const RECEPTIONIST_KNOWLEDGE_KEYS = [
@@ -196,6 +198,7 @@ export async function GET() {
           status: "degraded",
           service: "tuan-os-enterprise",
           runtime: "tce-executive-org-v1",
+          deploymentId: DEPLOYMENT_ID,
           features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", receptionistOmnichannel: "v1", receptionistMultiMailbox: "v1", aiReceptionistShadowControl: "v1", aiReceptionistMetaTransportOwnerGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1", kiotVietInventoryBot: "v1-readonly", verificationGuidance: "v1", dashboardLiveRefresh: "15s", financeUiCanonicalExpense: "v1", financeUiBrowserRuntimeState: "v1", financeClosureDiagnostics: "v2", cogsBomDetailFallback: "v1", personalFinanceFreedomKpi: "v1", personalFinanceKpiSnapshots: "v1", financeOperatingOs: "v2", personalFinanceOperatingDashboard: "v2", financeCutover20261001: "v1", financeOperatingModel: "v1", canonicalFinanceSync: "v1", tceGlobalUiDataSafety: "v1", aiReceptionistFreshness: "v2", businessFreshness: "v1", recoveredTabsFreshness: "v1" },
           agentRegistry: 16,
           executiveOrgRoles: 11,
@@ -213,6 +216,7 @@ export async function GET() {
         status: "ok",
         service: "tuan-os-enterprise",
         runtime: "tce-executive-org-v1",
+        deploymentId: DEPLOYMENT_ID,
         features: { masterChangeControl: "v1", masterDataSteward: "v1", googleSheetsWriteScope: "v1", amenityStatusSync: "v1", approvalCenterPriorityHistory: "v1", marketingGrowthLoop: "v1", cmoExecutiveOperatingSystem: "v2", ccoClosedLoop: "v1", septemberExecutionPlan: "v1", executiveCouncil: "v1", businessOperatingPlan: "2026-2027-v1", companyAutopilot: "v1", phase14Sprint: "2026-09-21-v1", receptionistConversationV2: "v2", receptionistAllowlistChannelGate: "v1", receptionistOmnichannel: "v1", receptionistMultiMailbox: "v1", aiReceptionistShadowControl: "v1", aiReceptionistMetaTransportOwnerGate: "v1", financeProfitAnalysis: "v1", kiotVietCashflowTaxonomy: "v2-lean", kiotVietFinanceBot: "v1", kiotVietInventoryBot: "v1-readonly", verificationGuidance: "v1", dashboardLiveRefresh: "15s", financeUiCanonicalExpense: "v1", financeUiBrowserRuntimeState: "v1", financeClosureDiagnostics: "v2", cogsBomDetailFallback: "v1", personalFinanceFreedomKpi: "v1", personalFinanceKpiSnapshots: "v1", financeOperatingOs: "v2", personalFinanceOperatingDashboard: "v2", financeCutover20261001: "v1", financeOperatingModel: "v1", canonicalFinanceSync: "v1", tceGlobalUiDataSafety: "v1", aiReceptionistFreshness: "v2", businessFreshness: "v1", recoveredTabsFreshness: "v1" },
         agentRegistry: 16,
         executiveOrgRoles: 11,

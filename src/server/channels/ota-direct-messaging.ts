@@ -127,6 +127,23 @@ export class BookingMessagingTransport implements OtaDirectMessagingTransport {
     if (!response.ok) throw new Error(`Booking.com conversation read failed HTTP ${response.status}`);
     const data = (payload.data && typeof payload.data === "object" ? payload.data : {}) as Record<string, unknown>;
     const conversation = (data.conversation && typeof data.conversation === "object" ? data.conversation : data) as Record<string, unknown>;
+    const participantTypes = new Map<string, OtaDirectParticipant>();
+    const participants = Array.isArray(conversation.participants) ? conversation.participants : [];
+    for (const rawParticipant of participants) {
+      if (!rawParticipant || typeof rawParticipant !== "object") continue;
+      const participant = rawParticipant as Record<string, unknown>;
+      const participantId = String(participant.participant_id ?? "").trim();
+      const participantMetadata = participant.metadata && typeof participant.metadata === "object"
+        ? participant.metadata as Record<string, unknown>
+        : {};
+      const type = String(participantMetadata.type ?? "").toLowerCase();
+      if (!participantId) continue;
+      participantTypes.set(
+        participantId,
+        type === "guest" ? "guest" : type === "property" ? "property" : "provider",
+      );
+    }
+
     const rawMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
     const messages: OtaDirectMessage[] = rawMessages.flatMap((raw) => {
       if (!raw || typeof raw !== "object") return [];
@@ -135,7 +152,10 @@ export class BookingMessagingTransport implements OtaDirectMessagingTransport {
       const content = String(item.content ?? "").trim();
       const createdAt = String(item.timestamp ?? "").trim();
       if (!messageId || !content || !createdAt) return [];
+      const senderId = String(item.sender_id ?? "").trim();
       const sender = String(item.sender_type ?? item.participant_type ?? "").toLowerCase();
+      const participant = participantTypes.get(senderId)
+        ?? (sender === "guest" ? "guest" : sender === "property" ? "property" : "provider");
       return [{
         provider: "booking",
         channel: "booking",
@@ -143,7 +163,7 @@ export class BookingMessagingTransport implements OtaDirectMessagingTransport {
         conversationId: input.conversationId,
         reservationReference: typeof conversation.conversation_reference === "string" ? conversation.conversation_reference : null,
         messageId,
-        participant: sender === "guest" ? "guest" : sender === "property" ? "property" : "provider",
+        participant,
         content,
         createdAt,
       }];

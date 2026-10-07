@@ -1794,6 +1794,41 @@ export class AiReceptionistService {
     return { reviewStatus: input.decision, reviewedContent };
   }
 
+  async setConversationLanguageOverride(input: {
+    conversationId: string;
+    languageCode: string;
+    actorLabel: string;
+  }): Promise<void> {
+    const languageCode = input.languageCode.trim().toLowerCase();
+    const supported = new Set(["vi","en","fr","es","de","it","pt","nl","zh","ja","ko","ru","th"]);
+    if (!supported.has(languageCode)) throw new Error("Ngôn ngữ được chọn chưa được hỗ trợ.");
+
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const updatedAt = new Date().toISOString();
+
+    await this.repo.updateConversation(conversation.id, {
+      language: languageCode,
+      metadata: {
+        ...metadata,
+        language_override: languageCode,
+        preferred_language: languageCode,
+        language_source: "manual_override",
+        language_needs_verify: false,
+        language_override_at: updatedAt,
+        language_override_by: input.actorLabel,
+      },
+    });
+
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: `Đã xác minh thủ công ngôn ngữ khách = ${customerLanguageName(languageCode)} cho hội thoại ${conversation.id.slice(0, 8)}; không gửi khách.`,
+      type: "approval",
+    });
+  }
+
   async translateOperatorReply(input: {
     conversationId: string;
     vietnameseContent: string;
@@ -1813,11 +1848,27 @@ export class AiReceptionistService {
       throw new Error("Chưa có tin nhắn khách để xác định ngôn ngữ đích.");
     }
 
+    const conversationMetadata = AiReceptionistRepository.toObject(conversation.metadata);
     const guestMetadata = AiReceptionistRepository.toObject(latestGuestMessage.metadata);
-    const targetLanguage = typeof guestMetadata.detected_language === "string" && guestMetadata.detected_language.trim()
-      ? guestMetadata.detected_language.trim().toLowerCase()
-      : detectGuestLanguage(latestGuestMessage.content).code;
-    if (!targetLanguage) throw new Error("Chưa xác định được ngôn ngữ của khách.");
+    const manualOverride = typeof conversationMetadata.language_override === "string"
+      ? conversationMetadata.language_override.trim().toLowerCase()
+      : "";
+    const sourceLanguage = typeof guestMetadata.source_language === "string"
+      ? guestMetadata.source_language.trim().toLowerCase()
+      : "";
+    const languageNeedsVerify = conversationMetadata.language_needs_verify === true
+      || guestMetadata.language_needs_verify === true;
+    const targetLanguage = manualOverride
+      || sourceLanguage
+      || (!languageNeedsVerify && typeof guestMetadata.detected_language === "string"
+        ? guestMetadata.detected_language.trim().toLowerCase()
+        : "");
+    if (!canUseCustomerLanguageForOutbound({
+      customerLanguage: targetLanguage,
+      languageNeedsVerify: languageNeedsVerify && !manualOverride,
+    })) {
+      throw new Error("Ngôn ngữ gốc của khách chưa được xác minh. Hãy chọn ngôn ngữ khách trước khi dịch/gửi.");
+    }
 
     const translated = await translateVietnameseToGuestLanguage(vietnameseContent, targetLanguage);
     await this.activityLog.record({
@@ -1850,6 +1901,15 @@ export class AiReceptionistService {
     const conversation = await this.repo.findConversationById(input.conversationId);
     if (!conversation) throw new Error("Không tìm thấy hội thoại.");
     const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const languageOverride = typeof metadata.language_override === "string"
+      ? metadata.language_override.trim().toLowerCase()
+      : "";
+    const customerLanguage = languageOverride
+      || (typeof metadata.preferred_language === "string" ? metadata.preferred_language.trim().toLowerCase() : conversation.language);
+    const languageNeedsVerify = metadata.language_needs_verify === true && !languageOverride;
+    if (!canUseCustomerLanguageForOutbound({ customerLanguage, languageNeedsVerify })) {
+      throw new Error("Ngôn ngữ gốc của khách chưa được xác minh. Hãy chọn ngôn ngữ khách trước khi gửi.");
+    }
     if (metadata.response_mode === "auto") {
       throw new Error("Hội thoại đang ở chế độ Tự động. Chuyển sang Manual trước khi người thật gửi.");
     }
@@ -1911,6 +1971,11 @@ export class AiReceptionistService {
     const translationTargetLanguage = input.translationTargetLanguage?.trim().toLowerCase() || "";
     if (sourceVietnamese && translationTargetLanguage && translationTargetLanguage !== "vi" && content === sourceVietnamese) {
       throw new Error("Bản gửi khách chưa được dịch khỏi tiếng Việt. Hãy bấm Dịch sang ngôn ngữ khách trước khi gửi.");
+    }
+    if (metadata.provider_translation_detected === true && customerLanguage !== "vi") {
+      if (!sourceVietnamese || translationTargetLanguage !== customerLanguage) {
+        throw new Error("Hội thoại có bản dịch tự động từ OTA. Hãy dùng chức năng Soạn tiếng Việt → Dịch đúng ngôn ngữ khách đã xác minh trước khi gửi.");
+      }
     }
 
     const detected = translationTargetLanguage || detectGuestLanguage(content).code;

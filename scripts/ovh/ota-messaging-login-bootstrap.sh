@@ -29,6 +29,10 @@ case "$PROVIDER" in
     ;;
 esac
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_SCRIPT="$SCRIPT_DIR/ota-messaging-browser-runtime.sh"
+RUNTIME_CONTAINER="tce-ota-${PROVIDER}-browser"
+
 log(){ printf '[OTA login bootstrap:%s] %s\n' "$PROVIDER" "$*"; }
 if [ "${EUID}" -ne 0 ]; then exec sudo -E bash "$0" "$@"; fi
 
@@ -41,6 +45,7 @@ status(){
 start(){
   mkdir -p "$STATE_ROOT" "$PROFILE_DIR"
   touch "$LOCK_FILE"
+  docker rm -f "$RUNTIME_CONTAINER" >/dev/null 2>&1 || true
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$PROFILE_DIR/SingletonLock" "$PROFILE_DIR/SingletonCookie" "$PROFILE_DIR/SingletonSocket" || true
   chown -R "${SELENIUM_UID:-1200}:${SELENIUM_GID:-1201}" "$PROFILE_DIR"
@@ -88,6 +93,9 @@ stop(){
   find "$PROFILE_DIR" -type f -exec chmod 600 {} +
   rm -f "$LOCK_FILE"
   log "Persistent profile returned to VPS runtime."
+  if [ -x "$RUNTIME_SCRIPT" ] || [ -f "$RUNTIME_SCRIPT" ]; then
+    bash "$RUNTIME_SCRIPT" "$PROVIDER" start
+  fi
 }
 
 case "$ACTION" in

@@ -1552,6 +1552,54 @@ export class AiReceptionistService {
     return true;
   }
 
+  async recordOtaEmailFallbackSignal(input: {
+    channel: string;
+    externalConversationId: string;
+    signalAt?: string | null;
+  }): Promise<{
+    recorded: boolean;
+    stale: boolean;
+    directSyncExpected: boolean;
+    syncLagSeconds: number | null;
+  }> {
+    const existing = await this.repo.findConversation(input.channel, input.externalConversationId);
+    if (!existing) {
+      return { recorded: false, stale: false, directSyncExpected: false, syncLagSeconds: null };
+    }
+
+    const metadata = AiReceptionistRepository.toObject(existing.metadata);
+    const directSyncExpected = input.channel === "agoda" || input.channel === "booking";
+    const signalAt = input.signalAt?.trim() || new Date().toISOString();
+    const signalMs = Date.parse(signalAt);
+    const directSyncRaw = typeof metadata.browser_dom_last_reconciled_at === "string"
+      ? metadata.browser_dom_last_reconciled_at
+      : typeof metadata.provider_history_synced_at === "string"
+        ? metadata.provider_history_synced_at
+        : null;
+    const directSyncMs = directSyncRaw ? Date.parse(directSyncRaw) : Number.NaN;
+    const syncLagSeconds = Number.isFinite(signalMs) && Number.isFinite(directSyncMs)
+      ? Math.max(0, Math.floor((signalMs - directSyncMs) / 1000))
+      : null;
+    const stale = directSyncExpected && (syncLagSeconds === null || syncLagSeconds > 15 * 60);
+
+    await this.repo.updateConversation(existing.id, {
+      metadata: {
+        ...metadata,
+        email_relay_role: "fallback_evidence_only",
+        ota_email_signal_at: signalAt,
+        ota_direct_sync_expected: directSyncExpected,
+        ota_sync_lag_seconds: syncLagSeconds,
+        ota_sync_stale_alert: stale,
+        ota_sync_stale_reason: stale
+          ? "EMAIL_NEW_MESSAGE_WITHOUT_FRESH_DIRECT_SYNC"
+          : null,
+        ota_sync_stale_checked_at: new Date().toISOString(),
+      },
+    });
+
+    return { recorded: true, stale, directSyncExpected, syncLagSeconds };
+  }
+
   async enrichReservationContext(input: {
     channel: string;
     externalConversationId: string;

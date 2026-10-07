@@ -21,24 +21,53 @@ function withEnv(values: Record<string, string | undefined>, fn: () => void | Pr
   });
 }
 
-test("Booking direct messaging is fail-closed without machine account", async () => {
+test("Booking direct messaging is fail-closed until Connectivity Partner entitlement is verified", async () => {
   await withEnv({
-    TCE_BOOKING_CONNECTIVITY_CLIENT_ID: undefined,
-    TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: undefined,
+    TCE_BOOKING_CONNECTIVITY_PARTNER_VERIFIED: undefined,
+    TCE_BOOKING_CONNECTIVITY_CLIENT_ID: "set-for-test",
+    TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: "set-for-test",
     TCE_OTA_DIRECT_REPLY_ENABLED: undefined,
   }, () => {
     const readiness = new BookingMessagingTransport().readiness();
     assert.equal(readiness.configured, false);
     assert.equal(readiness.historyReadCapable, false);
     assert.equal(readiness.replyCapable, false);
+    assert.equal(readiness.reason, "BOOKING_CONNECTIVITY_PARTNER_NOT_VERIFIED");
+  });
+});
+
+test("Booking requires machine account after partner entitlement is verified", async () => {
+  await withEnv({
+    TCE_BOOKING_CONNECTIVITY_PARTNER_VERIFIED: "true",
+    TCE_BOOKING_CONNECTIVITY_CLIENT_ID: undefined,
+    TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: undefined,
+    TCE_OTA_DIRECT_REPLY_ENABLED: undefined,
+  }, () => {
+    const readiness = new BookingMessagingTransport().readiness();
     assert.equal(readiness.reason, "MISSING_BOOKING_MACHINE_ACCOUNT");
+  });
+});
+
+test("Agoda direct messaging is fail-closed until Channel Manager certification is verified", async () => {
+  await withEnv({
+    TCE_AGODA_CHANNEL_MANAGER_CERTIFIED: undefined,
+    TCE_AGODA_SUPPLY_AUTHORIZATION: "set-for-test",
+    TCE_OTA_DIRECT_REPLY_ENABLED: undefined,
+  }, () => {
+    const readiness = new AgodaMessagingTransport().readiness();
+    assert.equal(readiness.configured, false);
+    assert.equal(readiness.historyReadCapable, false);
+    assert.equal(readiness.replyCapable, false);
+    assert.equal(readiness.reason, "AGODA_CHANNEL_MANAGER_NOT_CERTIFIED");
   });
 });
 
 test("Configured providers keep replies disabled until governance gate opens", async () => {
   await withEnv({
+    TCE_BOOKING_CONNECTIVITY_PARTNER_VERIFIED: "true",
     TCE_BOOKING_CONNECTIVITY_CLIENT_ID: "set-for-test",
     TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: "set-for-test",
+    TCE_AGODA_CHANNEL_MANAGER_CERTIFIED: "true",
     TCE_AGODA_SUPPLY_AUTHORIZATION: "set-for-test",
     TCE_OTA_DIRECT_REPLY_ENABLED: "false",
   }, () => {
@@ -113,6 +142,7 @@ test("Booking history maps sender_id through conversation participants", async (
 
 test("Booking sendReply cannot bypass the direct-reply governance gate", async () => {
   await withEnv({
+    TCE_BOOKING_CONNECTIVITY_PARTNER_VERIFIED: "true",
     TCE_BOOKING_CONNECTIVITY_CLIENT_ID: "client",
     TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: "secret",
     TCE_OTA_DIRECT_REPLY_ENABLED: "false",

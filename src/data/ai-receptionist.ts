@@ -91,6 +91,14 @@ export type ReceptionistConversation = {
   unreadCount: number;
   managerReadAt: string | null;
   upsellOffers: string[];
+  followUpPlan: {
+    kind: "pre_arrival_check" | "in_stay_check" | "post_stay_feedback";
+    suggestedDelayHours: number;
+    reason: string;
+    humanApprovalRequired: boolean;
+    autoSendAllowed: boolean;
+  } | null;
+  followUpMode: "shadow_recommendation" | null;
   status: ConversationStatus;
   mode: ReceptionistMode;
   responseMode: "manual" | "auto";

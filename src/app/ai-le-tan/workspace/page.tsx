@@ -40,6 +40,7 @@ function emptyDashboard(): ReceptionistDashboard {
       humanCorrectionRate: 0,
       pendingTrustReviewDrafts: 0,
       trustEligibleReviewedAiDrafts: 0,
+      trustEligibleEditedAiDrafts: 0,
       excludedNonRealReviewedAiDrafts: 0,
     },
     missingDataBacklog: [],

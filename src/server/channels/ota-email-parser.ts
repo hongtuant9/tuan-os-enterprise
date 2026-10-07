@@ -265,8 +265,22 @@ function providerAutoTranslated(body: string): boolean {
   return /(nội dung trên được tự động dịch|được dịch tự động|automatically translated|auto-translated|machine translated)/i.test(body);
 }
 
+function isReactionOnly(guestText: string | null): boolean {
+  if (!guestText) return false;
+  const text = normalize(guestText);
+  return /^(?:đã bày tỏ cảm xúc|đã phản ứng|reacted\b|reaction\b)/i.test(text);
+}
+
+function isNameOnlyExtraction(channel: OtaEmailChannel | null, subject: string, guestText: string | null): boolean {
+  if (channel !== "expedia" || !guestText) return false;
+  const extracted = normalize(guestText).replace(/[^A-ZÀ-Ỹ]/gi, "").toLowerCase();
+  const subjectGuest = normalize(expediaGuestName(subject) ?? "").replace(/[^A-ZÀ-Ỹ]/gi, "").toLowerCase();
+  if (!extracted || !subjectGuest || extracted !== subjectGuest) return false;
+  return /^[A-ZÀ-Ỹ'’ -]+(?:\/[A-ZÀ-Ỹ'’ -]+)?$/u.test(normalize(guestText));
+}
+
 function classifyGuestMessage(guestText: string | null): ParsedOtaEmail["eventType"] {
-  if (!guestText) return "other";
+  if (!guestText || isReactionOnly(guestText)) return "other";
   return /(request|requested|yêu cầu|có thể|could you|can i|can we|would it be possible|thắc mắc)/i.test(guestText)
     ? "guest_request"
     : "guest_message";
@@ -594,10 +608,12 @@ export function parseOtaEmail(input: {
   });
   const guestText = relayVerified ? extractGuestText(channel, body) : null;
   const autoTranslated = relayVerified && providerAutoTranslated(body);
+  const reactionOnly = isReactionOnly(guestText);
+  const nameOnlyExtraction = isNameOnlyExtraction(channel, subject, guestText);
   const eventType = classifyGuestMessage(guestText);
   const ref = parsedContext.reservationReference ?? reservationReference(channel, combined);
   const conversationRef = parsedContext.providerConversationReference ?? providerConversationReference(channel, combined);
-  const actionable = Boolean(channel && relayVerified && guestText);
+  const actionable = Boolean(channel && relayVerified && guestText && !reactionOnly && !nameOnlyExtraction);
   const carePhase = deriveCarePhase(parsedContext.context.checkInDate, parsedContext.context.checkOutDate);
 
   return {
@@ -620,6 +636,10 @@ export function parseOtaEmail(input: {
         ? "not_verified_guest_relay"
         : !guestText
           ? "guest_relay_text_not_extracted"
-          : "verified_guest_message",
+          : reactionOnly
+            ? "guest_reaction_no_reply"
+            : nameOnlyExtraction
+              ? "guest_name_only_extraction_filtered"
+              : "verified_guest_message",
   };
 }

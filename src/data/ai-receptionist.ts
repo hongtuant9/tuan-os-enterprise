@@ -191,6 +191,7 @@ export type ReceptionistDashboard = {
     humanCorrectionRate: number;
     pendingTrustReviewDrafts: number;
     trustEligibleReviewedAiDrafts: number;
+    trustEligibleEditedAiDrafts: number;
     excludedNonRealReviewedAiDrafts: number;
   };
   missingDataBacklog: string[];

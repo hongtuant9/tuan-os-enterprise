@@ -109,3 +109,23 @@ test("Booking history maps sender_id through conversation participants", async (
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("Booking sendReply cannot bypass the direct-reply governance gate", async () => {
+  await withEnv({
+    TCE_BOOKING_CONNECTIVITY_CLIENT_ID: "client",
+    TCE_BOOKING_CONNECTIVITY_CLIENT_SECRET: "secret",
+    TCE_OTA_DIRECT_REPLY_ENABLED: "false",
+  }, async () => {
+    await assert.rejects(
+      () => new BookingMessagingTransport().sendReply({
+        provider: "booking",
+        channel: "booking",
+        propertyExternalId: "999",
+        conversationId: "conversation-1",
+        content: "Approved reply",
+      }),
+      /Direct OTA reply is disabled by governance gate/,
+    );
+  });
+});

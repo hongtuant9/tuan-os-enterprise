@@ -31,6 +31,7 @@ import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation
 import { isCustomerTimelineMessage } from "@/server/ai-receptionist/conversation-message-visibility";
 import { canPublishConfirmedKnowledge } from "@/server/ai-receptionist/knowledge-authority";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
+import { createOtaDirectTransport, type OtaDirectProvider } from "@/server/channels/ota-direct-messaging";
 import { customerLanguageName, detectGuestLanguage, resolveGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
@@ -838,6 +839,141 @@ export class AiReceptionistService {
     });
 
     return { conversationId: conversation.id, messageId: message.id, duplicate: false };
+  }
+
+  async syncOtaConversationHistory(input: {
+    provider: OtaDirectProvider;
+    channel: "booking" | "agoda" | "airbnb" | "expedia";
+    propertyExternalId: string;
+    providerConversationId: string;
+    externalConversationId: string;
+    reservationReference?: string | null;
+    customerName?: string | null;
+    pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
+  }): Promise<{ imported: number; duplicates: number; complete: boolean }> {
+    const transport = createOtaDirectTransport(input.provider);
+    const readiness = transport.readiness();
+    if (!readiness.historyReadCapable) {
+      throw new Error(`OTA direct history unavailable: ${readiness.reason}`);
+    }
+
+    let pageId: string | null = null;
+    let imported = 0;
+    let duplicates = 0;
+    let pageCount = 0;
+    do {
+      pageCount += 1;
+      if (pageCount > 200) throw new Error("OTA history pagination exceeded safety limit.");
+      const page = await transport.fetchConversation({
+        propertyExternalId: input.propertyExternalId,
+        conversationId: input.providerConversationId,
+        pageId,
+      });
+      for (const message of page.messages) {
+        const result = await this.ingestOtaHistoryMessage({
+          channel: input.channel,
+          provider: input.provider,
+          propertyExternalId: input.propertyExternalId,
+          externalConversationId: input.externalConversationId,
+          providerConversationId: input.providerConversationId,
+          externalMessageId: `${input.provider}:${message.messageId}`,
+          participant: message.participant,
+          content: message.content,
+          createdAt: message.createdAt,
+          reservationReference: input.reservationReference ?? message.reservationReference,
+          customerName: input.customerName,
+          pageEntity: input.pageEntity,
+          providerAutoTranslated: message.providerAutoTranslated === true,
+        });
+        if (result.duplicate) duplicates += 1;
+        else imported += 1;
+      }
+      pageId = page.nextPageId;
+    } while (pageId);
+
+    const conversation = await this.repo.findConversation(input.channel, input.externalConversationId);
+    if (conversation) {
+      const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+      await this.repo.updateConversation(conversation.id, {
+        metadata: {
+          ...metadata,
+          history_completeness: "complete",
+          direct_history_complete_at: new Date().toISOString(),
+          direct_history_provider: input.provider,
+          direct_reply_transport: input.provider,
+          email_relay_role: "fallback_evidence_only",
+        },
+      });
+    }
+
+    return { imported, duplicates, complete: true };
+  }
+
+  async sendApprovedDirectOtaReply(input: {
+    conversationId: string;
+    sourceAiMessageId: string;
+  }): Promise<{
+    accepted: boolean;
+    providerMessageId: string | null;
+    deliveryState: "accepted_pending_confirmation" | "confirmed_visible" | "unknown";
+  }> {
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại OTA.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const provider = typeof metadata.direct_ota_provider === "string"
+      ? metadata.direct_ota_provider as OtaDirectProvider
+      : null;
+    const propertyExternalId = typeof metadata.provider_property_id === "string" ? metadata.provider_property_id : "";
+    const providerConversationId = typeof metadata.provider_conversation_id === "string" ? metadata.provider_conversation_id : "";
+    if (!provider || !propertyExternalId || !providerConversationId) {
+      throw new Error("Hội thoại chưa có direct OTA provider context.");
+    }
+
+    const source = await this.repo.findMessageById(input.sourceAiMessageId);
+    if (!source || source.conversation_id !== conversation.id || source.sender_type !== "ai") {
+      throw new Error("AI draft source không hợp lệ.");
+    }
+    const sourceMetadata = AiReceptionistRepository.toObject(source.metadata);
+    const reviewStatus = typeof sourceMetadata.review_status === "string" ? sourceMetadata.review_status : "";
+    if (reviewStatus !== "approved" && reviewStatus !== "edited") {
+      throw new Error("Direct OTA reply yêu cầu human-approved draft.");
+    }
+    const reviewedContent = reviewStatus === "edited" && typeof sourceMetadata.reviewed_content === "string"
+      ? sourceMetadata.reviewed_content.trim()
+      : source.content.trim();
+    if (!reviewedContent) throw new Error("Nội dung reply đã duyệt đang trống.");
+
+    const transport = createOtaDirectTransport(provider);
+    const readiness = transport.readiness();
+    if (!readiness.replyCapable) {
+      throw new Error(`Direct OTA reply unavailable: ${readiness.reason}`);
+    }
+
+    const result = await transport.sendReply({
+      provider,
+      channel: conversation.channel as "booking" | "agoda" | "airbnb" | "expedia",
+      propertyExternalId,
+      conversationId: providerConversationId,
+      content: reviewedContent,
+    });
+
+    await this.repo.updateMessage(source.id, {
+      metadata: {
+        ...sourceMetadata,
+        direct_ota_send_attempted_at: new Date().toISOString(),
+        direct_ota_provider: provider,
+        direct_ota_provider_message_id: result.providerMessageId,
+        direct_ota_delivery_state: result.deliveryState,
+        direct_ota_accepted: result.accepted,
+        direct_ota_guest_has_account: result.guestHasAccount,
+      },
+    });
+
+    return {
+      accepted: result.accepted,
+      providerMessageId: result.providerMessageId,
+      deliveryState: result.deliveryState,
+    };
   }
 
   async ingestGuestMessage(input: PilotMessageInput): Promise<{

@@ -32,7 +32,7 @@ jobs:
           HOST="app.tamcocexperience.com"
           OVH_IP="57.128.186.45"
           HTTP_URL="http://${HOST}/health"
-          rm -f /tmp/health.json /tmp/direct_http_code /tmp/public_https_code /tmp/dns_ip
+          rm -f /tmp/health.json /tmp/login.html /tmp/direct_http_code /tmp/public_https_code /tmp/dns_ip
 
           for attempt in 1 2 3 4 5 6; do
             code="$(curl -sS --connect-timeout 8 --max-time 20               --resolve "${HOST}:80:${OVH_IP}"               -o /tmp/health.json -w '%{http_code}' "$HTTP_URL" || true)"
@@ -49,10 +49,19 @@ jobs:
             sleep 12
           done
 
+          login_code="$(curl -sS --connect-timeout 8 --max-time 20 \
+            --resolve "${HOST}:80:${OVH_IP}" \
+            -o /tmp/login.html -w '%{http_code}' "http://${HOST}/login" || true)"
+          if [ "$login_code" != "200" ]; then
+            echo "OVH direct login probe failed: HTTP ${login_code:-000}"
+            exit 1
+          fi
+
       - name: Validate autonomous-company invariants
         shell: python
         run: |
           import json
+          import re
           from pathlib import Path
 
           data = json.loads(Path("/tmp/health.json").read_text())
@@ -115,8 +124,11 @@ jobs:
           expect(signals.get("executionGovernanceVersion") == "2026-10-07.v8",
                  f"executionGovernanceVersion={signals.get('executionGovernanceVersion')!r}")
           expected_deployment = "${{ github.sha }}"[:12]
-          expect(data.get("deploymentId") == expected_deployment,
-                 f"deploymentId={data.get('deploymentId')!r}, expected={expected_deployment!r}")
+          login_html = Path("/tmp/login.html").read_text(errors="ignore")
+          match = re.search(r"dpl=([0-9a-f]{12})", login_html, re.I)
+          deployed_id = match.group(1).lower() if match else None
+          expect(deployed_id == expected_deployment.lower(),
+                 f"deploymentId={deployed_id!r}, expected={expected_deployment!r}")
           expect(signals.get("trelloExecutionMirror") in ("ACTIVE", "HOLD_NO_RUNTIME_CREDENTIALS"),
                  f"trelloExecutionMirror={signals.get('trelloExecutionMirror')!r}")
           expect(signals.get("kiotVietWriteEnabled") is False,

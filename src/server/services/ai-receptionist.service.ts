@@ -7,6 +7,7 @@ import type {
   ManagerDecisionInput,
   ManagerReview,
   PilotMessageInput,
+  OtaHistoryMessageInput,
   ReceptionistConversation,
   ReceptionistDashboard,
   ReceptionistMessage,
@@ -745,6 +746,98 @@ export class AiReceptionistService {
       },
       missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),
     };
+  }
+
+  async ingestOtaHistoryMessage(input: OtaHistoryMessageInput): Promise<{
+    conversationId: string;
+    messageId: string;
+    duplicate: boolean;
+  }> {
+    const externalMessageId = input.externalMessageId.trim();
+    if (!externalMessageId) throw new Error("OTA history message requires externalMessageId.");
+
+    const duplicate = await this.repo.findMessageByExternalId(externalMessageId);
+    if (duplicate) {
+      return { conversationId: duplicate.conversation_id, messageId: duplicate.id, duplicate: true };
+    }
+
+    const existing = await this.repo.findConversation(input.channel, input.externalConversationId);
+    const existingMetadata = existing
+      ? AiReceptionistRepository.toObject(existing.metadata)
+      : ({} as Record<string, Json>);
+    const hospitalityBusinessUnitId = await this.repo.findHospitalityBusinessUnitId();
+    const pageEntity = input.pageEntity
+      ?? (typeof existingMetadata.page_entity === "string" ? existingMetadata.page_entity : "unknown");
+    const providerMessageAt = Date.parse(input.createdAt);
+    const currentLastAt = existing ? Date.parse(existing.last_message_at) : Number.NEGATIVE_INFINITY;
+    const lastMessageAt = Number.isFinite(providerMessageAt) && providerMessageAt > currentLastAt
+      ? input.createdAt
+      : existing?.last_message_at ?? input.createdAt;
+
+    const metadata: Record<string, Json> = {
+      ...existingMetadata,
+      page_entity: pageEntity,
+      reservation_reference: input.reservationReference ?? existingMetadata.reservation_reference ?? null,
+      history_completeness: "partial_email_only",
+      direct_ota_sync: true,
+      direct_ota_provider: input.provider,
+      provider_property_id: input.propertyExternalId,
+      provider_conversation_id: input.providerConversationId,
+      direct_history_last_synced_at: new Date().toISOString(),
+      direct_reply_transport: input.provider,
+      email_relay_role: "fallback_evidence_only",
+    };
+
+    const conversation = await this.repo.upsertConversation({
+      id: existing?.id,
+      business_unit_id: existing?.business_unit_id ?? hospitalityBusinessUnitId,
+      property_id: existing?.property_id ?? null,
+      customer_id: existing?.customer_id ?? null,
+      channel: input.channel,
+      external_conversation_id: input.externalConversationId,
+      customer_name: input.customerName ?? existing?.customer_name ?? null,
+      customer_contact: existing?.customer_contact ?? null,
+      language: existing?.language ?? "und",
+      intent: existing?.intent ?? "guest_message",
+      status: existing?.status ?? "active",
+      mode: existing?.mode ?? getReceptionistMode(),
+      last_message_at: lastMessageAt,
+      metadata,
+    });
+
+    const direction = input.participant === "guest" ? "inbound" : input.participant === "property" ? "outbound" : "internal";
+    const senderType = input.participant === "guest" ? "guest" : input.participant === "property" ? "manager" : "system";
+    const status = input.participant === "property" ? "sent" : "received";
+
+    const message = await this.repo.createMessage({
+      conversation_id: conversation.id,
+      external_message_id: externalMessageId,
+      direction,
+      sender_type: senderType,
+      content: input.content.trim(),
+      status,
+      evidence: {
+        source: input.provider,
+        direct_ota_history: true,
+      },
+      metadata: {
+        historical_import: true,
+        trust_evidence_eligible: false,
+        direct_ota_sync: true,
+        provider: input.provider,
+        provider_property_id: input.propertyExternalId,
+        provider_conversation_id: input.providerConversationId,
+        provider_message_id: externalMessageId,
+        provider_auto_translated: input.providerAutoTranslated === true,
+        reservation_reference: input.reservationReference ?? null,
+        page_entity: pageEntity,
+        actor_label: input.participant === "guest" ? "Khách" : input.participant === "property" ? "Chỗ nghỉ" : "OTA",
+        authorship: input.participant === "guest" ? "guest" : input.participant === "property" ? "human" : "system",
+      },
+      created_at: input.createdAt,
+    });
+
+    return { conversationId: conversation.id, messageId: message.id, duplicate: false };
   }
 
   async ingestGuestMessage(input: PilotMessageInput): Promise<{

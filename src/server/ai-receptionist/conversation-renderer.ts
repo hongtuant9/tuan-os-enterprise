@@ -8,7 +8,7 @@ import type { ReceptionistMessage } from "@/data/ai-receptionist";
 import type { PilotDecision } from "./decision-engine";
 import type { KnowledgeResolution } from "./knowledge-resolver";
 import type { GuestLanguage } from "./language";
-import { languageInstruction } from "./language";
+import { customerLanguageName, languageInstruction } from "./language";
 import type { PagePersona } from "./page-persona";
 import { validateCustomerReply } from "./conversation-qa";
 
@@ -298,4 +298,58 @@ export async function translateToVietnamese(text: string, languageCode?: string)
   } catch {
     return input;
   }
+}
+
+
+
+export async function translateVietnameseToGuestLanguage(text: string, languageCode: string): Promise<string> {
+  const input = text.trim();
+  const targetCode = languageCode.trim().toLowerCase();
+  if (!input) throw new Error("Nội dung tiếng Việt không được để trống.");
+  if (!targetCode) throw new Error("Chưa xác định được ngôn ngữ của khách.");
+  if (targetCode === "vi") return input;
+
+  const apiKey = receptionistApiKey();
+  if (!apiKey) throw new Error("Dịch vụ dịch tự động chưa được cấu hình.");
+
+  const model = selectedModel();
+  const targetName = customerLanguageName(targetCode);
+  const instructions = [
+    `Translate the supplied Vietnamese customer-service reply faithfully into ${targetName} (${targetCode}).`,
+    "Preserve names, dates, times, numbers, prices, booking references, URLs and proper nouns exactly.",
+    "Do not add, remove, infer, soften, strengthen, answer, summarize or reinterpret any business fact.",
+    "Keep the tone polite, natural and concise for hospitality customer service.",
+    "Return only the translated customer-facing text, with no quotes, labels or explanation.",
+  ].join("\n");
+
+  await assertReceptionistAiBudget(
+    estimatePreflightCostUsd(model, Math.ceil((instructions.length + input.length) / 4), 500)
+  );
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, instructions, input, max_output_tokens: 500, store: false }),
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Không thể dịch nội dung sang ${targetName}.`);
+  }
+
+  const payload = await response.json();
+  const translated = extractText(payload).trim();
+  if (!translated) throw new Error("Dịch vụ dịch trả về nội dung trống.");
+
+  const usage = payload && typeof payload === "object"
+    ? (payload as Record<string, unknown>).usage
+    : undefined;
+  if (usage && typeof usage === "object") {
+    await recordTceAiUsage("receptionist", model, usage as Record<string, number>, "operator-reply-translation");
+  }
+
+  return translated;
 }

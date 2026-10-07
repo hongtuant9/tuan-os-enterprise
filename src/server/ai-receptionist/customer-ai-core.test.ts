@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { inferCustomerCarePhase } from "./customer-care.ts";
 import { isInternalOpsConversation } from "./conversation-scope.ts";
+import { customerLanguageName, detectGuestLanguage } from "./language.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
 import {
@@ -189,4 +190,12 @@ test("intent metrics count only trust-eligible reviewed drafts", () => {
   assert.equal(metrics[0].reviewed, 2);
   assert.equal(metrics[0].approvedUnchanged, 1);
   assert.equal(metrics[0].edited, 1);
+});
+
+
+test("manual Vietnamese reply target uses the guest language vocabulary", () => {
+  assert.equal(detectGuestLanguage("Good morning, do you have laundry service?").code, "en");
+  assert.equal(customerLanguageName("en"), "English");
+  assert.equal(customerLanguageName("ko"), "Korean");
+  assert.equal(customerLanguageName("vi"), "Vietnamese");
 });

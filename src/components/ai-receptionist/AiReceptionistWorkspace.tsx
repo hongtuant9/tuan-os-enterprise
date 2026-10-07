@@ -15,6 +15,7 @@ import {
   prepareBookingDraftAction,
   requestBookingExecutionApprovalAction,
   submitPilotMessage,
+  translateManualReplyFromVietnameseAction,
 } from "@/app/actions/ai-receptionist";
 import type {
   KnowledgeCandidate,
@@ -162,6 +163,38 @@ function aiDraftText(item?: ReceptionistConversation) {
   return draft?.reviewedContent ?? draft?.content ?? "";
 }
 
+function aiDraftVietnameseText(item?: ReceptionistConversation) {
+  const draft = latestAiDraftForConversation(item);
+  if (!draft) return "";
+  const translated = draft.translatedVi?.trim() ?? "";
+  if (
+    translated
+    && translated !== "Bản dịch tiếng Việt chưa được tạo."
+    && translated !== "Chưa có bản dịch."
+  ) return translated;
+  return draft.detectedLanguage === "vi" ? (draft.reviewedContent ?? draft.content) : "";
+}
+
+const LANGUAGE_NAME_VI: Record<string, string> = {
+  vi: "Tiếng Việt",
+  en: "Tiếng Anh",
+  fr: "Tiếng Pháp",
+  es: "Tiếng Tây Ban Nha",
+  de: "Tiếng Đức",
+  it: "Tiếng Ý",
+  pt: "Tiếng Bồ Đào Nha",
+  nl: "Tiếng Hà Lan",
+  zh: "Tiếng Trung",
+  ja: "Tiếng Nhật",
+  ko: "Tiếng Hàn",
+  ru: "Tiếng Nga",
+  th: "Tiếng Thái",
+};
+
+function languageNameVi(code: string) {
+  return LANGUAGE_NAME_VI[code.toLowerCase()] ?? code.toUpperCase();
+}
+
 function currentJourneyStep(item: ReceptionistConversation) {
   if (item.journeyStage === "post_stay") return 5;
   if (item.journeyStage === "in_house" || item.journeyStage === "departure_today") return 4;
@@ -306,7 +339,12 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "pending_review">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
+  const firstVietnameseDraft = aiDraftVietnameseText(firstConversation);
   const [replyDraft, setReplyDraft] = useState(aiDraftText(firstConversation));
+  const [replyDraftVi, setReplyDraftVi] = useState(firstVietnameseDraft);
+  const [translatedSourceVi, setTranslatedSourceVi] = useState(firstVietnameseDraft);
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState(firstConversation?.language ?? "en");
+  const [operatorTranslationPrepared, setOperatorTranslationPrepared] = useState(false);
   const [responseMode, setResponseMode] = useState<"manual" | "auto">(firstConversation?.responseMode ?? "manual");
   const [responseModePending, startResponseModeTransition] = useTransition();
   const [sendPending, startSendTransition] = useTransition();
@@ -316,6 +354,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackPending, startFeedbackTransition] = useTransition();
   const [translationPending, startTranslationTransition] = useTransition();
+  const [composerTranslationPending, startComposerTranslationTransition] = useTransition();
   const [readPending, startReadTransition] = useTransition();
 
   const scopedItems = useMemo(
@@ -352,6 +391,12 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
       : "";
   const replyMatchesReviewedDraft = reviewedDraftReady && Boolean(reviewedReplyContent) && replyDraft.trim() === reviewedReplyContent;
   const manualReplyAuthorized = Boolean(selected?.humanTakeover || replyMatchesReviewedDraft);
+  const composerTranslationStale = Boolean(
+    selected
+    && selected.language !== "vi"
+    && replyDraftVi.trim()
+    && translatedSourceVi !== replyDraftVi.trim()
+  );
 
   function changeScope(next: InboxScope) {
     setInboxScope(next);
@@ -360,8 +405,13 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    const viDraft = aiDraftVietnameseText(first);
     setResponseMode(first?.responseMode ?? "manual");
     setReplyDraft(aiDraftText(first));
+    setReplyDraftVi(viDraft);
+    setTranslatedSourceVi(viDraft);
+    setTranslationTargetLanguage(first?.language ?? "en");
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
   }
 
@@ -373,8 +423,13 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     const first = nextItems[0];
     setSelectedId(first?.id ?? "");
     setSelectedMessageId(first?.messages[first.messages.length - 1]?.id ?? "");
+    const viDraft = aiDraftVietnameseText(first);
     setResponseMode(first?.responseMode ?? "manual");
     setReplyDraft(aiDraftText(first));
+    setReplyDraftVi(viDraft);
+    setTranslatedSourceVi(viDraft);
+    setTranslationTargetLanguage(first?.language ?? "en");
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
   }
 
@@ -382,8 +437,13 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     setSelectedId(item.id);
     const last = item.messages[item.messages.length - 1];
     setSelectedMessageId(last?.id ?? "");
+    const viDraft = aiDraftVietnameseText(item);
     setResponseMode(item.responseMode);
     setReplyDraft(aiDraftText(item));
+    setReplyDraftVi(viDraft);
+    setTranslatedSourceVi(viDraft);
+    setTranslationTargetLanguage(item.language);
+    setOperatorTranslationPrepared(false);
     setReviewNote("");
 
     if (!canManage || !item.unread || readLocally.has(item.id)) return;
@@ -463,12 +523,44 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     });
   }
 
+  function translateVietnameseReply() {
+    if (!selected || !replyDraftVi.trim() || composerTranslationPending) return;
+    setFeedbackStatus("");
+    startComposerTranslationTransition(async () => {
+      const source = replyDraftVi.trim();
+      const result = await translateManualReplyFromVietnameseAction({
+        conversationId: selected.id,
+        vietnameseContent: source,
+      });
+      if (!result.ok || !result.data) {
+        setFeedbackStatus(result.ok ? "Không nhận được bản dịch." : result.error);
+        return;
+      }
+      setReplyDraft(result.data.translated);
+      setTranslatedSourceVi(source);
+      setTranslationTargetLanguage(result.data.targetLanguage);
+      setOperatorTranslationPrepared(true);
+      setFeedbackStatus(
+        result.data.targetLanguage === "vi"
+          ? "Khách đang dùng tiếng Việt. Nội dung tiếng Việt đã sẵn sàng để kiểm tra."
+          : `Đã dịch sang ${languageNameVi(result.data.targetLanguage)}. Hãy kiểm tra bản gửi khách trước khi duyệt/gửi.`
+      );
+    });
+  }
+
   function sendManualReply() {
     if (!selected || responseMode !== "manual" || !manualReplyAuthorized || !replyDraft.trim() || sendPending) return;
     setFeedbackStatus("");
     startSendTransition(async () => {
       const sourceAiMessageId = reviewedDraftReady ? latestAiDraft?.id ?? null : null;
-      const result = await sendManualConversationReplyAction(selected.id, replyDraft.trim(), crypto.randomUUID(), sourceAiMessageId);
+      const result = await sendManualConversationReplyAction(
+        selected.id,
+        replyDraft.trim(),
+        crypto.randomUUID(),
+        sourceAiMessageId,
+        operatorTranslationPrepared && replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? replyDraftVi.trim() : null,
+        operatorTranslationPrepared && replyDraftVi.trim() && translatedSourceVi === replyDraftVi.trim() ? translationTargetLanguage : null,
+      );
       if (!result.ok) {
         setFeedbackStatus(result.error);
         return;
@@ -965,30 +1057,94 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
             </div>
           ) : null}
 
-          <div className="flex items-end gap-2">
-            <textarea
-              value={replyDraft}
-              onChange={(event) => setReplyDraft(event.target.value)}
-              disabled={!canManage}
-              placeholder="AI sẽ tạo nội dung gợi ý tại đây. Ở Thủ công, Tuấn/lễ tân có thể sửa trước khi gửi."
-              className="min-h-24 flex-1 resize-y rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
-            />
-            <button
-              type="button"
-              onClick={sendManualReply}
-              disabled={
-                !canManage
-                || responseMode !== "manual"
-                || !selected.manualSendReady
-                || !manualReplyAuthorized
-                || !replyDraft.trim()
-                || sendPending
-              }
-              title={responseMode !== "manual" ? "Tự động vẫn đang khóa" : selected.manualSendReason}
-              className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {sendPending ? "Đang gửi..." : "Gửi"}
-            </button>
+          <div className="grid gap-3">
+            <div className="rounded-xl border border-[var(--accent)]/25 bg-[var(--accent)]/5 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-[var(--ink-primary)]">1. Soạn bằng tiếng Việt</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[var(--ink-muted)]">Anh/lễ tân viết nội dung muốn nói với khách bằng tiếng Việt. Hệ thống sẽ dịch theo ngôn ngữ tin nhắn khách mới nhất.</p>
+                </div>
+                <Pill label={`Khách: ${languageNameVi(selected.language)}`} tone="accent" />
+              </div>
+              <textarea
+                value={replyDraftVi}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setReplyDraftVi(value);
+                  if (selected.language === "vi") {
+                    setReplyDraft(value);
+                    setTranslatedSourceVi(value.trim());
+                    setTranslationTargetLanguage("vi");
+                    setOperatorTranslationPrepared(true);
+                  } else {
+                    setTranslatedSourceVi("");
+                    setOperatorTranslationPrepared(false);
+                  }
+                }}
+                disabled={!canManage}
+                placeholder="Ví dụ: Chào anh/chị, bên em có dịch vụ giặt là. Em sẽ kiểm tra thời gian hoàn thành và báo lại ngay."
+                className="mt-3 min-h-24 w-full resize-y rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={translateVietnameseReply}
+                  disabled={!canManage || !replyDraftVi.trim() || composerTranslationPending}
+                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  {composerTranslationPending
+                    ? "Đang dịch..."
+                    : selected.language === "vi"
+                      ? "Dùng bản tiếng Việt"
+                      : `Dịch sang ${languageNameVi(selected.language)}`}
+                </button>
+                {composerTranslationStale ? <Pill label="Đã sửa tiếng Việt · CẦN DỊCH LẠI" tone="warn" /> : null}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-[var(--ink-primary)]">2. Bản sẽ gửi cho khách</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[var(--ink-muted)]">Kiểm tra và có thể sửa trực tiếp bản dịch trước khi duyệt/gửi.</p>
+                </div>
+                <Pill label={languageNameVi(translationTargetLanguage || selected.language)} tone="good" />
+              </div>
+              <textarea
+                value={replyDraft}
+                onChange={(event) => setReplyDraft(event.target.value)}
+                disabled={!canManage}
+                placeholder="Bản dịch sang ngôn ngữ của khách sẽ xuất hiện tại đây."
+                className="mt-3 min-h-24 w-full resize-y rounded-xl border border-[var(--border-hairline)] bg-[var(--page)] px-3 py-2 text-sm leading-6 text-[var(--ink-primary)] outline-none focus:border-[var(--accent)]/60 disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={sendManualReply}
+                disabled={
+                  !canManage
+                  || responseMode !== "manual"
+                  || !selected.manualSendReady
+                  || !manualReplyAuthorized
+                  || !replyDraft.trim()
+                  || composerTranslationStale
+                  || composerTranslationPending
+                  || sendPending
+                }
+                title={
+                  composerTranslationStale
+                    ? "Nội dung tiếng Việt đã thay đổi. Hãy dịch lại trước khi gửi."
+                    : responseMode !== "manual"
+                      ? "Tự động vẫn đang khóa"
+                      : selected.manualSendReason
+                }
+                className="h-11 shrink-0 rounded-xl bg-[var(--accent)] px-5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {sendPending ? "Đang gửi..." : "Gửi bản đã kiểm tra"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">

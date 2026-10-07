@@ -150,11 +150,37 @@ export async function reviewAiDraftAction(input: {
   }
 }
 
+export async function translateManualReplyFromVietnameseAction(input: {
+  conversationId: string;
+  vietnameseContent: string;
+}): Promise<ActionResult<{ translated: string; targetLanguage: string; targetLanguageName: string }>> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để dịch nội dung trả lời." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được dùng chức năng soạn tiếng Việt và dịch cho khách." };
+  }
+  if (!input.vietnameseContent.trim()) return { ok: false, error: "Nội dung tiếng Việt không được để trống." };
+
+  try {
+    const data = await getAdminContainer().aiReceptionist.translateOperatorReply({
+      conversationId: input.conversationId,
+      vietnameseContent: input.vietnameseContent.trim(),
+      actorLabel: session.email ?? "Lễ tân",
+    });
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể dịch nội dung trả lời." };
+  }
+}
+
 export async function sendManualConversationReplyAction(
   conversationId: string,
   content: string,
   requestId: string,
   sourceAiMessageId?: string | null,
+  sourceVietnamese?: string | null,
+  translationTargetLanguage?: string | null,
 ): Promise<ActionResult<{ messageId: string }>> {
   const db = await createRequestClient();
   const session = await getCurrentSession(db);
@@ -170,6 +196,8 @@ export async function sendManualConversationReplyAction(
       requestId: requestId.trim(),
       actorLabel: session.email ?? "Lễ tân",
       sourceAiMessageId: sourceAiMessageId ?? null,
+      sourceVietnamese: sourceVietnamese?.trim() || null,
+      translationTargetLanguage: translationTargetLanguage?.trim() || null,
     });
     revalidatePath("/ai-le-tan");
     revalidatePath("/ai-le-tan/workspace");

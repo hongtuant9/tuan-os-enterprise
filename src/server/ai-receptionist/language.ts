@@ -57,3 +57,25 @@ export function languageInstruction(language: GuestLanguage): string {
   }
   return `Reply in ${language.name} (${language.code}), matching the guest's language.`;
 }
+
+
+const CUSTOMER_LANGUAGE_NAME: Record<string, string> = {
+  vi: "Vietnamese",
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  nl: "Dutch",
+  zh: "Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  ru: "Russian",
+  th: "Thai",
+};
+
+export function customerLanguageName(code: string): string {
+  const normalized = code.trim().toLowerCase();
+  return CUSTOMER_LANGUAGE_NAME[normalized] ?? normalized.toUpperCase();
+}

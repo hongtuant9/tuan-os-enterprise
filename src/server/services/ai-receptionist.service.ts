@@ -28,10 +28,10 @@ import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "@/server/ai-receptionist/intent-review-metrics";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
-import { detectGuestLanguage } from "@/server/ai-receptionist/language";
+import { customerLanguageName, detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
-import { renderSalesConversation, translateToVietnamese } from "@/server/ai-receptionist/conversation-renderer";
+import { renderSalesConversation, translateToVietnamese, translateVietnameseToGuestLanguage } from "@/server/ai-receptionist/conversation-renderer";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,
@@ -1679,12 +1679,54 @@ export class AiReceptionistService {
     return { reviewStatus: input.decision, reviewedContent };
   }
 
+  async translateOperatorReply(input: {
+    conversationId: string;
+    vietnameseContent: string;
+    actorLabel: string;
+  }): Promise<{ translated: string; targetLanguage: string; targetLanguageName: string }> {
+    const vietnameseContent = input.vietnameseContent.trim();
+    if (!vietnameseContent) throw new Error("Nội dung tiếng Việt không được để trống.");
+
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+
+    const messages = await this.repo.findMessages([conversation.id]);
+    const latestGuestMessage = [...messages]
+      .reverse()
+      .find((message) => message.sender_type === "guest" && message.direction === "inbound");
+    if (!latestGuestMessage) {
+      throw new Error("Chưa có tin nhắn khách để xác định ngôn ngữ đích.");
+    }
+
+    const guestMetadata = AiReceptionistRepository.toObject(latestGuestMessage.metadata);
+    const targetLanguage = typeof guestMetadata.detected_language === "string" && guestMetadata.detected_language.trim()
+      ? guestMetadata.detected_language.trim().toLowerCase()
+      : detectGuestLanguage(latestGuestMessage.content).code;
+    if (!targetLanguage) throw new Error("Chưa xác định được ngôn ngữ của khách.");
+
+    const translated = await translateVietnameseToGuestLanguage(vietnameseContent, targetLanguage);
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: `Soạn tiếng Việt → dịch nháp sang ${customerLanguageName(targetLanguage)} cho hội thoại ${conversation.id.slice(0, 8)}; chưa gửi khách.`,
+      type: "info",
+    });
+
+    return {
+      translated,
+      targetLanguage,
+      targetLanguageName: customerLanguageName(targetLanguage),
+    };
+  }
+
   async sendManualConversationReply(input: {
     conversationId: string;
     content: string;
     actorLabel: string;
     requestId: string;
     sourceAiMessageId?: string | null;
+    sourceVietnamese?: string | null;
+    translationTargetLanguage?: string | null;
   }): Promise<{ messageId: string; externalMessageId: string }> {
     const content = input.content.trim();
     const requestId = input.requestId.trim();
@@ -1750,7 +1792,13 @@ export class AiReceptionistService {
         : "Yêu cầu này đang được xử lý hoặc đã được ghi nhận; hệ thống đã chặn gửi trùng.");
     }
 
-    const detected = detectGuestLanguage(content).code;
+    const sourceVietnamese = input.sourceVietnamese?.trim() || "";
+    const translationTargetLanguage = input.translationTargetLanguage?.trim().toLowerCase() || "";
+    if (sourceVietnamese && translationTargetLanguage && translationTargetLanguage !== "vi" && content === sourceVietnamese) {
+      throw new Error("Bản gửi khách chưa được dịch khỏi tiếng Việt. Hãy bấm Dịch sang ngôn ngữ khách trước khi gửi.");
+    }
+
+    const detected = translationTargetLanguage || detectGuestLanguage(content).code;
     const pendingMessage = await this.repo.createMessage({
       conversation_id: conversation.id,
       external_message_id: idempotencyExternalId,
@@ -1777,6 +1825,9 @@ export class AiReceptionistService {
         delivery_status: "sending",
         response_mode: "manual",
         send_request_id: requestId,
+        operator_source_vi: sourceVietnamese || null,
+        translated_from_operator_vi: Boolean(sourceVietnamese && translationTargetLanguage),
+        translation_target_language: translationTargetLanguage || null,
       },
     });
 

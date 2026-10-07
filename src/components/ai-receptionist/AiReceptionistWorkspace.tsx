@@ -1732,6 +1732,57 @@ export default function AiReceptionistWorkspace({ dashboard, canManage, channels
         <Metric label="Booking AI đã xác minh" value={dashboard.metrics.verifiedAiBookings} hint="Booking write vẫn theo gate riêng" />
       </div>
 
+      <section className="mb-6 rounded-xl border border-[var(--border-hairline)] bg-[var(--surface)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--ink-primary)]">Độ tin cậy theo loại yêu cầu</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">Chỉ dùng để quan sát giai đoạn Shadow. Không loại yêu cầu nào được tự mở trả lời tự động từ bảng này; Owner vẫn phải duyệt quyết định mở từng intent.</p>
+          </div>
+          <Pill label="Tự động: Đang khóa" tone="warn" />
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead className="text-[var(--ink-muted)]">
+              <tr>
+                <th className="px-3 py-2 font-medium">Loại yêu cầu</th>
+                <th className="px-3 py-2 font-medium">Mẫu đã duyệt</th>
+                <th className="px-3 py-2 font-medium">Duyệt nguyên văn</th>
+                <th className="px-3 py-2 font-medium">Bị sửa</th>
+                <th className="px-3 py-2 font-medium">Từ chối / tiếp quản</th>
+                <th className="px-3 py-2 font-medium">QA lỗi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboard.intentReviewMetrics.length ? dashboard.intentReviewMetrics.map((item) => {
+                const label = item.intent === "guest_message"
+                  ? "Tin nhắn khách"
+                  : item.intent === "stay"
+                    ? "Lưu trú / đặt phòng"
+                    : item.intent === "explore"
+                      ? "Khám phá địa phương"
+                      : item.intent === "experience"
+                        ? "Trải nghiệm"
+                        : item.intent === "general"
+                          ? "Chung"
+                          : item.intent.replaceAll("_", " ");
+                return (
+                  <tr key={item.intent} className="border-t border-[var(--border-hairline)]">
+                    <td className="px-3 py-2 font-medium text-[var(--ink-primary)]">{label}<span className="ml-2 text-[10px] text-[var(--ink-muted)]">({item.intent})</span></td>
+                    <td className="px-3 py-2 text-[var(--ink-secondary)]">{item.reviewed}</td>
+                    <td className="px-3 py-2 text-[var(--ink-secondary)]">{(item.approvedUnchangedRate * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-[var(--ink-secondary)]">{(item.humanCorrectionRate * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-[var(--ink-secondary)]">{(item.rejectedOrTakeoverRate * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-[var(--ink-secondary)]">{item.qaFailures}</td>
+                  </tr>
+                );
+              }) : (
+                <tr><td colSpan={6} className="px-3 py-4 text-center text-[var(--ink-muted)]">Chưa có đủ bản nháp AI đã được người thật duyệt để tính theo intent.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <div className="mb-5 overflow-x-auto border-b border-[var(--border-hairline)]">
         <div className="flex min-w-max gap-1">
           {TABS.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} className={`border-b-2 px-4 py-3 text-sm font-medium ${tab === id ? "border-[var(--accent)] text-[var(--ink-primary)]" : "border-transparent text-[var(--ink-muted)]"}`}>{label}{id === "xac-nhan" && pendingReviews > 0 ? <span className="ml-2 rounded-full bg-[var(--status-bad)] px-1.5 py-0.5 text-[10px] text-white">{pendingReviews}</span> : null}</button>)}

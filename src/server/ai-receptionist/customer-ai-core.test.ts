@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { inferCustomerCarePhase } from "./customer-care.ts";
 import { isInternalOpsConversation } from "./conversation-scope.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
+import { buildIntentReviewMetrics } from "./intent-review-metrics.ts";
 import {
   buildKiotVietOrderPayload,
   canDraftConfirmation,
@@ -129,4 +130,23 @@ test("source marker alone is enough to exclude internal operations", () => {
     externalConversationId: "legacy-internal-123",
     metadata: { source: "MORNING_BRIEF_DEPARTMENT" },
   }), true);
+});
+
+
+test("intent review metrics stay observational and never auto-enable", () => {
+  const [metric] = buildIntentReviewMetrics([
+    { intent: "stay", reviewStatus: "approved", qaPass: true },
+    { intent: "stay", reviewStatus: "edited", qaPass: true },
+    { intent: "stay", reviewStatus: "rejected", qaPass: false },
+    { intent: "stay", reviewStatus: "pending", qaPass: true },
+  ]);
+  assert.equal(metric.reviewed, 3);
+  assert.equal(metric.approvedUnchanged, 1);
+  assert.equal(metric.edited, 1);
+  assert.equal(metric.rejected, 1);
+  assert.equal(metric.qaFailures, 1);
+  assert.equal(metric.approvedUnchangedRate, 1 / 3);
+  assert.equal(metric.humanCorrectionRate, 1 / 3);
+  assert.equal(metric.rejectedOrTakeoverRate, 1 / 3);
+  assert.equal(metric.automationCandidate, false);
 });

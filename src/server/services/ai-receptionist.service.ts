@@ -25,6 +25,7 @@ import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/ups
 import { evaluateManualSendGate } from "@/server/ai-receptionist/manual-send-gate";
 import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
 import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/follow-up-engine";
+import { buildIntentReviewMetrics } from "@/server/ai-receptionist/intent-review-metrics";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { detectGuestLanguage } from "@/server/ai-receptionist/language";
@@ -665,6 +666,17 @@ export class AiReceptionistService {
     const editedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "edited").length;
     const rejectedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "rejected").length;
     const takenOverAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "taken_over").length;
+    const intentReviewMetrics = buildIntentReviewMetrics(
+      conversations.flatMap((conversation) =>
+        conversation.messages
+          .filter((message) => message.authorship === "ai")
+          .map((message) => ({
+            intent: conversation.intent || "general",
+            reviewStatus: message.reviewStatus,
+            qaPass: message.qaPass,
+          }))
+      )
+    );
 
     return {
       mode: getReceptionistMode(),
@@ -674,6 +686,7 @@ export class AiReceptionistService {
       bookings,
       managerReviews,
       knowledgeCandidates,
+      intentReviewMetrics,
       metrics: {
         openConversations: conversations.filter((item) => item.status !== "closed").length,
         pendingManagerReviews: managerReviews.filter((item) => item.status === "pending").length,

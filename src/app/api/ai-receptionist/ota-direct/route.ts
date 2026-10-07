@@ -80,7 +80,11 @@ export async function POST(request: Request) {
       const row = item as Record<string, unknown>;
       const text = typeof row.text === "string" ? row.text.trim() : "";
       if (!text) return [];
-      return [{ index: typeof row.index === "number" ? row.index : index, text }];
+      return [{
+        index: typeof row.index === "number" ? row.index : index,
+        text,
+        className: typeof row.className === "string" ? row.className : null,
+      }];
     });
     if (!propertyExternalId || !reservationReference || !externalConversationId || items.length === 0) {
       return NextResponse.json({ error: "Invalid Agoda browser snapshot payload" }, { status: 400 });
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
         ? payload.pageEntity as "tce" | "lavender" | "ruby" | "cozy" | "unknown"
         : "unknown",
       items,
+      snapshotDate: typeof payload.snapshotDate === "string" ? payload.snapshotDate : undefined,
     });
     return NextResponse.json({
       ok: true,

@@ -1,7 +1,11 @@
-import { customerLanguageName, detectGuestLanguage, type GuestLanguage } from "./language";
+export type ProvenanceLanguage = {
+  code: string;
+  name: string;
+  confidence: "high" | "medium" | "low";
+};
 
 export type LanguageProvenanceInput = {
-  content: string;
+  displayLanguage: ProvenanceLanguage;
   providerTranslated?: boolean;
   sourceLanguage?: string | null;
   manualOverride?: string | null;
@@ -13,11 +17,31 @@ export type LanguageProvenance = {
   sourceLanguage: string | null;
   languageSource: "manual_override" | "provider_source" | "provider_translated_unknown" | "content_detection";
   languageNeedsVerify: boolean;
-  renderLanguage: GuestLanguage;
+  renderLanguage: ProvenanceLanguage;
 };
 
+const LANGUAGE_NAME: Record<string, string> = {
+  vi: "Vietnamese",
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  nl: "Dutch",
+  zh: "Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  ru: "Russian",
+  th: "Thai",
+};
+
+function languageName(code: string): string {
+  return LANGUAGE_NAME[code] ?? code.toUpperCase();
+}
+
 export function resolveLanguageProvenance(input: LanguageProvenanceInput): LanguageProvenance {
-  const display = detectGuestLanguage(input.content);
+  const display = input.displayLanguage;
   const manualOverride = input.manualOverride?.trim().toLowerCase() || "";
   if (manualOverride) {
     return {
@@ -28,7 +52,7 @@ export function resolveLanguageProvenance(input: LanguageProvenanceInput): Langu
       languageNeedsVerify: false,
       renderLanguage: {
         code: manualOverride,
-        name: customerLanguageName(manualOverride),
+        name: languageName(manualOverride),
         confidence: "high",
       },
     };
@@ -44,7 +68,7 @@ export function resolveLanguageProvenance(input: LanguageProvenanceInput): Langu
       languageNeedsVerify: false,
       renderLanguage: {
         code: sourceLanguage,
-        name: customerLanguageName(sourceLanguage),
+        name: languageName(sourceLanguage),
         confidence: "high",
       },
     };
@@ -57,8 +81,6 @@ export function resolveLanguageProvenance(input: LanguageProvenanceInput): Langu
       sourceLanguage: null,
       languageSource: "provider_translated_unknown",
       languageNeedsVerify: true,
-      // The received text may still be useful for an internal Shadow draft.
-      // Never treat this render language as verified customer language.
       renderLanguage: display,
     };
   }

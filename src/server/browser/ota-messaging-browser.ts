@@ -105,7 +105,7 @@ export async function otaBrowserProviderStatus(provider: OtaBrowserProvider) {
       reason: error instanceof Error ? error.message : "unknown",
     };
   } finally {
-    await browser?.disconnect().catch(() => undefined);
+    try { browser?.disconnect(); } catch {}
   }
 }
 
@@ -214,7 +214,7 @@ export async function otaMessagingBrowserWorkerTick() {
       reason: error instanceof Error ? error.message : "unknown",
     });
   } finally {
-    await agodaBrowser?.disconnect().catch(() => undefined);
+    try { agodaBrowser?.disconnect(); } catch {}
   }
 
   // Booking runtime is monitored but history ingestion remains fail-closed

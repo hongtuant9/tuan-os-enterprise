@@ -13,7 +13,7 @@ const IN_SERVICE = [
 ];
 
 const POST_SERVICE = [
-  "checked out", "after my stay", "after checkout", "review", "feedback", "left the hotel",
+  "checked out", "after my stay", "after checkout", "leave a review", "write a review", "review my stay", "feedback", "left the hotel",
   "đã trả phòng", "sau khi ở", "sau khi sử dụng", "đánh giá", "phản hồi sau", "đã rời",
   "après mon séjour", "après le départ", "avis",
 ];

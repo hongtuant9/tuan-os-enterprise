@@ -459,7 +459,7 @@ export class AiReceptionistService {
 
   async dashboard(): Promise<ReceptionistDashboard> {
     const [conversationRows, bookingRows, reviewRows, candidateRows] = await Promise.all([
-      this.repo.findRecentConversations(),
+      this.repo.findRecentConversations(200),
       this.repo.findBookings(),
       this.repo.findManagerReviews(),
       this.repo.findKnowledgeCandidates(),
@@ -473,7 +473,9 @@ export class AiReceptionistService {
         }))
         .map((row) => row.id),
     );
-    const customerConversationRows = conversationRows.filter((row) => !internalOpsConversationIds.has(row.id));
+    const customerConversationRows = conversationRows
+      .filter((row) => !internalOpsConversationIds.has(row.id))
+      .slice(0, 40);
     const customerBookingRows = bookingRows.filter((row) => !internalOpsConversationIds.has(row.conversation_id));
     const customerReviewRows = reviewRows.filter((row) => !row.conversation_id || !internalOpsConversationIds.has(row.conversation_id));
 

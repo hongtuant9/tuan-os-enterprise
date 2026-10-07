@@ -113,7 +113,13 @@ export async function otaBrowserProviderStatus(provider: OtaBrowserProvider) {
 }
 
 async function collectAgodaSnapshots(page: Page, maxConversations: number): Promise<AgodaSnapshot[]> {
-  const cardCount = await page.$$eval(
+  const allMessagesTab = await page.$('[data-testid="all-messages-tab"]');
+  if (allMessagesTab) {
+    await allMessagesTab.click();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+
+  const cardCount = await page.$eval(
     '[data-testid^="inbox-conversation-card inbox-conversation-card-"]',
     (nodes) => nodes.length,
   );

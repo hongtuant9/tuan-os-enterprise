@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { inferCustomerCarePhase } from "./customer-care.ts";
 import { isInternalOpsConversation } from "./conversation-scope.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
-import { buildIntentReviewMetrics } from "./intent-review-metrics.ts";
+import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
 import {
   buildKiotVietOrderPayload,
   canDraftConfirmation,
@@ -135,10 +135,10 @@ test("source marker alone is enough to exclude internal operations", () => {
 
 test("intent review metrics stay observational and never auto-enable", () => {
   const [metric] = buildIntentReviewMetrics([
-    { intent: "stay", reviewStatus: "approved", qaPass: true },
-    { intent: "stay", reviewStatus: "edited", qaPass: true },
-    { intent: "stay", reviewStatus: "rejected", qaPass: false },
-    { intent: "stay", reviewStatus: "pending", qaPass: true },
+    { intent: "stay", reviewStatus: "approved", qaPass: true, trustEligible: true },
+    { intent: "stay", reviewStatus: "edited", qaPass: true, trustEligible: true },
+    { intent: "stay", reviewStatus: "rejected", qaPass: false, trustEligible: true },
+    { intent: "stay", reviewStatus: "pending", qaPass: true, trustEligible: true },
   ]);
   assert.equal(metric.reviewed, 3);
   assert.equal(metric.approvedUnchanged, 1);
@@ -149,4 +149,44 @@ test("intent review metrics stay observational and never auto-enable", () => {
   assert.equal(metric.humanCorrectionRate, 1 / 3);
   assert.equal(metric.rejectedOrTakeoverRate, 1 / 3);
   assert.equal(metric.automationCandidate, false);
+});
+
+
+test("Trust Gate excludes pilot, UAT, regression and historical evidence", () => {
+  assert.equal(isTrustEligibleEvidence({
+    channel: "website",
+    externalConversationId: "website:cf7:4955:real-customer",
+    scenarioTag: null,
+    historicalImport: false,
+  }), true);
+  assert.equal(isTrustEligibleEvidence({
+    channel: "pilot",
+    externalConversationId: "pilot-123",
+    scenarioTag: "private-pilot",
+    historicalImport: false,
+  }), false);
+  assert.equal(isTrustEligibleEvidence({
+    channel: "website",
+    externalConversationId: "uat-followup-001",
+    scenarioTag: "P0A_UAT",
+    historicalImport: false,
+  }), false);
+  assert.equal(isTrustEligibleEvidence({
+    channel: "agoda",
+    externalConversationId: "agoda:historical:2044082592",
+    scenarioTag: null,
+    historicalImport: true,
+  }), false);
+});
+
+test("intent metrics count only trust-eligible reviewed drafts", () => {
+  const metrics = buildIntentReviewMetrics([
+    { intent: "stay", reviewStatus: "approved", qaPass: true, trustEligible: true },
+    { intent: "stay", reviewStatus: "approved", qaPass: true, trustEligible: false },
+    { intent: "stay", reviewStatus: "edited", qaPass: true, trustEligible: true },
+  ]);
+  assert.equal(metrics.length, 1);
+  assert.equal(metrics[0].reviewed, 2);
+  assert.equal(metrics[0].approvedUnchanged, 1);
+  assert.equal(metrics[0].edited, 1);
 });

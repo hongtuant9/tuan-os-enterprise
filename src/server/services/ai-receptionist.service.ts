@@ -25,7 +25,7 @@ import { buildUpsellPlan, type JourneyEntry } from "@/server/ai-receptionist/ups
 import { evaluateManualSendGate } from "@/server/ai-receptionist/manual-send-gate";
 import { inferCustomerCarePhase, type CustomerCarePhase } from "@/server/ai-receptionist/customer-care";
 import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/follow-up-engine";
-import { buildIntentReviewMetrics } from "@/server/ai-receptionist/intent-review-metrics";
+import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "@/server/ai-receptionist/intent-review-metrics";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { detectGuestLanguage } from "@/server/ai-receptionist/language";
@@ -573,6 +573,16 @@ export class AiReceptionistService {
       const latestGuestLanguage = [...messages]
         .reverse()
         .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
+      const trustEvidenceEligible = isTrustEligibleEvidence({
+        channel: row.channel,
+        externalConversationId: row.external_conversation_id,
+        scenarioTag: typeof metadata.scenario_tag === "string" ? metadata.scenario_tag : null,
+        historicalImport: metadata.historical_import === true,
+      });
+      const latestAiMessage = [...messages]
+        .reverse()
+        .find((message) => message.authorship === "ai" && message.direction === "outbound");
+      const pendingAiReview = trustEvidenceEligible && latestAiMessage?.reviewStatus === "pending";
       return {
         id: row.id,
         channel: row.channel,
@@ -627,6 +637,8 @@ export class AiReceptionistService {
         mode: row.mode as ReceptionistConversation["mode"],
         responseMode: metadata.response_mode === "auto" ? "auto" : "manual",
         humanTakeover: metadata.human_takeover === true,
+        trustEvidenceEligible,
+        pendingAiReview,
         lastMessageAt: row.last_message_at,
         messages,
       };
@@ -666,6 +678,22 @@ export class AiReceptionistService {
     const editedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "edited").length;
     const rejectedAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "rejected").length;
     const takenOverAiDrafts = reviewedAiDrafts.filter((message) => message.reviewStatus === "taken_over").length;
+    const trustEligibleReviewedMessages = conversations
+      .filter((conversation) => conversation.trustEvidenceEligible)
+      .flatMap((conversation) => conversation.messages)
+      .filter((message) =>
+        message.authorship === "ai"
+        && (
+          message.reviewStatus === "approved"
+          || message.reviewStatus === "edited"
+          || message.reviewStatus === "rejected"
+          || message.reviewStatus === "taken_over"
+        )
+      );
+    const trustEligibleReviewedAiDrafts = trustEligibleReviewedMessages.length;
+    const trustEligibleEditedAiDrafts = trustEligibleReviewedMessages.filter((message) => message.reviewStatus === "edited").length;
+    const pendingTrustReviewDrafts = conversations.filter((conversation) => conversation.pendingAiReview).length;
+    const excludedNonRealReviewedAiDrafts = Math.max(0, reviewedAiDrafts.length - trustEligibleReviewedAiDrafts);
     const intentReviewMetrics = buildIntentReviewMetrics(
       conversations.flatMap((conversation) =>
         conversation.messages
@@ -674,6 +702,7 @@ export class AiReceptionistService {
             intent: conversation.intent || "general",
             reviewStatus: message.reviewStatus,
             qaPass: message.qaPass,
+            trustEligible: conversation.trustEvidenceEligible,
           }))
       )
     );
@@ -697,7 +726,11 @@ export class AiReceptionistService {
         editedAiDrafts,
         rejectedAiDrafts,
         takenOverAiDrafts,
-        humanCorrectionRate: reviewedAiDrafts.length > 0 ? editedAiDrafts / reviewedAiDrafts.length : 0,
+        humanCorrectionRate: trustEligibleReviewedAiDrafts > 0 ? trustEligibleEditedAiDrafts / trustEligibleReviewedAiDrafts : 0,
+        pendingTrustReviewDrafts,
+        trustEligibleReviewedAiDrafts,
+        trustEligibleEditedAiDrafts,
+        excludedNonRealReviewedAiDrafts,
       },
       missingDataBacklog: knowledgeCandidates.filter((item) => item.status === "pending" || item.status === "approved").map((item) => item.title),
     };

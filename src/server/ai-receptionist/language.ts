@@ -112,6 +112,7 @@ const CUSTOMER_LANGUAGE_NAME: Record<string, string> = {
   ko: "Korean",
   ru: "Russian",
   th: "Thai",
+  und: "Unknown / chưa xác định",
 };
 
 export function customerLanguageName(code: string): string {

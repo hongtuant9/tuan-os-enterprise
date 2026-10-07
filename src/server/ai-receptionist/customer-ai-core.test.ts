@@ -7,6 +7,7 @@ import { buildUpsellPlan } from "./upsell-engine.ts";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
 import { isCustomerTimelineMessage } from "./conversation-message-visibility.ts";
 import { canPublishConfirmedKnowledge } from "./knowledge-authority.ts";
+import { canUseCustomerLanguageForOutbound, resolveLanguageProvenance } from "./language-provenance.ts";
 import {
   buildKiotVietOrderPayload,
   canDraftConfirmation,
@@ -219,4 +220,48 @@ test("only admin or owner approved decisions can publish reusable operational kn
   assert.equal(canPublishConfirmedKnowledge("manager", "approved"), false);
   assert.equal(canPublishConfirmedKnowledge("owner", "needs_info"), false);
   assert.equal(canPublishConfirmedKnowledge("owner", "rejected"), false);
+});
+
+
+test("provider-translated Vietnamese never becomes trusted guest language without source evidence", () => {
+  const provenance = resolveLanguageProvenance({
+    displayLanguage: detectGuestLanguage("Xin chào, chúng tôi sẽ đến sớm vào ngày mai."),
+    providerTranslated: true,
+    sourceLanguage: null,
+    manualOverride: null,
+  });
+  assert.equal(provenance.displayLanguage, "vi");
+  assert.equal(provenance.customerLanguage, "und");
+  assert.equal(provenance.languageNeedsVerify, true);
+  assert.equal(provenance.languageSource, "provider_translated_unknown");
+  assert.equal(canUseCustomerLanguageForOutbound({
+    customerLanguage: provenance.customerLanguage,
+    languageNeedsVerify: provenance.languageNeedsVerify,
+  }), false);
+});
+
+test("manual language override makes provider-translated conversation send-eligible without changing displayed text", () => {
+  const provenance = resolveLanguageProvenance({
+    displayLanguage: detectGuestLanguage("Xin chào, chúng tôi sẽ đến sớm vào ngày mai."),
+    providerTranslated: true,
+    sourceLanguage: null,
+    manualOverride: "en",
+  });
+  assert.equal(provenance.displayLanguage, "vi");
+  assert.equal(provenance.customerLanguage, "en");
+  assert.equal(provenance.languageNeedsVerify, false);
+  assert.equal(provenance.languageSource, "manual_override");
+  assert.equal(canUseCustomerLanguageForOutbound({
+    customerLanguage: provenance.customerLanguage,
+    languageNeedsVerify: provenance.languageNeedsVerify,
+  }), true);
+});
+
+test("untranslated English remains trusted by content detection", () => {
+  const provenance = resolveLanguageProvenance({
+    displayLanguage: detectGuestLanguage("Good morning, can we leave our luggage before check-in?"),
+  });
+  assert.equal(provenance.displayLanguage, "en");
+  assert.equal(provenance.customerLanguage, "en");
+  assert.equal(provenance.languageNeedsVerify, false);
 });

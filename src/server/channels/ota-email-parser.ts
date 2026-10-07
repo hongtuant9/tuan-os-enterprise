@@ -28,6 +28,8 @@ export type ParsedOtaEmail = {
   actionable: boolean;
   relayVerified: boolean;
   guestText: string | null;
+  providerTranslated: boolean;
+  providerTranslationMarker: string | null;
   checkInText: string | null;
   checkOutText: string | null;
   specialRequest: string | null;
@@ -38,6 +40,20 @@ export type ParsedOtaEmail = {
 
 function normalize(value: string): string {
   return value.replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function providerTranslationMarker(body: string): string | null {
+  const markers: Array<[RegExp, string]> = [
+    [/nội dung trên được tự động dịch/i, "provider_auto_translation_vi"],
+    [/được dịch tự động/i, "provider_auto_translation_vi"],
+    [/automatically translated/i, "provider_auto_translation"],
+    [/auto[- ]translated/i, "provider_auto_translation"],
+    [/this message was translated/i, "provider_auto_translation"],
+  ];
+  for (const [pattern, marker] of markers) {
+    if (pattern.test(body)) return marker;
+  }
+  return null;
 }
 
 function channelFrom(from: string, subject: string, replyTo: string): OtaEmailChannel | null {
@@ -593,6 +609,7 @@ export function parseOtaEmail(input: {
   const conversationRef = parsedContext.providerConversationReference ?? providerConversationReference(channel, combined);
   const actionable = Boolean(channel && relayVerified && guestText);
   const carePhase = deriveCarePhase(parsedContext.context.checkInDate, parsedContext.context.checkOutDate);
+  const translationMarker = relayVerified ? providerTranslationMarker(body) : null;
 
   return {
     channel,
@@ -602,6 +619,8 @@ export function parseOtaEmail(input: {
     actionable,
     relayVerified,
     guestText,
+    providerTranslated: Boolean(translationMarker),
+    providerTranslationMarker: translationMarker,
     checkInText: parsedContext.context.checkInText,
     checkOutText: parsedContext.context.checkOutText,
     specialRequest: parsedContext.context.specialRequest,

@@ -29,6 +29,7 @@ import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "@/server/ai-r
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { isCustomerTimelineMessage } from "@/server/ai-receptionist/conversation-message-visibility";
 import { canPublishConfirmedKnowledge } from "@/server/ai-receptionist/knowledge-authority";
+import { canUseCustomerLanguageForOutbound, resolveLanguageProvenance } from "@/server/ai-receptionist/language-provenance";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
 import { customerLanguageName, detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
@@ -164,16 +165,31 @@ function toMessage(row: {
 }): ReceptionistMessage {
   const metadata = AiReceptionistRepository.toObject(row.metadata);
   const evidence = AiReceptionistRepository.toObject(row.evidence);
+  const displayLanguage = typeof metadata.display_language === "string"
+    ? metadata.display_language
+    : detectGuestLanguage(row.content).code;
+  const sourceLanguage = typeof metadata.source_language === "string" && metadata.source_language.trim()
+    ? metadata.source_language.trim().toLowerCase()
+    : null;
+  const providerTranslated = metadata.provider_translated === true;
+  const languageNeedsVerify = metadata.language_needs_verify === true;
+  const languageSource = typeof metadata.language_source === "string"
+    ? metadata.language_source
+    : providerTranslated
+      ? "provider_translated_unknown"
+      : "content_detection";
   const detectedLanguage = typeof metadata.detected_language === "string"
     ? metadata.detected_language
-    : detectGuestLanguage(row.content).code;
+    : languageNeedsVerify
+      ? "und"
+      : sourceLanguage ?? displayLanguage;
   const translatedVi = typeof metadata.translated_vi === "string"
     ? metadata.translated_vi
-    : detectedLanguage === "vi"
+    : displayLanguage === "vi"
       ? row.content
       : "";
   const rawTranslationStatus = typeof metadata.translation_status === "string" ? metadata.translation_status : "";
-  const translationStatus: ReceptionistMessage["translationStatus"] = detectedLanguage === "vi"
+  const translationStatus: ReceptionistMessage["translationStatus"] = displayLanguage === "vi"
     ? "not_needed"
     : rawTranslationStatus === "failed"
       ? "failed"
@@ -234,6 +250,11 @@ function toMessage(row: {
     content: row.content,
     translatedVi,
     detectedLanguage,
+    displayLanguage,
+    sourceLanguage,
+    providerTranslated,
+    languageNeedsVerify,
+    languageSource,
     translationStatus,
     translationError,
     status: row.status as ReceptionistMessage["status"],
@@ -577,9 +598,23 @@ export class AiReceptionistService {
               autoSendAllowed: followUpMetadata.autoSendAllowed === true,
             }
           : null;
+      const languageOverride = typeof metadata.language_override === "string" && metadata.language_override.trim()
+        ? metadata.language_override.trim().toLowerCase()
+        : null;
+      const languageNeedsVerify = metadata.language_needs_verify === true && !languageOverride;
+      const languageSource = typeof metadata.language_source === "string"
+        ? metadata.language_source
+        : languageNeedsVerify
+          ? "unknown"
+          : "content_detection";
       const latestGuestLanguage = [...messages]
         .reverse()
-        .find((message) => message.authorship === "guest" && message.detectedLanguage)?.detectedLanguage;
+        .find((message) =>
+          message.authorship === "guest"
+          && !message.languageNeedsVerify
+          && message.detectedLanguage
+          && message.detectedLanguage !== "und"
+        )?.detectedLanguage;
       const trustEvidenceEligible = isTrustEligibleEvidence({
         channel: row.channel,
         externalConversationId: row.external_conversation_id,
@@ -606,7 +641,10 @@ export class AiReceptionistService {
         propertyEntity: (["lavender", "ruby", "cozy", "tce"] as const).includes(pageEntity as "lavender" | "ruby" | "cozy" | "tce")
           ? pageEntity as "lavender" | "ruby" | "cozy" | "tce"
           : "unknown",
-        language: latestGuestLanguage ?? row.language,
+        language: languageOverride ?? (languageNeedsVerify ? "und" : latestGuestLanguage ?? row.language),
+        languageNeedsVerify,
+        languageSource,
+        languageOverride,
         intent: row.intent,
         routedAgent: typeof metadata.routed_agent === "string" ? metadata.routed_agent : "AI_RECEPTIONIST",
         journeyEntry: typeof metadata.journey_entry === "string" ? metadata.journey_entry : "GENERAL",
@@ -838,7 +876,16 @@ export class AiReceptionistService {
       }
     }
 
-    const guestLanguage = detectGuestLanguage(input.content);
+    const existingLanguageOverride = typeof existingMetadata.language_override === "string"
+      ? existingMetadata.language_override
+      : null;
+    const languageProvenance = resolveLanguageProvenance({
+      displayLanguage: detectGuestLanguage(input.content),
+      providerTranslated: input.providerTranslated === true,
+      sourceLanguage: input.sourceLanguage ?? null,
+      manualOverride: existingLanguageOverride,
+    });
+    const guestLanguage = languageProvenance.renderLanguage;
     const effectiveReservationContext = mergeReservationContext(existingMetadata.reservation_context, input.reservationContext);
     const contextCheckInDate = typeof effectiveReservationContext.checkInDate === "string" ? effectiveReservationContext.checkInDate : null;
     const contextCheckOutDate = typeof effectiveReservationContext.checkOutDate === "string" ? effectiveReservationContext.checkOutDate : null;
@@ -888,7 +935,7 @@ export class AiReceptionistService {
       reply: rendered.reply,
       metadataPatch: {
         ...decision.metadataPatch,
-        language: rendered.detectedLanguage,
+        language: languageProvenance.customerLanguage,
       },
       evidence: {
         ...decision.evidence,
@@ -903,7 +950,12 @@ export class AiReceptionistService {
           syncedAt: fact.syncedAt,
         })) as unknown as Json,
         conversation_renderer: rendered.usedGenerativeRenderer ? "generative" : "fallback",
-        conversation_qa: rendered.qa as unknown as Json,
+        conversation_qa: {
+          pass: rendered.qa.pass && !languageProvenance.languageNeedsVerify,
+          reasons: languageProvenance.languageNeedsVerify
+            ? [...rendered.qa.reasons, "customer_language_unverified"]
+            : rendered.qa.reasons,
+        } as unknown as Json,
       },
     };
 
@@ -937,7 +989,13 @@ export class AiReceptionistService {
       self_reported_source: input.selfReportedSource ?? existingMetadata.self_reported_source ?? null,
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
       page_entity: pageEntity,
-      preferred_language: rendered.detectedLanguage,
+      preferred_language: languageProvenance.customerLanguage,
+      display_language: languageProvenance.displayLanguage,
+      source_language: languageProvenance.sourceLanguage,
+      language_source: languageProvenance.languageSource,
+      language_needs_verify: languageProvenance.languageNeedsVerify,
+      provider_translation_detected: input.providerTranslated === true || existingMetadata.provider_translation_detected === true,
+      provider_translation_marker: input.providerTranslationMarker ?? existingMetadata.provider_translation_marker ?? null,
       care_phase: carePhase,
       follow_up_plan: followUpPlan as unknown as Json,
       follow_up_mode: followUpPlan ? "shadow_recommendation" : null,
@@ -999,7 +1057,13 @@ export class AiReceptionistService {
       ?? (typeof input.reservationContext?.guestEmail === "string" ? input.reservationContext.guestEmail : null)
       ?? existing?.customer_contact
       ?? null;
-    const customerId = await this.resolveCustomerId({ channel: input.channel, externalConversationId, customerName: resolvedCustomerName, customerContact: resolvedCustomerContact, language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi") });
+    const customerId = await this.resolveCustomerId({
+      channel: input.channel,
+      externalConversationId,
+      customerName: resolvedCustomerName,
+      customerContact: resolvedCustomerContact,
+      language: languageProvenance.customerLanguage === "und" ? null : languageProvenance.customerLanguage,
+    });
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const recentUpsell = await this.repo.findRecentUpsellEvents(customerId, since24h);
     const rawJourney = typeof decision.metadataPatch.journey_entry === "string" ? decision.metadataPatch.journey_entry : "GENERAL";
@@ -1028,7 +1092,7 @@ export class AiReceptionistService {
         ?? (typeof input.reservationContext?.guestEmail === "string" ? input.reservationContext.guestEmail : null)
         ?? existing?.customer_contact
         ?? null,
-      language: typeof decision.metadataPatch.language === "string" ? decision.metadataPatch.language : (existing?.language ?? "vi"),
+      language: languageProvenance.customerLanguage,
       intent: typeof decision.metadataPatch.primary_intent === "string" ? decision.metadataPatch.primary_intent : "general",
       status: decision.conversationStatus,
       mode,
@@ -1063,8 +1127,14 @@ export class AiReceptionistService {
       },
       metadata: {
         scenario_tag: input.scenarioTag ?? null,
-        translated_vi: rendered.guestTranslationVi,
-        detected_language: rendered.detectedLanguage,
+        translated_vi: languageProvenance.displayLanguage === "vi" ? input.content.trim() : rendered.guestTranslationVi,
+        detected_language: languageProvenance.customerLanguage,
+        display_language: languageProvenance.displayLanguage,
+        source_language: languageProvenance.sourceLanguage,
+        provider_translated: input.providerTranslated === true,
+        provider_translation_marker: input.providerTranslationMarker ?? null,
+        language_needs_verify: languageProvenance.languageNeedsVerify,
+        language_source: languageProvenance.languageSource,
         page_entity: pageEntity,
         care_phase: carePhase,
         reservation_reference: input.reservationReference ?? null,
@@ -1104,9 +1174,14 @@ export class AiReceptionistService {
         pilot_conversation_allowed: pilotConversationAllowed,
         translated_vi: rendered.replyTranslationVi,
         detected_language: rendered.detectedLanguage,
+        customer_language: languageProvenance.customerLanguage,
+        language_needs_verify: languageProvenance.languageNeedsVerify,
+        language_source: languageProvenance.languageSource,
         page_entity: pageEntity,
-        qa_pass: rendered.qa.pass,
-        qa_reasons: rendered.qa.reasons,
+        qa_pass: rendered.qa.pass && !languageProvenance.languageNeedsVerify,
+        qa_reasons: languageProvenance.languageNeedsVerify
+          ? [...rendered.qa.reasons, "customer_language_unverified"]
+          : rendered.qa.reasons,
         actor_label: "AI Lễ tân",
         authorship: "ai",
         generated_at: new Date().toISOString(),
@@ -1161,8 +1236,10 @@ export class AiReceptionistService {
       reply: decision.reply,
       reviewId,
       outboundMessageId: outbound.id,
-      qaPass: rendered.qa.pass,
-      qaReasons: rendered.qa.reasons,
+      qaPass: rendered.qa.pass && !languageProvenance.languageNeedsVerify,
+      qaReasons: languageProvenance.languageNeedsVerify
+        ? [...rendered.qa.reasons, "customer_language_unverified"]
+        : rendered.qa.reasons,
       usedGenerativeRenderer: rendered.usedGenerativeRenderer,
       primaryIntent: typeof decision.metadataPatch.primary_intent === "string"
         ? decision.metadataPatch.primary_intent
@@ -1717,6 +1794,41 @@ export class AiReceptionistService {
     return { reviewStatus: input.decision, reviewedContent };
   }
 
+  async setConversationLanguageOverride(input: {
+    conversationId: string;
+    languageCode: string;
+    actorLabel: string;
+  }): Promise<void> {
+    const languageCode = input.languageCode.trim().toLowerCase();
+    const supported = new Set(["vi","en","fr","es","de","it","pt","nl","zh","ja","ko","ru","th"]);
+    if (!supported.has(languageCode)) throw new Error("Ngôn ngữ được chọn chưa được hỗ trợ.");
+
+    const conversation = await this.repo.findConversationById(input.conversationId);
+    if (!conversation) throw new Error("Không tìm thấy hội thoại.");
+    const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const updatedAt = new Date().toISOString();
+
+    await this.repo.updateConversation(conversation.id, {
+      language: languageCode,
+      metadata: {
+        ...metadata,
+        language_override: languageCode,
+        preferred_language: languageCode,
+        language_source: "manual_override",
+        language_needs_verify: false,
+        language_override_at: updatedAt,
+        language_override_by: input.actorLabel,
+      },
+    });
+
+    await this.activityLog.record({
+      agent: input.actorLabel,
+      unit: "Tam Cốc",
+      message: `Đã xác minh thủ công ngôn ngữ khách = ${customerLanguageName(languageCode)} cho hội thoại ${conversation.id.slice(0, 8)}; không gửi khách.`,
+      type: "approval",
+    });
+  }
+
   async translateOperatorReply(input: {
     conversationId: string;
     vietnameseContent: string;
@@ -1736,11 +1848,27 @@ export class AiReceptionistService {
       throw new Error("Chưa có tin nhắn khách để xác định ngôn ngữ đích.");
     }
 
+    const conversationMetadata = AiReceptionistRepository.toObject(conversation.metadata);
     const guestMetadata = AiReceptionistRepository.toObject(latestGuestMessage.metadata);
-    const targetLanguage = typeof guestMetadata.detected_language === "string" && guestMetadata.detected_language.trim()
-      ? guestMetadata.detected_language.trim().toLowerCase()
-      : detectGuestLanguage(latestGuestMessage.content).code;
-    if (!targetLanguage) throw new Error("Chưa xác định được ngôn ngữ của khách.");
+    const manualOverride = typeof conversationMetadata.language_override === "string"
+      ? conversationMetadata.language_override.trim().toLowerCase()
+      : "";
+    const sourceLanguage = typeof guestMetadata.source_language === "string"
+      ? guestMetadata.source_language.trim().toLowerCase()
+      : "";
+    const languageNeedsVerify = conversationMetadata.language_needs_verify === true
+      || guestMetadata.language_needs_verify === true;
+    const targetLanguage = manualOverride
+      || sourceLanguage
+      || (!languageNeedsVerify && typeof guestMetadata.detected_language === "string"
+        ? guestMetadata.detected_language.trim().toLowerCase()
+        : "");
+    if (!canUseCustomerLanguageForOutbound({
+      customerLanguage: targetLanguage,
+      languageNeedsVerify: languageNeedsVerify && !manualOverride,
+    })) {
+      throw new Error("Ngôn ngữ gốc của khách chưa được xác minh. Hãy chọn ngôn ngữ khách trước khi dịch/gửi.");
+    }
 
     const translated = await translateVietnameseToGuestLanguage(vietnameseContent, targetLanguage);
     await this.activityLog.record({
@@ -1773,6 +1901,15 @@ export class AiReceptionistService {
     const conversation = await this.repo.findConversationById(input.conversationId);
     if (!conversation) throw new Error("Không tìm thấy hội thoại.");
     const metadata = AiReceptionistRepository.toObject(conversation.metadata);
+    const languageOverride = typeof metadata.language_override === "string"
+      ? metadata.language_override.trim().toLowerCase()
+      : "";
+    const customerLanguage = languageOverride
+      || (typeof metadata.preferred_language === "string" ? metadata.preferred_language.trim().toLowerCase() : conversation.language);
+    const languageNeedsVerify = metadata.language_needs_verify === true && !languageOverride;
+    if (!canUseCustomerLanguageForOutbound({ customerLanguage, languageNeedsVerify })) {
+      throw new Error("Ngôn ngữ gốc của khách chưa được xác minh. Hãy chọn ngôn ngữ khách trước khi gửi.");
+    }
     if (metadata.response_mode === "auto") {
       throw new Error("Hội thoại đang ở chế độ Tự động. Chuyển sang Manual trước khi người thật gửi.");
     }
@@ -1834,6 +1971,11 @@ export class AiReceptionistService {
     const translationTargetLanguage = input.translationTargetLanguage?.trim().toLowerCase() || "";
     if (sourceVietnamese && translationTargetLanguage && translationTargetLanguage !== "vi" && content === sourceVietnamese) {
       throw new Error("Bản gửi khách chưa được dịch khỏi tiếng Việt. Hãy bấm Dịch sang ngôn ngữ khách trước khi gửi.");
+    }
+    if (metadata.provider_translation_detected === true && customerLanguage !== "vi") {
+      if (!sourceVietnamese || translationTargetLanguage !== customerLanguage) {
+        throw new Error("Hội thoại có bản dịch tự động từ OTA. Hãy dùng chức năng Soạn tiếng Việt → Dịch đúng ngôn ngữ khách đã xác minh trước khi gửi.");
+      }
     }
 
     const detected = translationTargetLanguage || detectGuestLanguage(content).code;

@@ -151,6 +151,30 @@ export async function reviewAiDraftAction(input: {
   }
 }
 
+export async function setConversationLanguageOverrideAction(input: {
+  conversationId: string;
+  languageCode: string;
+}): Promise<ActionResult> {
+  const db = await createRequestClient();
+  const session = await getCurrentSession(db);
+  if (!session) return { ok: false, error: "Anh cần đăng nhập để xác minh ngôn ngữ khách." };
+  if (!hasMinimumRole(session.role, "manager")) {
+    return { ok: false, error: "Chỉ Manager hoặc vai trò cao hơn được xác minh ngôn ngữ khách." };
+  }
+  try {
+    await getAdminContainer().aiReceptionist.setConversationLanguageOverride({
+      conversationId: input.conversationId,
+      languageCode: input.languageCode,
+      actorLabel: session.email ?? "Quản lý Homestay",
+    });
+    revalidatePath("/ai-le-tan");
+    revalidatePath("/ai-le-tan/workspace");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không thể cập nhật ngôn ngữ khách." };
+  }
+}
+
 export async function translateManualReplyFromVietnameseAction(input: {
   conversationId: string;
   vietnameseContent: string;

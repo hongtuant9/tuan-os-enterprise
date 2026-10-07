@@ -30,7 +30,7 @@ import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation
 import { isCustomerTimelineMessage } from "@/server/ai-receptionist/conversation-message-visibility";
 import { canPublishConfirmedKnowledge } from "@/server/ai-receptionist/knowledge-authority";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
-import { customerLanguageName, detectGuestLanguage } from "@/server/ai-receptionist/language";
+import { customerLanguageName, detectGuestLanguage, resolveGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
 import { renderSalesConversation, translateToVietnamese, translateVietnameseToGuestLanguage } from "@/server/ai-receptionist/conversation-renderer";
@@ -838,7 +838,13 @@ export class AiReceptionistService {
       }
     }
 
-    const guestLanguage = detectGuestLanguage(input.content);
+    const guestLanguage = resolveGuestLanguage(input.content, {
+      providerAutoTranslated: input.providerAutoTranslated === true,
+      previousLanguage: existing?.language ?? null,
+    });
+    const languageProvenance = input.providerAutoTranslated === true
+      ? (guestLanguage.code === "und" ? "provider_auto_translation_unknown" : "conversation_history")
+      : "message_content";
     const effectiveReservationContext = mergeReservationContext(existingMetadata.reservation_context, input.reservationContext);
     const contextCheckInDate = typeof effectiveReservationContext.checkInDate === "string" ? effectiveReservationContext.checkInDate : null;
     const contextCheckOutDate = typeof effectiveReservationContext.checkOutDate === "string" ? effectiveReservationContext.checkOutDate : null;
@@ -938,6 +944,8 @@ export class AiReceptionistService {
       referral_source: input.referralSource ?? existingMetadata.referral_source ?? null,
       page_entity: pageEntity,
       preferred_language: rendered.detectedLanguage,
+      language_provenance: languageProvenance,
+      provider_auto_translated: input.providerAutoTranslated === true,
       care_phase: carePhase,
       follow_up_plan: followUpPlan as unknown as Json,
       follow_up_mode: followUpPlan ? "shadow_recommendation" : null,
@@ -1065,6 +1073,8 @@ export class AiReceptionistService {
         scenario_tag: input.scenarioTag ?? null,
         translated_vi: rendered.guestTranslationVi,
         detected_language: rendered.detectedLanguage,
+        language_provenance: languageProvenance,
+        provider_auto_translated: input.providerAutoTranslated === true,
         page_entity: pageEntity,
         care_phase: carePhase,
         reservation_reference: input.reservationReference ?? null,
@@ -1737,10 +1747,17 @@ export class AiReceptionistService {
     }
 
     const guestMetadata = AiReceptionistRepository.toObject(latestGuestMessage.metadata);
-    const targetLanguage = typeof guestMetadata.detected_language === "string" && guestMetadata.detected_language.trim()
+    const providerAutoTranslated = guestMetadata.provider_auto_translated === true;
+    const detectedFromMessage = typeof guestMetadata.detected_language === "string" && guestMetadata.detected_language.trim()
       ? guestMetadata.detected_language.trim().toLowerCase()
       : detectGuestLanguage(latestGuestMessage.content).code;
-    if (!targetLanguage) throw new Error("Chưa xác định được ngôn ngữ của khách.");
+    const conversationLanguage = conversation.language?.trim().toLowerCase() ?? "";
+    const targetLanguage = providerAutoTranslated && (detectedFromMessage === "vi" || detectedFromMessage === "und")
+      ? (conversationLanguage && conversationLanguage !== "vi" && conversationLanguage !== "und" ? conversationLanguage : "und")
+      : detectedFromMessage;
+    if (!targetLanguage || targetLanguage === "und") {
+      throw new Error("Email OTA đã được nhà cung cấp tự dịch sang tiếng Việt và chưa xác định được ngôn ngữ gốc của khách. Hệ thống giữ Fail Closed: chưa dịch/gửi cho tới khi có ngôn ngữ gốc đáng tin cậy.");
+    }
 
     const translated = await translateVietnameseToGuestLanguage(vietnameseContent, targetLanguage);
     await this.activityLog.record({

@@ -235,6 +235,7 @@ export type PilotMessageInput = {
   providerMessageIdHeader?: string | null;
   providerReferences?: string | null;
   historicalImport?: boolean;
+  providerAutoTranslated?: boolean;
   reservationContext?: {
     checkInText?: string | null;
     checkOutText?: string | null;

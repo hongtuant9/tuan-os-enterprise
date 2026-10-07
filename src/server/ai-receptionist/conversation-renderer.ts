@@ -211,7 +211,9 @@ export async function renderSalesConversation(input: {
     const reply = String(raw.reply ?? "").trim();
     const rawGuestTranslationVi = String(raw.guestTranslationVi ?? "").trim();
     const replyTranslationVi = String(raw.replyTranslationVi ?? "").trim();
-    const detectedLanguage = String(raw.detectedLanguage ?? input.language.code).trim() || input.language.code;
+    const detectedLanguage = input.language.code === "und"
+      ? "und"
+      : (String(raw.detectedLanguage ?? input.language.code).trim() || input.language.code);
 
     // Do not trust a multi-field sales-render response as the canonical inbound translation.
     // Translate the guest's original text independently so guest/reply translations cannot bleed into each other.

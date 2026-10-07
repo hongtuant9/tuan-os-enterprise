@@ -27,6 +27,7 @@ export type ParsedOtaEmail = {
   eventType: "guest_message" | "guest_request" | "other";
   actionable: boolean;
   relayVerified: boolean;
+  providerAutoTranslated: boolean;
   guestText: string | null;
   checkInText: string | null;
   checkOutText: string | null;
@@ -258,6 +259,10 @@ function extractGuestText(channel: OtaEmailChannel | null, body: string): string
   };
 
   return firstMatch(text, patterns[channel])?.slice(0, 1800) ?? null;
+}
+
+function providerAutoTranslated(body: string): boolean {
+  return /(nội dung trên được tự động dịch|được dịch tự động|automatically translated|auto-translated|machine translated)/i.test(body);
 }
 
 function classifyGuestMessage(guestText: string | null): ParsedOtaEmail["eventType"] {
@@ -588,6 +593,7 @@ export function parseOtaEmail(input: {
     body,
   });
   const guestText = relayVerified ? extractGuestText(channel, body) : null;
+  const autoTranslated = relayVerified && providerAutoTranslated(body);
   const eventType = classifyGuestMessage(guestText);
   const ref = parsedContext.reservationReference ?? reservationReference(channel, combined);
   const conversationRef = parsedContext.providerConversationReference ?? providerConversationReference(channel, combined);
@@ -601,6 +607,7 @@ export function parseOtaEmail(input: {
     eventType,
     actionable,
     relayVerified,
+    providerAutoTranslated: autoTranslated,
     guestText,
     checkInText: parsedContext.context.checkInText,
     checkOutText: parsedContext.context.checkOutText,

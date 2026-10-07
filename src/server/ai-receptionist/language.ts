@@ -4,6 +4,28 @@ export type GuestLanguage = {
   confidence: "high" | "medium" | "low";
 };
 
+export type GuestLanguageResolutionContext = {
+  providerAutoTranslated?: boolean;
+  previousLanguage?: string | null;
+};
+
+const KNOWN_LANGUAGE_NAMES: Record<string, string> = {
+  vi: "Vietnamese",
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  nl: "Dutch",
+  zh: "Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  ru: "Russian",
+  th: "Thai",
+  und: "Unknown / chưa xác định",
+};
+
 const SCRIPT_RULES: Array<[RegExp, string, string]> = [
   [/[\u0E00-\u0E7F]/, "th", "Thai"],
   [/[\u3040-\u30ff]/, "ja", "Japanese"],
@@ -51,7 +73,24 @@ export function detectGuestLanguage(text: string): GuestLanguage {
   return { code: "en", name: "English", confidence: "low" };
 }
 
+export function resolveGuestLanguage(
+  text: string,
+  context: GuestLanguageResolutionContext = {},
+): GuestLanguage {
+  if (!context.providerAutoTranslated) return detectGuestLanguage(text);
+
+  const previous = context.previousLanguage?.trim().toLowerCase() ?? "";
+  if (previous && previous !== "vi" && previous !== "und" && KNOWN_LANGUAGE_NAMES[previous]) {
+    return { code: previous, name: KNOWN_LANGUAGE_NAMES[previous], confidence: "medium" };
+  }
+
+  return { code: "und", name: "Unknown", confidence: "low" };
+}
+
 export function languageInstruction(language: GuestLanguage): string {
+  if (language.code === "und") {
+    return "The OTA/provider supplied a translated message and the guest's original language is unknown. Draft in English only as a neutral operator-review fallback. Do not infer Vietnamese as the guest's language.";
+  }
   if (language.confidence === "low") {
     return "Detect the guest's language from their latest message and reply in that same language.";
   }
@@ -73,6 +112,7 @@ const CUSTOMER_LANGUAGE_NAME: Record<string, string> = {
   ko: "Korean",
   ru: "Russian",
   th: "Thai",
+  und: "Unknown / chưa xác định",
 };
 
 export function customerLanguageName(code: string): string {

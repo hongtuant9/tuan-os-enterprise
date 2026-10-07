@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { inferCustomerCarePhase } from "./customer-care.ts";
 import { isInternalOpsConversation } from "./conversation-scope.ts";
-import { customerLanguageName, detectGuestLanguage } from "./language.ts";
+import { customerLanguageName, detectGuestLanguage, resolveGuestLanguage } from "./language.ts";
 import { buildUpsellPlan } from "./upsell-engine.ts";
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "./intent-review-metrics.ts";
-import { isCustomerTimelineMessage } from "./conversation-message-visibility.ts";
+import { isCustomerTimelineMessage, latestActionableAiDraft } from "./conversation-message-visibility.ts";
 import { canPublishConfirmedKnowledge } from "./knowledge-authority.ts";
 import {
   buildKiotVietOrderPayload,
@@ -219,4 +219,39 @@ test("only admin or owner approved decisions can publish reusable operational kn
   assert.equal(canPublishConfirmedKnowledge("manager", "approved"), false);
   assert.equal(canPublishConfirmedKnowledge("owner", "needs_info"), false);
   assert.equal(canPublishConfirmedKnowledge("owner", "rejected"), false);
+});
+
+
+test("sent reply consumes its source AI draft so composer does not resurface it", () => {
+  const messages = [
+    { id: "draft-1", direction: "outbound", senderType: "ai", authorship: "ai", status: "simulated", sourceAiMessageId: null },
+    { id: "sent-1", direction: "outbound", senderType: "manager", authorship: "human", status: "sent", sourceAiMessageId: "draft-1" },
+  ];
+  assert.equal(latestActionableAiDraft(messages), undefined);
+});
+
+test("composer keeps only the latest unconsumed AI draft", () => {
+  const messages = [
+    { id: "draft-old", direction: "outbound", senderType: "ai", authorship: "ai", status: "simulated", sourceAiMessageId: null },
+    { id: "sent-old", direction: "outbound", senderType: "manager", authorship: "human", status: "sent", sourceAiMessageId: "draft-old" },
+    { id: "draft-new", direction: "outbound", senderType: "ai", authorship: "ai", status: "simulated", sourceAiMessageId: null },
+  ];
+  assert.equal(latestActionableAiDraft(messages)?.id, "draft-new");
+});
+
+test("provider auto-translated Vietnamese does not become guest language", () => {
+  const resolved = resolveGuestLanguage(
+    "Xin chào, chúng tôi sẽ đến vào khoảng 20:30.",
+    { providerAutoTranslated: true, previousLanguage: null },
+  );
+  assert.equal(resolved.code, "und");
+});
+
+test("provider auto-translated message reuses prior trustworthy guest language", () => {
+  const resolved = resolveGuestLanguage(
+    "Xin chào, chúng tôi sẽ đến vào khoảng 20:30.",
+    { providerAutoTranslated: true, previousLanguage: "en" },
+  );
+  assert.equal(resolved.code, "en");
+  assert.equal(resolved.confidence, "medium");
 });

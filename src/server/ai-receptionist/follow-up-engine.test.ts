@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildFollowUpPlan } from "./follow-up-engine.ts";
+import { buildFollowUpPlan, hasComplaintSignal } from "./follow-up-engine.ts";
 
 test("pre-service follow-up is recommendation-only", () => {
   const plan = buildFollowUpPlan("pre_service");
@@ -36,4 +36,10 @@ test("human takeover suppresses follow-up planning", () => {
 
 test("customer opt-out suppresses follow-up planning", () => {
   assert.equal(buildFollowUpPlan("pre_service", { customerDeclinedFollowUp: true }), null);
+});
+
+test("complaint signal detects direct guest complaint text", () => {
+  assert.equal(hasComplaintSignal("I have a complaint about the air conditioner."), true);
+  assert.equal(hasComplaintSignal("Điều hòa không hoạt động và tôi muốn phàn nàn."), true);
+  assert.equal(hasComplaintSignal("Everything is okay."), false);
 });

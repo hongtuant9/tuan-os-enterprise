@@ -119,7 +119,7 @@ async function collectAgodaSnapshots(page: Page, maxConversations: number): Prom
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }
 
-  const cardCount = await page.$eval(
+  const cardCount = await page.$$eval(
     '[data-testid^="inbox-conversation-card inbox-conversation-card-"]',
     (nodes) => nodes.length,
   );

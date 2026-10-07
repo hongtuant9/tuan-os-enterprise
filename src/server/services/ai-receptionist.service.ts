@@ -28,10 +28,10 @@ import { buildFollowUpPlan, hasComplaintSignal } from "@/server/ai-receptionist/
 import { buildIntentReviewMetrics, isTrustEligibleEvidence } from "@/server/ai-receptionist/intent-review-metrics";
 import { isInternalOpsConversation } from "@/server/ai-receptionist/conversation-scope";
 import { channelAllowsAutomaticUpsell } from "@/server/channels/channel-policy";
-import { detectGuestLanguage } from "@/server/ai-receptionist/language";
+import { customerLanguageName, detectGuestLanguage } from "@/server/ai-receptionist/language";
 import { getPagePersona } from "@/server/ai-receptionist/page-persona";
 import { resolveKnowledge } from "@/server/ai-receptionist/knowledge-resolver";
-import { customerLanguageName, renderSalesConversation, translateToVietnamese, translateVietnameseToGuestLanguage } from "@/server/ai-receptionist/conversation-renderer";
+import { renderSalesConversation, translateToVietnamese, translateVietnameseToGuestLanguage } from "@/server/ai-receptionist/conversation-renderer";
 import {
   getReceptionistMode,
   isKiotVietDirectBookingWriteEnabled,

@@ -12,6 +12,7 @@ export type OtaBrowserState =
   | "HOLD_MFA"
   | "HOLD_CAPTCHA"
   | "READY"
+  | "BUSY_BACKFILL"
   | "ERROR";
 
 type AgodaSnapshot = {
@@ -27,6 +28,9 @@ const PROVIDER_ENDPOINTS: Record<OtaBrowserProvider, string> = {
   agoda: process.env.TCE_OTA_AGODA_CDP_URL?.trim() || "http://tce-ota-agoda-browser:9223",
   booking: process.env.TCE_OTA_BOOKING_CDP_URL?.trim() || "http://tce-ota-booking-browser:9223",
 };
+
+let agodaBackfillActive = false;
+
 
 function enabled() {
   return process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true";
@@ -322,6 +326,17 @@ async function navigateAgodaPropertyInbox(page: Page, propertyExternalId: string
 
 export async function backfillAgodaConversationHistory(maxConversations = 500) {
   if (!enabled()) return { state: "DISABLED" as OtaBrowserState, processed: 0, conversations: [] };
+  if (agodaBackfillActive) {
+    return {
+      state: "BUSY_BACKFILL" as OtaBrowserState,
+      processed: 0,
+      conversations: [],
+      automaticOutbound: false,
+      historicalBackfill: true,
+    };
+  }
+
+  agodaBackfillActive = true;
   let browser: Browser | null = null;
   try {
     browser = await connect("agoda");
@@ -390,6 +405,7 @@ export async function backfillAgodaConversationHistory(maxConversations = 500) {
     }
   } finally {
     try { browser?.disconnect(); } catch {}
+    agodaBackfillActive = false;
   }
 }
 
@@ -416,6 +432,14 @@ export async function otaMessagingBrowserWorkerTick() {
   }
 
   // Agoda collection is read-only against the OTA UI and writes only normalized history into TUAN OS.
+  if (agodaBackfillActive) {
+    providerResults.push({
+      provider: "agoda",
+      state: "BUSY_BACKFILL",
+      processed: 0,
+      mode: "BACKFILL_EXCLUSIVE_LOCK",
+    });
+  } else {
   let agodaBrowser: Browser | null = null;
   try {
     agodaBrowser = await connect("agoda");
@@ -471,6 +495,7 @@ export async function otaMessagingBrowserWorkerTick() {
     });
   } finally {
     try { agodaBrowser?.disconnect(); } catch {}
+  }
   }
 
   // Booking runtime is monitored but history ingestion remains fail-closed

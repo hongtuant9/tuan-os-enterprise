@@ -75,18 +75,19 @@ function runtimeSignals() {
 
   return {
     companyAutopilotEnabled,
-    companyRuntimeMode: companyAutopilotEnabled ? "VPS_ALWAYS_ON" : "PAUSED",
-    runtimeDependencyPolicy: "VPS_ONLY",
+    companyRuntimeMode: companyAutopilotEnabled ? "LINUX_ALWAYS_ON" : "PAUSED",
+    runtimeDependencyPolicy: "PORTABLE_LINUX",
     windowDependency: false,
     desktopDependency: false,
     desktopRuntimeRole: "NON_RUNTIME_FALLBACK_ONLY",
     chatWindowRole: "STATELESS_CONTROL_SURFACE_ONLY",
     cmiBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
     vpsHeadlessBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
+    linuxHeadlessBrowserEnabled: companyAutopilotEnabled && process.env.CMI_BROWSER_ENABLED?.trim().toLowerCase() !== "false",
     browserRuntimeMode:
       process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true"
-        ? "VPS_HEADLESS_PLUS_AUTHENTICATED"
-        : "VPS_HEADLESS_PUBLIC_ONLY",
+        ? "LINUX_HEADLESS_PLUS_AUTHENTICATED"
+        : "LINUX_HEADLESS_PUBLIC_ONLY",
     cmiQueueWorkerEnabled: companyAutopilotEnabled && process.env.CMI_QUEUE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     staffOpsWorkerEnabled: companyAutopilotEnabled && process.env.TCE_STAFF_OPS_WORKER_ENABLED?.trim().toLowerCase() !== "false",
     executiveWorkerEnabled: companyAutopilotEnabled && process.env.TCE_EXECUTIVE_WORKER_ENABLED?.trim().toLowerCase() !== "false",
@@ -164,7 +165,7 @@ function runtimeSignals() {
       120_000,
       Number(process.env.TCE_OTA_BROWSER_WORKER_INTERVAL_MS || 120_000),
     ),
-    otaBrowserRuntimeScope: "VPS_ONLY_READ_FIRST",
+    otaBrowserRuntimeScope: "PORTABLE_LINUX_READ_FIRST",
     otaBrowserOutboundEnabled: false,
     facebookRecruitmentBrowserEnabled: process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() === "true",
     facebookRecruitmentBrowserPolicy: facebookRecruitmentBrowserPolicy(),

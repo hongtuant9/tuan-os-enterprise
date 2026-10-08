@@ -91,9 +91,9 @@ jobs:
           signals = data.get("runtimeSignals") or {}
           expect(signals.get("companyAutopilotEnabled") is True,
                  f"companyAutopilotEnabled={signals.get('companyAutopilotEnabled')!r}")
-          expect(signals.get("companyRuntimeMode") == "VPS_ALWAYS_ON",
+          expect(signals.get("companyRuntimeMode") == "LINUX_ALWAYS_ON",
                  f"companyRuntimeMode={signals.get('companyRuntimeMode')!r}")
-          expect(signals.get("runtimeDependencyPolicy") == "VPS_ONLY",
+          expect(signals.get("runtimeDependencyPolicy") == "PORTABLE_LINUX",
                  f"runtimeDependencyPolicy={signals.get('runtimeDependencyPolicy')!r}")
           expect(signals.get("windowDependency") is False,
                  f"windowDependency={signals.get('windowDependency')!r}")
@@ -113,7 +113,7 @@ jobs:
                  f"cmiBrowserEnabled={signals.get('cmiBrowserEnabled')!r}")
           expect(signals.get("vpsHeadlessBrowserEnabled") is True,
                  f"vpsHeadlessBrowserEnabled={signals.get('vpsHeadlessBrowserEnabled')!r}")
-          expect(signals.get("browserRuntimeMode") in ("VPS_HEADLESS_PUBLIC_ONLY", "VPS_HEADLESS_PLUS_AUTHENTICATED"),
+          expect(signals.get("browserRuntimeMode") in ("LINUX_HEADLESS_PUBLIC_ONLY", "LINUX_HEADLESS_PLUS_AUTHENTICATED"),
                  f"browserRuntimeMode={signals.get('browserRuntimeMode')!r}")
           expect(signals.get("cmiQueueWorkerEnabled") is True,
                  f"cmiQueueWorkerEnabled={signals.get('cmiQueueWorkerEnabled')!r}")

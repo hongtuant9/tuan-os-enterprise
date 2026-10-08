@@ -380,7 +380,7 @@ export async function POST(req: NextRequest) {
       `Telegram Owner: ${status.enabled ? "ACTIVE" : "HOLD"}`,
       `AI Agent Operator Group: ${operatorChatId ? "ACTIVE" : "NOT BOUND"}`,
       `TCE Operations Group: ${opsChatId ? "ACTIVE" : "NOT BOUND"}`,
-      "Runtime: VPS_ONLY",
+      "Runtime: PORTABLE_LINUX",
       "Window dependency: NO",
       "Desktop dependency: NO",
       `Authenticated Browser Executor: ${process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true" ? "ACTIVE" : "OFF/HOLD"}`,

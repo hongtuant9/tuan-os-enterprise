@@ -15,12 +15,12 @@ INVENTORY_BOT_STATE_DIR="${INVENTORY_BOT_STATE_DIR:-/opt/tuan-ai/kiotviet-invent
 AUTH_BROWSER_STATE_DIR="${AUTH_BROWSER_STATE_DIR:-/opt/tuan-ai/auth-browser}"
 APP_DOCKER_NETWORK="${APP_DOCKER_NETWORK:-}"
 if [ -z "$APP_DOCKER_NETWORK" ] && docker inspect "$APP_CONTAINER" >/dev/null 2>&1; then
-  APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}}{{"\\n"}}{{end}}{{end}}' "$APP_CONTAINER" 2>/dev/null | head -n1 | tr -d '\\r' || true)"
+  APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}} {{end}}{{end}}' "$APP_CONTAINER" 2>/dev/null | awk '{print $1}' || true)"
 fi
 if [ -z "$APP_DOCKER_NETWORK" ]; then
   for browser_container in tce-ota-agoda-browser tce-ota-booking-browser; do
     if docker inspect "$browser_container" >/dev/null 2>&1; then
-      APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}}{{"\\n"}}{{end}}{{end}}' "$browser_container" 2>/dev/null | head -n1 | tr -d '\\r' || true)"
+      APP_DOCKER_NETWORK="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{if ne $k "bridge"}}{{$k}} {{end}}{{end}}' "$browser_container" 2>/dev/null | awk '{print $1}' || true)"
       [ -n "$APP_DOCKER_NETWORK" ] && break
     fi
   done

@@ -178,6 +178,13 @@ function runtimeSignals() {
       1000,
       Math.max(100, Number(process.env.TCE_OTA_HISTORY_BACKFILL_MAX_CONVERSATIONS || 1000)),
     ),
+    otaDemandKnowledgeRefreshEnabled:
+      companyAutopilotEnabled &&
+      process.env.TCE_OTA_DEMAND_KNOWLEDGE_REFRESH_ENABLED?.trim().toLowerCase() !== "false",
+    otaDemandKnowledgeRefreshIntervalMs: Math.max(
+      3_600_000,
+      Number(process.env.TCE_OTA_DEMAND_KNOWLEDGE_REFRESH_INTERVAL_MS || 21_600_000),
+    ),
     otaBrowserRuntimeScope: "PORTABLE_LINUX_READ_FIRST",
     otaBrowserOutboundEnabled: false,
     facebookRecruitmentBrowserEnabled: process.env.TCE_FACEBOOK_RECRUITMENT_BROWSER_ENABLED?.trim().toLowerCase() === "true",

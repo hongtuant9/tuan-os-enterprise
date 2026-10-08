@@ -104,6 +104,14 @@ const OTA_GUEST_DEMAND_TOPICS: Array<{
   { key: "cancellation_refund", title: "Hủy / hoàn tiền", patterns: [/cancel/i, /refund/i, /hủy/i, /hoàn tiền/i] },
   { key: "visa_document", title: "Visa / giấy tờ lưu trú", patterns: [/visa/i, /invitation/i, /confirmation letter/i, /giấy xác nhận/i, /thư xác nhận/i] },
   { key: "directions_location", title: "Đường đi / vị trí", patterns: [/direction/i, /location/i, /how to get/i, /đường đi/i, /vị trí/i, /map/i] },
+  { key: "train_bus_station", title: "Tàu / xe khách / bến ga", patterns: [/train/i, /bus/i, /station/i, /railway/i, /ga tàu/i, /bến xe/i, /xe khách/i] },
+  { key: "pickup_dropoff", title: "Đón / trả khách", patterns: [/pick.?up/i, /drop.?off/i, /đón khách/i, /đón tôi/i, /trả khách/i] },
+  { key: "children_family", title: "Gia đình / trẻ em", patterns: [/child/i, /children/i, /kid/i, /family/i, /trẻ em/i, /gia đình/i, /em bé/i] },
+  { key: "room_availability", title: "Còn phòng / tình trạng phòng", patterns: [/availability/i, /available room/i, /room available/i, /vacancy/i, /còn phòng/i, /còn phòng trống/i] },
+  { key: "checkin_time", title: "Giờ nhận phòng", patterns: [/check.?in time/i, /what time.*check.?in/i, /giờ nhận phòng/i, /mấy giờ.*nhận phòng/i] },
+  { key: "late_arrival", title: "Đến muộn / nhận phòng muộn", patterns: [/late arrival/i, /arrive late/i, /late check.?in/i, /đến muộn/i, /đến trễ/i, /nhận phòng muộn/i] },
+  { key: "parking", title: "Chỗ đỗ xe", patterns: [/parking/i, /car park/i, /đỗ xe/i, /đậu xe/i] },
+  { key: "pet", title: "Thú cưng", patterns: [/\bpet\b/i, /\bdog\b/i, /\bcat\b/i, /thú cưng/i, /chó/i, /mèo/i] },
 ];
 
 function classifyOtaGuestDemand(content: string): string[] {

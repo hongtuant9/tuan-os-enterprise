@@ -48,6 +48,17 @@ const otaBrowserWorkerEnabled =
   process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true" &&
   process.env.TCE_OTA_BROWSER_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const otaBrowserWorkerIntervalMs = Math.max(120_000, Number(process.env.TCE_OTA_BROWSER_WORKER_INTERVAL_MS || 120_000));
+const otaHistoryBackfillEnabled =
+  otaBrowserWorkerEnabled &&
+  process.env.TCE_OTA_HISTORY_BACKFILL_ENABLED?.trim().toLowerCase() !== "false";
+const otaHistoryBackfillIntervalMs = Math.max(
+  21_600_000,
+  Number(process.env.TCE_OTA_HISTORY_BACKFILL_INTERVAL_MS || 86_400_000),
+);
+const otaHistoryBackfillMaxConversations = Math.min(
+  1000,
+  Math.max(100, Number(process.env.TCE_OTA_HISTORY_BACKFILL_MAX_CONVERSATIONS || 1000)),
+);
 const trelloWorkerEnabled = companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const trelloWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_TRELLO_WORKER_INTERVAL_MS || 300_000));
 const knowledgeGovernanceWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
@@ -576,6 +587,62 @@ async function otaBrowserWorkerLoop() {
   }
 }
 
+async function otaHistoryBackfillTick() {
+  if (!otaHistoryBackfillEnabled || !otaBrowserWorkerToken || stopping) return;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/internal/tce/browser/ota-messaging/worker`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-tce-ota-browser-worker-token": otaBrowserWorkerToken,
+        },
+        body: JSON.stringify({
+          mode: "backfill_agoda",
+          maxConversations: otaHistoryBackfillMaxConversations,
+        }),
+        signal: AbortSignal.timeout(900_000),
+      },
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error(`[TCE OTA History] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    const result = payload?.result ?? {};
+    const properties = Array.isArray(result.properties)
+      ? result.properties.map((item) => `${item.pageEntity ?? item.propertyExternalId}:${item.state}:${item.processed ?? 0}`).join(",")
+      : "n/a";
+    const knowledge = result.knowledge ?? {};
+    console.log(
+      `[TCE OTA History] provider=agoda state=${result.state ?? "n/a"} processed=${result.processed ?? 0} properties=${properties} knowledge_observations=${knowledge.observations ?? 0} outbound=false`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE OTA History] ${message}`);
+  }
+}
+
+async function otaHistoryBackfillLoop() {
+  if (!otaHistoryBackfillEnabled) {
+    console.log("[TCE OTA History] disabled");
+    return;
+  }
+  if (!otaBrowserWorkerToken) {
+    console.error("[TCE OTA History] disabled: worker token unavailable");
+    return;
+  }
+  console.log(
+    `[TCE OTA History] enabled interval_ms=${otaHistoryBackfillIntervalMs} max_conversations=${otaHistoryBackfillMaxConversations} read_only=true`,
+  );
+  await sleep(90000);
+  while (!stopping) {
+    await otaHistoryBackfillTick();
+    await sleep(otaHistoryBackfillIntervalMs);
+  }
+}
+
 async function cozyPurchaseWorkerTick() {
   if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
   try {
@@ -717,5 +784,6 @@ void kiotVietInventoryBotWorkerLoop();
 void omnichannelWorkerLoop();
 void otaEmailWorkerLoop();
 void otaBrowserWorkerLoop();
+void otaHistoryBackfillLoop();
 void trelloWorkerLoop();
 void knowledgeGovernanceWorkerLoop();

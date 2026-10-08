@@ -32,6 +32,10 @@ function enabled() {
   return process.env.TCE_AUTHENTICATED_BROWSER_EXECUTOR_ENABLED?.trim().toLowerCase() === "true";
 }
 
+function probeOnly() {
+  return process.env.TCE_OTA_BROWSER_PROBE_ONLY?.trim().toLowerCase() !== "false";
+}
+
 async function cdpWebSocket(provider: OtaBrowserProvider): Promise<string> {
   const endpoint = new URL(PROVIDER_ENDPOINTS[provider]);
   const resolved = await lookup(endpoint.hostname);
@@ -185,7 +189,21 @@ export async function otaMessagingBrowserWorkerTick() {
   const providerResults: Array<Record<string, unknown>> = [];
   let processed = 0;
 
-  // Agoda is enabled for read-only collection because its DOM contract passed UAT.
+  if (probeOnly()) {
+    const agoda = await otaBrowserProviderStatus("agoda");
+    const booking = await otaBrowserProviderStatus("booking");
+    providerResults.push({ ...agoda, mode: "PROBE_ONLY" });
+    providerResults.push({ ...booking, mode: "PROBE_ONLY" });
+    return {
+      state: providerResults.some((item) => item.state === "READY") ? "READY" : "ERROR",
+      processed: 0,
+      providers: providerResults,
+      automaticOutbound: false,
+      customerDataWrite: false,
+    };
+  }
+
+  // Agoda collection is write-capable and therefore requires explicit PROBE_ONLY=false.
   let agodaBrowser: Browser | null = null;
   try {
     agodaBrowser = await connect("agoda");

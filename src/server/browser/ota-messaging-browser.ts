@@ -140,6 +140,49 @@ export async function otaBrowserProviderStatus(provider: OtaBrowserProvider) {
   }
 }
 
+async function nearestScrollableSelector(page: Page, baseSelector: string): Promise<string> {
+  return await page.evaluate((selector) => {
+    const base = document.querySelector<HTMLElement>(selector);
+    if (!base) return selector;
+    let node: HTMLElement | null = base;
+    while (node) {
+      if (node.scrollHeight > node.clientHeight + 24) {
+        const testId = node.getAttribute("data-testid");
+        if (testId) return `[data-testid="${testId.replace(/"/g, '\\"')}"]`;
+        node.dataset.tceScrollTarget = "true";
+        return '[data-tce-scroll-target="true"]';
+      }
+      node = node.parentElement;
+    }
+    return selector;
+  }, baseSelector);
+}
+
+async function scrollUntilStable(
+  page: Page,
+  baseSelector: string,
+  direction: "top" | "bottom",
+  maxRounds = 40,
+): Promise<void> {
+  const selector = await nearestScrollableSelector(page, baseSelector);
+  let stable = 0;
+  let previous = "";
+  for (let round = 0; round < maxRounds && stable < 3; round += 1) {
+    const state = await page.evaluate(({ selector, direction }) => {
+      const node = document.querySelector<HTMLElement>(selector);
+      if (!node) return { key: "missing", moved: false };
+      const before = node.scrollTop;
+      node.scrollTop = direction === "top" ? 0 : node.scrollHeight;
+      const key = `${node.scrollTop}|${node.scrollHeight}|${node.childElementCount}`;
+      return { key, moved: before !== node.scrollTop };
+    }, { selector, direction });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    if (state.key === previous && !state.moved) stable += 1;
+    else stable = 0;
+    previous = state.key;
+  }
+}
+
 async function collectAgodaSnapshots(page: Page, maxConversations: number): Promise<AgodaSnapshot[]> {
   const allMessagesTab = await page.$('[data-testid="all-messages-tab"]');
   if (allMessagesTab) {
@@ -147,62 +190,156 @@ async function collectAgodaSnapshots(page: Page, maxConversations: number): Prom
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }
 
-  const cardCount = await page.$$eval(
-    '[data-testid^="inbox-conversation-card inbox-conversation-card-"]',
-    (nodes) => nodes.length,
+  await scrollUntilStable(
+    page,
+    '[data-testid="inbox-conversations-container-card"]',
+    "top",
+    8,
   );
-  const limit = Math.min(cardCount, maxConversations);
+
   const snapshots: AgodaSnapshot[] = [];
+  const seenReservations = new Set<string>();
+  const seenCardFingerprints = new Set<string>();
+  let idleRounds = 0;
 
-  for (let index = 0; index < limit; index += 1) {
-    const selector = `[data-testid="inbox-conversation-card inbox-conversation-card-${index}"]`;
-    const card = await page.$(selector);
-    if (!card) continue;
-    const customerName = await card.$eval(
-      '[data-testid="inbox-conversation-card-guest-name"]',
-      (node) => (node.textContent || "").trim(),
-    ).catch(() => "");
+  for (let round = 0; round < 120 && snapshots.length < maxConversations && idleRounds < 5; round += 1) {
+    const cards = await page.$$('[data-testid^="inbox-conversation-card inbox-conversation-card-"]');
+    let discoveredThisRound = 0;
 
-    await card.evaluate((node) => {
-      node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    for (const card of cards) {
+      if (snapshots.length >= maxConversations) break;
+      const cardFingerprint = await card.evaluate((node) => ((node as HTMLElement).innerText || "").trim());
+      if (!cardFingerprint || seenCardFingerprints.has(cardFingerprint)) continue;
+      seenCardFingerprints.add(cardFingerprint);
+
+      const customerName = await card.$eval(
+        '[data-testid="inbox-conversation-card-guest-name"]',
+        (node) => (node.textContent || "").trim(),
+      ).catch(() => "");
+
+      await card.evaluate((node) => {
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      await scrollUntilStable(
+        page,
+        '[data-testid="inbox-message-cards-container"]',
+        "top",
+        30,
+      );
+
+      const raw = await page.evaluate(() => {
+        const values = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="booking-details-"]'))
+          .map((node) => (node.innerText || node.textContent || "").trim())
+          .filter(Boolean);
+        const root = document.querySelector<HTMLElement>('[data-testid="inbox-message-cards-container"]');
+        const items = root
+          ? Array.from(root.children).map((node, i) => ({
+              index: i,
+              text: ((node as HTMLElement).innerText || "").trim(),
+              className: (node as HTMLElement).className || "",
+            }))
+          : [];
+        return { values, items };
+      });
+
+      const propertyExternalId = raw.values.find((value) => value === "6280104" || value === "7206992") ?? "";
+      const reservationReference = raw.values.find((value) => /^\d{10}$/.test(value) && value !== propertyExternalId) ?? "";
+      if (!propertyExternalId || !reservationReference || raw.items.length === 0) continue;
+      if (seenReservations.has(reservationReference)) continue;
+      seenReservations.add(reservationReference);
+
+      const pageEntity = propertyExternalId === "6280104"
+        ? "ruby"
+        : propertyExternalId === "7206992"
+          ? "lavender"
+          : "unknown";
+
+      snapshots.push({
+        propertyExternalId,
+        reservationReference,
+        externalConversationId: `agoda:${pageEntity}:${reservationReference}`,
+        customerName: customerName || null,
+        pageEntity,
+        items: raw.items,
+      });
+      discoveredThisRound += 1;
+    }
+
+    const moved = await page.evaluate(() => {
+      const base = document.querySelector<HTMLElement>('[data-testid="inbox-conversations-container-card"]');
+      if (!base) return false;
+      let node: HTMLElement | null = base;
+      while (node && node.scrollHeight <= node.clientHeight + 24) node = node.parentElement;
+      if (!node) return false;
+      const before = node.scrollTop;
+      node.scrollTop = Math.min(node.scrollHeight, node.scrollTop + Math.max(node.clientHeight * 0.85, 400));
+      return node.scrollTop !== before;
     });
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    await new Promise((resolve) => setTimeout(resolve, 850));
 
-    const raw = await page.evaluate(() => {
-      const values = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="booking-details-"]'))
-        .map((node) => (node.innerText || node.textContent || "").trim())
-        .filter(Boolean);
-      const root = document.querySelector<HTMLElement>('[data-testid="inbox-message-cards-container"]');
-      const items = root
-        ? Array.from(root.children).map((node, i) => ({
-            index: i,
-            text: ((node as HTMLElement).innerText || "").trim(),
-          }))
-        : [];
-      return { values, items };
-    });
-
-    const propertyExternalId = raw.values.find((value) => value === "6280104" || value === "7206992") ?? "";
-    const reservationReference = raw.values.find((value) => /^\d{10}$/.test(value) && value !== propertyExternalId) ?? "";
-    if (!propertyExternalId || !reservationReference || raw.items.length === 0) continue;
-
-    const pageEntity = propertyExternalId === "6280104"
-      ? "ruby"
-      : propertyExternalId === "7206992"
-        ? "lavender"
-        : "unknown";
-
-    snapshots.push({
-      propertyExternalId,
-      reservationReference,
-      externalConversationId: `agoda:${pageEntity}:${reservationReference}`,
-      customerName: customerName || null,
-      pageEntity,
-      items: raw.items,
-    });
+    if (discoveredThisRound === 0 && !moved) idleRounds += 1;
+    else if (discoveredThisRound === 0) idleRounds += 1;
+    else idleRounds = 0;
   }
 
   return snapshots;
+}
+
+async function authenticatedAgodaPage(browser: Browser): Promise<{ page: Page; temporary: boolean }> {
+  const pages = await browser.pages();
+  const existing = pages.find((candidate) => /portal\.agoda\.com/i.test(candidate.url()));
+  if (existing) return { page: existing, temporary: false };
+  const page = await browser.newPage();
+  await page.goto("https://portal.agoda.com/mldc/vi-vn/app/iam/propertysearch", {
+    waitUntil: "domcontentloaded",
+    timeout: 45000,
+  }).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 1800));
+  return { page, temporary: true };
+}
+
+export async function backfillAgodaConversationHistory(maxConversations = 500) {
+  if (!enabled()) return { state: "DISABLED" as OtaBrowserState, processed: 0, conversations: [] };
+  let browser: Browser | null = null;
+  try {
+    browser = await connect("agoda");
+    const { page, temporary } = await authenticatedAgodaPage(browser);
+    try {
+      const state = await agodaState(page);
+      if (state !== "READY") return { state, processed: 0, conversations: [] };
+
+      const snapshots = await collectAgodaSnapshots(page, maxConversations);
+      const results = [];
+      for (const snapshot of snapshots) {
+        const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot(snapshot);
+        results.push({
+          reservationReference: snapshot.reservationReference,
+          parsed: result.parsed,
+          imported: result.imported,
+          reconciled: result.reconciled,
+          duplicates: result.duplicates,
+        });
+      }
+
+      const knowledge = await getAdminContainer().aiReceptionist.refreshOtaGuestDemandKnowledge();
+      return {
+        state: "READY" as OtaBrowserState,
+        processed: snapshots.length,
+        conversations: results,
+        knowledge,
+        automaticOutbound: false,
+        historicalBackfill: true,
+      };
+    } finally {
+      if (temporary) {
+        try { await page.close(); } catch {}
+      }
+    }
+  } finally {
+    try { browser?.disconnect(); } catch {}
+  }
 }
 
 export async function otaMessagingBrowserWorkerTick() {
@@ -231,7 +368,7 @@ export async function otaMessagingBrowserWorkerTick() {
   let agodaBrowser: Browser | null = null;
   try {
     agodaBrowser = await connect("agoda");
-    const page = await newProbePage(agodaBrowser);
+    const { page } = await authenticatedAgodaPage(agodaBrowser);
     const state = await agodaState(page);
     if (state !== "READY") {
       providerResults.push({ provider: "agoda", state, processed: 0 });

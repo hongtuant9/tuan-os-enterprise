@@ -13,6 +13,7 @@ type ReviewRow = Database["public"]["Tables"]["ai_manager_reviews"]["Row"];
 type ReviewInsert = Database["public"]["Tables"]["ai_manager_reviews"]["Insert"];
 type CandidateRow = Database["public"]["Tables"]["ai_knowledge_candidates"]["Row"];
 type CandidateInsert = Database["public"]["Tables"]["ai_knowledge_candidates"]["Insert"];
+type CandidateUpdate = Database["public"]["Tables"]["ai_knowledge_candidates"]["Update"];
 type PilotSessionInsert = Database["public"]["Tables"]["ai_pilot_sessions"]["Insert"];
 type UpsellRow = Database["public"]["Tables"]["ai_upsell_events"]["Row"];
 type UpsellInsert = Database["public"]["Tables"]["ai_upsell_events"]["Insert"];
@@ -275,6 +276,29 @@ export class AiReceptionistRepository {
     const { data, error } = await this.db
       .from("ai_knowledge_candidates")
       .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async findKnowledgeCandidateByFieldKey(fieldKey: string): Promise<CandidateRow | null> {
+    const { data, error } = await this.db
+      .from("ai_knowledge_candidates")
+      .select("*")
+      .eq("field_key", fieldKey)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateKnowledgeCandidate(id: string, patch: CandidateUpdate): Promise<CandidateRow> {
+    const { data, error } = await this.db
+      .from("ai_knowledge_candidates")
+      .update(patch)
+      .eq("id", id)
       .select("*")
       .single();
     if (error) throw error;

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { otaMessagingBrowserWorkerTick } from "@/server/browser/ota-messaging-browser";
+import { backfillAgodaConversationHistory, otaMessagingBrowserWorkerTick } from "@/server/browser/ota-messaging-browser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +26,17 @@ export async function POST(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const result = await otaMessagingBrowserWorkerTick();
+
+  const body = await req.json().catch(() => ({})) as {
+    mode?: "poll" | "backfill_agoda";
+    maxConversations?: number;
+  };
+
+  const result = body.mode === "backfill_agoda"
+    ? await backfillAgodaConversationHistory(
+        Math.min(1000, Math.max(1, Number(body.maxConversations || 500))),
+      )
+    : await otaMessagingBrowserWorkerTick();
+
   return NextResponse.json({ ok: true, result });
 }

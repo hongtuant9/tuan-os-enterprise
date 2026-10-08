@@ -677,9 +677,13 @@ export class AiReceptionistService {
         reservationDataSource,
         reservationStatus,
         reservationMissingReasons,
-        historyCompleteness: row.channel === "booking" || row.channel === "agoda" || row.channel === "airbnb" || row.channel === "expedia"
-          ? "partial_email_only"
-          : "unknown",
+        historyCompleteness:
+          metadata.history_completeness === "complete"
+          || typeof metadata.direct_history_complete_at === "string"
+            ? "complete"
+            : ["booking", "agoda", "airbnb", "expedia"].includes(row.channel)
+              ? "partial_email_only"
+              : "unknown",
         manualSendReady: manualSend.ready,
         manualSendReason: manualSend.reason,
         unread: unreadInbound.length > 0,
@@ -800,6 +804,7 @@ export class AiReceptionistService {
     pageEntity?: "tce" | "lavender" | "ruby" | "cozy" | "unknown";
     items: AgodaDomHistoryItem[];
     snapshotDate?: string;
+    fullHistoryVerified?: boolean;
   }): Promise<{
     parsed: number;
     imported: number;
@@ -889,7 +894,14 @@ export class AiReceptionistService {
           browser_dom_provider: "agoda_ycs",
           browser_dom_last_reconciled_at: new Date().toISOString(),
           browser_dom_last_message_count: parsed.length,
-          history_completeness: "partial_browser_dom_verified",
+          history_completeness: input.fullHistoryVerified === true
+            ? "complete"
+            : metadata.history_completeness === "complete"
+              ? "complete"
+              : "partial_browser_dom_verified",
+          full_history_verified_at: input.fullHistoryVerified === true
+            ? new Date().toISOString()
+            : metadata.full_history_verified_at ?? null,
           email_relay_role: "fallback_evidence_only",
         },
       });

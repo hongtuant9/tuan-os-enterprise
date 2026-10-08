@@ -367,7 +367,10 @@ export async function backfillAgodaConversationHistory(maxConversations = 500) {
         );
 
         for (const snapshot of snapshots) {
-          const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot(snapshot);
+          const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot({
+            ...snapshot,
+            fullHistoryVerified: true,
+          });
           results.push({
             propertyExternalId: property.propertyExternalId,
             pageEntity: property.pageEntity,

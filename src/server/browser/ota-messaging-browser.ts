@@ -70,29 +70,25 @@ function detectState(url: string, text: string): OtaBrowserState {
   return "READY";
 }
 
-async function ensurePage(browser: Browser): Promise<Page> {
-  const pages = await browser.pages();
-  return pages[0] ?? await browser.newPage();
+async function newProbePage(browser: Browser): Promise<Page> {
+  return await browser.newPage();
 }
 
 async function agodaState(page: Page): Promise<OtaBrowserState> {
-  await page.goto("https://portal.agoda.com/mldc/vi-vn/app/inbox/multiproperty", {
-    waitUntil: "domcontentloaded",
-    timeout: 45000,
-  }).catch(() => undefined);
-  await new Promise((resolve) => setTimeout(resolve, 1800));
-  const state = detectState(page.url(), await pageText(page));
+  const url = page.url();
+  const text = await pageText(page);
+  const state = detectState(url, text);
   if (state !== "READY") return state;
+
+  // Current Agoda Partner Portal inbox route. Reaching this route means the
+  // authenticated property context is active; keep the probe read-only.
+  if (/\/app\/hermes\/inbox\/ycs\/\d+/i.test(url)) return "READY";
+
   const ready = await page.$('[data-testid="multi-property-inbox"],[data-testid="property-messages-tabs"]');
   return ready ? "READY" : "HOLD_LOGIN";
 }
 
 async function bookingState(page: Page): Promise<OtaBrowserState> {
-  await page.goto("https://admin.booking.com/", {
-    waitUntil: "domcontentloaded",
-    timeout: 45000,
-  }).catch(() => undefined);
-  await new Promise((resolve) => setTimeout(resolve, 1800));
   return detectState(page.url(), await pageText(page));
 }
 
@@ -101,9 +97,37 @@ export async function otaBrowserProviderStatus(provider: OtaBrowserProvider) {
   let browser: Browser | null = null;
   try {
     browser = await connect(provider);
-    const page = await ensurePage(browser);
-    const state = provider === "agoda" ? await agodaState(page) : await bookingState(page);
-    return { provider, state, authenticated: state === "READY" };
+    const pages = await browser.pages();
+    const existing = pages.find((page) => {
+      const url = page.url();
+      return provider === "agoda"
+        ? /portal\.agoda\.com/i.test(url)
+        : /booking\.com/i.test(url);
+    });
+    const page = existing ?? await newProbePage(browser);
+    const temporary = !existing;
+    try {
+      if (temporary) {
+        if (provider === "agoda") {
+          await page.goto("https://portal.agoda.com/mldc/vi-vn/app/iam/propertysearch", {
+            waitUntil: "domcontentloaded",
+            timeout: 45000,
+          }).catch(() => undefined);
+        } else {
+          await page.goto("https://admin.booking.com/", {
+            waitUntil: "domcontentloaded",
+            timeout: 45000,
+          }).catch(() => undefined);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1800));
+      }
+      const state = provider === "agoda" ? await agodaState(page) : await bookingState(page);
+      return { provider, state, authenticated: state === "READY" };
+    } finally {
+      if (temporary) {
+        try { await page.close(); } catch {}
+      }
+    }
   } catch (error) {
     return {
       provider,
@@ -207,7 +231,7 @@ export async function otaMessagingBrowserWorkerTick() {
   let agodaBrowser: Browser | null = null;
   try {
     agodaBrowser = await connect("agoda");
-    const page = await ensurePage(agodaBrowser);
+    const page = await newProbePage(agodaBrowser);
     const state = await agodaState(page);
     if (state !== "READY") {
       providerResults.push({ provider: "agoda", state, processed: 0 });

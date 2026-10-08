@@ -342,7 +342,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
   const [selectedId, setSelectedId] = useState(firstConversation?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState(firstMessage?.id ?? "");
   const [inboxScope, setInboxScope] = useState<InboxScope>(initialScope);
-  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "pending_review">("all");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "pending_review" | "post_stay">("all");
   const [propertyFilter, setPropertyFilter] = useState<PropertyFilter>("all");
   const [readLocally, setReadLocally] = useState<Set<string>>(new Set());
   const firstVietnameseDraft = aiDraftVietnameseText(firstConversation);
@@ -380,10 +380,12 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
     : scopedItems.filter((item) => item.propertyEntity === propertyFilter);
   const unreadTotal = propertyItems.filter((item) => item.unread && !readLocally.has(item.id)).length;
   const pendingReviewTotal = propertyItems.filter((item) => item.pendingAiReview).length;
+  const postStayTotal = propertyItems.filter((item) => item.journeyStage === "post_stay").length;
   const filteredItems = propertyItems.filter((item) =>
     inboxFilter === "all"
       || (inboxFilter === "unread" && item.unread && !readLocally.has(item.id))
       || (inboxFilter === "pending_review" && item.pendingAiReview)
+      || (inboxFilter === "post_stay" && item.journeyStage === "post_stay")
   );
   const selected = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0];
   const selectedTimelineMessages = customerTimelineMessages(selected);
@@ -718,7 +720,7 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
             ))}
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setInboxFilter("all")}
@@ -751,6 +753,17 @@ function Conversations({ items, canManage, autoReplyApproved }: { items: Recepti
               }`}
             >
               Chờ duyệt AI ({pendingReviewTotal})
+            </button>
+            <button
+              type="button"
+              onClick={() => setInboxFilter("post_stay")}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold ${
+                inboxFilter === "post_stay"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                  : "border-[var(--border-hairline)] text-[var(--ink-secondary)]"
+              }`}
+            >
+              Đã trả phòng ({postStayTotal})
             </button>
           </div>
         </div>

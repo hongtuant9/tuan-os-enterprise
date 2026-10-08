@@ -183,7 +183,11 @@ async function scrollUntilStable(
   }
 }
 
-async function collectAgodaSnapshots(page: Page, maxConversations: number): Promise<AgodaSnapshot[]> {
+async function collectAgodaSnapshots(
+  page: Page,
+  maxConversations: number,
+  expectedPropertyExternalId?: string,
+): Promise<AgodaSnapshot[]> {
   const allMessagesTab = await page.$('[data-testid="all-messages-tab"]');
   if (allMessagesTab) {
     await allMessagesTab.click();
@@ -244,7 +248,9 @@ async function collectAgodaSnapshots(page: Page, maxConversations: number): Prom
         return { values, items };
       });
 
-      const propertyExternalId = raw.values.find((value) => value === "6280104" || value === "7206992") ?? "";
+      const propertyExternalId = raw.values.find((value) => value === "6280104" || value === "7206992")
+        ?? expectedPropertyExternalId
+        ?? "";
       const reservationReference = raw.values.find((value) => /^\d{10}$/.test(value) && value !== propertyExternalId) ?? "";
       if (!propertyExternalId || !reservationReference || raw.items.length === 0) continue;
       if (seenReservations.has(reservationReference)) continue;
@@ -300,6 +306,20 @@ async function authenticatedAgodaPage(browser: Browser): Promise<{ page: Page; t
   return { page, temporary: true };
 }
 
+const AGODA_PROPERTIES = [
+  { propertyExternalId: "7206992", pageEntity: "lavender" as const },
+  { propertyExternalId: "6280104", pageEntity: "ruby" as const },
+];
+
+async function navigateAgodaPropertyInbox(page: Page, propertyExternalId: string): Promise<OtaBrowserState> {
+  await page.goto(`https://portal.agoda.com/mldc/vi-vn/app/hermes/inbox/ycs/${propertyExternalId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45000,
+  }).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 1600));
+  return agodaState(page);
+}
+
 export async function backfillAgodaConversationHistory(maxConversations = 500) {
   if (!enabled()) return { state: "DISABLED" as OtaBrowserState, processed: 0, conversations: [] };
   let browser: Browser | null = null;
@@ -307,26 +327,57 @@ export async function backfillAgodaConversationHistory(maxConversations = 500) {
     browser = await connect("agoda");
     const { page, temporary } = await authenticatedAgodaPage(browser);
     try {
-      const state = await agodaState(page);
-      if (state !== "READY") return { state, processed: 0, conversations: [] };
+      const results: Array<Record<string, unknown>> = [];
+      const providerResults: Array<Record<string, unknown>> = [];
+      let processed = 0;
 
-      const snapshots = await collectAgodaSnapshots(page, maxConversations);
-      const results = [];
-      for (const snapshot of snapshots) {
-        const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot(snapshot);
-        results.push({
-          reservationReference: snapshot.reservationReference,
-          parsed: result.parsed,
-          imported: result.imported,
-          reconciled: result.reconciled,
-          duplicates: result.duplicates,
+      for (const property of AGODA_PROPERTIES) {
+        if (processed >= maxConversations) break;
+        const state = await navigateAgodaPropertyInbox(page, property.propertyExternalId);
+        if (state !== "READY") {
+          providerResults.push({
+            propertyExternalId: property.propertyExternalId,
+            pageEntity: property.pageEntity,
+            state,
+            processed: 0,
+          });
+          continue;
+        }
+
+        const remaining = Math.max(1, maxConversations - processed);
+        const snapshots = await collectAgodaSnapshots(
+          page,
+          remaining,
+          property.propertyExternalId,
+        );
+
+        for (const snapshot of snapshots) {
+          const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot(snapshot);
+          results.push({
+            propertyExternalId: property.propertyExternalId,
+            pageEntity: property.pageEntity,
+            reservationReference: snapshot.reservationReference,
+            parsed: result.parsed,
+            imported: result.imported,
+            reconciled: result.reconciled,
+            duplicates: result.duplicates,
+          });
+        }
+
+        processed += snapshots.length;
+        providerResults.push({
+          propertyExternalId: property.propertyExternalId,
+          pageEntity: property.pageEntity,
+          state: "READY",
+          processed: snapshots.length,
         });
       }
 
       const knowledge = await getAdminContainer().aiReceptionist.refreshOtaGuestDemandKnowledge();
       return {
-        state: "READY" as OtaBrowserState,
-        processed: snapshots.length,
+        state: providerResults.some((item) => item.state === "READY") ? "READY" as OtaBrowserState : "ERROR" as OtaBrowserState,
+        processed,
+        properties: providerResults,
         conversations: results,
         knowledge,
         automaticOutbound: false,
@@ -364,16 +415,26 @@ export async function otaMessagingBrowserWorkerTick() {
     };
   }
 
-  // Agoda collection is write-capable and therefore requires explicit PROBE_ONLY=false.
+  // Agoda collection is read-only against the OTA UI and writes only normalized history into TUAN OS.
   let agodaBrowser: Browser | null = null;
   try {
     agodaBrowser = await connect("agoda");
     const { page } = await authenticatedAgodaPage(agodaBrowser);
-    const state = await agodaState(page);
-    if (state !== "READY") {
-      providerResults.push({ provider: "agoda", state, processed: 0 });
-    } else {
-      const snapshots = await collectAgodaSnapshots(page, 10);
+    const propertyResults = [];
+
+    for (const property of AGODA_PROPERTIES) {
+      const state = await navigateAgodaPropertyInbox(page, property.propertyExternalId);
+      if (state !== "READY") {
+        propertyResults.push({
+          propertyExternalId: property.propertyExternalId,
+          pageEntity: property.pageEntity,
+          state,
+          processed: 0,
+        });
+        continue;
+      }
+
+      const snapshots = await collectAgodaSnapshots(page, 10, property.propertyExternalId);
       const results = [];
       for (const snapshot of snapshots) {
         const result = await getAdminContainer().aiReceptionist.ingestAgodaBrowserDomSnapshot(snapshot);
@@ -386,13 +447,21 @@ export async function otaMessagingBrowserWorkerTick() {
           duplicates: result.duplicates,
         });
       }
-      providerResults.push({
-        provider: "agoda",
+      propertyResults.push({
+        propertyExternalId: property.propertyExternalId,
+        pageEntity: property.pageEntity,
         state: "READY",
         processed: snapshots.length,
         conversations: results,
       });
     }
+
+    providerResults.push({
+      provider: "agoda",
+      state: propertyResults.some((item) => item.state === "READY") ? "READY" : "ERROR",
+      processed: propertyResults.reduce((sum, item) => sum + Number(item.processed || 0), 0),
+      properties: propertyResults,
+    });
   } catch (error) {
     providerResults.push({
       provider: "agoda",

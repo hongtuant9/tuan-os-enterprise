@@ -7,6 +7,8 @@ STATE_ROOT="${TCE_AUTH_BROWSER_STATE_DIR:-/opt/tuan-ai/auth-browser/business-pro
 IMAGE="${TCE_OTA_BUSINESS_BROWSER_IMAGE:-selenium/standalone-chrome:4.49.0}"
 APP_CONTAINER="${TCE_APP_CONTAINER:-tce-control-center}"
 WORKER_CONTAINER="tce-ota-browser-worker"
+GUI_PORT="${TCE_OTA_GUI_PORT:-}"
+PASSTHROUGH_SCRIPT="${TCE_OTA_CDP_PASSTHROUGH_SCRIPT:-/opt/tuan-ai/tce-control-center/scripts/ovh/cdp-tcp-passthrough.py}"
 
 case "$IDENTITY" in
   hospitality-main|ruby) ;;
@@ -31,6 +33,7 @@ network_name(){
 
 start(){
   [ -d "$PROFILE_DIR" ] || { echo "Profile missing: $PROFILE_DIR" >&2; exit 1; }
+  [ -f "$PASSTHROUGH_SCRIPT" ] || { echo "CDP passthrough missing: $PASSTHROUGH_SCRIPT" >&2; exit 1; }
 
   if docker ps --format '{{.Names}}' | grep -qx "$GUI_CONTAINER"; then
     echo "GUI browser still running: $GUI_CONTAINER. Stop it before starting worker." >&2
@@ -45,6 +48,11 @@ start(){
   net="$(network_name)"
   [ -n "$net" ] || { echo "Cannot resolve app Docker network" >&2; exit 1; }
 
+  local port_args=()
+  if [ -n "$GUI_PORT" ]; then
+    port_args=(-p "127.0.0.1:${GUI_PORT}:7900")
+  fi
+
   docker run -d \
     --name "$WORKER_CONTAINER" \
     --init \
@@ -53,77 +61,48 @@ start(){
     --network-alias tce-ota-agoda-browser \
     --network-alias tce-ota-booking-browser \
     --shm-size=2g \
-    --entrypoint bash \
+    "${port_args[@]}" \
+    -e SE_SCREEN_WIDTH=1366 \
+    -e SE_SCREEN_HEIGHT=768 \
+    -e SE_SCREEN_DEPTH=24 \
+    -e SE_SCREEN_DPI=96 \
+    -e SE_FRAME_RATE=8 \
     -v "$PROFILE_DIR:/home/seluser/browser-profile" \
-    "$IMAGE" -lc '
-      set -e
-      BROWSER=/usr/bin/google-chrome
-      [ -x "$BROWSER" ] || { echo "Google Chrome executable not found" >&2; exit 1; }
+    -v "$PASSTHROUGH_SCRIPT:/opt/cdp-tcp-passthrough.py:ro" \
+    "$IMAGE" >/dev/null
 
-      python3 - <<PY &
-import socket
-import threading
+  sleep 5
 
-def pump(src, dst):
-    try:
-        while True:
-            data = src.recv(65536)
-            if not data:
-                break
-            dst.sendall(data)
-    except Exception:
-        pass
+  docker exec -d "$WORKER_CONTAINER" \
+    python3 /opt/cdp-tcp-passthrough.py 0.0.0.0 9223 127.0.0.1 9222
 
-def handle(client):
-    upstream = None
-    try:
-        upstream = socket.create_connection(("127.0.0.1", 9222), timeout=5)
-        threading.Thread(target=pump, args=(client, upstream), daemon=True).start()
-        pump(upstream, client)
-    except Exception:
-        pass
-    finally:
-        try:
-            client.close()
-        except Exception:
-            pass
-        if upstream:
-            try:
-                upstream.close()
-            except Exception:
-                pass
-
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server.bind(("0.0.0.0", 9223))
-server.listen(32)
-while True:
-    client, _ = server.accept()
-    threading.Thread(target=handle, args=(client,), daemon=True).start()
-PY
-
-      exec "$BROWSER" \
-        --headless=new \
-        --remote-debugging-address=127.0.0.1 \
-        --remote-debugging-port=9222 \
-        --user-data-dir=/home/seluser/browser-profile \
-        --no-first-run \
-        --no-default-browser-check \
-        --disable-dev-shm-usage \
-        --disable-gpu \
-        about:blank
-    ' >/dev/null
+  docker exec -u seluser -d "$WORKER_CONTAINER" bash -lc '
+    export DISPLAY=:99.0
+    exec /usr/bin/google-chrome \
+      --user-data-dir=/home/seluser/browser-profile \
+      --remote-debugging-address=127.0.0.1 \
+      --remote-debugging-port=9222 \
+      --no-first-run \
+      --no-default-browser-check \
+      --start-maximized \
+      about:blank >/tmp/ota-worker-chrome.log 2>&1
+  '
 
   for _ in $(seq 1 60); do
-    worker_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$WORKER_CONTAINER" 2>/dev/null || true)"
-    if [ -n "$worker_ip" ] && docker exec "$APP_CONTAINER" node -e "fetch('http://$worker_ip:9223/json/version').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then
-      log "READY — internal CDP only; profile=$PROFILE_DIR"
+    if docker exec "$APP_CONTAINER" sh -lc \
+      'wget -T 2 -qO- http://tce-ota-agoda-browser:9223/json/version >/dev/null'; then
+      if [ -n "$GUI_PORT" ]; then
+        log "READY — headed Chrome + localhost noVNC 127.0.0.1:${GUI_PORT}; profile=$PROFILE_DIR"
+      else
+        log "READY — headed Chrome, internal CDP only; profile=$PROFILE_DIR"
+      fi
       return 0
     fi
     sleep 1
   done
 
   echo "OTA browser worker CDP did not become ready" >&2
+  docker logs "$WORKER_CONTAINER" --tail 80 || true
   exit 1
 }
 
@@ -134,11 +113,8 @@ stop(){
 
 status(){
   docker ps --format '{{.Names}} {{.Status}}' | grep "^$WORKER_CONTAINER " || true
-  local worker_ip
-  worker_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$WORKER_CONTAINER" 2>/dev/null || true)"
-  if [ -n "$worker_ip" ]; then
-    docker exec "$APP_CONTAINER" node -e "fetch('http://$worker_ip:9223/json/version').then(async r=>{const t=await r.text();process.stdout.write(t.slice(0,300))}).catch(()=>process.exit(1))" 2>/dev/null || true
-  fi
+  docker exec "$APP_CONTAINER" sh -lc \
+    'wget -T 2 -qO- http://tce-ota-agoda-browser:9223/json/version | head -c 300' 2>/dev/null || true
   printf '\n'
 }
 

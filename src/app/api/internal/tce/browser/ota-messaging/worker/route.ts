@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({})) as {
-    mode?: "poll" | "backfill_agoda";
+    mode?: "poll" | "backfill_agoda" | "refresh_guest_demand";
     maxConversations?: number;
   };
 
@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
     ? await backfillAgodaConversationHistory(
         Math.min(1000, Math.max(1, Number(body.maxConversations || 500))),
       )
-    : await otaMessagingBrowserWorkerTick();
+    : body.mode === "refresh_guest_demand"
+      ? await getAdminContainer().aiReceptionist.refreshOtaGuestDemandKnowledge()
+      : await otaMessagingBrowserWorkerTick();
 
   return NextResponse.json({ ok: true, result });
 }

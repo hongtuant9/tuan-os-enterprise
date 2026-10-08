@@ -83,6 +83,41 @@ function mergeReservationContext(
   return merged;
 }
 
+const OTA_GUEST_DEMAND_TOPICS: Array<{
+  key: string;
+  title: string;
+  patterns: RegExp[];
+}> = [
+  { key: "breakfast", title: "Bữa sáng", patterns: [/breakfast/i, /bữa sáng/i, /ăn sáng/i] },
+  { key: "hanoi_transfer", title: "Di chuyển Ninh Bình ↔ Hà Nội", patterns: [/hanoi/i, /hà nội/i, /transfer/i, /transport/i, /limousine/i, /shuttle/i] },
+  { key: "airport_transfer", title: "Đưa đón sân bay", patterns: [/airport/i, /sân bay/i, /noibai/i, /nội bài/i] },
+  { key: "luggage_storage", title: "Gửi hành lý", patterns: [/luggage/i, /baggage/i, /bag drop/i, /hành lý/i, /gửi đồ/i] },
+  { key: "early_checkin_late_checkout", title: "Nhận phòng sớm / trả phòng muộn", patterns: [/early check.?in/i, /late check.?out/i, /nhận phòng sớm/i, /trả phòng muộn/i] },
+  { key: "laundry", title: "Giặt là", patterns: [/laundry/i, /washing/i, /dryer/i, /giặt/i, /sấy/i] },
+  { key: "extra_bed", title: "Giường phụ / thêm người", patterns: [/extra bed/i, /additional bed/i, /giường phụ/i, /thêm giường/i, /extra person/i] },
+  { key: "quiet_non_smoking", title: "Phòng yên tĩnh / không hút thuốc", patterns: [/quiet room/i, /non.?smoking/i, /yên tĩnh/i, /không hút thuốc/i] },
+  { key: "room_features", title: "Loại phòng / tiện nghi phòng", patterns: [/room type/i, /private room/i, /twin room/i, /double room/i, /balcony/i, /view/i, /loại phòng/i, /phòng riêng/i, /ban công/i] },
+  { key: "motorbike_bicycle", title: "Thuê xe máy / xe đạp", patterns: [/motorbike/i, /scooter/i, /bicycle/i, /bike rental/i, /xe máy/i, /xe đạp/i] },
+  { key: "tour_ticket", title: "Tour / vé tham quan", patterns: [/tour/i, /ticket/i, /trang an/i, /tràng an/i, /hang mua/i, /mua cave/i, /tam coc boat/i, /tam cốc/i] },
+  { key: "food_restaurant", title: "Ăn uống / nhà hàng", patterns: [/restaurant/i, /dinner/i, /lunch/i, /food/i, /vegan/i, /vegetarian/i, /nhà hàng/i, /ăn tối/i, /ăn trưa/i, /đồ ăn/i] },
+  { key: "payment", title: "Thanh toán", patterns: [/payment/i, /pay by/i, /credit card/i, /cash/i, /thanh toán/i, /thẻ/i, /tiền mặt/i] },
+  { key: "cancellation_refund", title: "Hủy / hoàn tiền", patterns: [/cancel/i, /refund/i, /hủy/i, /hoàn tiền/i] },
+  { key: "visa_document", title: "Visa / giấy tờ lưu trú", patterns: [/visa/i, /invitation/i, /confirmation letter/i, /giấy xác nhận/i, /thư xác nhận/i] },
+  { key: "directions_location", title: "Đường đi / vị trí", patterns: [/direction/i, /location/i, /how to get/i, /đường đi/i, /vị trí/i, /map/i] },
+];
+
+function classifyOtaGuestDemand(content: string): string[] {
+  const normalized = content.trim();
+  if (!normalized) return [];
+  return OTA_GUEST_DEMAND_TOPICS
+    .filter((topic) => topic.patterns.some((pattern) => pattern.test(normalized)))
+    .map((topic) => topic.key);
+}
+
+function otaGuestDemandTitle(topicKey: string): string {
+  return OTA_GUEST_DEMAND_TOPICS.find((topic) => topic.key === topicKey)?.title ?? topicKey;
+}
+
 function currentVietnamDate(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -454,7 +489,7 @@ export class AiReceptionistService {
 
   async dashboard(): Promise<ReceptionistDashboard> {
     const [conversationRows, bookingRows, reviewRows, candidateRows] = await Promise.all([
-      this.repo.findRecentConversations(200),
+      this.repo.findRecentConversations(1000),
       this.repo.findBookings(),
       this.repo.findManagerReviews(),
       this.repo.findKnowledgeCandidates(),
@@ -469,8 +504,7 @@ export class AiReceptionistService {
         .map((row) => row.id),
     );
     const customerConversationRows = conversationRows
-      .filter((row) => !internalOpsConversationIds.has(row.id))
-      .slice(0, 40);
+      .filter((row) => !internalOpsConversationIds.has(row.id));
     const customerBookingRows = bookingRows.filter((row) => !internalOpsConversationIds.has(row.conversation_id));
     const customerReviewRows = reviewRows.filter((row) => !row.conversation_id || !internalOpsConversationIds.has(row.conversation_id));
 
@@ -2405,6 +2439,145 @@ export class AiReceptionistService {
     }
 
     return { updated, skipped, failed };
+  }
+
+  async refreshOtaGuestDemandKnowledge(): Promise<{
+    scannedConversations: number;
+    scannedGuestMessages: number;
+    observations: number;
+    updated: number;
+    created: number;
+  }> {
+    const conversations = (await this.repo.findRecentConversations(1000))
+      .filter((row) => ["booking", "agoda", "airbnb", "expedia"].includes(row.channel));
+    const conversationById = new Map(conversations.map((row) => [row.id, row]));
+    const messages = await this.repo.findMessages(conversations.map((row) => row.id));
+
+    type Observation = {
+      entity: string;
+      topic: string;
+      count: number;
+      conversations: Set<string>;
+      channels: Set<string>;
+      messageIds: string[];
+      latestObservedAt: string | null;
+      firstConversationId: string | null;
+    };
+
+    const observations = new Map<string, Observation>();
+    let scannedGuestMessages = 0;
+
+    for (const message of messages) {
+      if (message.direction !== "inbound") continue;
+      const messageMetadata = AiReceptionistRepository.toObject(message.metadata);
+      const authorship = typeof messageMetadata.authorship === "string" ? messageMetadata.authorship : "";
+      if (authorship && authorship !== "guest") continue;
+      if (!authorship && ["ai", "manager", "system"].includes(message.sender_type)) continue;
+
+      const conversation = conversationById.get(message.conversation_id);
+      if (!conversation) continue;
+      scannedGuestMessages += 1;
+
+      const conversationMetadata = AiReceptionistRepository.toObject(conversation.metadata);
+      const entity = typeof conversationMetadata.page_entity === "string"
+        ? conversationMetadata.page_entity
+        : "unknown";
+      const translatedVi = typeof messageMetadata.translated_vi === "string"
+        ? messageMetadata.translated_vi
+        : "";
+      const topics = classifyOtaGuestDemand(`${message.content}\n${translatedVi}`);
+
+      for (const topic of topics) {
+        const key = `${entity}:${topic}`;
+        const current = observations.get(key) ?? {
+          entity,
+          topic,
+          count: 0,
+          conversations: new Set<string>(),
+          channels: new Set<string>(),
+          messageIds: [],
+          latestObservedAt: null,
+          firstConversationId: message.conversation_id,
+        };
+        current.count += 1;
+        current.conversations.add(message.conversation_id);
+        current.channels.add(conversation.channel);
+        if (current.messageIds.length < 100) current.messageIds.push(message.id);
+        if (!current.latestObservedAt || message.created_at > current.latestObservedAt) {
+          current.latestObservedAt = message.created_at;
+        }
+        observations.set(key, current);
+      }
+    }
+
+    let created = 0;
+    let updated = 0;
+    for (const observation of observations.values()) {
+      const fieldKey = `guest_demand_observation:${observation.entity}:${observation.topic}`;
+      const existing = await this.repo.findKnowledgeCandidateByFieldKey(fieldKey);
+      const proposedValue = {
+        observation_type: "OTA_GUEST_DEMAND",
+        topic_key: observation.topic,
+        topic_title: otaGuestDemandTitle(observation.topic),
+        entity: observation.entity,
+        occurrence_count: observation.count,
+        conversation_count: observation.conversations.size,
+        channels: [...observation.channels].sort(),
+        latest_observed_at: observation.latestObservedAt,
+        verification_status: "VERIFIED",
+        allowed_use: "INTERNAL_ANALYTICS_ONLY",
+        customer_response_fact: false,
+        pii_stored_in_knowledge: false,
+        source: "OTA_CONVERSATION_HISTORY",
+        refreshed_at: new Date().toISOString(),
+      } as Json;
+      const sourceEvidence = {
+        message_ids: observation.messageIds,
+        conversation_ids: [...observation.conversations].slice(0, 100),
+        evidence_type: "AGGREGATED_GUEST_QUESTIONS",
+        raw_customer_text_embedded: false,
+      } as Json;
+
+      if (existing) {
+        await this.repo.updateKnowledgeCandidate(existing.id, {
+          title: `Nhu cầu khách OTA: ${otaGuestDemandTitle(observation.topic)} — ${observation.entity}`,
+          proposed_value: proposedValue,
+          source_evidence: sourceEvidence,
+          updated_at: new Date().toISOString(),
+        });
+        updated += 1;
+      } else {
+        await this.repo.createKnowledgeCandidate({
+          conversation_id: observation.firstConversationId,
+          manager_review_id: null,
+          field_key: fieldKey,
+          title: `Nhu cầu khách OTA: ${otaGuestDemandTitle(observation.topic)} — ${observation.entity}`,
+          current_value: null,
+          proposed_value: proposedValue,
+          source_evidence: sourceEvidence,
+          scope: "reusable",
+          status: "pending",
+          reviewed_by: null,
+          reviewed_at: null,
+        });
+        created += 1;
+      }
+    }
+
+    await this.activityLog.record({
+      agent: "AI Knowledge Manager",
+      unit: "Tam Cốc",
+      message: `Đã làm mới ${observations.size} quan sát nhu cầu khách từ ${scannedGuestMessages} tin nhắn OTA; chỉ dùng INTERNAL_ANALYTICS, không coi là fact để trả lời khách.`,
+      type: "info",
+    });
+
+    return {
+      scannedConversations: conversations.length,
+      scannedGuestMessages,
+      observations: observations.size,
+      updated,
+      created,
+    };
   }
 
   async captureConversationStyleFeedback(input: {

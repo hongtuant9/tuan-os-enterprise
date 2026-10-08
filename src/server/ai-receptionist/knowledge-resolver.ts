@@ -28,6 +28,25 @@ export type KnowledgeResolution = {
   scenarioExamples: Array<{ id: string; guestQuestion: string; replyTemplate: string }>;
 };
 
+// Cache the review-only scenario snapshot briefly so normal guest replies do not
+// download the complete 540-case workbook from Supabase on every message.
+type ScenarioRecord = Awaited<ReturnType<AiReceptionistRepository["findKnowledgeSyncRecords"]>>[number];
+let scenarioCache: { rows: ScenarioRecord[]; expiresAt: number } | null = null;
+let pendingScenarioFetch: Promise<ScenarioRecord[]> | null = null;
+
+async function getReviewScenarioRows(repo: AiReceptionistRepository): Promise<ScenarioRecord[]> {
+  if (scenarioCache && scenarioCache.expiresAt > Date.now()) return scenarioCache.rows;
+  if (!pendingScenarioFetch) {
+    pendingScenarioFetch = repo.findKnowledgeSyncRecords(["tce-ai-receptionist-qa-540-review"])
+      .then((rows) => {
+        scenarioCache = { rows, expiresAt: Date.now() + 120_000 };
+        return rows;
+      })
+      .finally(() => { pendingScenarioFetch = null; });
+  }
+  return pendingScenarioFetch;
+}
+
 function normalize(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -212,7 +231,7 @@ export async function resolveKnowledge(
   // intentionally keeps them separate from VERIFIED customer-facing facts.
   let scenarioExamples: KnowledgeResolution["scenarioExamples"] = [];
   try {
-    const examples = await repo.findKnowledgeSyncRecords(["tce-ai-receptionist-qa-540-review"]);
+    const examples = await getReviewScenarioRows(repo);
     scenarioExamples = examples
       .map((row) => {
         const data = AiReceptionistRepository.toObject(row.data);

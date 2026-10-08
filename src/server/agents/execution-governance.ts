@@ -94,7 +94,7 @@ export const TRELLO_EXECUTION_BOARD = {
 } as const;
 
 export const AUTONOMOUS_CONTINUATION_POLICY = {
-  runtimeAuthority: "VPS_ALWAYS_ON",
+  runtimeAuthority: "LINUX_ALWAYS_ON",
   checkpointAuthority: "TASK-001",
   approvalAuthority: "APPROVAL-001",
   autoContinueLevels: ["L0", "L1"] as const,
@@ -113,13 +113,13 @@ export const AUTONOMOUS_CONTINUATION_POLICY = {
   ] as const,
   desktopPolicy: "NON_RUNTIME_FALLBACK_ONLY",
   windowPolicy: "STATELESS_CONTROL_SURFACE_ONLY",
-  runtimeDependencyPolicy: "VPS_ONLY",
+  runtimeDependencyPolicy: "PORTABLE_LINUX",
   sessionFailurePolicy: "RESUME_FROM_CHECKPOINT",
   completionSummary: true,
   autoSelectNextTask: true,
   browserRuntime: {
-    publicHeadless: "VPS_PRIMARY",
-    authenticatedSession: "VPS_PERSISTENT_PROFILE_WHEN_SUPPORTED",
+    publicHeadless: "LINUX_RUNTIME_PRIMARY",
+    authenticatedSession: "LINUX_PERSISTENT_PROFILE_WHEN_SUPPORTED",
     ownerAuthChallenge: "ONE_TIME_OWNER_GATE",
     desktopMayKeepRuntimeAlive: false,
   },

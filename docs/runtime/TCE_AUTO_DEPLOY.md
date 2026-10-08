@@ -48,7 +48,7 @@ Bắt buộc:
 - runtime `tce-executive-org-v1`;
 - agentRegistry >= 16;
 - companyAutopilot = v1;
-- companyRuntimeMode = VPS_ALWAYS_ON;
+- companyRuntimeMode = LINUX_ALWAYS_ON;
 - desktopDependency = false;
 - Executive/Sync/Staff Ops/CMI enabled;
 - write guardrails an toàn;

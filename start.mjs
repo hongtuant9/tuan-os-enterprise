@@ -60,7 +60,7 @@ const server = spawn(process.execPath, ["server.js"], {
 
 let stopping = false;
 
-console.log(`[TCE Autopilot] enabled=${companyAutopilotEnabled} runtime=VPS_ALWAYS_ON no_desktop_dependency=true`);
+console.log(`[TCE Autopilot] enabled=${companyAutopilotEnabled} runtime=LINUX_ALWAYS_ON no_desktop_dependency=true`);
 
 function deriveToken(suffix) {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -152,7 +152,7 @@ async function facebookRecruitmentWorkerLoop() {
     console.error("[Facebook Recruitment] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
     return;
   }
-  console.log(`[Facebook Recruitment] enabled interval_ms=${facebookRecruitmentWorkerIntervalMs} runtime=VPS_ALWAYS_ON`);
+  console.log(`[Facebook Recruitment] enabled interval_ms=${facebookRecruitmentWorkerIntervalMs} runtime=LINUX_ALWAYS_ON`);
   await sleep(45000);
   while (!stopping) {
     await facebookRecruitmentWorkerTick();
@@ -204,7 +204,7 @@ async function facebookPersonalSchedulerLoop() {
     return;
   }
   console.log(
-    `[Facebook Personal Scheduler] enabled interval_ms=${facebookPersonalSchedulerIntervalMs} runtime=VPS_ALWAYS_ON`,
+    `[Facebook Personal Scheduler] enabled interval_ms=${facebookPersonalSchedulerIntervalMs} runtime=LINUX_ALWAYS_ON`,
   );
   await sleep(60000);
   while (!stopping) {
@@ -316,7 +316,7 @@ async function knowledgeGovernanceWorkerLoop() {
     console.error("[Knowledge Governance] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
     return;
   }
-  console.log(`[Knowledge Governance] enabled interval_ms=${knowledgeGovernanceWorkerIntervalMs} runtime=VPS_ALWAYS_ON`);
+  console.log(`[Knowledge Governance] enabled interval_ms=${knowledgeGovernanceWorkerIntervalMs} runtime=LINUX_ALWAYS_ON`);
   await sleep(60000);
   while (!stopping) {
     await knowledgeGovernanceWorkerTick();
@@ -568,7 +568,7 @@ async function otaBrowserWorkerLoop() {
     console.error("[TCE OTA Browser] disabled: SUPABASE_SERVICE_ROLE_KEY is not set");
     return;
   }
-  console.log(`[TCE OTA Browser] enabled interval_ms=${otaBrowserWorkerIntervalMs} runtime=VPS_ALWAYS_ON read_only=true`);
+  console.log(`[TCE OTA Browser] enabled interval_ms=${otaBrowserWorkerIntervalMs} runtime=LINUX_ALWAYS_ON read_only=true`);
   await sleep(50000);
   while (!stopping) {
     await otaBrowserWorkerTick();

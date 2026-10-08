@@ -70,7 +70,7 @@ signals=data.get("runtimeSignals") or {}
 telegram=signals.get("telegramOwnerChannel") or {}
 checks={
   "status_ok": data.get("status")=="ok",
-  "runtime_vps_only": signals.get("runtimeDependencyPolicy")=="VPS_ONLY",
+  "runtime_portable_linux": signals.get("runtimeDependencyPolicy")=="PORTABLE_LINUX",
   "telegram_enabled": telegram.get("enabled") is True,
   "token_set": telegram.get("botTokenConfigured") is True,
   "owner_chat_set": telegram.get("ownerChatConfigured") is True,

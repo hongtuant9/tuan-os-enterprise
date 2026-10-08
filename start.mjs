@@ -59,6 +59,13 @@ const otaHistoryBackfillMaxConversations = Math.min(
   1000,
   Math.max(100, Number(process.env.TCE_OTA_HISTORY_BACKFILL_MAX_CONVERSATIONS || 1000)),
 );
+const otaDemandKnowledgeRefreshEnabled =
+  companyAutopilotEnabled &&
+  process.env.TCE_OTA_DEMAND_KNOWLEDGE_REFRESH_ENABLED?.trim().toLowerCase() !== "false";
+const otaDemandKnowledgeRefreshIntervalMs = Math.max(
+  3_600_000,
+  Number(process.env.TCE_OTA_DEMAND_KNOWLEDGE_REFRESH_INTERVAL_MS || 21_600_000),
+);
 const trelloWorkerEnabled = companyAutopilotEnabled && process.env.TCE_TRELLO_WORKER_ENABLED?.trim().toLowerCase() !== "false";
 const trelloWorkerIntervalMs = Math.max(60_000, Number(process.env.TCE_TRELLO_WORKER_INTERVAL_MS || 300_000));
 const knowledgeGovernanceWorkerEnabled = companyAutopilotEnabled && process.env.TCE_KNOWLEDGE_GOVERNANCE_WORKER_ENABLED?.trim().toLowerCase() !== "false";
@@ -643,6 +650,53 @@ async function otaHistoryBackfillLoop() {
   }
 }
 
+async function otaDemandKnowledgeRefreshTick() {
+  if (!otaDemandKnowledgeRefreshEnabled || !otaBrowserWorkerToken || stopping) return;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/internal/tce/browser/ota-messaging/worker`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-tce-ota-browser-worker-token": otaBrowserWorkerToken,
+        },
+        body: JSON.stringify({ mode: "refresh_guest_demand" }),
+        signal: AbortSignal.timeout(180_000),
+      },
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error(`[TCE OTA Demand] HTTP ${response.status}: ${payload?.error ?? "unknown error"}`);
+      return;
+    }
+    const result = payload?.result ?? {};
+    console.log(
+      `[TCE OTA Demand] conversations=${result.scannedConversations ?? 0} guest_messages=${result.scannedGuestMessages ?? 0} observations=${result.observations ?? 0} created=${result.created ?? 0} updated=${result.updated ?? 0} customer_fact=false`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error(`[TCE OTA Demand] ${message}`);
+  }
+}
+
+async function otaDemandKnowledgeRefreshLoop() {
+  if (!otaDemandKnowledgeRefreshEnabled) {
+    console.log("[TCE OTA Demand] disabled");
+    return;
+  }
+  if (!otaBrowserWorkerToken) {
+    console.error("[TCE OTA Demand] disabled: worker token unavailable");
+    return;
+  }
+  console.log(`[TCE OTA Demand] enabled interval_ms=${otaDemandKnowledgeRefreshIntervalMs} internal_analytics_only=true`);
+  await sleep(120000);
+  while (!stopping) {
+    await otaDemandKnowledgeRefreshTick();
+    await sleep(otaDemandKnowledgeRefreshIntervalMs);
+  }
+}
+
 async function cozyPurchaseWorkerTick() {
   if (!cozyPurchaseWorkerEnabled || !cozyPurchaseWorkerToken || stopping) return;
   try {
@@ -785,5 +839,6 @@ void omnichannelWorkerLoop();
 void otaEmailWorkerLoop();
 void otaBrowserWorkerLoop();
 void otaHistoryBackfillLoop();
+void otaDemandKnowledgeRefreshLoop();
 void trelloWorkerLoop();
 void knowledgeGovernanceWorkerLoop();

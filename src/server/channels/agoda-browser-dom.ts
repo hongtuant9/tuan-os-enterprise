@@ -19,15 +19,35 @@ function parseDateLabel(label: string, snapshotDate?: string): { year: number; m
     const matchToday = snapshotDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (matchToday) return { year: Number(matchToday[1]), month: Number(matchToday[2]), day: Number(matchToday[3]) };
   }
-  const match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
-  if (!match) return null;
-  const months: Record<string, number> = {
-    Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
-    Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
-  };
-  const month = months[match[2] ?? ""];
-  if (!month) return null;
-  return { year: Number(match[3]), month, day: Number(match[1]) };
+  const english = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (english) {
+    const months: Record<string, number> = {
+      Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+      Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+    };
+    const month = months[english[2] ?? ""];
+    if (month) return { year: Number(english[3]), month, day: Number(english[1]) };
+  }
+
+  const vietnamese = trimmed.match(/^(\d{1,2})\s+(?:thg|tháng)\s+(\d{1,2})\s+(\d{4})$/i);
+  if (vietnamese) {
+    return {
+      year: Number(vietnamese[3]),
+      month: Number(vietnamese[2]),
+      day: Number(vietnamese[1]),
+    };
+  }
+
+  const numeric = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (numeric) {
+    return {
+      year: Number(numeric[3]),
+      month: Number(numeric[2]),
+      day: Number(numeric[1]),
+    };
+  }
+
+  return null;
 }
 
 function isAgodaSystemDisclaimer(text: string): boolean {

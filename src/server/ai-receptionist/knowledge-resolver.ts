@@ -25,6 +25,7 @@ export type KnowledgeResolution = {
   facts: KnowledgeFact[];
   missing: boolean;
   checkedSources: string[];
+  scenarioExamples: Array<{ id: string; guestQuestion: string; replyTemplate: string }>;
 };
 
 function normalize(value: unknown): string {
@@ -207,9 +208,37 @@ export async function resolveKnowledge(
     }
   }
 
+  // Review-only examples improve phrasing, NEVER factual authority. The resolver
+  // intentionally keeps them separate from VERIFIED customer-facing facts.
+  let scenarioExamples: KnowledgeResolution["scenarioExamples"] = [];
+  try {
+    const examples = await repo.findKnowledgeSyncRecords(["tce-ai-receptionist-qa-540-review"]);
+    scenarioExamples = examples
+      .map((row) => {
+        const data = AiReceptionistRepository.toObject(row.data);
+        const guestQuestion = normalize(data.guest_question);
+        const replyTemplate = normalize(data.reply_template);
+        return {
+          id: row.external_id,
+          guestQuestion,
+          replyTemplate,
+          score: scoreRow({ guest_question: guestQuestion, intent_key: data.intent_key ?? null, scenario_group: data.scenario_group ?? null }, query, entity),
+          reviewOnly: data.data_class === "REVIEW_ONLY" && data.customer_response_fact === false,
+        };
+      })
+      .filter((row) => row.reviewOnly && row.score >= 2 && row.guestQuestion && row.replyTemplate)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .map(({ id, guestQuestion, replyTemplate }) => ({ id, guestQuestion, replyTemplate }));
+    checkedSources.push("tce-ai-receptionist-qa-540-review");
+  } catch {
+    // Optional style reference must never interrupt guest service.
+  }
+
   return {
     facts,
     missing: facts.length === 0,
     checkedSources,
+    scenarioExamples,
   };
 }

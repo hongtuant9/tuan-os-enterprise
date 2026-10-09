@@ -168,6 +168,21 @@ body.m33-fin .content>h1,body.m33-fin .content>#subtitle,body.m33-fin .content>#
 .m33-controls{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:8px}.m33-input{border:1px solid #dce8f7;background:white;border-radius:5px;padding:7px;font-size:10px;color:#33567b}.m33-btn{background:#146ce9;border:0;border-radius:6px;color:white;cursor:pointer;padding:8px 12px;font-size:10px}.m33-tablewrap{overflow-x:auto}.m33-table{border-collapse:collapse;width:100%;min-width:680px;font-size:10px}.m33-table th{background:#f1f6fd;text-align:left}.m33-table th,.m33-table td{padding:8px;border-bottom:1px solid #eaf0f8}.m33-progress{display:inline-block;width:65px;height:7px;background:#e3edfa;border-radius:8px;margin-left:5px;overflow:hidden;vertical-align:middle}.m33-progress i{display:block;height:100%;background:#25bb88}.m33-row{display:flex;justify-content:space-between;gap:6px;align-items:center;padding:9px 0;border-bottom:1px solid #edf2f8;font-size:10px}.m33-row:last-child{border-bottom:0}.m33-row button{font-size:10px;border:0;border-radius:5px;color:#1869d8;background:#ebf3ff;cursor:pointer;padding:5px}.m33-bottom{display:grid;grid-template-columns:1fr 1fr;gap:9px}.m33-invoice{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.m33-invoice>div{border:1px solid #e3eaf5;border-radius:6px;padding:8px;font-size:10px}.m33-invoice b{display:block;font-size:19px}.m33-heat{display:grid;grid-template-columns:repeat(8,1fr);gap:3px}.m33-heat span{text-align:center;font-size:8px;padding:5px 0;background:#cfe5ff;border:1px solid white}.m33-heat span:nth-child(3n){background:#9dc9ff}.m33-heat span:nth-child(5n){background:#e7f3ff}
 @media(max-width:1340px){.m33-grid{grid-template-columns:1fr}.m33-side{grid-template-columns:repeat(3,minmax(0,1fr))}.m33-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.m33-head h1{font-size:21px}.m33-grid,.m33-side,.m33-top,.m33-bottom{display:block}.m33-side .m33-panel,.m33-bottom .m33-panel,.m33-top .m33-panel{margin-top:9px}.m33-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.m33-card strong{font-size:17px}.m33-invoice{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* M34 Audit / Finance screenshot geometry and icon correction */
+body.m32-audit .m32-columns{grid-template-columns:minmax(0,2.45fr) minmax(360px,1fr)}
+body.m32-audit .m32-status-card{min-height:118px}
+body.m32-audit .m32-kpi{min-height:92px}
+body.m32-audit .m32-kpi b{font-size:21px}
+body.m32-audit .m32-status-card .m32-badge{display:inline-block;margin-left:5px}
+body.m33-fin .m33-grid{grid-template-columns:minmax(0,2.55fr) minmax(290px,.85fr)}
+body.m33-fin .m33-top{grid-template-columns:minmax(0,1.82fr) minmax(245px,.75fr)}
+body.m33-fin .m33-chart{position:relative}
+body.m33-fin .m33-line{position:absolute;inset:0;height:100%;width:100%;pointer-events:none;overflow:visible}
+body.m32-audit .m32-panel,body.m33-fin .m33-panel{border-color:#e1eaf5;box-shadow:0 1px 4px #12335a08}
+.m34-lucide{width:23px;height:23px;display:block;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:1350px){body.m32-audit .m32-columns,body.m33-fin .m33-grid{grid-template-columns:1fr}}
+@media(max-width:760px){body.m32-audit .m32-columns,body.m33-fin .m33-grid,body.m33-fin .m33-top{display:block}}
 </style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
 <div class="founder-board" id="founder-board">
  <div class="founder-top"><div><h1>Tổng quan nền tảng BIZVIORA</h1><p class="subtitle">AI Business Operating System cho doanh nghiệp lưu trú, F&amp;B và dịch vụ</p></div><select id="founder-period" aria-label="Khoảng thời gian"><option>6 tháng gần nhất</option><option>3 tháng gần nhất</option><option>12 tháng gần nhất</option></select></div>
@@ -920,4 +935,39 @@ function renderM33(){
  const ai=m33Panel('✳ AI đề xuất');['Tập trung thu hồi công nợ demo để cải thiện dòng tiền.','Đánh giá khách hàng có tín hiệu mở rộng gói.','Kiểm tra churn trên từng nhóm gói.','Xem xét chiến lược giá theo hiệu quả.'].forEach(s=>m33Row(ai,s,'→'));side.append(ai);
 }
 const m33PriorDraw=draw;draw=function(){m33PriorDraw();renderM33()};draw();
+
+/* M34 canonical vector icons and monthly blue MRR line */
+const M34_SHAPES={
+alert:'<path d="M10.3 3.8 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+flask:'<path d="M9 3h6M10 3v7l-5.5 8.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 10V3M8 15h8"/>',
+database:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/>',
+refresh:'<path d="M20 7v5h-5M4 17v-5h5M5.7 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 12.3-3"/>',
+key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9 2 2-3 3 2 2-3 3-2-2-2 2"/>',
+users:'<circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/>',
+shield:'<path d="m12 22 8-4V6l-8-4-8 4v12l8 4ZM9 12l2 2 4-4"/>',
+server:'<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+code:'<path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-12-2 16"/>',
+bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+wallet:'<rect x="2" y="5" width="20" height="16" rx="2"/><path d="M18 14h4M2 9V4a2 2 0 0 1 2-2h14"/>',
+receipt:'<path d="M4 3v18l4-2 4 2 4-2 4 2V3H4ZM8 8h8M8 12h8"/>',
+trend:'<path d="m3 17 6-6 4 4 8-9M15 6h6v6"/>',
+heart:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>'
+};
+function m34Vector(type){const e=document.createElementNS('http://www.w3.org/2000/svg','svg');e.setAttribute('class','m34-lucide');e.setAttribute('viewBox','0 0 24 24');e.innerHTML=M34_SHAPES[type]||M34_SHAPES.shield;return e}
+function m34Enhance(){
+ if(mode!=='founder'||(idx!==6&&idx!==7))return;
+ const audit=idx===6,root=document.getElementById(audit?'m32-audit-app':'m33-finance');if(!root)return;
+ const icons=audit?['alert','flask','database','refresh','key','users']:['database','receipt','trend','heart','wallet'];
+ root.querySelectorAll(audit?'.m32-kpi .m32-icon':'.m33-card .m33-ico').forEach((slot,i)=>slot.replaceChildren(m34Vector(icons[i])));
+ if(audit)root.querySelectorAll('.m32-status-card .m32-icon').forEach((slot,i)=>slot.replaceChildren(m34Vector(['server','database','users','shield','code','bell'][i])));
+ else{
+  const chart=root.querySelector('.m33-chart');if(!chart||chart.querySelector('.m33-line'))return;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','m33-line');svg.setAttribute('viewBox','0 0 1200 205');svg.setAttribute('preserveAspectRatio','none');
+  const points=M33_SERIES.map((r,i)=>(50+i*100)+','+(205-Math.min(185,r.mrr/M33_TOTAL*165))).join(' ');
+  const line=document.createElementNS('http://www.w3.org/2000/svg','polyline');line.setAttribute('points',points);line.setAttribute('stroke','#1269ed');line.setAttribute('stroke-width','3');line.setAttribute('fill','none');svg.append(line);
+  M33_SERIES.forEach((r,i)=>{const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('cx',50+i*100);dot.setAttribute('cy',205-Math.min(185,r.mrr/M33_TOTAL*165));dot.setAttribute('r','5');dot.setAttribute('fill','#1269ed');svg.append(dot)});
+  chart.append(svg)
+ }
+}
+const m34BeforeDraw=draw;draw=function(){m34BeforeDraw();m34Enhance()};draw();
 </script></body></html>

@@ -709,4 +709,12 @@ function m26Shell(){
  m26Make();
 }
 const m26previous=draw;draw=function(){m26previous();m26Shell()};draw();
+
+/* M27 tamcocexperience pilot organizational fixture — no production synchronization */
+const tce=SYN_TENANTS[8];
+tce.name='tamcocexperience';tce.industry='Lưu trú và F&B';tce.plan='Pilot';tce.owner='TUAN OS Enterprise Owner';tce.domain='app.tamcocexperience.com';tce.stage='Chưa đồng bộ';tce.status='Pilot demo';tce.mrr=0;tce.connected=false;tce.domainState='Not verified in BIZVIORA';tce.sslState='Not checked';
+tce.businessUnits=[{name:'Lavender Homestay',type:'Hospitality',integration:'HotelLink / KiotViet Hotel',status:'NOT CONNECTED'},{name:'Cozy Garden',type:'F&B',integration:'KiotViet F&B',status:'NOT CONNECTED'}];
+demoAccounts.push({id:'tce-owner',name:'Owner tamcocexperience (Demo)',business:'tamcocexperience',role:'owner',tenant:tce.id,industry:'Lưu trú và F&B'});
+demoAccounts.push({id:'tce-staff',name:'Staff tamcocexperience (Demo)',business:'tamcocexperience',role:'employee',tenant:tce.id,industry:'Lưu trú và F&B'});
+demoSeeds[tce.id]={tasks:['Kiểm tra báo cáo Lavender Homestay','Đối soát chi phí Cozy Garden'],approvals:['Đề xuất vật tư Lavender (demo)','Đề xuất marketing Cozy Garden (demo)'],marketing:['Google Maps và OTA (chưa kết nối)'],insights:['HotelLink chưa kết nối','KiotViet chưa kết nối']};
 </script></body></html>

@@ -89,6 +89,20 @@
 @media(max-width:630px){.founder-detail-active .content,.founder-detail-active #founder-detail,.founder-detail-active .fd-layout,.founder-detail-active .fd-main,.founder-detail-active .fd-rail{min-width:0;max-width:100%;box-sizing:border-box}.founder-detail-active .fd-card{min-width:0;max-width:100%;box-sizing:border-box}.founder-detail-active #syn-tenant-detail>.fd-controls{max-width:100%;overflow-x:auto}.founder-detail-active #syn-special .fd-controls select{min-width:0;max-width:100%}.founder-detail-active .fd-table-wrap{max-width:100%;overflow-x:auto}}
 
 @media(max-width:630px){html,body{max-width:100%;overflow-x:clip}.founder-detail-active #founder-detail{overflow-x:clip}}
+
+/* M25: consolidate infographic screen hierarchy; prevent legacy panel duplication */
+.founder-detail-active .fd-main>#m24-primary{order:-3}
+.founder-detail-active .fd-main>#m24-primary~#syn-special,
+.founder-detail-active .fd-main>#m24-primary~#fd-special{display:none!important}
+.founder-detail-active .fd-main>#m24-primary~.fd-card:not(#m24-primary){display:none}
+.founder-detail-active .fd-rail{gap:10px}
+.founder-detail-active .fd-kpi{box-shadow:0 1px 5px #152a4408}
+.founder-detail-active .fd-card{box-shadow:0 2px 7px #10264c08}
+.founder-detail-active .fd-lane{min-height:235px}
+.founder-detail-active .fd-ticket{box-shadow:0 1px 4px #0e376010}
+.founder-detail-active .fd-table td{line-height:1.5}
+.founder-detail-active .fd-chart-caption{line-height:1.6}
+@media(max-width:630px){.founder-detail-active .fd-main>#m24-primary{width:100%;max-width:100%}.founder-detail-active .fd-rail{min-width:0}}
 </style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
 <div class="founder-board" id="founder-board">
  <div class="founder-top"><div><h1>Tổng quan nền tảng BIZVIORA</h1><p class="subtitle">AI Business Operating System cho doanh nghiệp lưu trú, F&amp;B và dịch vụ</p></div><select id="founder-period" aria-label="Khoảng thời gian"><option>6 tháng gần nhất</option><option>3 tháng gần nhất</option><option>12 tháng gần nhất</option></select></div>
@@ -604,4 +618,37 @@ function m24render(){
  }
 }
 const m24previous=draw;draw=function(){m24previous();m24render()};draw();
+
+/* M25: executable consistency validation across source-of-truth synthetic collections. */
+function checkSyntheticInvariants(){
+ const errors=[],ids=new Set(SYN_TENANTS.map(x=>x.id));
+ const sum=SYN_MRR_ENTRIES.reduce((a,x)=>a+x.amount,0);
+ if(SYN_TENANTS.length!==156)errors.push('Tenant record count mismatch');
+ if(new Set(SYN_TENANTS.map(t=>t.id)).size!==SYN_TENANTS.length)errors.push('Duplicate tenant ID');
+ if(sum!==SYN_TENANTS.reduce((a,t)=>a+t.mrr,0))errors.push('MRR mismatch between revenue records and tenants');
+ if(SYN_METRICS.mrr!==sum)errors.push('MRR KPI mismatch');
+ if(SYN_METRICS.active+SYN_METRICS.trial!==SYN_METRICS.total)errors.push('Active+trial does not total tenant count');
+ for(const [kind,arr] of [['approval',SYN_APPROVALS],['task',SYN_TASKS],['audit',SYN_EVENTS],['revenue',SYN_MRR_ENTRIES],['invoice',SYN_INVOICES]]){
+  for(const r of arr)if(!ids.has(r.tenantId))errors.push('Broken '+kind+' FK '+r.tenantId);
+ }
+ for(const t of SYN_TENANTS){
+  if(!tenantM22Modules.has(t.id)||!tenantM22Members.has(t.id))errors.push('Missing tenant module/member association for '+t.id);
+ }
+ return {passed:errors.length===0,errors,counts:{tenants:SYN_TENANTS.length,modules:SYN_MODULES.length,tasks:SYN_TASKS.length,approvals:SYN_APPROVALS.length,audit:SYN_EVENTS.length,recurring:SYN_MRR_ENTRIES.length},mrr:sum};
+}
+const m25Integrity=checkSyntheticInvariants();
+function renderM25Integrity(){
+ if(mode!=='founder'||idx!==6)return;
+ const main=document.querySelector('#m24-primary');if(!main)return;
+ let panel=document.querySelector('#m25-integrity');if(panel)panel.remove();
+ panel=synPanel('Kiểm tra nhất quán dữ liệu DEMO — thực thi tại trình duyệt');
+ panel.id='m25-integrity';
+ const state=synNode('div','fd-mini-stat');state.append(synNode('b',null,'Quan hệ tenant/module/task/approval/audit/invoice'),synNode('strong','fd-chip '+(m25Integrity.passed?'':'hold'),m25Integrity.passed?'DATA CONSISTENCY PASS':'DATA CONSISTENCY FAIL'));panel.append(state);
+ Object.entries(m25Integrity.counts).forEach(([name,count])=>overviewMini(panel,name,count));
+ overviewMini(panel,'MRR tính từ revenue entries',fmtSyn(m25Integrity.mrr));
+ const label=synNode('div','fd-footnote',m25Integrity.passed?'Chỉ là tính nhất quán trong bộ dữ liệu giả lập; KHÔNG phải security/RLS/database PASS.':'Sai lệch: '+m25Integrity.errors.join('; '));
+ panel.append(label);
+ main.after(panel);
+}
+const m25PriorDraw=draw;draw=function(){m25PriorDraw();renderM25Integrity()};draw();
 </script></body></html>

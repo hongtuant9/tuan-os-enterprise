@@ -138,7 +138,7 @@ draw();
 
 /* Founder infographic rendering overlay: preserves 19-tab demo navigation. */
 const founderOriginalDraw=draw;
-draw=function(){founderOriginalDraw();const active=mode==='founder'&&idx===0;document.body.classList.toggle('founder-is-home',active);const board=document.getElementById('founder-board');if(board){board.hidden=!active;board.querySelectorAll('[data-route]').forEach(btn=>btn.onclick=()=>{idx=Number(btn.dataset.route);draw()});board.querySelectorAll('[data-switch-tenant]').forEach(btn=>btn.onclick=()=>{document.getElementById('mode').value='tenant';document.getElementById('mode').dispatchEvent(new Event('change',{bubbles:true}));idx=0;draw()});const period=document.getElementById('founder-period');period.onchange=()=>notify('Đã chọn '+period.value+'; số liệu demo không biến thành dữ liệu thật.');}}
+draw=function(){founderOriginalDraw();const active=mode==='founder'&&idx===0;document.body.classList.toggle('founder-is-home',active);const board=document.getElementById('founder-board');if(board){board.hidden=!active;board.querySelectorAll('[data-route]').forEach(btn=>btn.onclick=()=>{idx=Number(btn.dataset.route);draw()});board.querySelectorAll('[data-switch-tenant]').forEach(btn=>btn.onclick=()=>{document.getElementById('mode').value='tenant';document.getElementById('mode').dispatchEvent(new Event('change',{bubbles:true}));idx=0;draw()});const period=document.getElementById('founder-period');if(period)period.onchange=()=>notify('Đã chọn '+period.value+'; số liệu demo không biến thành dữ liệu thật.');}}
 draw();
 
 /* DEMO ACCOUNTS: client-side showcase ONLY. Not production auth or a security boundary. */

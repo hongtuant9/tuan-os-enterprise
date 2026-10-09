@@ -221,6 +221,20 @@ body.m35-customer .m35-kpi,body.m35-customer .m35-panel{border-color:var(--cbord
 .m37-pill{border-radius:13px;background:#e9f4ff;color:#1266e8;padding:4px 8px;font-size:10px}.m37-detail{border:1px solid #e3ebf7;padding:10px;border-radius:8px;margin:6px 0;font-size:11px}.m37-detail p{color:#5c7594;font-size:10px}.m37-detail .warn{color:#af6619}.m37-tablewrap{overflow:auto}.m37-table{border-collapse:collapse;width:100%;min-width:610px;font-size:11px}.m37-table th,.m37-table td{padding:9px;border-bottom:1px solid #e5edf7;text-align:left}.m37-table th{background:#f0f6ff}.m37-row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #e9eff7;padding:9px 0;font-size:11px}
 @media(max-width:1270px){.m37-statgrid{grid-template-columns:repeat(3,1fr)}.m37-columns{grid-template-columns:1fr}}
 @media(max-width:750px){.m37-statgrid{grid-template-columns:repeat(2,1fr)}.m37-columns{display:block}.m37-board{display:flex}.m37-lane{min-width:210px}}
+
+.c38-shell h1{font-size:28px;color:#102950;margin:0}.c38-shell>p{font-size:12px;color:#69809d;margin:5px 0 15px}
+.c38-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:12px}.c38-kpi{background:white;border:1px solid #e1eaf6;border-radius:9px;padding:11px;min-height:100px}.c38-kpi i{font-size:22px;display:block;color:#1266e8;font-style:normal}.c38-kpi:nth-child(2) i{color:#00a66b}.c38-kpi:nth-child(3) i{color:#ef9a26}.c38-kpi:nth-child(4) i{color:#793ce7}.c38-kpi:nth-child(5) i{color:#ef4b58}.c38-kpi label{font-size:10px;color:#627a9b;display:block;margin:7px 0}.c38-kpi strong{font-size:17px}.c38-kpi small{display:block;font-size:9px;color:#986b22}
+.c38-cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:10px}.c38-left,.c38-right{display:grid;gap:10px;align-content:start;min-width:0}.c38-panel{background:white;border:1px solid #e1eaf6;border-radius:9px;padding:13px;min-width:0}.c38-panel h3{font-size:14px;color:#11284f;margin:0 0 9px}
+.c38-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eaf0f8;font-size:11px}.c38-row:last-child{border:0}.c38-row small{color:#6b829e}.c38-row .c38-status{border-radius:12px;padding:4px 7px;background:#fff3df;color:#9a6312;font-size:10px}
+.c38-bars{display:flex;align-items:end;gap:7px;height:145px;border-bottom:1px solid #dce8f6;background:repeating-linear-gradient(to top,transparent 0,transparent 34px,#e6eff9 35px);padding:0 12px}.c38-bars>span{flex:1;background:linear-gradient(0deg,#2c81ed,#8ec9ff);border-radius:3px 3px 0 0}
+.c38-tablewrap{overflow:auto}.c38-table{width:100%;min-width:540px;border-collapse:collapse;font-size:11px}.c38-table th,.c38-table td{padding:8px;border-bottom:1px solid #e9f0f9;text-align:left}.c38-table th{background:#f0f6ff}
+.c38-metrics{display:flex;gap:7px;flex-wrap:wrap}.c38-metrics div{flex:1;min-width:100px;padding:10px;border:1px solid #dce8f7;border-radius:8px;background:#f9fbff;font-size:11px}
+.c38-metrics strong{font-size:17px;display:block}.c38-sel,.c38-button{border:1px solid #d6e6f7;border-radius:6px;padding:8px;font-size:11px;background:white;color:#1266e8}.c38-button{cursor:pointer;background:#edf5ff}
+.c38-empty{padding:10px;border-radius:7px;background:#fff5e5;color:#936019;font-size:11px}
+.c38-funnel{display:flex;gap:6px}.c38-funnel>div{flex:1;min-height:90px;border-radius:7px;padding:10px;background:#e9f3ff;text-align:center;font-size:11px}.c38-funnel>div:nth-child(2){background:#eee8ff}.c38-funnel>div:nth-child(3){background:#fff0da}.c38-funnel>div:nth-child(4){background:#e3f7ee}.c38-funnel>div:nth-child(5){background:#f2e7ff}
+.c38-lock{border:1px solid #eadbbd;border-radius:9px;padding:12px;background:#fff7e8;color:#8d5a14;font-size:12px}
+@media(max-width:1340px){.c38-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.c38-cols{grid-template-columns:1fr}}
+@media(max-width:750px){.c38-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.c38-cols{display:block}.c38-right,.c38-left{margin-top:10px}.c38-funnel{overflow:auto}.c38-funnel>div{min-width:120px}}
 </style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
 <div class="founder-board" id="founder-board">
  <div class="founder-top"><div><h1>Tổng quan nền tảng BIZVIORA</h1><p class="subtitle">AI Business Operating System cho doanh nghiệp lưu trú, F&amp;B và dịch vụ</p></div><select id="founder-period" aria-label="Khoảng thời gian"><option>6 tháng gần nhất</option><option>3 tháng gần nhất</option><option>12 tháng gần nhất</option></select></div>
@@ -1099,4 +1113,53 @@ function renderC37(){
  const ai=c37Panel('AI Chief of Staff');ai.append(c37El('div','m37-detail','Chưa có kết nối dữ liệu thật. Các đề xuất và rủi ro tài chính cần bằng chứng trước khi thực hiện.'));rail.append(ai);
 }
 const c37Previous=draw;draw=function(){c37Previous();renderC37()};draw();
+
+/* C4/C5 specialized customer screens, synthetic-only bounded pilot records */
+const C38_REFERENCE={
+1:{name:'AI Chief of Staff',sub:'Trợ lý điều hành cho chủ doanh nghiệp; bằng chứng và nguồn được tách khỏi gợi ý',k:[['⚠','Cảnh báo hôm nay','4'],['↗','Cơ hội tăng trưởng','3'],['☑','Việc chờ quyết định','6'],['▤','Dòng tiền dự kiến','Chưa đồng bộ'],['♙','Khách cần phản hồi','24'],['▥','Độ tin cậy dữ liệu','Chưa kiểm chứng']],left:['Tóm tắt sáng nay','Hỏi AI điều hành','Điểm nghẽn phát hiện','Đề xuất theo từng mảng'],right:['Ưu tiên hành động','Lịch quyết định hôm nay','Nhắc việc quan trọng']},
+4:{name:'Khách hàng & Marketing',sub:'CRM, nguồn lead, chiến dịch, đánh giá và tỷ lệ giữ chân theo hai cơ sở',k:[['♙','Tổng khách hàng','2.846'],['✚','Lead mới','328'],['⟳','Khách quay lại','38%'],['★','Đánh giá cần phản hồi','12'],['◉','Chiến dịch đang chạy','5'],['▽','Tỷ lệ chuyển đổi','24,6%']],left:['Pipeline khách hàng (CRM)','Khách hàng gần đây'],right:['Hiệu quả chiến dịch marketing','Đánh giá & phản hồi','AI Chief of Staff — Gợi ý hành động']},
+5:{name:'Homestay Insights',sub:'Lavender Homestay — phân tích từ PMS và OTA sau khi kết nối',k:[['▣','Công suất phòng','78%'],['♙','Khách hôm nay','24'],['＄','Doanh thu lưu trú','18,6 triệu'],['★','Điểm đánh giá','4,6 / 5'],['⚒','Phòng cần xử lý','7'],['☏','OTA chờ phản hồi','12']],left:['Xu hướng công suất phòng và doanh thu','Khách sắp đến / sắp đi'],right:['Tình trạng vận hành phòng','Vấn đề & yêu cầu của khách','AI Chief of Staff — Đề xuất']},
+6:{name:'F&B Insights',sub:'Cozy Garden — hiệu quả bán hàng, sản phẩm, ca làm và tồn kho',k:[['▥','Doanh thu hôm nay','18,6 triệu'],['♙','Khách hôm nay','128'],['▤','Hóa đơn trung bình','145.000đ'],['☕','Món bán chạy','Cà phê sữa đá'],['◈','Vật tư cần bổ sung','3'],['⟳','Tỷ lệ quay lại','42%']],left:['Xu hướng doanh thu & lượng khách theo ngày','Top 5 món bán chạy','Top 5 món bán chậm','Tổng quan ca làm việc'],right:['Khung giờ cao điểm','Cảnh báo vật tư & tồn kho','Khách hàng & Marketing']},
+7:{name:'Tài chính doanh nghiệp',sub:'Doanh thu, chi phí, lợi nhuận, dòng tiền và công nợ theo Business Unit',k:[['▥','Doanh thu tháng','186,4 triệu'],['▤','Chi phí tháng','124,6 triệu'],['↗','Lợi nhuận ước tính','61,8 triệu'],['＄','Dòng tiền ròng','48,2 triệu'],['♙','Công nợ phải thu','24,6 triệu'],['▣','Công nợ phải trả','41,3 triệu']],left:['Xu hướng doanh thu & chi phí theo tháng','Công nợ phải thu / phải trả theo thời hạn','AI Financial Insights'],right:['Phân bổ doanh thu & chi phí theo lĩnh vực','Dự báo dòng tiền 6 tháng tới','Khoản cần quyết định']},
+8:{name:'Tài chính cá nhân',sub:'OWNER PRIVATE — tài sản, nợ, dòng tiền và tự do tài chính',k:[['▥','Tài sản ròng','3,24 tỷ'],['▤','Nợ vay','620 triệu'],['＄','Dòng tiền cá nhân','46,8 triệu'],['♙','Tiết kiệm','780 triệu'],['◎','Mục tiêu tài chính','25 tỷ'],['⬡','Quỹ dự phòng','10,5 tháng']],left:['Xu hướng tài sản ròng','Dòng tiền cá nhân','Lộ trình trả nợ'],right:['Cơ cấu tài sản & nợ','Hành trình tự do tài chính','AI Chief of Staff']},
+9:{name:'Báo cáo & KPI',sub:'Đánh giá kết quả, chỉ tiêu, hiệu suất và báo cáo định kỳ',k:[['◎','KPI đạt chuẩn','8 / 12'],['⚑','Mục tiêu tháng','78%'],['⚠','Cảnh báo KPI','4'],['↗','Tốc độ tăng trưởng','18,6%'],['▤','Báo cáo chờ xem','6'],['▥','Tần suất sử dụng','78%']],left:['Hiệu quả kinh doanh theo tháng','Bảng điểm KPI theo bộ phận','Danh sách chỉ số quan trọng'],right:['AI Chief of Staff — KPI','KPI tổng quan theo tháng','Báo cáo định kỳ']}
+};
+const C38_FIXTURES={
+contacts:[{name:'Khách hàng A',source:'Google',unit:'Lavender Homestay',status:'Lead'},{name:'Khách hàng B',source:'Walk-in',unit:'Cozy Garden',status:'Đã ghé'}],
+rooms:[{name:'Phòng 201',status:'Cần kiểm tra',source:'REFERENCE_ONLY'},{name:'Phòng 105',status:'Yêu cầu kiểm tra',source:'REFERENCE_ONLY'}],
+menu:[{name:'Cà phê sữa đá',quantity:64},{name:'Trà sen vàng',quantity:42},{name:'Bánh croissant',quantity:38},{name:'Trà đào cam sả',quantity:36},{name:'Americano',quantity:28}],
+reports:[{name:'Báo cáo Homestay',period:'Tháng'},{name:'Báo cáo F&B',period:'Tháng'},{name:'Báo cáo KPI tổng hợp',period:'Tuần'}],
+department:[{name:'Homestay',done:4,total:5},{name:'Cozy Garden',done:3,total:4},{name:'Marketing',done:2,total:3},{name:'Finance',done:4,total:5}]
+};
+function c38N(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el}
+function c38Panel(title){const p=c38N('section','c38-panel');p.append(c38N('h3',null,title));return p}
+function c38Rows(p,arr){arr.forEach((name,i)=>{const row=c38N('div','c38-row');row.append(c38N('span',null,name),c38N('span','c38-status',i%2?'Demo':'Chưa đồng bộ'));p.append(row)})}
+function c38Bar(p){const bars=c38N('div','c38-bars');[46,53,61,66,71,78,73].forEach(v=>{const bar=c38N('span');bar.style.height=v+'%';bars.append(bar)});p.append(bars,c38N('p','c38-empty','Chuỗi tham chiếu infographic — không phải số liệu thực đã đối soát'))}
+function c38Table(panel,head,data){const wrap=c38N('div','c38-tablewrap'),table=c38N('table','c38-table'),tr=c38N('tr');head.forEach(s=>tr.append(c38N('th',null,s)));table.append(tr);data.forEach(r=>{const row=c38N('tr');r.forEach(s=>row.append(c38N('td',null,s)));table.append(row)});wrap.append(table);panel.append(wrap)}
+function renderC38(){
+ if(mode!=='tenant'||!demoCurrent||demoCurrent.tenant!=='T009'||!C38_REFERENCE[idx]){document.getElementById('c38-screen')?.remove();return}
+ document.getElementById('m35-customer')?.remove();document.getElementById('c38-screen')?.remove();const ref=C38_REFERENCE[idx],root=c38N('div','m35-app c38-shell');root.id='c38-screen';document.querySelector('.content').prepend(root);
+ root.append(c38N('span','m35-label','tamcocexperience · Customer Workspace · SYNTHETIC'),c38N('h1',null,ref.name),c38N('p',null,ref.sub));
+ if(idx===8&&demoCurrent.role!=='owner'){root.append(c38N('div','c38-lock','Không có quyền xem Tài chính cá nhân: demo ẩn màn, backend Auth/RLS chưa kiểm định.'));return}
+ const kpis=c38N('div','c38-kpis');ref.k.forEach(([icon,name,value])=>{const card=c38N('div','c38-kpi');card.append(c38N('i',null,icon),c38N('label',null,name),c38N('strong',null,value),c38N('small',null,'REFERENCE FIXTURE · KHÔNG PHẢI ACTUAL'));kpis.append(card)});root.append(kpis);
+ if(idx===8)root.append(c38N('div','c38-lock','OWNER PRIVATE. Giá trị trong ảnh đều là ví dụ minh họa, không có tài chính cá nhân thực được nhập hoặc chia sẻ.'));
+ const grid=c38N('div','c38-cols'),left=c38N('div','c38-left'),right=c38N('div','c38-right');grid.append(left,right);root.append(grid);
+ ref.left.forEach((title,i)=>{const panel=c38Panel(title);
+ if(idx===1&&i===1){const q=c38N('input','c38-sel');q.placeholder='Hỏi AI điều hành...';q.disabled=true;panel.append(q,c38N('p','c38-empty','AI chưa có kết nối backend hoặc nguồn được phê duyệt.'))}
+ else if(idx===4&&i===0){const funnel=c38N('div','c38-funnel');[['Khách tiềm năng',328],['Đã liên hệ',246],['Quan tâm',189],['Đã đặt/ghé',121],['Trung thành','1.082']].forEach(([a,b])=>{const x=c38N('div');x.append(c38N('b',null,a),c38N('h3',null,b));funnel.append(x)});panel.append(funnel)}
+ else if(idx===4&&i===1)c38Table(panel,['Khách hàng','Nguồn','Cơ sở','Trạng thái'],C38_FIXTURES.contacts.map(x=>[x.name,x.source,x.unit,x.status]));
+ else if(idx===5&&i===1)c38Table(panel,['Phòng','Tình trạng','Nguồn'],C38_FIXTURES.rooms.map(x=>[x.name,x.status,x.source]));
+ else if(idx===6&&(i===1||i===2))c38Table(panel,['Món','Số lượng','Trạng thái'],C38_FIXTURES.menu.map(x=>[x.name,x.quantity,'DEMO']));
+ else if(idx===9&&i===1)c38Table(panel,['Bộ phận','Đạt','Tổng'],C38_FIXTURES.department.map(x=>[x.name,x.done,x.total]));
+ else if(i===0)c38Bar(panel);
+ else c38Rows(panel,idx===7?['Homestay','Cozy Garden','Tổng hợp']:idx===8?['Dòng tiền','Tiết kiệm','Nợ vay']:['Hạng mục 01','Hạng mục 02','Hạng mục 03']);
+ left.append(panel)});
+ ref.right.forEach((title,i)=>{const panel=c38Panel(title);
+ if(idx===9&&i===2)c38Table(panel,['Báo cáo','Chu kỳ'],C38_FIXTURES.reports.map(x=>[x.name,x.period]));
+ else if(i===0&&(idx===6||idx===9))c38Bar(panel);
+ else c38Rows(panel,idx===5?['Phòng cần kiểm tra','Phòng đang xử lý','OTA chờ phản hồi']:idx===6?['Sữa','Hạt cà phê','Vật tư']:idx===7?['Homestay','Café','Tài chính']:['Theo dõi nguồn','Cần xác minh','Chưa đồng bộ']);
+ right.append(panel)});
+ const badge=c38N('p','c38-empty','Trạng thái C4/C5: layout prototype. Chưa có kết nối production, chức năng nghiệp vụ và kiểm thử RLS.');root.append(badge);
+}
+const c38Old=draw;draw=function(){c38Old();renderC38()};draw();
 </script></body></html>

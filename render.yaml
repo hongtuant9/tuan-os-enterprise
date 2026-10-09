@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: bizviora-synthetic-demo
+    runtime: static
+    rootDir: bizviora/demo
+    buildCommand: echo "BIZVIORA synthetic static preview"
+    staticPublishPath: .
+    autoDeployTrigger: off
+    pullRequestPreviewsEnabled: false

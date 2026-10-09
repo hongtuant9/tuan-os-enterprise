@@ -1,0 +1,17 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {normalizeHostname,resolveTenantContext} from "./tenant-domain.mjs";
+const domainA={hostname:"team-a.example.com",tenant_id:"A",status:"ACTIVE",verification_status:"VERIFIED",certificate_status:"ACTIVE"};
+const domainB={hostname:"team-b.example.com",tenant_id:"B",status:"ACTIVE",verification_status:"VERIFIED",certificate_status:"ACTIVE"};
+const domains=new Map([[domainA.hostname,domainA],[domainB.hostname,domainB]]);
+const memberships=new Map([["A:owner-a",{role:"owner",status:"ACTIVE"}],["A:employee-a",{role:"employee",status:"ACTIVE"}],["B:owner-b",{role:"owner",status:"ACTIVE"}]]);
+const resolve=(host,user)=>resolveTenantContext({trustedHostname:host,userId:user,lookupDomain:async h=>domains.get(h),lookupMembership:async({tenantId,userId})=>memberships.get(tenantId+":"+userId)});
+test("normalizes verified DNS hostname",()=>{assert.equal(normalizeHostname("TEAM-A.EXAMPLE.COM."),"team-a.example.com");});
+test("rejects forwarded-host injection",()=>{for(const x of ["team-a.example.com,evil.com","team-a.example.com:3000","http://team-a.example.com","127.0.0.1","localhost"])assert.equal(normalizeHostname(x),null);});
+test("owner A allowed on domain A",async()=>{assert.equal((await resolve(domainA.hostname,"owner-a")).tenantId,"A");});
+test("employee A allowed only on tenant A",async()=>{assert.equal((await resolve(domainA.hostname,"employee-a")).role,"employee");await assert.rejects(resolve(domainB.hostname,"employee-a"),{code:"NOT_A_MEMBER"});});
+test("owner B cannot access domain A",async()=>{await assert.rejects(resolve(domainA.hostname,"owner-b"),{code:"NOT_A_MEMBER"});});
+test("unmapped hostname fails closed",async()=>{await assert.rejects(resolve("unknown.example.com","owner-a"),{code:"UNMAPPED_HOST"});});
+test("unverified or inactive hostname fails closed",async()=>{domains.set("pending.example.com",{...domainA,hostname:"pending.example.com",status:"PENDING"});await assert.rejects(resolve("pending.example.com","owner-a"),{code:"UNMAPPED_HOST"});domains.delete("pending.example.com");});
+test("unauthenticated request is denied",async()=>{await assert.rejects(resolve(domainA.hostname,""),{code:"UNAUTHENTICATED"});});
+test("membership is scoped to tenant and cannot be chosen by request",async()=>{const out=await resolve(domainB.hostname,"owner-b");assert.equal(out.tenantId,"B");assert.equal(Object.hasOwn(out,"requestedTenantId"),false);});

@@ -178,4 +178,35 @@ addRecord=function(){if(demoCurrent?.role==='employee'&&(idx===3||idx===8)){noti
 const prevUpdateStatus=updateStatus;
 updateStatus=function(r,next){if(demoCurrent?.role==='employee'&&r.kind==='approval'){notify('Demo Employee: không được phê duyệt');return}prevUpdateStatus(r,next)};
 demoCurrent=null;loginOverlay();
+
+/* Demo fixture visibility and PRIVATE presentation hardening.
+ * Still browser-only: not an authentication or authorization security control. */
+const oldFilteredRows=filteredRows;
+filteredRows=function(){
+ const result=oldFilteredRows();
+ if(!demoCurrent||demoCurrent.role==='founder')return result;
+ const key=idx===2?'tasks':idx===3?'approvals':idx===4?'marketing':idx===5||idx===6?'insights':null;
+ if(!key)return result;
+ const fixture=(demoSeeds[demoCurrent.tenant]?.[key]||[]).map((title,i)=>({id:'seed-'+i,title,priority:'Bình thường',state:'Dữ liệu giả lập',kind:'fixture'}));
+ return [...fixture,...result.filter(r=>r.kind!=='fixture')].filter(r=>r.title.toLocaleLowerCase('vi').includes(query.toLocaleLowerCase('vi'))&&(filter==='all'||r.state===filter));
+};
+const oldRenderRows=renderRows;
+renderRows=function(){
+ if(demoCurrent?.role==='employee'&&idx===8){
+  const target=document.getElementById('records');
+  if(target)target.replaceChildren(element('div',{className:'demo-data-badge',textContent:'KHÔNG CÓ QUYỀN (DEMO): Tài chính cá nhân PRIVATE chỉ dành cho Owner được xác thực ở hệ thống thật. Không có dữ liệu thật ở đây.'}));
+  return;
+ }
+ oldRenderRows();
+};
+const secureDemoDraw=draw;
+draw=function(){
+ secureDemoDraw();
+ if(demoCurrent?.role==='employee'&&idx===8){
+  const cards=document.getElementById('cards');if(cards)cards.replaceChildren();
+  const actionbar=document.getElementById('actionbar');if(actionbar){const add=actionbar.querySelector('.primary');if(add)add.disabled=true;}
+  renderRows();
+ }
+};
+draw();
 </script></body></html>

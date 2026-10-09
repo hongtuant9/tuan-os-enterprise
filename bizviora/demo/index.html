@@ -189,6 +189,25 @@ body.m35-customer .content>h1,body.m35-customer .content>#subtitle,body.m35-cust
 .m35-app{display:none}body.m35-customer .m35-app{display:block}body.m35-customer .content{background:#f4f8fd;padding:17px}body.m35-customer aside{background:linear-gradient(170deg,#0b2240,#071a32)}.m35-header h1{font-size:27px;color:#112a50;margin:0}.m35-header p{font-size:12px;color:#6a7d96;margin:4px 0}.m35-label{background:#e9f3ff;color:#1666d2;border-radius:14px;font-size:10px;padding:4px 9px;display:inline-block;margin-bottom:8px}.m35-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:13px 0}.m35-kpi,.m35-panel{border:1px solid #dfebf7;background:white;border-radius:10px;padding:14px;min-width:0}.m35-kpi .icon{color:#1470ee;font-size:20px}.m35-kpi label{display:block;color:#6480a2;font-size:11px;margin:7px 0}.m35-kpi strong{font-size:22px}.m35-columns{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(280px,1fr);gap:10px}.m35-main,.m35-rail{display:grid;gap:10px;align-content:start;min-width:0}.m35-panel h3{font-size:15px;color:#153056;margin:0 0 10px}.m35-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;padding:11px 0;border-bottom:1px solid #edf2fa}.m35-row:last-child{border:0}.m35-row small{color:#758ba8;font-size:10px}.m35-pill{background:#e8f5ff;color:#1264d3;padding:4px 8px;border-radius:7px;font-size:10px}.m35-warn{color:#b46c14;background:#fff4de}.m35-btn{border:1px solid #c9ddf8;color:#1469df;background:#f0f6ff;border-radius:7px;padding:7px 10px;font-size:11px;cursor:pointer}.m35-btn.primary{background:#1268e8;color:white}.m35-chart{height:150px;display:flex;align-items:end;gap:9px;padding:14px;background:linear-gradient(#f9fbff,#eff6ff);border-radius:8px}.m35-chart div{flex:1;background:#62a6fa;border-radius:4px 4px 0 0}.m35-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.m35-tabs button{border:1px solid #dfebf8;background:white;border-radius:6px;padding:8px 10px;color:#46678b;cursor:pointer}.m35-tabs button.active{background:#126be8;color:white}.m35-list{display:grid;gap:7px}.m35-item{border:1px solid #e0ebf8;border-radius:8px;padding:11px;background:#fff}.m35-item b{font-size:12px}.m35-item p{font-size:11px;color:#657f9e;margin:5px 0}.m35-locked{background:#fff7eb;border:1px solid #f2d9a3;padding:11px;border-radius:8px;font-size:11px;color:#9d5b10}
 @media(max-width:1120px){.m35-columns{grid-template-columns:1fr}}
 @media(max-width:650px){.m35-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.m35-header h1{font-size:22px}.m35-columns{display:block}.m35-panel{margin:9px 0}.m35-kpi strong{font-size:18px}}
+
+body.m35-customer{--cprimary:#1266E8;--cnavy:#0B2140;--cborder:#E1EAF6;--ccanvas:#F4F8FD}
+body.m35-customer aside{background:linear-gradient(180deg,#0B2140,#071b32)!important}
+body.m35-customer .content{background:var(--ccanvas)!important}
+body.m35-customer .m35-kpi,body.m35-customer .m35-panel{border-color:var(--cborder);box-shadow:0 1px 5px #132a4910}
+.m36-dashboard{display:none}body.m35-customer .m36-dashboard{display:block}
+.m36-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin:12px 0}
+.m36-kpi{background:white;border:1px solid #e1eaf6;border-radius:9px;min-height:100px;padding:13px}
+.m36-kpi .ic{font-size:21px;color:#1266e8;display:block}.m36-kpi label{display:block;font-size:11px;color:#607697;margin:5px 0}.m36-kpi b{font-size:19px;color:#10294c}.m36-kpi small{display:block;font-size:9px;color:#a27313;margin-top:6px}
+.m36-columns{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(320px,1fr);gap:10px}
+.m36-panel{background:#fff;border:1px solid #e1eaf6;border-radius:9px;padding:13px;margin-bottom:10px}.m36-panel h3{font-size:15px;color:#11284f;margin:0 0 10px}
+.m36-bars{display:flex;align-items:flex-end;height:185px;gap:8px;padding:5px 8px 18px;border-bottom:1px solid #dbe7f6;background:repeating-linear-gradient(to top,transparent 0,transparent 40px,#eaf1f9 41px)}
+.m36-bars .day{flex:1;display:flex;align-items:flex-end;height:100%;position:relative}.m36-bars .day i{display:block;width:100%;background:linear-gradient(to top,#865ce8 0 44%,#49d6a2 44% 100%);border-radius:3px 3px 0 0}
+.m36-bars .day:after{content:attr(data-day);position:absolute;top:100%;font-size:9px;color:#597495}
+.m36-table-wrap{overflow:auto}.m36-table{width:100%;min-width:530px;border-collapse:collapse;font-size:11px}.m36-table td,.m36-table th{padding:8px;border-bottom:1px solid #e7edf6;text-align:left}.m36-table th{background:#f0f6fc}
+.m36-button{background:#eff5ff;border:1px solid #cfe0f7;border-radius:6px;color:#1266e8;padding:7px;font-size:11px;cursor:pointer;margin:0 5px 8px 0}.m36-button.selected{background:#1266e8;color:white}
+.m36-alert{padding:10px;font-size:11px;border-radius:7px;background:#fff4de;color:#9a6113}
+@media(max-width:1350px){.m36-kpis{grid-template-columns:repeat(3,1fr)}.m36-columns{grid-template-columns:1fr}}
+@media(max-width:700px){.m36-kpis{grid-template-columns:repeat(2,1fr)}.m36-kpi b{font-size:15px}.m36-columns{display:block}}
 </style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
 <div class="founder-board" id="founder-board">
  <div class="founder-top"><div><h1>Tổng quan nền tảng BIZVIORA</h1><p class="subtitle">AI Business Operating System cho doanh nghiệp lưu trú, F&amp;B và dịch vụ</p></div><select id="founder-period" aria-label="Khoảng thời gian"><option>6 tháng gần nhất</option><option>3 tháng gần nhất</option><option>12 tháng gần nhất</option></select></div>
@@ -1007,4 +1026,31 @@ function renderM35(){
  const next=m35Panel('Công việc tiếp theo');['Thiết lập staging backend + Auth + RLS','Kiểm thử cô lập tenant A/B','Kiểm tra backup/restore và secret scan','Import dữ liệu TUAN OS theo quyền được duyệt'].forEach(t=>m35Row(next,t,'Chưa nghiệm thu','HOLD'));rail.append(next);
 }
 const m35PriorDraw=draw;draw=function(){m35PriorDraw();renderM35()};draw();
+
+const C36_RECORDS=Array.from({length:12},(_,i)=>({day:(12+i)+'/4',homestay:2700000+i*250000,cafe:1900000+i*210000,tenantId:'T009',isSynthetic:true}));
+const C36_TASKS=[
+{id:'C36-01',unit:'Lavender Homestay',title:'Kiểm tra checklist buồng phòng',owner:'Lễ tân',state:'Cần làm'},
+{id:'C36-02',unit:'Cozy Garden',title:'Kiểm kê vật tư Bar',owner:'Ca trưởng',state:'Đang làm'},
+{id:'C36-03',unit:'Cozy Garden',title:'Duyệt đề xuất marketing',owner:'Owner',state:'Chờ duyệt'},
+{id:'C36-04',unit:'Lavender Homestay',title:'Theo dõi vấn đề phòng',owner:'Bộ phận phòng',state:'Cần làm'}
+].map(x=>Object.assign(x,{tenantId:'T009',isSynthetic:true}));
+function c36Node(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;if(value!==undefined)el.textContent=String(value);return el}
+function c36Panel(title){const p=c36Node('section','m36-panel');p.append(c36Node('h3',null,title));return p}
+function renderC36(){
+ if(mode!=='tenant'||!demoCurrent||demoCurrent.tenant!=='T009'||idx!==0){document.getElementById('c36-dashboard')?.remove();return}
+ document.querySelector('#m35-customer')?.remove();document.querySelector('#c36-dashboard')?.remove();
+ const root=c36Node('div','m35-app m36-dashboard');root.id='c36-dashboard';document.querySelector('.content').prepend(root);
+ const head=c36Node('div','m35-header');head.append(c36Node('span','m35-label','Customer Workspace · tamcocexperience · Pilot 001'),c36Node('h1',null,'Bảng điều hành vận hành & kinh doanh'),c36Node('p',null,'Lavender Homestay · Cozy Garden · Dữ liệu minh họa chưa kết nối HotelLink/KiotViet'));root.append(head);
+ const kpis=c36Node('div','m36-kpis');
+ [['＄','Doanh thu hôm nay','12.500.000 đ'],['♙','Khách lưu trú','12'],['☕','Đơn quán café','86'],['▥','Lợi nhuận ước tính','5.880.000 đ'],['☑','Việc cần xử lý',C36_TASKS.length],['▤','Tiền mặt & dòng tiền','42.300.000 đ']].forEach(([ic,name,val])=>{const card=c36Node('div','m36-kpi');card.append(c36Node('span','ic',ic),c36Node('label',null,name),c36Node('b',null,val),c36Node('small',null,'SYNTHETIC • Không phải dữ liệu thật'));kpis.append(card)});root.append(kpis);
+ const cols=c36Node('div','m36-columns'),main=c36Node('div'),rail=c36Node('div');cols.append(main,rail);root.append(cols);
+ const chart=c36Panel('Doanh thu theo cơ sở');chart.append(c36Node('p','m36-alert','Biểu đồ dùng bản ghi synthetic có tenantId. Chưa có dữ liệu doanh thu thực từ PMS/POS.'));const bars=c36Node('div','m36-bars');C36_RECORDS.forEach(r=>{const day=c36Node('div','day');day.dataset.day=r.day;const bar=c36Node('i');bar.style.height=(r.homestay+r.cafe)/11000000*100+'%';day.append(bar);bars.append(day)});chart.append(bars);main.append(chart);
+ const tasks=c36Panel('Việc hôm nay'),filter=c36Node('div'),tableHost=c36Node('div','m36-table-wrap');let selected='Tất cả';
+ function paint(){tableHost.replaceChildren();const table=c36Node('table','m36-table'),header=c36Node('tr');['Công việc','Cơ sở','Người thực hiện','Trạng thái'].forEach(x=>header.append(c36Node('th',null,x)));table.append(header);C36_TASKS.filter(x=>selected==='Tất cả'||x.unit===selected).forEach(t=>{const row=c36Node('tr');[t.title,t.unit,t.owner,t.state].forEach(x=>row.append(c36Node('td',null,x)));table.append(row)});tableHost.append(table)}
+ ['Tất cả','Lavender Homestay','Cozy Garden'].forEach(x=>{const btn=c36Node('button','m36-button'+(x===selected?' selected':''),x);btn.onclick=()=>{selected=x;filter.querySelectorAll('button').forEach(b=>b.classList.toggle('selected',b.textContent===x));paint()};filter.append(btn)});tasks.append(filter,tableHost);paint();main.append(tasks);
+ const perf=c36Panel('Hiệu suất cơ sở');M35_TENANT.units.forEach(u=>{const row=c36Node('div','m35-row');row.append(c36Node('b',null,u.name),c36Node('span','m35-pill','NOT CONNECTED'));perf.append(row)});rail.append(perf);
+ const ai=c36Panel('AI trợ lý hôm nay');ai.append(c36Node('p','m36-alert','AI chưa được kết nối với dữ liệu thực. Phân tích và khuyến nghị sẽ được mở sau khi hoàn thành tích hợp an toàn.'));rail.append(ai);
+ const cash=c36Panel('Dòng tiền nhanh');['Tổng thu','Tổng chi','Phải thu','Phải trả'].forEach(t=>{const r=c36Node('div','m35-row');r.append(c36Node('span',null,t),c36Node('span','m35-pill','Chưa đồng bộ'));cash.append(r)});rail.append(cash);
+}
+const c36OldDraw=draw;draw=function(){c36OldDraw();renderC36()};draw();
 </script></body></html>

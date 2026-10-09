@@ -369,4 +369,102 @@ function renderFounderOverviewM20(){
  const ai=overviewPanel('✳ AI Chief of Staff',5);const text=document.createElement('div');text.className='f-ai-text';text.textContent='• Doanh thu tháng này dự kiến đạt 415 triệu, tăng 18% so với tháng trước.\n• Nên ưu tiên phê duyệt 5 yêu cầu triển khai để không chậm tiến độ onboarding.\n• Có 3 doanh nghiệp trial sắp hết hạn trong 7 ngày tới.\n• Đề xuất xem xét nâng cấp hạ tầng server nếu mức sử dụng tăng 35%.';text.style.whiteSpace='pre-line';const info=document.createElement('p');info.className='f-chart-foot';info.textContent='Nhận định demo theo nội dung infographic, chưa chạy AI trên dữ liệu thật.';const b=document.createElement('button');b.textContent='Xem chi tiết phân tích & đề xuất →';b.className='blue';b.style.cssText='width:100%;padding:10px;margin-top:8px;background:#1667e3;color:#fff;border:0;border-radius:8px;cursor:pointer';b.onclick=()=>{idx=5;draw()};ai.append(text,info,b);right.append(ai);
 }
 const prevOverviewM20=draw;draw=function(){prevOverviewM20();renderFounderOverviewM20()};draw();
+
+/* M21 RELATIONAL SYNTHETIC DATASET — 156 tenants, 12 modules and per-tenant transactions.
+ * Demo fixtures only, not proof of real customer accounts. All KPIs derived from records.
+ */
+const SYN_NAMES=[
+['The Mong Homestay','Homestay','Pro','Trần Thị Mai','themong.vn',78],
+['Lá Cafe Đà Lạt','Café','Standard','Nguyễn Văn Hùng','lacafe.vn',64],
+['Nhà hàng Bếp Việt','Nhà hàng','Pro','Lê Quang Minh','bepviet.vn',85],
+['An Yên Hotel','Khách sạn nhỏ','Business','Phạm Thu Hà','anyenhotel.vn',71],
+['Coco Homestay','Homestay','Standard','Ngô Hoàng Nam','cocohomestay.vn',46],
+['Xóm Cafe','Café','Standard','Vũ Thảo An','xomcafe.vn',53],
+['Minh Châu Hotel','Khách sạn nhỏ','Business','Đặng Minh Tâm','minhchauhotel.vn',12],
+['Sunrise Villa','Homestay','Pro','Trần Quốc Bảo','sunrisevilla.vn',66]];
+const SYN_MODULES=[
+['Core OS','Nền tảng lõi, quản trị đa doanh nghiệp','Live','v2.4.0'],
+['Task & Approval','Quản lý công việc và phê duyệt','Live','v2.3.1'],
+['AI Chief of Staff','Trợ lý điều hành doanh nghiệp','Live','v2.5.0'],
+['Hospitality Insights','Phân tích vận hành lưu trú','Live','v2.2.3'],
+['Marketing & CRM','Tiếp thị, chăm sóc khách hàng','Live','v2.4.1'],
+['Business Finance','Tài chính doanh nghiệp','Live','v2.3.0'],
+['Personal Finance','Quản lý tài chính cá nhân','Beta','v2.0.0-beta.2'],
+['Reporting & KPI','Báo cáo và chỉ số vận hành','Live','v2.4.2'],
+['Audit Trail','Nhật ký hoạt động và tuân thủ','Live','v2.2.0'],
+['Customer Onboarding','Quy trình triển khai khách hàng','Beta','v2.1.0-beta.1'],
+['Domain Manager','Quản lý tên miền và thương hiệu','Draft','v1.0.0'],
+['AI Agent Hub','Xây dựng và quản lý AI Agent','Beta','v2.0.0-beta.3']
+];
+function synMake(){
+ let t=[];
+ for(let i=0;i<156;i++){
+  const n=SYN_NAMES[i]||['Demo '+(['Homestay','Cafe','Hotel','Restaurant','Villa'][i%5])+' '+String(i+1).padStart(3,'0'),['Homestay','Café','Khách sạn nhỏ','Nhà hàng'][i%4],['Standard','Pro','Business'][i%3],['Người phụ trách '+(i+1)],'demo-'+(i+1)+'.invalid',20+(i*13)%76];
+  const active=i<128,trial=!active,stage=i<9?'Đang cấu hình':i<128?'Hoàn tất':'Dùng thử';
+  const status=i===6?'Tạm ngưng':i===5?'Dùng thử':active?'Đang hoạt động':'Dùng thử';
+  t.push({id:'T'+String(i+1).padStart(3,'0'),name:n[0],industry:n[1],plan:n[2],owner:n[3],domain:n[4],usage:n[5],active,trial,status,stage,created:'12/11/2024',mrr:0,domainVerified:false});
+ }
+ // Assign actual synthetic recurring-revenue records; MRR is SUM(entries), not a manual KPI constant.
+ // First 8 values reflect reference rows; a balancing record sets exact 412.5m demo target.
+ const fixture=[1500000,990000,1800000,2900000,0,990000,0,1500000];fixture.forEach((v,i)=>t[i].mrr=v);
+ for(let i=8;i<128;i++)t[i].mrr=[1500000,2900000,3900000,1990000][i%4];
+ const sum=t.reduce((s,x)=>s+x.mrr,0);t[127].mrr+=412500000-sum;
+ // Keep the line items consistent and positive by assigning a balancing settlement to tenant 127.
+ return t;
+}
+const SYN_TENANTS=synMake();
+const SYN_APPROVALS=Array.from({length:12},(_,i)=>({id:'APR-'+(i+1),tenantId:SYN_TENANTS[i%156].id,title:['Yêu cầu phê duyệt triển khai','Nâng cấp gói','Đề xuất marketing','Mua thiết bị'][i%4],state:'Chờ duyệt',amount:(i+1)*1500000}));
+const SYN_TASKS=Array.from({length:18},(_,i)=>({id:'TASK-'+(i+1),tenantId:SYN_TENANTS[i%156].id,title:['Kiểm tra onboarding khách hàng mới','Rà soát quy trình vận hành','Viết tài liệu hướng dẫn','Kiểm tra hạ tầng và phân quyền'][i%4],state:['Cần làm','Đang làm','Chờ duyệt','Hoàn thành'][i%4],owner:['Marketing','Engineering','Product','Customer Success'][i%4],progress:(i*17)%100}));
+const SYN_EVENTS=Array.from({length:24},(_,i)=>({id:'AUD-'+(i+1),tenantId:SYN_TENANTS[i%156].id,actor:['Founder demo','Support demo','Admin demo'][i%3],action:['Đăng nhập mô phỏng','Chỉnh sửa demo tenant','Ghi nhận yêu cầu demo','Đổi trạng thái công việc'][i%4],at:'12/04/2024 09:'+String(i).padStart(2,'0'),result:i%9===0?'Thất bại':'Thành công'}));
+const SYN_MRR_ENTRIES=SYN_TENANTS.filter(x=>x.mrr!==0).map(t=>({tenantId:t.id,amount:t.mrr,period:'2024-04',kind:'recurring'}));
+const SYN_INVOICES=SYN_MRR_ENTRIES.map((r,i)=>({id:'INV-'+(i+1),tenantId:r.tenantId,amount:r.amount,paid:i%9!==0}));
+const SYN_TIMELINE=Array.from({length:12},(_,i)=>({month:i+1,active:32+Math.round(i*96/11),mrr:Math.round(412500000*(.36+.64*i/11))}));
+function fmtSyn(x){return Number(x).toLocaleString('vi-VN')+'đ'}
+function synMetrics(){return {total:SYN_TENANTS.length,active:SYN_TENANTS.filter(t=>t.active).length,trial:SYN_TENANTS.filter(t=>t.trial).length,onboarding:SYN_TENANTS.filter(t=>t.stage==='Đang cấu hình').length,mrr:SYN_MRR_ENTRIES.reduce((s,r)=>s+r.amount,0),pending:SYN_APPROVALS.length}}
+const SYN_METRICS=synMetrics();
+function synNode(tag,cls,textValue){const a=document.createElement(tag);if(cls)a.className=cls;if(textValue!==undefined)a.textContent=String(textValue);return a}
+function synRowFields(container,values){const r=synNode('tr');values.forEach(v=>r.append(synNode('td',null,v)));container.append(r);return r}
+function synSelect(options,placeholder,cb){const select=synNode('select','f-control');select.setAttribute('aria-label',placeholder);options.forEach(v=>select.append(synNode('option',null,v)));select.onchange=()=>cb(select.value);return select}
+function synPanel(title){const p=synNode('section','fd-card');p.append(synNode('h3',null,title));return p}
+function synDetail(){
+ if(mode!=='founder'||idx===0)return;
+ const cfg=fdConfigs[idx];if(!cfg)return;
+ const box=document.getElementById('founder-detail');if(!box)return;
+ // Make KPI counters, tables and charts depend on canonical source records.
+ const setK=(i,v)=>{const k=box.querySelectorAll('.fd-kpi strong');if(k[i])k[i].textContent=v};
+ if(idx===1){[SYN_METRICS.total,SYN_METRICS.active,SYN_METRICS.trial,SYN_METRICS.onboarding,fmtSyn(SYN_METRICS.mrr),6].forEach(setK);synTenantPage(box);}
+ else if(idx===2){[SYN_MODULES.length,4,3,'82%','64%',9].forEach(setK);synModulesPage(box)}
+ else if(idx===3){[SYN_METRICS.onboarding,14,5,4,'12 ngày',2].forEach(setK);synKanbanPage(box)}
+ else if(idx===5){[SYN_TASKS.length,3,SYN_APPROVALS.length,'68%',12,5].forEach(setK);synTasksPage(box)}
+ else if(idx===6){['1','NOT RUN','NOT RUN','HOLD','HOLD','3'].forEach(setK);synAuditPage(box)}
+ else if(idx===7){[fmtSyn(SYN_METRICS.mrr),'4,95 tỷ','38%','3,4%',fmtSyn(SYN_INVOICES.filter(i=>!i.paid).reduce((s,i)=>s+i.amount,0)),'DEMO'].forEach(setK);synFinancePage(box)}
+}
+function synSpecialMount(box,title){let target=box.querySelector('.fd-main');if(!target)return null;const old=box.querySelector('#syn-special');if(old)old.remove();const p=synPanel(title);p.id='syn-special';target.prepend(p);return p}
+function synTenantPage(box){
+ const p=synSpecialMount(box,'Danh sách doanh nghiệp & tenant ('+SYN_METRICS.total+')');if(!p)return;
+ const strip=synNode('div','fd-controls');const search=synNode('input');search.placeholder='Tìm kiếm theo tên, domain, người phụ trách';search.setAttribute('aria-label','Tìm doanh nghiệp');
+ let ind='',plan='',state='',selected=SYN_TENANTS[0],page=0;
+ const inds=synSelect(['Tất cả lĩnh vực','Homestay','Café','Nhà hàng','Khách sạn nhỏ'],'Lĩnh vực',v=>{ind=v.startsWith('Tất cả')?'':v;page=0;render()});
+ const plans=synSelect(['Tất cả gói','Standard','Pro','Business'],'Gói',v=>{plan=v.startsWith('Tất cả')?'':v;page=0;render()});
+ const states=synSelect(['Tất cả trạng thái','Đang hoạt động','Dùng thử','Tạm ngưng'],'Trạng thái',v=>{state=v.startsWith('Tất cả')?'':v;page=0;render()});
+ const create=synNode('button','blue','+ Thêm doanh nghiệp demo');create.onclick=()=>promptDialog('Thêm doanh nghiệp demo','Chỉ lưu một bản ghi trong phiên trình duyệt.',[{label:'Tên doanh nghiệp'},{label:'Lĩnh vực',kind:'select',options:['Homestay','Café','Nhà hàng','Khách sạn nhỏ']}],([name,industry])=>{SYN_TENANTS.push({id:'T'+(SYN_TENANTS.length+1),name,industry,plan:'Standard',owner:'Demo',domain:'chua-ket-noi.invalid',usage:0,active:false,trial:true,status:'Dùng thử',stage:'Mới',created:'10/10/2026',mrr:0});render();notify('Đã thêm doanh nghiệp chỉ trong phiên demo')});
+ const csv=synNode('button',null,'⇩ Xuất CSV');csv.onclick=()=>{const rows=[['Tenant','Lĩnh vực','Gói','Domain','Trạng thái','Owner','Onboarding','MRR','Usage'],...SYN_TENANTS.map(t=>[t.name,t.industry,t.plan,t.domain,t.status,t.owner,t.stage,t.mrr,t.usage])];const data='\uFEFF'+rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n');const u=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));const a=synNode('a');a.href=u;a.download='BIZVIORA_SYNTHETIC_TENANTS.csv';a.click();URL.revokeObjectURL(u)};
+ strip.append(search,inds,plans,states,csv,create);p.append(strip);
+ const scroller=synNode('div','fd-table-wrap');const tbl=synNode('table','fd-table');const head=synNode('thead');const tr=synNode('tr');
+ ['#','Tên doanh nghiệp','Lĩnh vực','Gói','Domain','Trạng thái','Người phụ trách','Onboarding','MRR','Sử dụng'].forEach(c=>tr.append(synNode('th',null,c)));head.append(tr);tbl.append(head);const body=synNode('tbody');tbl.append(body);scroller.append(tbl);p.append(scroller);
+ const pages=synNode('div','f-pager');const label=synNode('span','f-chart-foot');const back=synNode('button',null,'‹'),next=synNode('button',null,'›');back.onclick=()=>{page=Math.max(0,page-1);render()};next.onclick=()=>{page++;render()};pages.append(label,back,next);p.append(pages);
+ let info=box.querySelector('#syn-tenant-detail');if(!info){info=synPanel('Thông tin tenant được chọn');info.id='syn-tenant-detail';box.querySelector('.fd-rail').prepend(info)}
+ function detail(){info.replaceChildren(synNode('h3',null,selected.name));[['Lĩnh vực',selected.industry],['Gói',selected.plan],['Domain ví dụ',selected.domain],['Trạng thái',selected.status],['Người phụ trách',selected.owner],['Onboarding',selected.stage],['MRR demo',fmtSyn(selected.mrr)],['Mức sử dụng',selected.usage+'%']].forEach(([a,b])=>{const row=synNode('div','fd-list-item');row.append(synNode('span',null,a),synNode('b',null,b));info.append(row)});
+ const tabs=synNode('div','fd-controls');['Tổng quan','Modules','Người dùng','Lịch sử','Ghi chú'].forEach(name=>{const b=synNode('button',null,name);b.onclick=()=>notify(name+' · Bản ghi '+selected.id+' · dữ liệu demo');tabs.append(b)});info.prepend(tabs)}
+ function render(){const filtered=SYN_TENANTS.filter(t=>(t.name+' '+t.domain+' '+t.owner).toLocaleLowerCase('vi').includes(search.value.toLocaleLowerCase('vi'))&&(!ind||t.industry===ind)&&(!plan||t.plan===plan)&&(!state||t.status===state));const count=Math.max(1,Math.ceil(filtered.length/8));page=Math.min(page,count-1);body.replaceChildren();filtered.slice(page*8,page*8+8).forEach((t,i)=>{const row=synRowFields(body,[page*8+i+1,t.name,t.industry,t.plan,t.domain,t.status,t.owner,t.stage,fmtSyn(t.mrr),t.usage+'%']);row.style.cursor='pointer';row.onclick=()=>{selected=t;detail()}});label.textContent='Hiển thị '+(filtered.length?1+page*8:0)+'–'+Math.min(filtered.length,(page+1)*8)+' / '+filtered.length+' doanh nghiệp demo';next.disabled=page>=count-1;back.disabled=page===0} );detail()}
+ search.oninput=()=>{page=0;render()};render();
+ const map=synPanel('Mapping domain & module · dữ liệu demo');const mapping=synNode('div','fd-table-wrap'),table=synNode('table','fd-table'),hd=synNode('tr');['Tên doanh nghiệp','Domain tạm','Domain tùy chỉnh','SSL','Xác thực','Kết nối'].forEach(c=>hd.append(synNode('th',null,c)));const hdwrap=synNode('thead');hdwrap.append(hd);table.append(hdwrap);const bd=synNode('tbody');SYN_TENANTS.slice(0,5).forEach(t=>synRowFields(bd,[t.name,'demo-'+t.id.toLowerCase()+'.invalid',t.domain,'CHƯA CẤP','CHƯA XÁC THỰC','DEMO']));table.append(bd);mapping.append(table);map.append(mapping);p.after(map);
+}
+function synModulesPage(box){const p=synSpecialMount(box,'Danh mục 12 module sản phẩm');if(!p)return;const tbl=synNode('table','fd-table'),thead=synNode('thead'),head=synNode('tr');['Module','Mô tả','Trạng thái tham chiếu','Số tenant giả lập','Phiên bản'].forEach(x=>head.append(synNode('th',null,x)));thead.append(head);tbl.append(thead);const b=synNode('tbody');SYN_MODULES.forEach((m,i)=>synRowFields(b,[m[0],m[1],m[2],Math.min(SYN_METRICS.total,24+(i*9)),m[3]]));tbl.append(b);const s=synNode('div','fd-table-wrap');s.append(tbl);p.append(s);const r=synPanel('Roadmap & feature flags');const steps=synNode('div','fd-roadmap');[['Q2 · Core','Task & Approval','Reporting & KPI'],['Q3 · Pilot','Personal Finance (Owner only)','Customer Onboarding'],['Q4 · Scale','Domain Manager','AI Agent Hub']].forEach((arr)=>{const d=synNode('div','fd-roadmap-col');d.append(synNode('h4',null,arr[0]));arr.slice(1).forEach(x=>d.append(m19Check(x)));steps.append(d)});r.append(steps);p.after(r)}
+function synKanbanPage(box){const p=synSpecialMount(box,'Kanban triển khai — bản ghi từ 9 tenant đang onboarding');if(!p)return;const board=synNode('div','fd-kanban');const lanes=['Chờ khởi tạo','Đang cấu hình','Chờ đào tạo','Chạy thử','Go-live'];lanes.forEach((name,i)=>{const col=synNode('div','fd-lane');col.append(synNode('h4',null,name));SYN_TENANTS.slice(0,9).filter((_,j)=>j%5===i).forEach(t=>{const card=synNode('div','fd-ticket');card.append(synNode('b',null,t.name),synNode('div',null,t.owner),synNode('small',null,'Ngày bắt đầu '+t.created));col.append(card)});board.append(col)});p.append(board)}
+function synTasksPage(box){const p=synSpecialMount(box,'Bảng công việc nội bộ — 18 bản ghi demo');if(!p)return;const board=synNode('div','fd-kanban');['Cần làm','Đang làm','Chờ duyệt','Hoàn thành'].forEach(name=>{const col=synNode('div','fd-lane');col.append(synNode('h4',null,name+' ('+SYN_TASKS.filter(t=>t.state===name).length+')'));SYN_TASKS.filter(t=>t.state===name).forEach(t=>{const card=synNode('div','fd-ticket');card.append(synNode('b',null,t.title),synNode('div',null,t.owner+' · '+t.id));col.append(card)});board.append(col)});p.append(board);const a=synPanel('Yêu cầu phê duyệt ('+SYN_APPROVALS.length+')');SYN_APPROVALS.slice(0,7).forEach(r=>overviewMini(a,r.title,fmtSyn(r.amount)));p.after(a)}
+function synAuditPage(box){const p=synSpecialMount(box,'Nhật ký audit · '+SYN_EVENTS.length+' sự kiện demo');if(!p)return;const scroll=synNode('div','fd-table-wrap'),table=synNode('table','fd-table'),head=synNode('tr');['Thời gian','Actor','Hành động','Tenant ID','Kết quả'].forEach(v=>head.append(synNode('th',null,v)));const th=synNode('thead');th.append(head);table.append(th);const tbody=synNode('tbody');SYN_EVENTS.forEach(e=>synRowFields(tbody,[e.at,e.actor,e.action,e.tenantId,e.result]));table.append(tbody);scroll.append(table);p.append(scroll);const caution=synNode('div','fd-footnote','SECURITY STATUS THẬT: Tenant RLS / Restore / Full secret scan chưa chạy. Không biến thành PASS vì có audit events giả lập.');p.append(caution)}
+function synFinancePage(box){const p=synSpecialMount(box,'Doanh thu & tăng trưởng 12 tháng · tổng hợp từ các bản ghi demo');if(!p)return;const chart=synNode('div','fd-revenue');SYN_TIMELINE.forEach(m=>{const group=synNode('div','fd-month');group.style.setProperty('--a',Math.round(m.mrr/412500000*98)+'%');group.style.setProperty('--b',Math.round(m.active/128*65)+'%');group.append(synNode('i'),synNode('em'),synNode('small',null,'T'+m.month));chart.append(group)});p.append(chart,synNode('p','f-chart-foot','Các cột được tính từ timeline SYN_TIMELINE; MRR hiện tại = tổng các giao dịch định kỳ SYN_MRR_ENTRIES.'));const table=synPanel('Top tenant theo MRR demo');const b=synNode('div','fd-list');[...SYN_TENANTS].sort((a,b)=>b.mrr-a.mrr).slice(0,8).forEach(t=>overviewMini(b,t.name,fmtSyn(t.mrr)));table.append(b);p.after(table)}
+// Inject after existing redraw pipeline, preserving all 19-screen navigation.
+const synPrevDraw=draw;draw=function(){synPrevDraw();synDetail()};draw();
 </script></body></html>

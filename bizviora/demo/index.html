@@ -431,7 +431,7 @@ function synDetail(){
  const cfg=fdConfigs[idx];if(!cfg)return;
  const box=document.getElementById('founder-detail');if(!box)return;
  // Make KPI counters, tables and charts depend on canonical source records.
- const setK=(i,v)=>{const k=box.querySelectorAll('.fd-kpi strong');if(k[i])k[i].textContent=v};
+ const setK=(v,i)=>{const k=box.querySelectorAll('.fd-kpi strong');if(k[i])k[i].textContent=v};
  if(idx===1){[SYN_METRICS.total,SYN_METRICS.active,SYN_METRICS.trial,SYN_METRICS.onboarding,fmtSyn(SYN_METRICS.mrr),6].forEach(setK);synTenantPage(box);}
  else if(idx===2){[SYN_MODULES.length,4,3,'82%','64%',9].forEach(setK);synModulesPage(box)}
  else if(idx===3){[SYN_METRICS.onboarding,14,5,4,'12 ngày',2].forEach(setK);synKanbanPage(box)}

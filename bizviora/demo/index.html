@@ -15,7 +15,9 @@
 .fgrid{display:grid;grid-template-columns:1.6fr .92fr 1.09fr;gap:10px;margin-top:11px}.fpanel{background:white;border:1px solid #e0eaf4;border-radius:9px;padding:13px;min-width:0}.fpanel h3{font-size:14px;margin:0 0 13px;display:flex;justify-content:space-between}.fpanel h3 button{border:0;background:none;color:#1265d8;cursor:pointer;font-size:11px}.fpanel.compact{padding:11px}.fstack{display:grid;gap:10px}.fbargraph{height:185px;display:flex;align-items:flex-end;gap:8%;border-bottom:1px solid #dbe5f2;padding:8px 12px 0;background:repeating-linear-gradient(to top,#fff,#fff 43px,#eaf0f8 44px)}.fbargraph .group{flex:1;min-width:0;display:flex;gap:5px;align-items:flex-end;height:100%;position:relative}.fbargraph .bar{flex:1;background:linear-gradient(#77b5ff,#2679e8);border-radius:3px 3px 0 0;height:var(--h);min-width:8px}.fbargraph .line{flex:1;background:#18b88a;height:var(--g);opacity:.55;min-width:4px;border-radius:3px 3px 0 0}.fbargraph .group small{position:absolute;top:100%;font-size:9px;color:#677c99;left:-5px;padding-top:5px}.fchartlegend{font-size:10px;color:#647a96;margin:12px 0 0}.fdonut{width:162px;height:162px;border-radius:50%;background:conic-gradient(#1462eb 0 27%,#1fb5cb 27% 51%,#a56df1 51% 73%,#ffbb4b 73% 88%,#c2d3ed 88% 100%);display:grid;place-items:center;flex-shrink:0}.fdonut:after{content:"2 DEMO";display:grid;place-items:center;width:104px;height:104px;background:white;border-radius:50%;font-size:15px;font-weight:800;color:#15254c}.fdonutrow{display:flex;gap:14px;align-items:center}.fdonutrow ul{padding:0;list-style:none;font-size:11px;line-height:2;color:#526c88}.fdonutrow li:before{content:"●";color:#1874e8;padding-right:6px}.ftable{width:100%;font-size:10px;border-collapse:collapse}.ftable td,.ftable th{text-align:left;border-bottom:1px solid #edf2f9;padding:9px 5px}.ftable th{background:#f3f7fc}.fstaterow{display:flex;justify-content:space-between;gap:7px;padding:7px 1px;border-bottom:1px solid #edf2f8;font-size:11px}.fstaterow .tag{font-size:9px;border-radius:12px;padding:3px 7px;background:#fff0d6;color:#976412;white-space:nowrap}.fstaterow .tag.ok{background:#e4f9ed;color:#078152}.fnotice{background:#eef6ff;border-radius:9px;padding:11px;color:#355c92;font-size:11px;line-height:1.5}.fnotice.warn{background:#fff8e5;color:#805a16}.founder-board button{font:inherit}.factions{display:flex;flex-wrap:wrap;gap:8px}.factions button{border:1px solid #d0e1f5;border-radius:8px;background:#f5f9ff;color:#1358b6;padding:9px 12px;cursor:pointer;font-size:11px}.fmobile-only{display:none}
 @media(max-width:1250px){.fkpis{grid-template-columns:repeat(3,minmax(0,1fr))}.fgrid{grid-template-columns:1fr 1fr}.fgrid>.fstack:last-child{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:750px){.founder-is-home{background:#0b2342}.founder-is-home .content{background:#f4f7fd;border-radius:19px 19px 0 0}.founder-is-home aside{background:#09213e}.founder-is-home .founder-top h1{font-size:19px}.founder-top{align-items:flex-start}.founder-top select{font-size:10px;width:115px}.fkpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fkpi{padding:11px}.fkpi b{font-size:17px}.fgrid{display:block}.fgrid>.fpanel,.fgrid>.fstack{margin-top:10px}.fgrid>.fstack:last-child{display:block}.fgrid>.fstack:last-child>*{margin-top:10px}.fmobile-only{display:block}.fdonutrow{justify-content:center}.fbargraph{height:155px}.fpanel{overflow-x:auto}.ftable{min-width:300px}.fnotice{font-size:11px}}
-</style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
+
+/* Synthetic multi-business demo accounts; not security authentication */
+.demo-login-backdrop{position:fixed;inset:0;background:linear-gradient(145deg,#0a1f42,#134c8b);z-index:300;display:flex;align-items:center;justify-content:center;padding:15px}.demo-login{width:min(940px,100%);background:#fff;border-radius:20px;box-shadow:0 20px 90px #0006;overflow:hidden;display:grid;grid-template-columns:.85fr 1.15fr}.demo-intro{background:#0d294b;color:#fff;padding:32px}.demo-intro h2{font-size:27px;letter-spacing:1px}.demo-intro p{line-height:1.65;color:#cfdeef}.demo-intro .disclaimer{background:#183c60;border-radius:12px;padding:12px;font-size:12px}.demo-login-main{padding:30px;max-height:82vh;overflow-y:auto}.demo-account-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.demo-account{background:#f6f9fe;border:1px solid #dce7f5;border-radius:11px;padding:12px;text-align:left;cursor:pointer;color:#10284d}.demo-account b{display:block;margin-bottom:4px}.demo-account small{color:#637991;line-height:1.5}.demo-account.selected{border:2px solid #1767d0;background:#eaf3ff}.demo-login-main .signin{width:100%;background:#1767d0;color:#fff;border:0;border-radius:9px;padding:12px;cursor:pointer;margin:15px 0 5px}.demo-login-main .signin:disabled{opacity:.5;cursor:not-allowed}.demo-userpill{border-radius:20px;background:#eaf3ff;color:#134d98;padding:7px 11px;font-size:12px;cursor:pointer;border:1px solid #d3e4f8}.seed-tag{font-size:10px;color:#879ab2}.demo-intro .chip{display:inline-block;border:1px solid #ffffff6e;padding:6px 10px;border-radius:20px;font-size:11px}.demo-data-badge{margin:8px 0 12px;padding:10px 12px;border-left:3px solid #f4ad37;background:#fff9e8;border-radius:6px;color:#805b15;font-size:12px}@media(max-width:700px){.demo-login{display:block}.demo-intro{padding:22px}.demo-intro h2{font-size:21px}.demo-login-main{padding:18px;max-height:58vh}.demo-account-grid{grid-template-columns:1fr}.demo-intro p{margin-bottom:10px}}</style></head><body><aside><div class="brand">✦ BIZVIORA<small>AI BUSINESS OPERATING SYSTEM</small></div><select class="mode" id="mode"><option value="founder">Founder · Quản trị Bizviora</option><option value="tenant">Khách hàng · TUAN OS 001</option></select><nav id="nav"></nav><div class="note" style="color:#b9cbe5;padding:17px 8px">Bản mẫu UX dùng dữ liệu giả lập.<br>Không kết nối production, không phải hệ thống đăng nhập thật.</div></aside><main><header class="header"><b id="breadcrumb">Founder / Tổng quan</b><span class="pill">SYNTHETIC DEMO</span></header><div class="content"><h1 id="title"></h1><p class="subtitle" id="subtitle"></p><div class="banner" id="banner"></div>
 <div class="founder-board" id="founder-board">
  <div class="founder-top"><div><h1>Tổng quan nền tảng BIZVIORA</h1><p class="subtitle">AI Business Operating System cho doanh nghiệp lưu trú, F&amp;B và dịch vụ</p></div><select id="founder-period" aria-label="Khoảng thời gian"><option>6 tháng gần nhất</option><option>3 tháng gần nhất</option><option>12 tháng gần nhất</option></select></div>
  <div class="fnotice warn" style="margin-bottom:10px">Dữ liệu bên dưới là <b>DEMO / SYNTHETIC</b>, không phản ánh số tenant, doanh thu, bảo mật hay vận hành thực tế.</div>
@@ -92,4 +94,88 @@ draw();
 const founderOriginalDraw=draw;
 draw=function(){founderOriginalDraw();const active=mode==='founder'&&idx===0;document.body.classList.toggle('founder-is-home',active);const board=document.getElementById('founder-board');if(board){board.hidden=!active;board.querySelectorAll('[data-route]').forEach(btn=>btn.onclick=()=>{idx=Number(btn.dataset.route);draw()});board.querySelectorAll('[data-switch-tenant]').forEach(btn=>btn.onclick=()=>{document.getElementById('mode').value='tenant';document.getElementById('mode').dispatchEvent(new Event('change',{bubbles:true}));idx=0;draw()});const period=document.getElementById('founder-period');period.onchange=()=>notify('Đã chọn '+period.value+'; số liệu demo không biến thành dữ liệu thật.');}}
 draw();
+
+/* DEMO ACCOUNTS: client-side showcase ONLY. Not production auth or a security boundary. */
+const demoAccounts=[
+{id:'platform-founder',name:'Founder BIZVIORA',business:'BIZVIORA Platform',role:'founder',tenant:'platform',industry:'SaaS'},
+{id:'tuan-owner',name:'Chủ sở hữu TUAN OS',business:'TUAN OS Enterprise 001',role:'owner',tenant:'tuan-001',industry:'Homestay · Café'},
+{id:'tuan-staff',name:'Nhân viên TUAN OS',business:'TUAN OS Enterprise 001',role:'employee',tenant:'tuan-001',industry:'Homestay · Café'},
+{id:'hotel-owner',name:'Chủ khách sạn Hoa Lư',business:'Hoa Lu Boutique Hotel 002',role:'owner',tenant:'hotel-002',industry:'Khách sạn'},
+{id:'hotel-staff',name:'Nhân viên Hoa Lư',business:'Hoa Lu Boutique Hotel 002',role:'employee',tenant:'hotel-002',industry:'Khách sạn'},
+{id:'cafe-owner',name:'Chủ quán An Nhiên',business:'An Nhien Coffee 003',role:'owner',tenant:'cafe-003',industry:'Café · F&B'},
+{id:'restaurant-owner',name:'Chủ nhà hàng Tam Cốc',business:'Tam Coc Garden Restaurant 004',role:'owner',tenant:'restaurant-004',industry:'Nhà hàng'}
+];
+const demoSeeds={
+'tuan-001':{tasks:['Kiểm tra báo cáo HotelLink cuối ngày','Đối soát doanh thu Cozy Garden trên KiotViet','Duyệt checklist buồng phòng'],approvals:['Đề xuất ngân sách marketing tuần','Đề xuất mua vật tư buồng phòng'],marketing:['Theo dõi Google Business Profile','Phân tích khách từ OTA và đi bộ'],insights:['Tổng hợp hiệu suất Homestay','Phân tích menu Cozy Garden']},
+'hotel-002':{tasks:['Tổng hợp báo cáo PMS','Phân tích đánh giá khách','Kiểm tra công việc bảo trì'],approvals:['Đề xuất bảo trì điều hòa'],marketing:['Phân tích nguồn đặt phòng','Theo dõi đánh giá OTA'],insights:['Công suất phòng theo mùa','Doanh thu theo kênh']},
+'cafe-003':{tasks:['Rà soát định mức nguyên liệu','Kiểm tra hiệu quả ca làm','Phân tích phản hồi khách'],approvals:['Đề xuất campaign cuối tuần'],marketing:['Đánh giá quảng cáo Google Maps','Khảo sát nguồn biết đến quán'],insights:['Món bán chạy theo ca','Phân tích biên lợi nhuận món']},
+'restaurant-004':{tasks:['Đối soát doanh thu từ POS','Kiểm tra tiêu hao nguyên liệu','Theo dõi năng suất nhân viên'],approvals:['Đề xuất mua thiết bị bếp'],marketing:['Theo dõi hiệu suất chiến dịch','Phân tích phản hồi khách'],insights:['Food cost theo món','Hiệu quả menu combo']}
+};
+let demoCurrent=null, chosenDemo='tuan-owner';
+const displayRole={founder:'Founder',owner:'Owner',employee:'Employee'};
+function cleanText(text){return String(text||'').slice(0,140)}
+function loginOverlay(){
+ const prev=document.getElementById('demo-login-root');if(prev)prev.remove();
+ const bg=element('div',{id:'demo-login-root',className:'demo-login-backdrop'});
+ const box=element('div',{className:'demo-login'});
+ const left=element('section',{className:'demo-intro'});
+ left.append(element('span',{className:'chip',textContent:'BIZVIORA · DEMO ENVIRONMENT'}),element('h2',{textContent:'Trải nghiệm BIZVIORA'}),element('p',{textContent:'Chọn tài khoản mẫu để khám phá không gian Founder hoặc điều hành của từng doanh nghiệp. Dữ liệu và vai trò đều giả lập.'}),element('div',{className:'disclaimer',textContent:'⚠ Không nhập thông tin thật. Không có mật khẩu, không có xác thực máy chủ. Việc chọn tài khoản chỉ điều khiển giao diện demo công khai; không dùng để chứng minh phân quyền an toàn.'}));
+ const main=element('section',{className:'demo-login-main'});
+ main.append(element('h3',{textContent:'Chọn tài khoản dùng thử'}),element('p',{className:'lbl',textContent:'7 tài khoản · 4 doanh nghiệp giả lập + Founder'}));
+ const grid=element('div',{className:'demo-account-grid'});
+ demoAccounts.forEach(a=>{const btn=element('button',{type:'button',className:'demo-account'+(chosenDemo===a.id?' selected':''),'data-account':a.id});
+ btn.append(element('b',{textContent:a.name}),element('small',{textContent:a.business+' • '+displayRole[a.role]}));
+ btn.onclick=()=>{chosenDemo=a.id;grid.querySelectorAll('button').forEach(b=>b.classList.toggle('selected',b.dataset.account===a.id))};
+ grid.append(btn)});
+ const submit=element('button',{className:'signin',textContent:'Vào trải nghiệm demo →'});
+ submit.onclick=()=>{demoCurrent=demoAccounts.find(a=>a.id===chosenDemo);bg.remove();applyDemoAccount()};
+ main.append(grid,submit,element('p',{className:'helper',textContent:'Dữ liệu giả lập, không có truy cập TUAN OS hay tài chính thật. Tạo/xóa công việc chỉ tác động dữ liệu demo trong phiên trình duyệt.'}));
+ box.append(left,main);bg.append(box);document.body.append(bg);
+}
+function demoBucket(){return demoCurrent?.tenant||'platform'}
+function demoStorageKey(){return 'bizviora-demo-session-v2-'+demoBucket()+'-'+demoCurrent?.id}
+function applyDemoAccount(){
+ const a=demoCurrent;if(!a)return;
+ mode=a.role==='founder'?'founder':'tenant';idx=0;query='';filter='all';
+ document.getElementById('mode').value=mode;
+ document.getElementById('mode').disabled=true;
+ const root=document.querySelector('.header');
+ let badge=document.getElementById('demo-user-switch');
+ if(!badge){badge=element('button',{id:'demo-user-switch',className:'demo-userpill'});root.append(badge)}
+ badge.textContent=a.name+' ▾';badge.onclick=loginOverlay;
+ // Reset tenant-local synthetic records; never reveal a prior tenant's browser edits.
+ demoRecords={founder:[],tenant:[]};
+ try{const saved=JSON.parse(sessionStorage.getItem(demoStorageKey())||'[]');demoRecords[mode]=Array.isArray(saved)?saved:[]}catch{}
+ if(a.role==='employee'){document.body.classList.add('demo-employee')}else{document.body.classList.remove('demo-employee')}
+ draw();
+}
+const originalSaveDemo=saveDemo;
+saveDemo=function(){if(demoCurrent){try{sessionStorage.setItem(demoStorageKey(),JSON.stringify(demoRecords[mode]))}catch{}}};
+const accountOriginalDraw=draw;
+draw=function(){
+ accountOriginalDraw();
+ if(!demoCurrent)return;
+ const a=demoCurrent;
+ const title=document.getElementById('title'), subtitle=document.getElementById('subtitle'),banner=document.getElementById('banner');
+ if(a.role!=='founder'){
+  const suffix=' · '+a.business;
+  title.textContent=title.textContent+suffix;
+  subtitle.textContent=a.industry+' | '+subtitle.textContent;
+  banner.textContent='DEMO TENANT '+a.tenant+' · '+a.business+' · Vai trò '+displayRole[a.role]+'. Không sử dụng dữ liệu thật.';
+  const rowNodes=[...document.querySelectorAll('#records .tablerow')].slice(1);
+  const key=idx===2?'tasks':idx===3?'approvals':idx===4?'marketing':idx===5||idx===6?'insights':null;
+  if(key){const source=demoSeeds[a.tenant]?.[key]||[];let c=0;rowNodes.forEach((row,i)=>{if(c<source.length){const first=row.querySelector('div');if(first){first.textContent=source[c];c++}}})}
+  if(a.role==='employee'&&idx===8){
+   document.getElementById('records').replaceChildren(element('div',{className:'demo-data-badge',textContent:'KHÔNG CÓ QUYỀN: Tài chính cá nhân PRIVATE chỉ dành cho Owner đã xác thực ở hệ thống thật. Bản demo không hiển thị dữ liệu riêng tư.'}));
+   document.getElementById('cards').replaceChildren();
+   const actions=document.getElementById('actionbar');if(actions)actions.querySelector('.primary').disabled=true;
+  }
+  const board=document.getElementById('founder-board');if(board)board.hidden=true;
+ }
+};
+const prevAddRecord=addRecord;
+addRecord=function(){if(demoCurrent?.role==='employee'&&(idx===3||idx===8)){notify('Demo Employee: yêu cầu phê duyệt và dữ liệu PRIVATE bị giới hạn.');return}prevAddRecord()};
+const prevUpdateStatus=updateStatus;
+updateStatus=function(r,next){if(demoCurrent?.role==='employee'&&r.kind==='approval'){notify('Demo Employee: không được phê duyệt');return}prevUpdateStatus(r,next)};
+demoCurrent=null;loginOverlay();
 </script></body></html>

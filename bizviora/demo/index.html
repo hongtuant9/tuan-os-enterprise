@@ -716,5 +716,22 @@ tce.name='tamcocexperience';tce.industry='Lưu trú và F&B';tce.plan='Pilot';tc
 tce.businessUnits=[{name:'Lavender Homestay',type:'Hospitality',integration:'HotelLink / KiotViet Hotel',status:'NOT CONNECTED'},{name:'Cozy Garden',type:'F&B',integration:'KiotViet F&B',status:'NOT CONNECTED'}];
 demoAccounts.push({id:'tce-owner',name:'Owner tamcocexperience (Demo)',business:'tamcocexperience',role:'owner',tenant:tce.id,industry:'Lưu trú và F&B'});
 demoAccounts.push({id:'tce-staff',name:'Staff tamcocexperience (Demo)',business:'tamcocexperience',role:'employee',tenant:tce.id,industry:'Lưu trú và F&B'});
+
+// Transfer generated demonstration revenue away from pilot to another purely synthetic tenant.
+// Do not represent real tamcocexperience revenue as mock customer billing.
+const tceSyntheticRevenue=SYN_MRR_ENTRIES.find(r=>r.tenantId===tce.id);
+const recipient=SYN_TENANTS[9];
+if(tceSyntheticRevenue){
+ const transfer=tceSyntheticRevenue.amount;
+ tceSyntheticRevenue.amount=0;
+ const targetRevenue=SYN_MRR_ENTRIES.find(r=>r.tenantId===recipient.id);
+ if(targetRevenue)targetRevenue.amount+=transfer;
+ recipient.mrr+=transfer;
+ tce.mrr=0;
+ const invoice=SYN_INVOICES.find(x=>x.tenantId===tce.id);
+ const recipientInvoice=SYN_INVOICES.find(x=>x.tenantId===recipient.id);
+ if(invoice)invoice.amount=0;
+ if(recipientInvoice)recipientInvoice.amount+=transfer;
+}
 demoSeeds[tce.id]={tasks:['Kiểm tra báo cáo Lavender Homestay','Đối soát chi phí Cozy Garden'],approvals:['Đề xuất vật tư Lavender (demo)','Đề xuất marketing Cozy Garden (demo)'],marketing:['Google Maps và OTA (chưa kết nối)'],insights:['HotelLink chưa kết nối','KiotViet chưa kết nối']};
 </script></body></html>

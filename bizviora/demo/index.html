@@ -467,4 +467,61 @@ function synAuditPage(box){const p=synSpecialMount(box,'Nhật ký audit · '+SY
 function synFinancePage(box){const p=synSpecialMount(box,'Doanh thu & tăng trưởng 12 tháng · tổng hợp từ các bản ghi demo');if(!p)return;const chart=synNode('div','fd-revenue');SYN_TIMELINE.forEach(m=>{const group=synNode('div','fd-month');group.style.setProperty('--a',Math.round(m.mrr/412500000*98)+'%');group.style.setProperty('--b',Math.round(m.active/128*65)+'%');group.append(synNode('i'),synNode('em'),synNode('small',null,'T'+m.month));chart.append(group)});p.append(chart,synNode('p','f-chart-foot','Các cột được tính từ timeline SYN_TIMELINE; MRR hiện tại = tổng các giao dịch định kỳ SYN_MRR_ENTRIES.'));const table=synPanel('Top tenant theo MRR demo');const b=synNode('div','fd-list');[...SYN_TENANTS].sort((a,b)=>b.mrr-a.mrr).slice(0,8).forEach(t=>overviewMini(b,t.name,fmtSyn(t.mrr)));table.append(b);p.after(table)}
 // Inject after existing redraw pipeline, preserving all 19-screen navigation.
 const synPrevDraw=draw;draw=function(){synPrevDraw();synDetail()};draw();
+
+/* M22: one canonical synthetic tenant model drives detail, members, domain, usage, audit. */
+const tenantM22Modules=new Map(),tenantM22Members=new Map(),tenantM22Notes=new Map();
+for(const [i,t] of SYN_TENANTS.entries()){
+ const ids=[0,1,4,7,8].filter((_,j)=>(i+j)%5!==4);
+ tenantM22Modules.set(t.id,ids.map(j=>({id:j,name:SYN_MODULES[j][0],state:'DEMO'})));
+ tenantM22Members.set(t.id,[{name:t.owner,role:'Owner (demo)',status:'Chưa xác thực'},{name:'Nhân viên '+t.id,role:'Employee (demo)',status:'Chưa xác thực'}]);
+ tenantM22Notes.set(t.id,['Đây là doanh nghiệp giả lập, không có khách hàng thật.']);
+ t.tempDomain='t-'+t.id.toLowerCase()+'.example.invalid';t.domainState='Chưa xác thực';t.sslState='Chưa cấp';t.connected=false;
+ t.resource={users:Math.round(t.usage/2),bookings:t.usage,storage:Math.round(t.usage*.6),api:Math.round(t.usage*.36)};
+ t.onboardingSteps=['Khởi tạo tenant','Cấu hình module','Thiết lập người dùng','Kiểm thử cô lập','Xác minh domain','Bàn giao'];
+}
+function tenantM22Panel(){
+ if(mode!=='founder'||idx!==1)return;
+ const box=document.querySelector('#founder-detail'),selectedTitle=box?.querySelector('#syn-tenant-detail h3');if(!box||!selectedTitle)return;
+ const panel=box.querySelector('#syn-tenant-detail');const requestedName=selectedTitle.textContent;
+ const t=SYN_TENANTS.find(t=>t.name===requestedName);if(!t)return;
+ panel.replaceChildren();
+ const title=synNode('h3',null,t.name);panel.append(title);
+ const nav=synNode('div','fd-controls');const body=synNode('div');body.id='m22-panel-content';
+ panel.append(nav,body);
+ function render(which){
+  body.replaceChildren();
+  if(which==='Tổng quan'){
+   for(const [k,v] of [['Tenant ID',t.id],['Lĩnh vực',t.industry],['Gói',t.plan],['Trạng thái',t.status],['Owner',t.owner],['MRR demo',fmtSyn(t.mrr)],['Onboarding',t.stage]])overviewMini(body,k,v);
+   const usage=synPanel('Mức sử dụng tài nguyên (demo)');
+   for(const [key,label] of [['users','Người dùng'],['bookings','Lượt đặt phòng/đơn'],['storage','Lưu trữ'],['api','API requests']]){
+    const r=synNode('div','fd-mini-stat');r.append(synNode('span',null,label));const meter=synNode('span','fd-meter');const bar=synNode('span');bar.style.width=t.resource[key]+'%';meter.append(bar);r.append(meter,synNode('b',null,t.resource[key]+'%'));usage.append(r)
+   }body.append(usage);
+   const dom=synPanel('Domain & kết nối');for(const [a,b] of [['Domain demo',t.tempDomain],['Domain tham chiếu',t.domain],['Xác thực',t.domainState],['SSL',t.sslState],['Kết nối',t.connected?'Đã kết nối':'Chưa kết nối']])overviewMini(dom,a,b);body.append(dom)
+  }else if(which==='Modules'){
+   for(const item of tenantM22Modules.get(t.id)||[])overviewMini(body,item.name,item.state)
+  }else if(which==='Người dùng'){
+   for(const user of tenantM22Members.get(t.id)||[])overviewMini(body,user.name+' · '+user.role,user.status)
+  }else if(which==='Lịch sử'){
+   const events=SYN_EVENTS.filter(e=>e.tenantId===t.id);
+   if(!events.length)body.append(synNode('p','helper','Chưa có audit event mô phỏng.'));
+   events.forEach(e=>overviewMini(body,e.at+' · '+e.action,e.result));
+  }else if(which==='Ghi chú'){
+   const list=synNode('div');for(const n of tenantM22Notes.get(t.id)||[])list.append(synNode('p','helper',n));body.append(list);
+   const add=synNode('button',null,'+ Ghi chú demo');add.onclick=()=>promptDialog('Thêm ghi chú nội bộ','Chỉ lưu ở trình duyệt trong phiên demo.',[{label:'Nội dung ghi chú',kind:'textArea'}],([content])=>{tenantM22Notes.get(t.id).push(content);render('Ghi chú')});body.append(add);
+  }
+ }
+ ['Tổng quan','Modules','Người dùng','Lịch sử','Ghi chú'].forEach(name=>{const btn=synNode('button',null,name);btn.onclick=()=>{nav.querySelectorAll('button').forEach(b=>b.classList.remove('blue'));btn.classList.add('blue');render(name)};nav.append(btn)});nav.firstChild.click()
+}
+const m22OldDetail=synDetail;
+synDetail=function(){m22OldDetail();if(mode==='founder'&&idx===1){
+ const panel=document.querySelector('#syn-tenant-detail');if(panel&&!panel.dataset.m22){panel.dataset.m22='1';tenantM22Panel()}
+ const table=document.querySelector('#syn-special tbody');if(table)for(const tr of table.rows){if(tr.dataset.m22)continue;tr.dataset.m22='1';tr.addEventListener('click',()=>{queueMicrotask(tenantM22Panel)})}
+ const main=document.querySelector('#syn-special');if(main&&!document.querySelector('#m22-mapping')){
+  const p=synPanel('Mapping domain & module — cùng nguồn dữ liệu tenant');p.id='m22-mapping';
+  const wrap=synNode('div','fd-table-wrap'),table2=synNode('table','fd-table'),hd=synNode('thead'),hr=synNode('tr');
+  ['Tenant','Domain demo','Domain tham chiếu','SSL','Xác thực','Số module','Onboarding'].forEach(x=>hr.append(synNode('th',null,x)));hd.append(hr);table2.append(hd);
+  const tb=synNode('tbody');SYN_TENANTS.slice(0,8).forEach(t=>synRowFields(tb,[t.name,t.tempDomain,t.domain,t.sslState,t.domainState,tenantM22Modules.get(t.id).length,t.stage]));table2.append(tb);wrap.append(table2);p.append(wrap);main.after(p)
+ }
+}};
+const m22PreviousDraw=draw;draw=function(){m22PreviousDraw();if(mode==='founder'&&idx===1)tenantM22Panel()};draw();
 </script></body></html>

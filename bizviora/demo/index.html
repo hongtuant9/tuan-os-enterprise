@@ -564,4 +564,44 @@ function tenantM23Finish(){
  if(body&&!body.dataset.m23){body.dataset.m23='1';body.addEventListener('click',e=>{if(e.target.closest('tr'))queueMicrotask(tenantM22Panel)})}
 }
 const beforeM23=draw;draw=function(){beforeM23();tenantM23Finish()};draw();
+
+/* M24 — cross-tab coherent Founder showcase sourced from synthetic records. */
+function m24mount(title){
+ const host=document.querySelector('#founder-detail .fd-main');if(!host)return null;
+ const previous=document.getElementById('m24-primary');if(previous)previous.remove();
+ const p=synPanel(title);p.id='m24-primary';host.prepend(p);return p;
+}
+function m24table(p,headers,rows){const wrap=synNode('div','fd-table-wrap'),table=synNode('table','fd-table'),head=synNode('thead'),tr=synNode('tr');headers.forEach(x=>tr.append(synNode('th',null,x)));head.append(tr);table.append(head);const body=synNode('tbody');rows.forEach(r=>synRowFields(body,r));table.append(body);wrap.append(table);p.append(wrap)}
+function m24render(){
+ if(mode!=='founder'||![2,3,5,6,7].includes(idx))return;
+ const host=document.querySelector('#founder-detail');if(!host)return;
+ // Existing synthetic details remain functional as fallback; this layer gives the specialist layout clear precedence.
+ const old=host.querySelector('#syn-special');if(old)old.style.display='none';
+ const previous=host.querySelector('#fd-special');if(previous)previous.style.display='none';
+ if(idx===2){
+  const p=m24mount('Danh mục module sản phẩm ('+SYN_MODULES.length+')');
+  const tools=synNode('div','fd-controls'),search=synNode('input');search.placeholder='Tìm kiếm module...';tools.append(search);const filter=synSelect(['Tất cả trạng thái','Live','Beta','Draft'],'Trạng thái',()=>paint());tools.append(filter);p.append(tools);
+  const list=synNode('div');p.append(list);
+  function paint(){list.replaceChildren();const sub=SYN_MODULES.filter(x=>x.join(' ').toLowerCase().includes(search.value.toLowerCase())&&(filter.value==='Tất cả trạng thái'||x[2]===filter.value));m24table(list,['#','Module','Mô tả ngắn','Trạng thái','Số tenant demo','Phiên bản'],sub.map((r,i)=>[i+1,r[0],r[1],r[2],SYN_TENANTS.filter((t,j)=>(j+i)%3!==0).length,r[3]]))}search.oninput=paint;paint();
+  const roadmap=synPanel('Roadmap sản phẩm · giai đoạn triển khai dự kiến');const columns=synNode('div','fd-roadmap');[['Q2 · Core','Tenant & Membership','Task & Approval','Audit trail'],['Q3 · Pilot','Hospitality Insights','Business Finance','Marketing CRM'],['Q4 · Scale','Domain Manager','AI Agent Hub','Mobile dashboard']].forEach(set=>{const col=synNode('div','fd-roadmap-col');col.append(synNode('h4',null,set[0]));set.slice(1).forEach(x=>col.append(m19Check(x)));columns.append(col)});roadmap.append(columns);p.after(roadmap);
+ }
+ if(idx===3){
+  const p=m24mount('Tổng quan tiến độ triển khai · 9 hồ sơ demo');const board=synNode('div','fd-kanban');
+  const titles=['Chờ khởi tạo','Đang cấu hình','Chờ đào tạo','Chạy thử','Go-live'];titles.forEach((title,i)=>{const col=synNode('div','fd-lane');col.append(synNode('h4',null,title));SYN_TENANTS.slice(0,9).filter((t,j)=>j%5===i).forEach(t=>{const card=synNode('div','fd-ticket');card.append(synNode('b',null,t.name),synNode('div',null,t.industry+' · '+t.owner),synNode('small',null,'Checklist: '+(t.onboardingSteps?.length||0)+' bước'));const b=synNode('button',null,'Chi tiết →');b.onclick=()=>notify('Onboarding '+t.id+' · hồ sơ demo');card.append(b);col.append(card)});board.append(col)});p.append(board);
+  const timeline=synPanel('Lịch trình triển khai sắp tới');m24table(timeline,['Doanh nghiệp','Giai đoạn','Công việc','Phụ trách'],SYN_TENANTS.slice(0,8).map(t=>[t.name,t.stage,t.onboardingSteps[1],t.owner]));p.after(timeline)
+ }
+ if(idx===5){
+  const p=m24mount('Bảng công việc nội bộ · '+SYN_TASKS.length+' công việc');const board=synNode('div','fd-kanban');['Cần làm','Đang làm','Chờ duyệt','Hoàn thành'].forEach(state=>{const col=synNode('div','fd-lane');const items=SYN_TASKS.filter(t=>t.state===state);col.append(synNode('h4',null,state+' ('+items.length+')'));items.forEach(t=>{const card=synNode('div','fd-ticket');card.append(synNode('b',null,t.title),synNode('div',null,t.owner+' · '+t.tenantId),synNode('small',null,'Tiến độ '+t.progress+'%'));col.append(card)});board.append(col)});p.append(board);
+  const ap=synPanel('Yêu cầu phê duyệt ('+SYN_APPROVALS.length+')');SYN_APPROVALS.slice(0,7).forEach(r=>{const row=synNode('div','fd-mini-stat');row.append(synNode('span',null,r.title+' · '+fmtSyn(r.amount)));const b=synNode('button',null,'Xem');b.onclick=()=>notify('Chờ duyệt demo '+r.id+'; không thực hiện giao dịch');row.append(b);ap.append(row)});p.after(ap)
+ }
+ if(idx===6){
+  const p=m24mount('Tình trạng an toàn hệ thống · không giả mạo PASS');const grid=synNode('div','fd-audit-grid');[['Tenant RLS','NOT RUN'],['Backup restore','NOT RUN'],['Full secret scan','NOT RUN'],['Founder auth','NOT IMPLEMENTED'],['Resolver unit tests','9/9 PASS'],['Production release','HOLD']].forEach(([a,b])=>{const tile=synNode('div','fd-audit-tile');tile.append(synNode('b',null,a),synNode('span','fd-chip '+(b.includes('PASS')?'':'warn'),b));grid.append(tile)});p.append(grid);
+  const audit=synPanel('Nhật ký kiểm toán gần đây · '+SYN_EVENTS.length+' bản ghi demo');m24table(audit,['Thời gian','Actor','Hành động','Tenant ID','Kết quả'],SYN_EVENTS.map(e=>[e.at,e.actor,e.action,e.tenantId,e.result]));p.after(audit)
+ }
+ if(idx===7){
+  const p=m24mount('Doanh thu và tăng trưởng theo tháng · dữ liệu có bản ghi nguồn');const legend=synNode('div','fd-finance-legend','🔵 MRR mô phỏng · 🟢 Số tenant hoạt động');p.append(legend);const chart=synNode('div','fd-revenue');SYN_TIMELINE.forEach(m=>{const g=synNode('div','fd-month');g.style.setProperty('--a',Math.round(m.mrr/SYN_METRICS.mrr*95)+'%');g.style.setProperty('--b',Math.round(m.active/SYN_METRICS.active*70)+'%');g.append(synNode('i'),synNode('em'),synNode('small',null,'T'+m.month));chart.append(g)});p.append(chart,synNode('p','fd-chart-caption','MRR hiện tại = '+fmtSyn(SYN_MRR_ENTRIES.reduce((s,e)=>s+e.amount,0))+' từ '+SYN_MRR_ENTRIES.length+' dòng doanh thu định kỳ demo.'));
+  const top=synPanel('Top khách hàng theo doanh thu MRR');m24table(top,['Doanh nghiệp','Gói','MRR','Trạng thái','Ngày bắt đầu'],[...SYN_TENANTS].sort((a,b)=>b.mrr-a.mrr).slice(0,8).map(t=>[t.name,t.plan,fmtSyn(t.mrr),t.status,t.created]));p.after(top)
+ }
+}
+const m24previous=draw;draw=function(){m24previous();m24render()};draw();
 </script></body></html>

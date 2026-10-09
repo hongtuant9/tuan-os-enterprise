@@ -216,8 +216,8 @@ draw();
 /* DEMO ACCOUNTS: client-side showcase ONLY. Not production auth or a security boundary. */
 const demoAccounts=[
 {id:'platform-founder',name:'Founder BIZVIORA',business:'BIZVIORA Platform',role:'founder',tenant:'platform',industry:'SaaS'},
-{id:'tuan-owner',name:'Chủ sở hữu TUAN OS',business:'TUAN OS Enterprise 001',role:'owner',tenant:'tuan-001',industry:'Homestay · Café'},
-{id:'tuan-staff',name:'Nhân viên TUAN OS',business:'TUAN OS Enterprise 001',role:'employee',tenant:'tuan-001',industry:'Homestay · Café'},
+{id:'tuan-owner',name:'Chủ sở hữu tamcocexperience',business:'tamcocexperience',role:'owner',tenant:'T009',industry:'Lưu trú · F&B'},
+{id:'tuan-staff',name:'Nhân viên tamcocexperience',business:'tamcocexperience',role:'employee',tenant:'T009',industry:'Lưu trú · F&B'},
 {id:'hotel-owner',name:'Chủ khách sạn Hoa Lư',business:'Hoa Lu Boutique Hotel 002',role:'owner',tenant:'hotel-002',industry:'Khách sạn'},
 {id:'hotel-staff',name:'Nhân viên Hoa Lư',business:'Hoa Lu Boutique Hotel 002',role:'employee',tenant:'hotel-002',industry:'Khách sạn'},
 {id:'cafe-owner',name:'Chủ quán An Nhiên',business:'An Nhien Coffee 003',role:'owner',tenant:'cafe-003',industry:'Café · F&B'},
@@ -726,8 +726,6 @@ const m26previous=draw;draw=function(){m26previous();m26Shell()};draw();
 const tce=SYN_TENANTS[8];
 tce.name='tamcocexperience';tce.industry='Lưu trú và F&B';tce.plan='Pilot';tce.owner='TUAN OS Enterprise Owner';tce.domain='app.tamcocexperience.com';tce.stage='Chưa đồng bộ';tce.status='Pilot demo';tce.mrr=0;tce.connected=false;tce.domainState='Not verified in BIZVIORA';tce.sslState='Not checked';
 tce.businessUnits=[{name:'Lavender Homestay',type:'Hospitality',integration:'HotelLink / KiotViet Hotel',status:'NOT CONNECTED'},{name:'Cozy Garden',type:'F&B',integration:'KiotViet F&B',status:'NOT CONNECTED'}];
-demoAccounts.push({id:'tce-owner',name:'Owner tamcocexperience (Demo)',business:'tamcocexperience',role:'owner',tenant:tce.id,industry:'Lưu trú và F&B'});
-demoAccounts.push({id:'tce-staff',name:'Staff tamcocexperience (Demo)',business:'tamcocexperience',role:'employee',tenant:tce.id,industry:'Lưu trú và F&B'});
 
 // Transfer generated demonstration revenue away from pilot to another purely synthetic tenant.
 // Do not represent real tamcocexperience revenue as mock customer billing.

@@ -811,6 +811,29 @@
 #viewport[data-route="approvals"] .bv-approve-detail .bv-approval-actions{gap:6px}
 @media(max-width:1260px){#viewport[data-route="sales"]>.layout.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-bottom,#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:1fr}#viewport[data-route="onboarding"] .bv-onb-kanban{grid-template-columns:repeat(7,minmax(172px,1fr));overflow-x:auto}}
 @media(max-width:920px){#viewport[data-route="onboarding"] .bv-onb-triple,#viewport[data-route="onboarding"] .bv-onb-bottom,#viewport[data-route="tasks"] .bv-work-top,#viewport[data-route="tasks"] .bv-work-bottom,#viewport[data-route="approvals"] .bv-approve-bottom{grid-template-columns:1fr}#viewport[data-route="tasks"] .bv-task-kanban{grid-template-columns:repeat(4,minmax(210px,1fr));overflow-x:auto}}
+
+/* V2.5 phase 3 visual contract: Overview, Finance, Audit — same panel rhythm as infographic, preserving DEMO/HOLD. */
+#viewport[data-route="overview"] .fv-overview-top{gap:11px}
+#viewport[data-route="overview"] .fv-panel{min-width:0}
+#viewport[data-route="overview"] .fv-panel .fv-heading{margin-bottom:9px}
+#viewport[data-route="overview"] .fv-panel .fv-grow{min-width:0}
+#viewport[data-route="finance"] .bv-finance-triple{grid-template-columns:minmax(0,1.58fr) minmax(0,.92fr) minmax(0,.97fr);gap:11px}
+#viewport[data-route="finance"] .bv-finance-second{grid-template-columns:minmax(0,1.58fr) minmax(0,.92fr) minmax(0,.97fr)}
+#viewport[data-route="finance"] .bv-finance-triple .box{padding:13px}
+#viewport[data-route="finance"] .bv-finance-triple .ring strong{font-size:14px;max-width:82px;line-height:1.12}
+#viewport[data-route="finance"] .bv-cash-chart{height:206px}
+#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+#viewport[data-route="audit"] .auditnav{padding:6px 11px}
+#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:minmax(0,1.52fr) minmax(0,.9fr) minmax(0,.98fr);gap:11px}
+#viewport[data-route="audit"] .bv-audit-bottom{grid-template-columns:minmax(0,1.43fr) minmax(0,1fr) minmax(0,.96fr)}
+#viewport[data-route="audit"] .bv-audit-triple .box{padding:13px}
+#viewport[data-route="audit"] .bv-audit-integ{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#viewport[data-route="audit"] .bv-audit-connect{min-height:83px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+#viewport[data-route="audit"] .bv-audit-status{padding:10px 0}
+#viewport[data-route="audit"] .bv-role-matrix th,#viewport[data-route="audit"] .bv-role-matrix td{padding:7px 4px}
+@media(max-width:1400px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:repeat(2,minmax(0,1fr))}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:1/-1}}
+@media(max-width:880px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:1fr}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:auto}#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:1fr}#viewport[data-route="audit"] .bv-audit-integ{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

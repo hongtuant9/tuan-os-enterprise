@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BIZVIORA — Unified Customer Inbox (Synthetic)</title>
+<style>
+:root{color-scheme:light;--bg:#f3f7fc;--surface:#fff;--line:#e3eaf5;--ink:#17253e;--muted:#64748b;--blue:#125aca;--pale:#ecf4ff;--teal:#007c75;--orange:#b76520;--shadow:0 8px 32px rgba(19,49,95,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.48 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select{font:inherit}
+.top{background:#0e2854;color:#fff;padding:16px 24px;display:flex;gap:18px;align-items:center;justify-content:space-between}
+.brand{letter-spacing:.1em;font-weight:850;font-size:17px}.brand small{display:block;font-weight:500;font-size:10px;letter-spacing:.19em;color:#b8cbef}
+.chip{font-size:11px;font-weight:700;border-radius:100px;padding:5px 10px;background:#f9ecb9;color:#724b02}
+.top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.top select{background:#15366b;border:1px solid #426392;padding:9px 12px;color:#fff;border-radius:9px}
+.wrap{padding:18px;max-width:1680px;margin:auto}.notice{padding:12px 16px;background:#e7f4fd;border:1px solid #c3e3fa;color:#16476e;border-radius:12px;font-size:12px;margin-bottom:15px}
+.heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:15px;flex-wrap:wrap}
+h1{font-size:21px;letter-spacing:-.035em;margin:0}h2{font-size:15px;margin:0}p{margin:4px 0;color:var(--muted)}.counts{display:flex;gap:9px;flex-wrap:wrap}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 15px;min-width:130px;box-shadow:var(--shadow)}.stat strong{display:block;font-size:19px}.stat small{color:var(--muted)}
+.layout{display:grid;grid-template-columns:292px minmax(390px,1fr) 310px;gap:14px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}
+.panel-title{padding:17px 17px 13px;border-bottom:1px solid var(--line)}.panel-body{padding:14px}
+.search{display:block;width:100%;border:1px solid #d2ddeb;background:#f9fbff;padding:11px;border-radius:10px;margin-bottom:12px;outline-color:var(--blue)}
+.booking{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:11px;padding:12px;margin:0 0 9px;cursor:pointer;color:inherit}
+.booking:hover{background:#f4f8ff}.booking.active{border-color:#4a87e4;background:#edf5ff;box-shadow:0 0 0 2px #dceaff}
+.booking strong{display:block;font-size:13px}.booking small{color:var(--muted)}.mini{font-size:11px;color:var(--muted);display:block}
+.tag{font-size:10px;font-weight:750;letter-spacing:.005em;color:#1e5fb2;background:#e8f2ff;border-radius:20px;padding:3px 7px;display:inline-flex;align-items:center;gap:4px}
+.tag.email{color:#79521b;background:#fff2d9}.tag.wa{color:#08755c;background:#ddf8eb}.tag.zalo{color:#1955a5;background:#e4f0fc}.tag.fb{color:#5e4da4;background:#efeaff}.tag.hold{color:#994c22;background:#fff0e6}.tag.demo{color:#64748b;background:#edf0f5}
+.chathead{padding:18px 19px;border-bottom:1px solid var(--line)}.chatmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:11px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding:10px 17px;background:#fbfcff;border-bottom:1px solid var(--line)}
+.filter{cursor:pointer;padding:6px 10px;border-radius:18px;border:1px solid #dbe5f1;background:white;font-size:11px;color:#496079}.filter.active{background:#155bc1;color:#fff;border-color:#155bc1}
+.messages{height:min(55vh,560px);min-height:360px;overflow:auto;padding:18px;background:linear-gradient(180deg,#f9fbff,#fff);display:flex;flex-direction:column;gap:15px}
+.bubble-wrap{max-width:85%;align-self:flex-start}.bubble-wrap.out{align-self:flex-end}.bubble{border:1px solid #dce6f3;background:#f1f6fd;border-radius:13px 13px 13px 3px;padding:11px 13px;white-space:pre-wrap;overflow-wrap:anywhere}.out .bubble{background:#e6f7f3;border-color:#c4ece0;border-radius:13px 13px 3px 13px}
+.msgmeta{display:flex;flex-wrap:wrap;align-items:center;gap:5px 7px;padding-top:6px;font-size:10px;color:var(--muted)}.out .msgmeta{justify-content:flex-end}
+.composer{border-top:1px solid var(--line);padding:13px 17px}.composer input{width:100%;padding:11px;border-radius:9px;background:#f6f9ff;border:1px solid #dce4ef;color:#64748b}
+.composer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding-top:7px;font-size:11px;color:var(--muted)}
+.btn{border:1px solid #bdd1ed;border-radius:9px;background:#eff5ff;color:#1254b7;font-size:12px;padding:8px 11px;cursor:pointer;font-weight:650}.btn:hover{background:#dcecff}.btn:disabled{cursor:not-allowed;background:#e9edf4;color:#8793a6;border-color:#e3e8ef}
+.gridline{display:grid;grid-template-columns:115px minmax(0,1fr);gap:9px;padding:6px 0;border-bottom:1px solid #f0f3f8;font-size:12px}.gridline span:first-child{color:var(--muted)}.gridline strong{overflow-wrap:anywhere}
+.review-item{border:1px solid var(--line);border-radius:10px;padding:9px;margin:9px 0;font-size:12px;background:#fff}.review-item b{display:block}
+.select{width:100%;border:1px solid #d5e1f0;border-radius:8px;background:#fff;padding:9px;margin:6px 0;font-size:12px}
+.state{padding:10px;border-radius:9px;background:#fff7e9;color:#824e16;border:1px solid #ffdfab;font-size:11px;margin-top:10px}
+.audit{min-height:24px;font-size:11px;color:var(--muted);padding:5px 0}.audit strong{color:#007c75}
+.footer{padding:16px 0;color:var(--muted);font-size:11px}
+.hidden{display:none!important}
+@media(max-width:1200px){.layout{grid-template-columns:260px minmax(340px,1fr)}.right{grid-column:1/-1}.right .panel-body{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+@media(max-width:760px){.top{padding:14px;flex-wrap:wrap}.wrap{padding:10px}.layout{grid-template-columns:1fr}.right{grid-column:auto}.right .panel-body{display:block}.messages{min-height:320px;height:50vh}.booking{margin-bottom:7px}.stat{min-width:100px}.heading h1{font-size:19px}}
+</style></head>
+<body>
+<header class="top"><div class="brand">BIZVIORA <small>AI BUSINESS OPERATING SYSTEM</small></div><div class="top-right"><span class="chip">SYNTHETIC DEMO · KHÔNG KẾT NỐI LIVE</span><label for="actor">Vai trò kiểm thử:</label><select id="actor"><option value="ownerA">Owner Tenant A</option><option value="staffA">Staff Tenant A</option><option value="ownerB">Owner Tenant B</option></select></div></header>
+<main class="wrap">
+<div class="notice">Bản mẫu độc lập trên nhánh staging. Mọi tên, mã booking và hội thoại đều là giả lập. Không truy xuất production, không gửi Email/OTA/WhatsApp/Zalo/Messenger và không ghi dữ liệu vào Supabase.</div>
+<div class="heading"><div><h1>AI Customer · Unified Inbox</h1><p>Một lịch sử chăm sóc khách theo từng lần lưu trú, truy vết được từng nguồn tin</p></div><div class="counts"><div class="stat"><strong id="bookingCount">—</strong><small>Booking được phép xem</small></div><div class="stat"><strong id="messageCount">—</strong><small>Tin nhắn hiển thị</small></div><div class="stat"><strong>0</strong><small>Hành động gửi thật</small></div></div></div>
+<div class="layout">
+<aside class="panel">
+ <div class="panel-title"><h2>Hộp thoại theo booking</h2><p>Mỗi lần lưu trú có một timeline riêng</p></div>
+ <div class="panel-body"><input class="search" id="search" placeholder="Tìm booking, tên khách..." autocomplete="off" aria-label="Tìm booking"/><div id="bookings"></div></div>
+</aside>
+<section class="panel">
+ <div class="chathead"><h2 id="activeTitle">Chọn booking</h2><div id="chatMeta" class="chatmeta"></div></div>
+ <div class="filters" id="filters"></div>
+ <div id="messages" class="messages" aria-live="polite"></div>
+ <div class="composer"><input value="Chức năng gửi bị khóa — bản mẫu dữ liệu giả lập" disabled aria-label="Ô trả lời chưa kích hoạt"/><div class="composer-row"><span>AI chỉ soạn nháp; gửi tin thật cần quyền kênh và người duyệt</span><button class="btn" disabled>🔒 Gửi tin</button></div></div>
+</section>
+<aside class="panel right"><div class="panel-title"><h2>Thông tin và đối soát</h2><p>Định danh, nguồn gốc và kiểm tra ghép booking</p></div><div class="panel-body">
+ <div><h2>Booking đang xem</h2><div id="bookingDetail"></div><div class="state" id="syncNote">Gửi Email không đồng nghĩa đã hiển thị trên OTA Chat; phải đọc lại OTA để xác nhận.</div></div>
+ <div><h2 style="margin:16px 0 5px">Trường hợp cần xét duyệt</h2><p>Thử quy tắc ghép danh tính (synthetic)</p><select id="reviewCase" class="select"></select><div id="caseOutcome" class="review-item"></div>
+ <label class="mini" for="targetBooking">Booking cần liên kết thủ công</label><select class="select" id="targetBooking"></select>
+ <label class="mini" for="reason">Lý do kiểm tra có bằng chứng</label><input id="reason" class="search" placeholder="VD: Đối chiếu thông tin đặt phòng..." autocomplete="off"/>
+ <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="link" class="btn" type="button">Liên kết (mô phỏng)</button><button id="unlink" class="btn" type="button">Gỡ liên kết</button></div>
+ <div id="audit" class="audit" role="status">Chưa có thao tác mô phỏng.</div>
+ </div>
+ </div></aside>
+</div><div class="footer">BIZVIORA · Unified Inbox Proof of Concept · Chỉ chạy trong bộ nhớ trình duyệt · Không được sử dụng làm bằng chứng đã triển khai production</div>
+</main>
+<script type="module">
+import {ACTORS,BOOKINGS,DATA,REVIEW_CASES} from "./fixtures.mjs";
+import {matchBooking,inboxForActor,manualLink,manualUnlink,LINK} from "./matcher.mjs";
+const els=Object.fromEntries(["actor","search","bookings","bookingCount","messageCount","activeTitle","chatMeta","messages","filters","bookingDetail","reviewCase","caseOutcome","targetBooking","reason","audit","link","unlink"].map(id=>[id,document.getElementById(id)]));
+let actor=ACTORS.ownerA,active="booking-A1",channel="Tất cả";
+const node=(tag,cls,txt)=>{const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x};
+const visibleBookings=()=>BOOKINGS.filter(b=>b.tenantId===actor.tenantId);
+const label=(channel)=>channel==="Booking.com"?"OTA · Booking.com":channel==="Email"?"Email":channel;
+function tagClass(name){return name==="WhatsApp"?"wa":name==="Facebook"?"fb":name==="Email"?"email":name==="Zalo"?"zalo":"ota"}
+function update(){
+ const available=visibleBookings();
+ if(!available.some(b=>b.id===active))active=available[0]?.id||null;
+ els.bookingCount.textContent=String(available.length);
+ els.bookings.replaceChildren();
+ const q=els.search.value.trim().toLowerCase();
+ for(const b of available.filter(b=>(b.guest+" "+b.providerBookingNumber+" "+b.provider).toLowerCase().includes(q))){
+ const btn=node("button","booking"+(b.id===active?" active":""));btn.type="button";
+ const title=node("strong","",b.guest),code=node("small","",b.provider+" · "+b.providerBookingNumber);
+ const dates=node("span","mini",b.checkIn+" → "+b.checkOut);btn.append(title,code,dates);
+ btn.addEventListener("click",()=>{active=b.id;channel="Tất cả";update()});els.bookings.append(btn);
+ }
+ const b=available.find(x=>x.id===active);
+ els.activeTitle.textContent=b?"Hội thoại · "+b.guest:"Không có booking";
+ els.chatMeta.replaceChildren();
+ for(const x of b?[b.provider+" #"+b.providerBookingNumber,b.checkIn+" → "+b.checkOut,"Đã xác minh nguồn booking"]:[]){
+  els.chatMeta.append(node("span","tag",x));
+ }
+ renderMessages();
+ els.bookingDetail.replaceChildren();
+ for(const [key,value] of b?[["Mã nội bộ",b.id],["Mã OTA",b.providerBookingNumber],["Nhà cung cấp",b.provider],["Cơ sở",b.propertyId],["Check-in/out",b.checkIn+" → "+b.checkOut],["Liên kết","Provider đã xác minh"]]:[]){
+ const row=node("div","gridline");row.append(node("span","",key),node("strong","",value));els.bookingDetail.append(row);
+ }
+ els.targetBooking.replaceChildren();
+ for(const item of available){const opt=node("option","",item.provider+" · "+item.providerBookingNumber);opt.value=item.id;els.targetBooking.append(opt)}
+ if(b)els.targetBooking.value=b.id;
+ renderCase();
+}
+function renderMessages(){
+ const all=inboxForActor(actor,DATA,active);
+ const sources=["Tất cả",...new Set(all.map(x=>x.channel))];
+ if(!sources.includes(channel))channel="Tất cả";
+ els.filters.replaceChildren();
+ for(const s of sources){let btn=node("button","filter"+(s===channel?" active":""),s);btn.type="button";btn.addEventListener("click",()=>{channel=s;renderMessages()});els.filters.append(btn);}
+ const rows=all.filter(x=>channel==="Tất cả"||x.channel===channel).sort((a,b)=>a.time.localeCompare(b.time));
+ els.messageCount.textContent=String(rows.length);
+ els.messages.replaceChildren();
+ if(!rows.length)els.messages.append(node("p","","Không có tin nhắn phù hợp."));
+ for(const m of rows){
+  const wrap=node("div","bubble-wrap"+(m.direction==="OUTBOUND"?" out":""));
+  wrap.append(node("div","bubble",m.text));
+  const meta=node("div","msgmeta");
+  meta.append(node("span","tag "+tagClass(m.channel),label(m.channel)));
+  const stamp=new Date(m.time).toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+  meta.append(node("span","",stamp));
+  const status=node("span","tag "+(m.status==="EMAIL_SENT_UNVERIFIED"?"hold":"demo"),m.status);
+  meta.append(status);
+  wrap.append(meta);els.messages.append(wrap);
+ }
+}
+function reviewEvent(){return REVIEW_CASES.find(x=>x.id===els.reviewCase.value);}
+function renderCase(){const r=reviewEvent();if(!r)return;const result=matchBooking(r,DATA);els.caseOutcome.replaceChildren();
+ els.caseOutcome.append(node("b","",result.status),node("span","",result.reason));
+ if(result.bookingId)els.caseOutcome.append(node("div","mini","Booking gợi ý: "+result.bookingId));
+ if(result.candidateIds?.length)els.caseOutcome.append(node("div","mini","Ứng viên: "+result.candidateIds.join(", ")));
+ els.link.disabled=actor.role==="staff";els.unlink.disabled=actor.role==="staff";
+}
+function auditAction(action){
+ const e={...reviewEvent(),id:reviewEvent().id};
+ const target=visibleBookings().find(b=>b.id===els.targetBooking.value);
+ const note=els.reason.value;
+ const result=action==="link"?manualLink(e,target,actor,note):manualUnlink(e,actor,note);
+ els.audit.replaceChildren();
+ const v=result.ok?"PASS · Chỉ ghi nhật ký trong bộ nhớ: "+result.audit.action+" → "+(result.bookingId||"UNASSIGNED"):"HOLD · "+result.reason;
+ els.audit.append(node("strong","",v));
+}
+for(const c of REVIEW_CASES){const opt=node("option","",c.label);opt.value=c.id;els.reviewCase.append(opt)}
+els.actor.addEventListener("change",()=>{actor=ACTORS[els.actor.value];channel="Tất cả";update()});
+els.search.addEventListener("input",update);
+els.reviewCase.addEventListener("change",renderCase);
+els.link.addEventListener("click",()=>auditAction("link"));
+els.unlink.addEventListener("click",()=>auditAction("unlink"));
+update();
+</script></body></html>

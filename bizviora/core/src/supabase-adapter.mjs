@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { ApiError } from './access.mjs';
 
 // Dự án Supabase sản xuất TUAN OS: luôn bị chặn ở máy chủ BIZVIORA staging.
-const FORBIDDEN_PRODUCTION_REF='mmxgthzafjoienokyplw';
+const FORBIDDEN_PROJECT_REFS=new Set(['mmxgthzafjoienokyplw','zydtetnvguvlhpkjlvqi']); // TUAN OS production và dự án cũ chưa được duyệt làm staging
 export function createSupabaseDependencies(env=process.env) {
   if(env.BIZVIORA_STAGING_ACK!=='STAGING_ONLY')throw Error('STAGING_ACK_REQUIRED');
   const url=env.BIZVIORA_SUPABASE_URL;
@@ -13,7 +13,7 @@ export function createSupabaseDependencies(env=process.env) {
   let host;
   try{host=new URL(url).hostname.toLowerCase();}catch{throw Error('INVALID_STAGING_URL');}
   if(!url.startsWith('https://'))throw Error('HTTPS_STAGING_REQUIRED');
-  if(host.includes(FORBIDDEN_PRODUCTION_REF))throw Error('PRODUCTION_PROJECT_FORBIDDEN');
+  if(FORBIDDEN_PROJECT_REFS.has(stagingRef)|| [...FORBIDDEN_PROJECT_REFS].some(ref=>host.includes(ref)))throw Error('NON_STAGING_PROJECT_FORBIDDEN');
   if(host!==`${stagingRef}.supabase.co`)throw Error('STAGING_REF_MISMATCH');
 
   const clientFor=token=>createClient(url,anonKey,{

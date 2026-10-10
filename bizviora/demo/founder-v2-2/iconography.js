@@ -76,5 +76,6 @@ function mount(){
  decorate();
  var app=d.getElementById('app');if(app&&app.dataset.fv22Watching!=='yes'){app.dataset.fv22Watching='yes';var observer=new MutationObserver(function(){queueMicrotask(decorate);});observer.observe(app,{childList:true,subtree:true});}
 }
+window.BIZVIORA_ICON_PREVIEW={paths:paths,kpis:kpis,titles:titles,svg:svg};
 if(src){src.addEventListener('load',mount);if(src.contentDocument&&src.contentDocument.readyState==='complete')mount();}
 })();

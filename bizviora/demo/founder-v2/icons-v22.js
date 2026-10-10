@@ -33,6 +33,9 @@ var kpis={
  audit:['shield','warning','package','link','users','shield']
 };
 var titles={
+ "Xu hướng MRR":"chart","Cơ cấu doanh thu":"finance","Dự báo dòng tiền":"chart","Công nợ phải thu":"finance","CAC và thời gian":"chart","Phân bổ chi phí":"finance","AI Finance Insight":"magic",
+ "Biểu đồ hoạt động quản trị":"chart","Tình trạng bảo mật":"shield","Tích hợp hệ thống":"link","Vai trò & quyền":"users","Cấu hình hệ thống":"settings","Audit log ·":"clipboard",
+ 
  "Nguồn lead":"chart","Phễu chuyển đổi":"filter","Lead theo ngành":"chart","Hiệu quả chiến dịch":"target",
  "Marketing Insight":"magic","Pipeline nội dung":"clipboard","Nguồn khách":"users",
  "Pipeline bán hàng":"chart","Gói dịch vụ":"finance","Danh sách cơ hội":"target","Lịch demo":"calendar",

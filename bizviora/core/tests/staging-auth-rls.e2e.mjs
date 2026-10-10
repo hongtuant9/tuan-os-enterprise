@@ -17,7 +17,7 @@ if(vars.BIZVIORA_STAGING_E2E_ACK!=='RUN_ON_ISOLATED_STAGING')
   throw Error('E2E_REQUIRES_EXPLICIT_STAGING_ACK');
 const ref=vars.BIZVIORA_STAGING_PROJECT_REF;
 const url=vars.BIZVIORA_SUPABASE_URL;
-if(!ref||!url||no.includes(ref)||new URL(url).hostname!==ref+'.supabase.co'||!url.startsWith('https://'))
+if(ref!=='oxakhhpyvvymujiwuvnm'||!url||no.includes(ref)||new URL(url).hostname!==ref+'.supabase.co'||!url.startsWith('https://'))
   throw Error('STAGING_PROJECT_IDENTITY_REJECTED');
 
 const anonKey=vars.BIZVIORA_SUPABASE_ANON_KEY;

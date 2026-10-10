@@ -78,10 +78,16 @@ const label=(channel)=>channel==="Booking.com"?"OTA · Booking.com":channel==="E
 function tagClass(name){return name==="WhatsApp"?"wa":name==="Facebook"?"fb":name==="Email"?"email":name==="Zalo"?"zalo":"ota"}
 function update(){
  const available=visibleBookings();
- if(!available.some(b=>b.id===active))active=available[0]?.id||null;
+ if(active!=="UNASSIGNED"&&!available.some(b=>b.id===active))active=available[0]?.id||null;
  els.bookingCount.textContent=String(available.length);
  els.bookings.replaceChildren();
+ const unlinked=DATA.messages.filter(m=>m.tenantId===actor.tenantId && !m.bookingId);
  const q=els.search.value.trim().toLowerCase();
+ if(unlinked.length && (!q || "chưa liên kết".includes(q))){
+   const btn=node("button","booking"+(active==="UNASSIGNED"?" active":""));btn.type="button";
+   btn.append(node("strong","","⚠ Chưa liên kết booking"),node("small","","Có "+unlinked.length+" yêu cầu cần xét duyệt"));
+   btn.addEventListener("click",()=>{active="UNASSIGNED";channel="Tất cả";update()});els.bookings.append(btn);
+ }
  for(const b of available.filter(b=>(b.guest+" "+b.providerBookingNumber+" "+b.provider).toLowerCase().includes(q))){
  const btn=node("button","booking"+(b.id===active?" active":""));btn.type="button";
  const title=node("strong","",b.guest),code=node("small","",b.provider+" · "+b.providerBookingNumber);
@@ -89,7 +95,7 @@ function update(){
  btn.addEventListener("click",()=>{active=b.id;channel="Tất cả";update()});els.bookings.append(btn);
  }
  const b=available.find(x=>x.id===active);
- els.activeTitle.textContent=b?"Hội thoại · "+b.guest:"Không có booking";
+ els.activeTitle.textContent=active==="UNASSIGNED"?"Yêu cầu chưa liên kết — cần xác minh":b?"Hội thoại · "+b.guest:"Không có booking";
  els.chatMeta.replaceChildren();
  for(const x of b?[b.provider+" #"+b.providerBookingNumber,b.checkIn+" → "+b.checkOut,"Đã xác minh nguồn booking"]:[]){
   els.chatMeta.append(node("span","tag",x));
@@ -111,7 +117,7 @@ function update(){
  renderCase();
 }
 function renderMessages(){
- const all=inboxForActor(actor,DATA,active);
+ const all=active==="UNASSIGNED"?inboxForActor(actor,DATA).filter(m=>!m.bookingId):inboxForActor(actor,DATA,active);
  const sources=["Tất cả",...new Set(all.map(x=>x.channel))];
  if(!sources.includes(channel))channel="Tất cả";
  els.filters.replaceChildren();

@@ -81,3 +81,13 @@ Source PostgreSQL size metadata (managed Supabase, NOT local OVH disk):
 **G5 CUTOVER/CLEANUP**: separate explicit owner L3 for any production mutation, data removal, service stop or credential revocation, after backup/restore and rollback.
 
 No production data migrated. No change to VPS, Supabase tables, Auth/OAuth, provider systems, DNS, billing or Render.
+
+
+## Read-only OVH billing evidence (no authentication data)
+
+Gmail messages from OVHcloud were reviewed for invoice metadata only, with no credentials/IP/hostnames exported.
+- OVHcloud issued invoice notification dated **2026-10-08**, **US$10.00 total**.
+- Another invoice notification dated **2026-09-07** also shows **US$10.00**.
+- 2026-09-30 and 2026-10-04 renewal notices refer to VPS service and **Auto Backup** option entries, under manual renewal.
+- The messages do **not** itemize invoice lines with sufficient precision to assert actual per-month VPS-2 price, VPS hardware size, exact backups quantity or that $10 is the full monthly charge. OVH authenticated billing console verification remains required.
+- No payment action, purchase, account setting change or VPS login performed.

@@ -34,5 +34,6 @@ export const REVIEW_CASES=[
  {id:"case-wa",label:"WhatsApp: một khách có hai lần lưu trú",tenantId:"tenant-A",propertyId:"lavender-demo",channel:"WhatsApp",identityKey:"wa-verified-A"},
  {id:"case-name",label:"Facebook: chỉ trùng tên/ngày check-in",tenantId:"tenant-A",propertyId:"lavender-demo",channel:"Facebook",claimedName:"Khách A (demo)",claimedCheckIn:"2026-10-22"},
  {id:"case-claimed",label:"Email: khách tự khai booking D2042",tenantId:"tenant-A",propertyId:"lavender-demo",channel:"Email",claimedBookingNumber:"D2042"},
- {id:"case-email",label:"Email alias chưa xác minh",tenantId:"tenant-A",propertyId:"lavender-demo",channel:"Email",identityKey:"shared-email"}
+ {id:"case-email",label:"Email alias chưa xác minh",tenantId:"tenant-A",propertyId:"lavender-demo",channel:"Email",identityKey:"shared-email"},
+ {id:"case-tenantB",label:"OTA demo doanh nghiệp B",tenantId:"tenant-B",propertyId:"property-B",channel:"Booking.com",provider:"Booking.com",providerBookingNumber:"D1042",providerTrust:"AUTHENTICATED_PROVIDER",transport:"OTA_API"}
 ];

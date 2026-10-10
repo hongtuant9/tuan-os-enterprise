@@ -78,6 +78,21 @@ async function verify() {
     app.hidden = false;
     document.documentElement.classList.add('bv-founderauth-ok');
     gate.hidden = true;
+    // V2.2 is a presentation-only enhancement loaded AFTER verified platform-manager RPC.
+    // If it fails, retain the authenticated V2.1 UI rather than affecting login/permissions.
+    try {
+      const { installFounderIcons } = await import('./icons-v22.js');
+      if (installFounderIcons()) {
+        window.BIZVIORA_FOUNDER_V2 = {
+          ...window.BIZVIORA_FOUNDER_V2,
+          version:'v2.2-icon-fidelity-10-tabs',
+          icons:{scope:'all-10-tabs',status:'active-after-auth'}
+        };
+        document.title = 'BIZVIORA — Founder Control Center V2.2 · Icon Fidelity · DEMO';
+      }
+    } catch (_) {
+      // Icon module is noncritical; never bypass or weaken the authenticated gate.
+    }
   } catch (_) {
     lock('Không thể xác minh phiên đăng nhập hoặc quyền truy cập. Vui lòng thử lại.', false);
   } finally {

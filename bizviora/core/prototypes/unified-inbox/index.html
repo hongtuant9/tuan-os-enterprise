@@ -102,6 +102,12 @@ function update(){
  els.targetBooking.replaceChildren();
  for(const item of available){const opt=node("option","",item.provider+" · "+item.providerBookingNumber);opt.value=item.id;els.targetBooking.append(opt)}
  if(b)els.targetBooking.value=b.id;
+ const selectedCase=els.reviewCase.value;
+ els.reviewCase.replaceChildren();
+ for(const c of REVIEW_CASES.filter(x=>x.tenantId===actor.tenantId)){
+   const opt=node("option","",c.label);opt.value=c.id;els.reviewCase.append(opt);
+ }
+ if([...els.reviewCase.options].some(o=>o.value===selectedCase))els.reviewCase.value=selectedCase;
  renderCase();
 }
 function renderMessages(){
@@ -126,7 +132,7 @@ function renderMessages(){
   wrap.append(meta);els.messages.append(wrap);
  }
 }
-function reviewEvent(){return REVIEW_CASES.find(x=>x.id===els.reviewCase.value);}
+function reviewEvent(){return REVIEW_CASES.find(x=>x.id===els.reviewCase.value && x.tenantId===actor.tenantId);}
 function renderCase(){const r=reviewEvent();if(!r)return;const result=matchBooking(r,DATA);els.caseOutcome.replaceChildren();
  els.caseOutcome.append(node("b","",result.status),node("span","",result.reason));
  if(result.bookingId)els.caseOutcome.append(node("div","mini","Booking gợi ý: "+result.bookingId));
@@ -142,7 +148,6 @@ function auditAction(action){
  const v=result.ok?"PASS · Chỉ ghi nhật ký trong bộ nhớ: "+result.audit.action+" → "+(result.bookingId||"UNASSIGNED"):"HOLD · "+result.reason;
  els.audit.append(node("strong","",v));
 }
-for(const c of REVIEW_CASES){const opt=node("option","",c.label);opt.value=c.id;els.reviewCase.append(opt)}
 els.actor.addEventListener("change",()=>{actor=ACTORS[els.actor.value];channel="Tất cả";update()});
 els.search.addEventListener("input",update);
 els.reviewCase.addEventListener("change",renderCase);

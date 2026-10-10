@@ -1,0 +1,11 @@
+{
+  "name": "@bizviora/core-mvp-001",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lát cắt nền tảng BIZVIORA 001, chỉ triển khai staging",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "start:staging": "node server.mjs"
+  }
+}

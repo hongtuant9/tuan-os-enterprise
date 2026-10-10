@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {ROLES,STATUS,validateTask,simulate} from './runtime-contract.mjs';
+const ctx={environment:'synthetic',production:false,authorityVerified:true,role:'platform_manager',aiCallBudget:0,costCapUsd:0};
+const task={agent:'ENG-001',title:'Kiểm tra quy trình thử nghiệm',syntheticScope:'SYN-T001',action:'create_test_plan',capabilities:[]};
+test('exactly four agents',()=>assert.deepEqual(ROLES,['ENG-001','SRE-001','IMP-001','SUP-001']));
+test('four synthetic roles allowed for zero-cost draft',()=>{for(const agent of ROLES)assert.equal(validateTask({...task,agent},ctx).ok,true)});
+test('never authorizes real execution',()=>{assert.equal(validateTask(task,ctx).authorizedExecution,false); const r=simulate(task,ctx);assert.equal(r.modelCalls,0);assert.equal(r.costUsd,0);assert.equal(r.status,'MOCK_REPORT_READY')});
+test('no server principal or wrong role',()=>{assert.equal(validateTask(task,{...ctx,authorityVerified:false}).status,'HOLD');assert.equal(validateTask(task,{...ctx,role:'tenant_owner'}).status,'HOLD')});
+test('production and non-synthetic environments rejected',()=>{assert.equal(validateTask(task,{...ctx,production:true}).status,'HOLD');assert.equal(validateTask(task,{...ctx,environment:'production'}).status,'HOLD')});
+test('reject cross tenant and customer payload',()=>{for(const patch of [{syntheticScope:'T001'},{customerId:'123'},{bookingId:'123'},{secretRef:'hidden'},{productionTenantId:'real'},{outbound:true},{payment:false}])assert.equal(validateTask({...task,...patch},ctx).status,'HOLD')});
+test('prohibited operations stay HOLD',()=>{for(const action of ['deploy','restart','delete','database_write','change_permissions','send_message','purchase','external_api','production_access','backup_restore','read_customer_data','secrets'])assert.equal(validateTask({...task,action},ctx).status,'HOLD')});
+test('unknown actions and permissions rejected',()=>{assert.equal(validateTask({...task,action:'unknown'},ctx).status,'HOLD'); assert.equal(validateTask({...task,capabilities:['github_write']},ctx).status,'HOLD')});
+test('AI costs cannot be enabled by client input',()=>{assert.equal(validateTask(task,{...ctx,aiCallBudget:1}).status,'HOLD');assert.equal(validateTask(task,{...ctx,costCapUsd:1}).status,'HOLD')});
+test('task shape validated',()=>{for(const invalid of [null,[],{}, {...task,title:''},{...task,title:'x'.repeat(121)}, {...task,agent:'ROOT'}])assert.equal(validateTask(invalid,ctx).status,'HOLD')});

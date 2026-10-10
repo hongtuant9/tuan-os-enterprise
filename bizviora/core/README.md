@@ -35,3 +35,28 @@ npm test
 Bài kiểm thử giả lập **không** thay cho thử RLS thật, sao lưu/khôi phục hay rà soát bảo mật. Không nhập dữ liệu sản xuất, không tạo giao dịch tài chính, không thay quyền tài khoản, không tự phát hành sản phẩm cho khách ngoài.
 
 Nguồn quyết định: Master Blueprint BIZVIORA, TASK-001, APPROVAL-001, Technical Build Guide.
+
+
+## Core 002 — Staging đã tạo, cổng JWT thật chưa đạt (10/10/2026)
+
+- **Đúng dự án staging duy nhất được phê duyệt:** `oxakhhpyvvymujiwuvnm` (`bizviora-staging-core-002`, Singapore, tổ chức Free), chi phí tạo dự án được Supabase xác nhận **0 USD/tháng**.
+- **CẤM** chạy migration / runtime trên `mmxgthzafjoienokyplw` (TUAN OS production) hoặc `zydtetnvguvlhpkjlvqi` (CSKH cũ). Runtime và bộ E2E đã khóa chính xác ref staging.
+- Migration `bizviora_core_001_staging_rls_audit` áp dụng thành công; `bizviora_core_002_revoke_audit_trigger_execute` thu hồi quyền thực thi công khai của hàm `SECURITY DEFINER`.
+- Supabase đã xác minh 7 bảng `bv_*` bật RLS; 9 chính sách; công cụ kiểm tra bảo mật: **0 cảnh báo** sau sửa. Mục hiệu năng có những nhắc nhở index cần theo dõi theo tải thật.
+- SQL đã kiểm thử A/B và vai trò owner/staff trong giao dịch staging với ngữ cảnh quyền Postgres + `request.jwt.claim.sub` **mô phỏng**. Giao dịch `ROLLBACK`; kiểm tra sau thử: 0 tenant, task, audit và tài khoản giả lập.
+- **CHƯA** có thử JWT phát hành qua Supabase Auth API, tài khoản Auth đăng nhập thật A/B, sao lưu/khôi phục và quét bí mật toàn bộ lịch sử Git. Do đó **SECURITY_GATE_HOLD**.
+
+### Chạy kiểm thử JWT/RLS thật khi có tài khoản staging được tạo đúng quy trình
+
+Chỉ tạo tài khoản thử bằng **Supabase Auth** trên **dự án staging BIZVIORA**. Dùng 3 danh tính khác nhau (chủ doanh nghiệp A, nhân viên A, chủ doanh nghiệp B). Không lấy dữ liệu/tài khoản sản xuất. Cần seed membership một cách có kiểm soát qua giao diện quản trị staging để A không được nhìn thấy B, staff không được tự thêm task và chủ A/B độc lập.
+
+Thiết lập biến môi trường qua trình quản lý bí mật **tại máy chạy thử**, không gửi mật khẩu, JWT, API key qua ChatGPT, Drive, Git hay log:
+- `BIZVIORA_STAGING_E2E_ACK=RUN_ON_ISOLATED_STAGING`
+- `BIZVIORA_STAGING_PROJECT_REF=oxakhhpyvvymujiwuvnm`
+- `BIZVIORA_SUPABASE_URL`, `BIZVIORA_SUPABASE_ANON_KEY`
+- `BIZVIORA_TEST_TENANT_A`, `BIZVIORA_TEST_TENANT_B`
+- `BIZVIORA_TEST_JWT_OWNER_A`, `BIZVIORA_TEST_JWT_STAFF_A`, `BIZVIORA_TEST_JWT_OWNER_B`
+
+Cài phụ thuộc trong thư mục `bizviora/core` (từ bản mã đã xác minh), sau đó chạy `npm run test:staging:auth-rls`. Không gửi kết quả chứa token. Kiểm tra từng giả định kiểm thử, dữ liệu ghi nhật ký, và xác nhận tenant A không thể đọc/ghi B rồi mới đề nghị gỡ cổng bảo mật. Bộ kiểm thử này **tạo công việc thử** và không tự xóa, chỉ chạy trên môi trường staging cách ly.
+
+Tài liệu/điểm tiếp nối: TASK-001 và Technical Build Guide. Không triển khai OTA/Facebook tự gửi, giá, thanh toán hoặc khách ngoài.

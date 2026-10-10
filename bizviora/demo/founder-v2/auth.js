@@ -7,6 +7,23 @@ const PROJECT = 'oxakhhpyvvymujiwuvnm';
 const API = 'https://' + PROJECT + '.supabase.co';
 const $ = id => document.getElementById(id);
 const gate = $('bv-founder-gate');
+gate.innerHTML = `
+<section class="bv-auth-card">
+  <div class="bv-auth-logo">BIZVIORA · FOUNDER</div>
+  <h1>Founder Control Center</h1>
+  <p id="bv-founder-status" role="status">Đang kiểm tra đăng nhập và phân quyền…</p>
+  <p id="bv-founder-error" role="alert" hidden></p>
+  <form id="bv-founder-login" hidden>
+    <label for="bv-founder-email">Email quản trị</label>
+    <input id="bv-founder-email" type="email" autocomplete="username" required placeholder="Email Supabase đã xác minh"/>
+    <label for="bv-founder-password">Mật khẩu</label>
+    <input id="bv-founder-password" type="password" autocomplete="current-password" required/>
+    <button id="bv-founder-submit" type="submit">Đăng nhập quản trị</button>
+  </form>
+  <div class="bv-auth-links"><a href="/account/">Doanh nghiệp của tôi</a>
+  <button id="bv-founder-logout-gate" type="button">Đổi tài khoản</button></div>
+  <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Dashboard dùng dữ liệu DEMO; không có quyền ghi dữ liệu kinh doanh thật.</p>
+</section>`;
 const form = $('bv-founder-login');
 const status = $('bv-founder-status');
 const errorText = $('bv-founder-error');

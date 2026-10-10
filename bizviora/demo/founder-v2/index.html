@@ -386,6 +386,18 @@
 #viewport[data-route="approvals"] .bv-approve-detail .minirow b{text-align:right;overflow-wrap:anywhere;max-width:62%}
 @media(max-width:1260px){#viewport[data-route="sales"]>.layout.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-bottom{grid-template-columns:1fr}#viewport[data-route="onboarding"] .bv-onb-kanban{grid-template-columns:repeat(7,minmax(175px,1fr));overflow-x:auto}#viewport[data-route="tasks"] .bv-task-kanban{grid-template-columns:repeat(4,minmax(205px,1fr));overflow-x:auto}#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:1fr}}
 @media(max-width:900px){#viewport[data-route="onboarding"] .bv-onb-triple,#viewport[data-route="onboarding"] .bv-onb-bottom,#viewport[data-route="tasks"] .bv-work-top,#viewport[data-route="tasks"] .bv-work-bottom,#viewport[data-route="tasks"] .bv-work-other,#viewport[data-route="approvals"] .bv-approve-bottom,#viewport[data-route="approvals"] .bv-approve-other{grid-template-columns:1fr}}
+
+/* Browser UAT correction 2026-10-11: no clipped checklist / no illegible mobile approvals */
+#viewport[data-route="tasks"] .bv-work-other .grid5{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#viewport[data-route="tasks"] .bv-work-other .mini-kpi{min-width:0;overflow-wrap:anywhere}
+#viewport[data-route="approvals"] .bv-approve-bottom>.bv-extra-wide{grid-column:auto;min-width:0}
+#viewport[data-route="onboarding"] .bv-onb-kanban .workcard b{font-size:10px;line-height:1.3}
+@media(max-width:900px){
+ #viewport[data-route="approvals"] .bv-approve-inbox .tbl{min-width:750px;table-layout:auto}
+ #viewport[data-route="approvals"] .bv-approve-inbox .tablewrap{overflow-x:auto;max-width:100%}
+ #viewport[data-route="sales"] .bv-sales-mid .tbl{min-width:820px}
+ #viewport[data-route="sales"] .bv-sales-mid .tablewrap{overflow-x:auto;max-width:100%}
+}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

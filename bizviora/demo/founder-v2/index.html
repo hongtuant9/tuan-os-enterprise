@@ -774,6 +774,43 @@
 #viewport[data-route="tenants"] .fv-module-grid>*{min-width:0;overflow-wrap:anywhere}
 @media(max-width:1120px){#viewport[data-route="tenants"] .fv-enterprise-grid{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr 1fr}}
 @media(max-width:640px){#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V2.5 owner infographic phase 2: reference proportions for Sales → Approvals. */
+#viewport[data-route="sales"]>.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-top{grid-template-columns:minmax(0,1.53fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"]>.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-mid{grid-template-columns:minmax(0,1.68fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"]>.bv-sales-bottom,#viewport[data-route="sales"]>.layout.bv-sales-bottom{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"] .stage{min-height:124px}
+#viewport[data-route="sales"] .stage b{font-size:20px}
+#viewport[data-route="sales"] .bv-sales-conv span{font-size:10px;min-height:37px}
+#viewport[data-route="sales"] .plan{padding:11px 8px}
+#viewport[data-route="sales"] .plan .tag{margin-top:5px}
+#viewport[data-route="sales"] .bv-sales-mid .tablewrap{overflow-x:auto}
+#viewport[data-route="onboarding"] .bv-onb-full>.box{padding:12px}
+#viewport[data-route="onboarding"] .bv-onb-kanban{gap:7px}
+#viewport[data-route="onboarding"] .bv-onb-kanban .lane{padding:6px;min-width:0}
+#viewport[data-route="onboarding"] .bv-onb-kanban .lanehead{min-height:36px;align-items:center}
+#viewport[data-route="onboarding"] .bv-onb-kanban .workcard{min-height:104px;padding:7px 6px;margin-bottom:6px}
+#viewport[data-route="onboarding"] .bv-onb-kanban .workcard b{font-size:10px}
+#viewport[data-route="onboarding"] .bv-onb-triple{grid-template-columns:minmax(0,1.12fr) minmax(0,.98fr) minmax(0,1.13fr);gap:10px}
+#viewport[data-route="onboarding"] .bv-onb-bottom{grid-template-columns:minmax(0,1.58fr) minmax(0,1fr)}
+#viewport[data-route="tasks"] .bv-work-top{grid-template-columns:minmax(0,1.95fr) minmax(0,.98fr);gap:10px}
+#viewport[data-route="tasks"] .bv-work-bottom{grid-template-columns:minmax(0,1.95fr) minmax(0,.98fr);gap:10px}
+#viewport[data-route="tasks"] .bv-task-kanban{gap:7px}
+#viewport[data-route="tasks"] .bv-task-kanban .lane{padding:6px}
+#viewport[data-route="tasks"] .bv-task-kanban .workcard{min-height:126px;padding:9px 7px;margin-bottom:6px}
+#viewport[data-route="tasks"] .bv-task-kanban .workcard b{font-size:10px;line-height:1.35}
+#viewport[data-route="tasks"] .bv-work-side .bv-extra-panel{padding:13px}
+#viewport[data-route="tasks"] .bv-load-track{margin-bottom:11px}
+#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:11px}
+#viewport[data-route="approvals"] .bv-approve-bottom{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:11px}
+#viewport[data-route="approvals"] .bv-approve-inbox .tablewrap{min-width:0;overflow-x:auto}
+#viewport[data-route="approvals"] .bv-approve-inbox .tbl{font-size:10px}
+#viewport[data-route="approvals"] .bv-approve-inbox .tbl td{padding:10px 5px}
+#viewport[data-route="approvals"] .bv-approve-detail .bv-approval-fact{padding:9px 8px;min-height:50px}
+#viewport[data-route="approvals"] .bv-approval-tabs span{font-size:10px}
+#viewport[data-route="approvals"] .bv-approve-detail .bv-approval-actions{gap:6px}
+@media(max-width:1260px){#viewport[data-route="sales"]>.layout.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-bottom,#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:1fr}#viewport[data-route="onboarding"] .bv-onb-kanban{grid-template-columns:repeat(7,minmax(172px,1fr));overflow-x:auto}}
+@media(max-width:920px){#viewport[data-route="onboarding"] .bv-onb-triple,#viewport[data-route="onboarding"] .bv-onb-bottom,#viewport[data-route="tasks"] .bv-work-top,#viewport[data-route="tasks"] .bv-work-bottom,#viewport[data-route="approvals"] .bv-approve-bottom{grid-template-columns:1fr}#viewport[data-route="tasks"] .bv-task-kanban{grid-template-columns:repeat(4,minmax(210px,1fr));overflow-x:auto}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

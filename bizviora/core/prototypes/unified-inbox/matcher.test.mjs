@@ -61,7 +61,7 @@ test("source tags and native/email sync distinction exist for each fixture",()=>
  assert.equal(DATA.messages.find(m=>m.id==="m6").status,"EMAIL_SENT_UNVERIFIED");
 });
 test("each review case returns nonempty explicit status",()=>{
- assert.equal(REVIEW_CASES.length,5);
+ assert.equal(REVIEW_CASES.length,6);
  for(const c of REVIEW_CASES)assert.ok(matchBooking(c,base).status);
 });
 test("wrong actor tenant id denied",()=>assert.equal(canView("tenant-B",ACTORS.ownerA),false));

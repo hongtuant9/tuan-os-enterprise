@@ -52,13 +52,16 @@ test('07: network error fails closed, no leakage of token',async()=>{
 test('08: malformed payload and missing arrays rejected',async()=>{
  await fails(client(200,{tenant:{id:A},role:'owner',businessUnits:[],properties:null}).loadEnterprise({tenantId:A}),'TENANT_CONTEXT_MISMATCH');
 });
-test('09: nonlocal endpoints and production domain cannot be configured',()=>{
+test('09: invalid tenant payload type rejects safely',async()=>{
+ await fails(client(200,{...payload(),tenant:{id:42}}).loadEnterprise({tenantId:A}),'TENANT_CONTEXT_MISMATCH');
+});
+test('10: nonlocal endpoints and production domain cannot be configured',()=>{
  for(const baseUrl of ['https://app.tamcocexperience.com','https://bizviora-synthetic-demo.onrender.com','https://oxakhhpyvvymujiwuvnm.supabase.co']){
   assert.throws(()=>createFounderStagingAdapter({getAccessToken:async()=>jwt,fetchImpl:mock(),baseUrl}),
     e=>e.code==='NON_STAGING_ENDPOINT_FORBIDDEN');
  }
 });
-test('10: invalid tenant id rejects before JWT call',async()=>{
+test('11: invalid tenant id rejects before JWT call',async()=>{
  let count=0;
  const c=createFounderStagingAdapter({getAccessToken:async()=>{count++;return jwt;},fetchImpl:mock()});
  await fails(c.loadEnterprise({tenantId:'tenant-A'}),'INVALID_TENANT_ID');assert.equal(count,0);

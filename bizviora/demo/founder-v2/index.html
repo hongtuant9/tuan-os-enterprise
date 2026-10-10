@@ -761,6 +761,19 @@
 @media(max-width:1320px){#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-enterprise-right .fv-panel:last-child{grid-column:auto}#viewport[data-route="products"] .fv-products-top,#viewport[data-route="marketing"]>.mktriple{grid-template-columns:1fr 1fr}#viewport[data-route="marketing"]>.mktriple>.box:first-child{grid-column:1/-1}}
 @media(max-width:920px){#viewport[data-route="tenants"] .fv-enterprise-split,#viewport[data-route="products"] .fv-products-top,#viewport[data-route="products"] .fv-products-mid,#viewport[data-route="products"] .fv-products-bottom,#viewport[data-route="marketing"]>.mktriple,#viewport[data-route="marketing"]>.layout.cols72{grid-template-columns:1fr}#viewport[data-route="marketing"]>.mktriple>.box:first-child{grid-column:auto}#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero{grid-template-columns:65px 1fr}#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero .thumb{width:65px;height:65px}#viewport[data-route="products"] .fv-prod-cards,#viewport[data-route="marketing"] .mini-kanban{grid-template-columns:repeat(2,minmax(0,1fr))}#viewport[data-route="tenants"] .fv-tenant-tbl{min-width:780px}}
+
+/* V2.5 critical structural correction: enterprise page must have TWO top-level columns.
+   The right panel itself is full width; only its two secondary rows are split 50/50. */
+#viewport[data-route="tenants"] .fv-enterprise-grid{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);gap:11px;align-items:start}
+#viewport[data-route="tenants"] .fv-enterprise-grid>.fv-panel,#viewport[data-route="tenants"] .fv-enterprise-grid>.fv-enterprise-right{min-width:0;width:100%}
+#viewport[data-route="tenants"] .fv-enterprise-right{display:flex;flex-direction:column;gap:9px;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-company-panel{width:100%;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel{width:100%;min-width:0;max-width:100%}
+#viewport[data-route="tenants"] .fv-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+#viewport[data-route="tenants"] .fv-module-grid>*{min-width:0;overflow-wrap:anywhere}
+@media(max-width:1120px){#viewport[data-route="tenants"] .fv-enterprise-grid{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

@@ -475,6 +475,32 @@
 #viewport[data-route="overview"] .fv-panel .fv-smalltbl,#viewport[data-route="products"] .fv-panel .fv-smalltbl{min-width:520px}
 #viewport[data-route="tenants"] .fv-panel .fv-grow{overflow-x:auto;scrollbar-width:thin}
 }
+
+/* Founder V2.5 reference parity — owner supplied 10 exact PNGs, 1672×941 */
+#viewport .pagehead h1{display:flex;align-items:center;gap:9px;letter-spacing:-.45px}
+#viewport .pagehead p .bv-context-name{font-weight:650;color:#1b5bb2}
+#viewport .pagehead .bv-title-icon{display:inline-flex;color:#176be8}
+#viewport[data-route="marketing"] .bv-geodist{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;min-height:200px;align-items:center}
+#viewport[data-route="marketing"] .bv-geo-plot{min-width:0;text-align:center}
+#viewport[data-route="marketing"] .bv-geo-plot svg{display:block;width:100%;max-height:192px}
+#viewport[data-route="marketing"] .bv-geo-plot small{font-size:9px;color:#6483a8}
+#viewport[data-route="marketing"] .bv-geo-rank{min-width:0}
+#viewport[data-route="marketing"] .bv-geo-rank>b{font-size:12px;color:#264a7d}
+#viewport[data-route="marketing"] .bv-geo-stat{display:grid;grid-template-columns:minmax(90px,1fr) minmax(45px,100px) 34px;gap:7px;align-items:center;margin-top:10px;font-size:10px}
+#viewport[data-route="marketing"] .bv-geo-stat span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#viewport[data-route="marketing"] .bv-geo-stat strong{color:#2565c4;text-align:right}
+#viewport[data-route="marketing"] .bv-geo-meter{height:8px;background:#e7efff;border-radius:8px;overflow:hidden}
+#viewport[data-route="marketing"] .bv-geo-meter i{display:block;height:100%;border-radius:8px;background:#2c7cef}
+#viewport[data-route="marketing"] .bv-geo-rank p{font-size:9px;line-height:1.5;margin-top:11px}
+#viewport[data-route="sales"] .bv-plan-fidelity{position:relative;display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:0;padding:10px 7px 8px}
+#viewport[data-route="sales"] .bv-plan-fidelity .bv-plan-icon{color:#1972ec;background:#ecf5ff;display:flex;justify-content:center;padding:8px 0;border-radius:6px}
+#viewport[data-route="sales"] .bv-plan-fidelity .bv-plan-features{flex:1;padding:7px 0 4px;text-align:left}
+#viewport[data-route="sales"] .bv-plan-features>div{display:flex;gap:3px;align-items:flex-start;font-size:9px;line-height:1.35;margin:5px 0;overflow-wrap:anywhere}
+#viewport[data-route="sales"] .bv-plan-features svg{flex:0 0 13px;color:#15a66b}
+#viewport[data-route="sales"] .bv-plan-ribbon{position:absolute;top:-16px;right:-3px;background:#1472ef;color:#fff;padding:3px 5px;border-radius:4px;font-size:8px}
+#viewport[data-route="sales"] .plan-cards{padding-top:17px}
+#viewport[data-route="sales"] .bv-plan-fidelity button{min-height:32px;margin-top:auto}
+@media(max-width:930px){#viewport[data-route="marketing"] .bv-geodist{grid-template-columns:1fr}#viewport[data-route="marketing"] .bv-geo-plot svg{max-height:160px}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}
@@ -823,7 +849,7 @@ return page("Audit & Cài đặt","Quản trị bảo mật, nhật ký, tích h
 ])+body);
 }
 function content(){return ({overview,tenants:enterprises,products,marketing:marketingPage,sales:salesPage,onboarding:deployment,tasks:tasksPage,approvals:approvalsPage,audit:auditSettingsPage,finance:financePage})[S.route]();}
-function shell(){document.getElementById('app').innerHTML=`<div class="app"><aside class="nav"><div class="logo"><div class="mark"><i></i></div><div><strong>BIZVIORA</strong><small>AI Business Operating System</small></div></div><nav class="navitems" aria-label="Founder menu">${NAV.map(a=>`<button type="button" class="navbtn ${S.route===a[0]?'on':''}" data-nav="${a[0]}">${ico(a[2],19)}<span>${a[1]}</span>${a[0]==='approvals'?'<i class="count">6</i>':''}</button>`).join('')}</nav><div class="founder-note">👑 &nbsp;<b>Founder Mode</b><br><span>Quản trị toàn hệ thống Bizviora</span><div style="margin-top:7px;color:#ffcf7a;font-size:9px">DỮ LIỆU GIẢ LẬP • QUYỀN XEM ĐÃ XÁC THỰC</div><div class="bv-founder-navlinks"><a href="/account/?view=manager">Duyệt đăng ký (staging)</a><a href="/account/">Doanh nghiệp TUAN-OS</a><button type="button" id="bv-founder-signout">Đăng xuất</button></div></div></aside><main class="app-main"><div class="topbar"><label class="global-search">${ico('search',16)}<input id="globalSearch" placeholder="Tìm doanh nghiệp, module, công việc..." aria-label="Tìm trong các mục giả lập"/><span class="key">⌘ K</span></label><div class="topright"><button class="topicon" data-action="alerts">${ico('bell',23)}<span class="notif">6</span></button><button class="topicon" data-action="help">ⓘ</button><div class="top-profile"><span class="face">F</span><div><b>Founder — DEMO</b><small>BIZVIORA Platform</small></div>⌄</div></div></div><div class="viewport" id="viewport" data-route="${S.route}">${content()}</div></main></div><div class="demo-banner">● DEMO · DỮ LIỆU GIẢ LẬP · KHÔNG GHI HỆ THỐNG THẬT</div><div id="portal"></div>`}
+function shell(){document.getElementById('app').innerHTML=`<div class="app"><aside class="nav"><div class="logo"><div class="mark"><i></i></div><div><strong>BIZVIORA</strong><small>AI Business Operating System</small></div></div><nav class="navitems" aria-label="Founder menu">${NAV.map(a=>`<button type="button" class="navbtn ${S.route===a[0]?'on':''}" data-nav="${a[0]}">${ico(a[2],19)}<span>${a[1]}</span>${a[0]==='approvals'?'<i class="count">6</i>':''}</button>`).join('')}</nav><div class="founder-note">👑 &nbsp;<b>Founder Mode</b><br><span>Quản trị toàn hệ thống Bizviora</span><div style="margin-top:7px;color:#ffcf7a;font-size:9px">DỮ LIỆU GIẢ LẬP • QUYỀN XEM ĐÃ XÁC THỰC</div><div class="bv-founder-navlinks"><a href="/account/?view=manager">Duyệt đăng ký (staging)</a><a href="/account/">Doanh nghiệp TUAN-OS</a><button type="button" id="bv-founder-signout">Đăng xuất</button></div></div></aside><main class="app-main"><div class="topbar"><label class="global-search">${ico('search',16)}<input id="globalSearch" placeholder="Tìm doanh nghiệp, module, công việc..." aria-label="Tìm trong các mục giả lập"/><span class="key">⌘ K</span></label><div class="topright"><button class="topicon" data-action="alerts">${ico('bell',23)}<span class="notif">6</span></button><button class="topicon" data-action="help" aria-label="Hướng dẫn">${ico("help",21)}</button><div class="top-profile"><span class="face">F</span><div><b>Founder — DEMO</b><small>BIZVIORA Platform</small></div>⌄</div></div></div><div class="viewport" id="viewport" data-route="${S.route}">${content()}</div></main></div><div class="demo-banner">● DEMO · DỮ LIỆU GIẢ LẬP · KHÔNG GHI HỆ THỐNG THẬT</div><div id="portal"></div>`}
 
 function bvReferenceLayout(){
   const view=document.getElementById('viewport');
@@ -869,7 +895,61 @@ function bvReferenceLayout(){
   }
   Array.from(view.children).filter(el=>el.matches('.layout.cols72,.bv-route-extra')).forEach(el=>el.remove());
 }
-function render(){shell();bvReferenceLayout()}
+
+/* Founder infographic parity — UI composition only; no network or data writes. */
+function bvFidelityPolish(){
+ const root=document.getElementById('viewport');if(!root)return;
+ const h=root.querySelector('.pagehead h1'),p=root.querySelector('.pagehead p');
+ if(h&&p){
+  const greeting=['overview','marketing','sales','onboarding','tasks','approvals','finance'];
+  if(greeting.includes(S.route)){
+   const screenTitle=h.textContent.trim();
+   h.textContent='Xin chào, Founder! 👋';
+   const contextual=document.createElement('strong');
+   contextual.className='bv-context-name';
+   contextual.textContent=screenTitle;
+   p.prepend(contextual,document.createTextNode(' · '));
+  }else{
+   const iconName={tenants:'building',products:'cube',audit:'settings'}[S.route];
+   if(iconName){const label=document.createElement('span');label.className='bv-title-icon';label.innerHTML=ico(iconName,29);h.prepend(label);}
+  }
+ }
+ if(S.route==='marketing'){
+  const cards=Array.from(root.querySelectorAll('section.box'));
+  const geo=cards.find(card=>card.querySelector('.boxhead h2')?.textContent.includes('Nguồn khách & đo lường thực tế'));
+  if(geo){
+   const title=geo.querySelector('.boxhead h2');title.textContent='Bản đồ phân bổ lead theo khu vực · DEMO';
+   Array.from(geo.children).filter(child=>child!==geo.querySelector('.boxhead')).forEach(child=>child.remove());
+   const holder=document.createElement('div');holder.className='bv-geodist';
+   const cities=[['TP. Hồ Chí Minh',34],['Hà Nội',28],['Đà Nẵng',10],['Bình Dương',7],['Hải Phòng',5]];
+   const picture='<div class="bv-geo-plot"><svg viewBox="0 0 260 192" role="img" aria-label="Minh họa địa lý Việt Nam; không phải định vị khách hàng"><rect width="260" height="192" rx="10" fill="#f5faff"/>'+
+   '<path d="M121 7 L132 14 L139 20 L129 28 L139 40 L131 53 L139 63 L149 75 L140 85 L147 94 L153 104 L148 115 L145 129 L151 142 L164 152 L158 165 L144 170 L135 183 L124 184 L121 167 L111 155 L114 142 L108 127 L117 116 L114 103 L109 89 L112 75 L104 60 L112 47 L107 34 L111 21Z" fill="#bfdbfe" stroke="#67aaf7" stroke-width="1.5"/>'+
+   [[126,27,7],[138,91,5],[149,159,10],[143,151,6],[119,40,4]].map(x=>'<circle cx="'+x[0]+'" cy="'+x[1]+'" r="'+x[2]+'" fill="#1468ed" opacity=".7" stroke="white" stroke-width="1.5"/>').join('')+
+   '<text x="170" y="29" font-size="11" fill="#325d95">Hà Nội</text><text x="166" y="96" font-size="11" fill="#325d95">Đà Nẵng</text><text x="169" y="161" font-size="10" fill="#325d95">TP.HCM</text></svg><small>Bản đồ minh họa · không định vị người dùng</small></div>';
+   const stats='<div class="bv-geo-rank"><b>Phân bổ lead mẫu</b>'+cities.map((x,i)=>'<div class="bv-geo-stat"><span>'+(i+1)+'. '+x[0]+'</span><div class="bv-geo-meter"><i style="width:'+x[1]*2.4+'%"></i></div><strong>'+x[1]+'%</strong></div>').join('')+'<p class="subtle">Tỷ trọng chỉ dùng kiểm thử bố cục, chưa có dữ liệu GA4/CRM được xác minh.</p></div>';
+   holder.innerHTML=picture+stats;geo.appendChild(holder);
+  }
+ }
+ if(S.route==='sales'){
+  const plans=Array.from(root.querySelectorAll('.plan-cards .plan'));
+  const features=[
+   ['Quản lý công việc','Báo cáo cơ bản','Hỗ trợ qua email'],
+   ['Bao gồm Starter','AI hỗ trợ vận hành','Báo cáo nâng cao'],
+   ['Tùy biến theo nhu cầu','Tích hợp hệ thống','Hỗ trợ chuyên biệt']
+  ];
+  plans.forEach((card,i)=>{
+   card.classList.add('bv-plan-fidelity');
+   const head=document.createElement('div');head.className='bv-plan-icon';head.innerHTML=ico(['cube','finance','building'][i],22);
+   card.prepend(head);
+   if(i===1){const tag=document.createElement('span');tag.className='bv-plan-ribbon';tag.textContent='Gói nổi bật';card.prepend(tag);}
+   const list=document.createElement('div');list.className='bv-plan-features';
+   features[i].forEach(label=>{const div=document.createElement('div');div.innerHTML=ico('check',13);const text=document.createElement('span');text.textContent=label;div.appendChild(text);list.appendChild(div);});
+   const action=card.querySelector('button');if(action)card.insertBefore(list,action);
+  });
+ }
+}
+
+function render(){shell();bvReferenceLayout();bvFidelityPolish()}
 function toast(msg){document.getElementById('portal').innerHTML=`<div class="toast">${esc(msg)}</div>`;clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>{const p=document.getElementById('portal');if(p)p.innerHTML=''},2900)}
 function modal(title,text,buttons=[]){document.getElementById('portal').innerHTML=`<div class="overlay"><div class="modal"><h2>${esc(title)}</h2><p>${text}</p><div class="modalactions"><button class="outline" data-action="close-modal">Đóng</button>${buttons.map(b=>`<button class="${b.class||'primary'}" data-action="${b.action}" data-ref="${b.id||''}">${b.label}</button>`).join('')}</div></div></div>`}
 function announce(action){modal('Thao tác cần hệ thống thật',`<b>${esc(action)}</b> được thiết kế nhưng chưa kích hoạt. Founder shell kiểm tra đăng nhập và vai trò quản trị trên staging; các hành động của dashboard này vẫn chỉ là DEMO trong RAM, không có API nghiệp vụ ghi thật hoặc phê duyệt ngân sách.`,[])}

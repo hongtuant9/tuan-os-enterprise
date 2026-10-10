@@ -2,32 +2,39 @@ import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
 const $=id=>document.getElementById(id);
 const screens=['loading','login','register','application','pending','rejected','manager'];
-let client,user,signupEnabled=false;
+let client,user,signupEnabled=false,platformManager=false;
 function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('error-box').replaceChildren();}
 function feedback(t,error=false){const e=document.createElement('div');e.className='notice'+(error?' error':'');e.textContent=t;$('error-box').replaceChildren(e);}
 function failed(code){feedback('Chưa thể xử lý yêu cầu. Vui lòng thử lại hoặc liên hệ BIZVIORA. ('+code+')',true);}
 async function currentUser(){const {data,error}=await client.auth.getUser();return error?null:data?.user||null;}
-async function refresh(){
+async function refresh(preferManager=false){
  show('loading');$('portal-frame').removeAttribute('src');
  try{
   user=await currentUser();if(!user){show('login');return;}
-  const staff=await client.rpc('bv_is_platform_manager');if(staff.data===true&&!staff.error){show('manager');await reviews();return;}
+  const staff=await client.rpc('bv_is_platform_manager');if(staff.error)throw Error('MANAGER_ROLE_UNAVAILABLE');
+  platformManager=staff.data===true;
+  $('workspace-manager').hidden=!platformManager;
+  $('manager-company').hidden=true;
+  $('manager-register').hidden=true;
   const {data:applications,error}=await client.from('bv_registration_requests').select('id,business_name,plan_code,status,tenant_id,review_note').eq('applicant_user_id',user.id).limit(1);
   if(error)throw Error('REGISTRATION_LOOKUP_DENIED');
   const r=applications?.[0];
-  if(!r){show('application');await plans();return;}
-  if(r.status==='PENDING'){show('pending');$('pending-name').textContent=r.business_name+' · '+r.plan_code+' · Chờ quản lý BIZVIORA xét duyệt';return;}
-  if(r.status==='REJECTED'){show('rejected');$('reject-note').textContent=r.review_note||'Hồ sơ chưa được duyệt. Chưa có quyền truy cập.';return;}
+  if(!r){if(platformManager&&preferManager){show('manager');$('manager-register').hidden=false;await reviews();return;}show('application');await plans();return;}
+  if(r.status==='PENDING'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('pending');$('pending-name').textContent=r.business_name+' · '+r.plan_code+' · Chờ quản lý BIZVIORA xét duyệt';return;}
+  if(r.status==='REJECTED'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('rejected');$('reject-note').textContent=r.review_note||'Hồ sơ chưa được duyệt. Chưa có quyền truy cập.';return;}
   if(r.status!=='APPROVED'||!r.tenant_id)throw Error('ACCOUNT_NOT_APPROVED');
   const {data:member,error:me}=await client.from('bv_memberships').select('tenant_id,user_id,role').eq('tenant_id',r.tenant_id).eq('user_id',user.id).single();
   const {data:tenant,error:te}=await client.from('bv_tenants').select('id,name').eq('id',r.tenant_id).single();
   if(me||te||!member||!tenant||member.user_id!==user.id||member.tenant_id!==tenant.id||!['staff','manager','admin','owner'].includes(member.role))throw Error('TENANT_ACCESS_DENIED');
-  $('tenant-name').textContent=tenant.name+' · '+member.role;show('workspace');
+  $('tenant-name').textContent=tenant.name+' · '+member.role;
+  if(platformManager&&preferManager){show('manager');$('manager-company').hidden=false;await reviews();return;}
+  show('workspace');
   $('portal-frame').src='./customer-v176/template.html';
  }catch(e){show('login');failed(e?.message||'STAGING_UNAVAILABLE');}
 }
 async function plans(){const {data,error}=await client.from('bv_service_plans').select('code,label').eq('enabled',true);if(error){failed('PLANS_UNAVAILABLE');return;}const opts=(data||[]).map(p=>new Option(p.label,p.code));$('plan').replaceChildren(new Option('Chọn gói dịch vụ',''),...opts);}
 async function reviews(){
+ const role=await client.rpc('bv_is_platform_manager');if(role.error||role.data!==true){show('login');failed('MANAGER_ROLE_DENIED');return;}
  const {data,error}=await client.from('bv_registration_requests').select('id,business_name,contact_name,plan_code,created_at').eq('status','PENDING').order('created_at').limit(50);
  if(error){failed('REVIEW_LIST_DENIED');return;}
  const list=$('requests');list.replaceChildren();
@@ -45,10 +52,11 @@ async function reviews(){
  }
 }
 async function signout(){
- $('portal-frame').removeAttribute('src');if(client)await client.auth.signOut();user=null;show('login');
+ $('portal-frame').removeAttribute('src');if(client)await client.auth.signOut();user=null;platformManager=false;show('login');
 }
 $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show('login');
-$('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=refresh;$('manager-refresh').onclick=reviews;
+$('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
+$('workspace-manager').onclick=()=>refresh(true);$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
 $('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();if(!signupEnabled){failed('REGISTRATION_GATE_HOLD');return;}const email=$('re-email').value.trim(),password=$('re-password').value;
  if(password!==$('re-repeat').value){failed('PASSWORD_MISMATCH');return;}if(password.length<12){failed('PASSWORD_TOO_SHORT');return;}

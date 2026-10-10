@@ -36,10 +36,34 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
  }catch(e){show('login');failed(e?.message||'STAGING_UNAVAILABLE');}
 }
 async function plans(){const {data,error}=await client.from('bv_service_plans').select('code,label').eq('enabled',true);if(error){failed('PLANS_UNAVAILABLE');return;}const opts=(data||[]).map(p=>new Option(p.label,p.code));$('plan').replaceChildren(new Option('Chọn gói dịch vụ',''),...opts);}
+async function loadReviewAudit(){
+ const out=$('review-audit');out.replaceChildren();
+ const {data,error}=await client.from('bv_registration_reviews')
+  .select('request_id,result,note,reviewed_at,reviewer_user_id')
+  .order('reviewed_at',{ascending:false}).limit(30);
+ if(error){failed('AUDIT_READ_DENIED');return false;}
+ if(!data?.length){const empty=document.createElement('p');empty.textContent='Chưa có quyết định nào được ghi nhận.';out.append(empty);return true;}
+ const ids=[...new Set(data.map(x=>x.request_id))];
+ const {data:requests,error:lookupError}=await client.from('bv_registration_requests')
+  .select('id,business_name').in('id',ids);
+ if(lookupError){failed('AUDIT_REQUEST_LOOKUP_DENIED');return false;}
+ const labels=new Map((requests||[]).map(r=>[r.id,r.business_name]));
+ for(const a of data){
+  const item=document.createElement('div');item.className='row';
+  const title=document.createElement('strong');
+  title.textContent=(a.result==='APPROVED'?'ĐÃ DUYỆT':a.result==='REJECTED'?'ĐÃ TỪ CHỐI':a.result)+' · '+(labels.get(a.request_id)||'Hồ sơ không còn truy cập');
+  const note=document.createElement('small');
+  note.textContent=(a.reviewed_at?new Date(a.reviewed_at).toLocaleString('vi-VN')+' · ':'')+
+    (a.note||'Không có ghi chú')+' · Ref '+String(a.request_id).slice(0,8);
+  item.append(title,note);out.append(item);
+ }
+ return true;
+}
 async function reviews(){
  const role=await client.rpc('bv_is_platform_manager');if(role.error||role.data!==true){show('login');failed('MANAGER_ROLE_DENIED');return;}
  const {data,error}=await client.from('bv_registration_requests').select('id,business_name,contact_name,plan_code,created_at').eq('status','PENDING').order('created_at').limit(50);
  if(error){failed('REVIEW_LIST_DENIED');return;}
+ if(!await loadReviewAudit())return;
  const list=$('requests');list.replaceChildren();
  if(!data?.length){const p=document.createElement('p');p.textContent='Chưa có yêu cầu mới.';list.append(p);return;}
  for(const r of data){const item=document.createElement('div');item.className='row';

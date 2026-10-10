@@ -49,6 +49,87 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
   }
  }catch(e){show('login');failed(e?.message||'STAGING_UNAVAILABLE');}
 }
+
+function prefillQaRegister(){
+ if(!qaScenario)return;
+ $('re-email').value=qaScenario.email;
+ $('register-submit').disabled=false;
+ const c=$('qa-register-context');c.hidden=false;
+ c.textContent='STAGING QA — '+(qaScenario.plan==='TRIAL_7D'?'CASE A: PHÊ DUYỆT':'CASE B: TỪ CHỐI')+'. Email thử nghiệm riêng; hãy tự đặt mật khẩu và xác minh email. Không dùng thông tin kinh doanh thật.';
+}
+function prefillQaApplication(){
+ const entry=Object.values(QA_SCENARIOS).find(x=>x.email===user?.email?.toLowerCase());
+ if(!entry)return;
+ $('business-name').value=entry.name;
+ $('contact-name').value=entry.contact;
+ $('plan').value=entry.plan;
+}
+function qaElement(tag,text,classname){
+ const e=document.createElement(tag);if(text)e.textContent=text;if(classname)e.className=classname;return e;
+}
+function setQaRlsPanel(id,expected){
+ const area=$(id);if(!area)return;
+ area.hidden=false;area.replaceChildren();
+ area.append(qaElement('p','STAGING QA — JWT/RLS check (chỉ đọc dữ liệu, không đổi quyền).','intro'));
+ const btn=qaElement('button','Kiểm tra cách ly tenant bằng phiên đăng nhập này','secondary');
+ const result=qaElement('div','','notice');result.textContent='Chưa chạy kiểm thử phiên Auth/JWT trên trình duyệt.';
+ btn.onclick=async()=>{btn.disabled=true;try{await runQaRlsCheck(result,expected)}finally{btn.disabled=false}};
+ area.append(btn,result);
+}
+function setQaApprovedPanel(tenant){
+ const area=$('qa-approved-view');area.replaceChildren();
+ area.append(qaElement('h2','Tenant QA đã được duyệt (dữ liệu staging)'));
+ area.append(qaElement('p','Tên: '+tenant.name+' · Mã: '+tenant.slug));
+ area.append(qaElement('p','Giao diện demo TUAN-OS được ẩn đối với tenant QA để tránh nhầm dữ liệu giả lập với quyền thật.','intro'));
+ const section=qaElement('div');section.id='qa-approved-tests';area.append(section);
+ setQaRlsPanel('qa-approved-tests','APPROVED');
+}
+async function runQaRlsCheck(out,expected){
+ out.replaceChildren(qaElement('p','Đang kiểm tra Supabase Auth/JWT và RLS…'));
+ try{
+  const auth=await client.auth.getUser();
+  if(auth.error||!auth.data?.user)throw Error('AUTH_REQUIRED');
+  const a=auth.data.user;
+  const email=a.email?.toLowerCase();
+  if(!qaEmails.has(email)||!a.email_confirmed_at)throw Error('QA_EMAIL_NOT_VERIFIED');
+  const results=await Promise.all([
+   client.rpc('bv_is_platform_manager'),
+   client.from('bv_tenants').select('id,slug,name').limit(20),
+   client.from('bv_memberships').select('tenant_id,user_id,role').limit(20),
+   client.from('bv_registration_requests').select('id,applicant_user_id,tenant_id,status').limit(20),
+   client.from('bv_registration_reviews').select('request_id').limit(20),
+   client.from('bv_tenants').select('id').eq('slug','tuan-os-enterprise-001')
+  ]);
+  if(results.some(x=>x.error))throw Error('RLS_READ_ERROR');
+  const [role,tenants,members,requests,audits,foreign]=results.map(x=>x.data);
+  const oneRequest=requests.length===1&&requests[0].applicant_user_id===a.id;
+  const ownTenant=expected==='APPROVED'
+    ?(tenants.length===1&&requests[0]?.tenant_id===tenants[0]?.id&&members.length===1
+       &&members[0].tenant_id===tenants[0].id&&members[0].user_id===a.id&&members[0].role==='owner')
+    :(tenants.length===0&&members.length===0&&requests[0]?.tenant_id===null);
+  const assertions=[
+   ['Email QA đã xác minh',true],
+   ['Không có quyền Platform Manager',role===false],
+   ['Không đọc được tenant TUAN-OS 001',foreign.length===0],
+   ['Không đọc được audit của Platform Manager',audits.length===0],
+   ['Chỉ thấy hồ sơ của chính mình',oneRequest],
+   ['Trạng thái '+expected,oneRequest&&requests[0].status===expected],
+   ['Membership và tenant đúng phạm vi',oneRequest&&ownTenant]
+  ];
+  out.replaceChildren();
+  for(const [label,pass] of assertions){
+   const line=qaElement('p',(pass?'PASS · ':'FAIL · ')+label);
+   line.style.color=pass?'#146c43':'#aa2238';
+   out.append(line);
+  }
+  const passed=assertions.every(x=>x[1]);
+  const summary=qaElement('strong',passed?'JWT/RLS browser check: '+assertions.length+'/'+assertions.length+' PASS':'JWT/RLS browser check: FAIL — KHÔNG mở dữ liệu thật.');
+  out.prepend(summary);
+ }catch(_){
+  out.replaceChildren(qaElement('strong','HOLD — không xác minh được JWT/RLS. Không khẳng định PASS.','error'));
+ }
+}
+
 async function plans(){const {data,error}=await client.from('bv_service_plans').select('code,label').eq('enabled',true);if(error){failed('PLANS_UNAVAILABLE');return;}const opts=(data||[]).map(p=>new Option(p.label,p.code));$('plan').replaceChildren(new Option('Chọn gói dịch vụ',''),...opts);}
 async function loadReviewAudit(){
  const out=$('review-audit');out.replaceChildren();

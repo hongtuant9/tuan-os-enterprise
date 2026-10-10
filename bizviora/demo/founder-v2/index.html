@@ -528,6 +528,16 @@
 #viewport[data-route="sales"] .bv-sales-top .bv-plan-fidelity button{min-height:26px;padding:5px}
 #viewport[data-route="sales"] .bv-plan-ribbon{top:-11px}
 @media(max-width:650px){.topbar{padding-right:11px}.topright{gap:6px}.top-profile{gap:4px}.global-search{width:49vw}}
+
+/* Sales reference: row 1 pipeline/pricing ~275 px, row 2 opportunities/followups ~225 px */
+#viewport[data-route="sales"] .bv-sales-top .bv-meta-flow{font-size:9px}
+#viewport[data-route="sales"]>.bv-sales-mid>.box{height:231px;min-height:0;overflow:hidden}
+#viewport[data-route="sales"]>.bv-sales-mid .boxhead{margin-bottom:7px}
+#viewport[data-route="sales"]>.bv-sales-mid .filters{margin-bottom:5px!important}
+#viewport[data-route="sales"]>.bv-sales-mid .tablewrap{max-height:165px;overflow-y:auto}
+#viewport[data-route="sales"]>.bv-sales-mid .tbl th,#viewport[data-route="sales"]>.bv-sales-mid .tbl td{padding:5px 4px;font-size:9px}
+#viewport[data-route="sales"]>.bv-sales-mid .rightlist{max-height:170px;overflow-y:auto}
+#viewport[data-route="sales"]>.bv-sales-mid .rightlist .minirow{padding:5px 0}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}
@@ -958,6 +968,9 @@ function bvFidelityPolish(){
   }
  }
  if(S.route==='sales'){
+  const pipeline=root.querySelector('.bv-sales-top .box:first-child');
+  const verbose=pipeline?.querySelector('.note');
+  if(verbose){const head=pipeline.querySelector('.boxhead h2');if(head)head.title=verbose.textContent;verbose.remove();}
   const plans=Array.from(root.querySelectorAll('.plan-cards .plan'));
   const features=[
    ['Quản lý công việc','Báo cáo cơ bản','Hỗ trợ qua email'],

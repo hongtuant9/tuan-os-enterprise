@@ -60,3 +60,18 @@ Thiết lập biến môi trường qua trình quản lý bí mật **tại máy
 Cài phụ thuộc trong thư mục `bizviora/core` (từ bản mã đã xác minh), sau đó chạy `npm run test:staging:auth-rls`. Không gửi kết quả chứa token. Kiểm tra từng giả định kiểm thử, dữ liệu ghi nhật ký, và xác nhận tenant A không thể đọc/ghi B rồi mới đề nghị gỡ cổng bảo mật. Bộ kiểm thử này **tạo công việc thử** và không tự xóa, chỉ chạy trên môi trường staging cách ly.
 
 Tài liệu/điểm tiếp nối: TASK-001 và Technical Build Guide. Không triển khai OTA/Facebook tự gửi, giá, thanh toán hoặc khách ngoài.
+
+
+## Bằng chứng Core 002 bổ sung — 10/10/2026
+
+**Thiết kế khách hàng đã duyệt:** BIZVIORA UI V1.7.6 theo quyết định `DEC-BIZ-20261010-006`. Đường dẫn bản ZIP trên Drive: https://drive.google.com/file/d/1vgOztvz2TjK3FsZJXCn4hIDufmah19Cr/view . Mã SHA-256 của **file đính kèm đã trực tiếp kiểm tra** `6b2512c8b0eed00902291e53452c462dafdc1b2cdee8ef5c640a3660437c732b`. Giao diện `bizviora/demo/index.html` hiện tại có hash **KHÁC**. Xem `integration/UI_V176_BASELINE_CONTRACT_VI.md`; không thay giao diện đã duyệt bằng bản khác.
+
+**Hồi quy mã Core:** khi chạy trực tiếp nhánh GitHub trên máy Mac đã được ủy quyền, lần đầu chỉ có **16/29** bài đạt do biểu thức kiểm tra UUID thiếu nhóm thứ tư. Đã sửa trong `src/access.mjs`, bổ sung kiểm thử, chạy lại tại commit `912a140d7bea596dea11c80c3cec2c4ec25bb1c3`: **31/31 bài đạt**. Chỉ là bài kiểm thử Node bằng dữ liệu giả, không thay kết quả JWT thật.
+
+**Kiểm thử bảo mật Git đọc-only:** sao chép mirror ở thư mục tạm không đồng bộ đám mây trên máy Mac; rà soát toàn bộ **1.158 refs / 13.460 Git objects / 2.604 blobs**, khoảng 49,7 MB nội dung text. Bộ dò heuristic tự viết phát hiện **0 mẫu khóa/token có chữ ký đặc trưng**; 43 lượt khớp biểu thức gán bí mật trong lịch sử (37 vị trí duy nhất được phân loại là biến/biểu thức thực thi). Không xuất giá trị bí mật ra log/chat. **Chưa chạy máy quét chuyên dụng Gitleaks/TruffleHog; không tuyên bố full secret scan đạt chuẩn phát hành.**
+
+**Diễn tập khôi phục mức logic:** script `sql/004_STAGING_ONLY_LOGICAL_RESTORE_TRANSACTIONAL_TEST.sql` trên đúng staging tạo dữ liệu hoàn toàn giả lập, sao chép vào bảng tạm, xóa rồi khôi phục và so khớp 6 bảng, `ROLLBACK` kết thúc, đọc lại tất cả bảng nghiệp vụ liên quan đều còn **0 bản ghi**. Bản đầu của kịch bản bị lỗi thứ tự trigger/audit; đã sửa và chạy lại thành công. **Chưa diễn tập restore từ bản backup vật lý/logical độc lập trên dự án khác**, do đó `RESTORE_FULL_GATE_HOLD`.
+
+**Đăng nhập thật:** Supabase CLI cài trên máy Mac nhưng chưa có phiên đăng nhập quản trị. Connector không có API tạo người dùng Auth; **3 JWT thực của Auth vẫn chưa được cấp**, bộ `tests/staging-auth-rls.e2e.mjs` **CHƯA CHẠY**. Không đăng mật khẩu/token vào chat, Drive hoặc Git. `REAL_JWT_E2E_NOT_RUN`, `SECURITY_GATE_HOLD`, `PRODUCTION_OFF`.
+
+Nhật ký chính thức tại Technical Build Guide và TASK-001.

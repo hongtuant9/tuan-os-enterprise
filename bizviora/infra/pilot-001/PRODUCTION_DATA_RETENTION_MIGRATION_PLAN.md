@@ -50,3 +50,9 @@ EXCLUDE FROM CUSTOMER TENANT: owner PRIVATE finance, unrelated tenant data, inte
 ## Hold criteria
 No current VPS capacity inventory; source backup/restore independent test missing; target production customer schema not deployed; RLS E2E not done; OAuth/OTA migration rights not verified. All deletion, copying secrets, provider changes, production deploy and purchasing remain HOLD. Worker co-location on existing VPS-2 also HOLD pending resource and owner approval.
 Read-only GitHub branch file only; no runtime side effects.
+
+
+## Latest L0 checkpoint 11 Oct 2026 — missing field linkages
+
+Verified with read-only aggregate SELECTs: 479 source bookings; all 479 have NULL property_id; 85 have NULL customer_id; all 479 have source_system=KIOTVIET_HOTEL and source_booking_uuid. 288 AI conversations; 0 linked to hospitality_booking_id, 0 to ai_booking_record_id, 0 to property_id, 90 with business_unit_id, 63 with customer_id. 536 messages with 0 orphaned messages; 484 customer identities with 394 verified. BIZVIORA staging has TUAN OS Enterprise tenant slug tuan-os-enterprise-001, but bv_business_units and bv_properties are both empty. Therefore cutover mapping is **BLOCKED** until authoritative KiotViet property and legacy conversation mapping can be proven. See companion READONLY_MIGRATION_BASELINE_20261011.md. No customer PII or actual OAuth/token values exported.
+OVH billing Gmail notifications were inspected without credential values: invoice total US$10.00 in September and October, plus renewal notices naming VPS and Auto Backup entries. Invoice line items / VPS hardware remain unverified. No VPS disk access possible because Remote Desktop Commander remote_calls_left_pct=0.

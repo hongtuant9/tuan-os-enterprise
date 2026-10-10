@@ -1,7 +1,8 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
+const APPROVED_OWNER_EMAIL='hongtuant9@gmail.com'; // L3 approval is recorded; this UI never grants a role.
 const $=id=>document.getElementById(id);
-const screens=['loading','login','register','application','pending','rejected','manager'];
+const screens=['loading','login','register','owner-wait','application','pending','rejected','manager'];
 let client,user,signupEnabled=false,platformManager=false;
 function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('account-manager').hidden=!(user&&platformManager&&!['manager','workspace','login','register','loading'].includes(id));$('error-box').replaceChildren();}
 function feedback(t,error=false){const e=document.createElement('div');e.className='notice'+(error?' error':'');e.textContent=t;$('error-box').replaceChildren(e);}
@@ -19,7 +20,9 @@ async function refresh(preferManager=false){
   const {data:applications,error}=await client.from('bv_registration_requests').select('id,business_name,plan_code,status,tenant_id,review_note').eq('applicant_user_id',user.id).limit(1);
   if(error)throw Error('REGISTRATION_LOOKUP_DENIED');
   const r=applications?.[0];
-  if(!r){if(platformManager&&preferManager){show('manager');$('manager-register').hidden=false;await reviews();return;}show('application');await plans();return;}
+  if(!r){if(platformManager&&preferManager){show('manager');$('manager-register').hidden=false;await reviews();return;}
+   if(user.email?.toLowerCase()===APPROVED_OWNER_EMAIL){show('owner-wait');return;}
+   show('application');await plans();return;}
   if(r.status==='PENDING'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('pending');$('pending-name').textContent=r.business_name+' · '+r.plan_code+' · Chờ quản lý BIZVIORA xét duyệt';return;}
   if(r.status==='REJECTED'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('rejected');$('reject-note').textContent=r.review_note||'Hồ sơ chưa được duyệt. Chưa có quyền truy cập.';return;}
   if(r.status!=='APPROVED'||!r.tenant_id)throw Error('ACCOUNT_NOT_APPROVED');
@@ -55,11 +58,15 @@ async function signout(){
  $('portal-frame').removeAttribute('src');if(client)await client.auth.signOut();user=null;platformManager=false;show('login');
 }
 $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show('login');
+$('owner-refresh').onclick=()=>refresh(false);
+$('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
 $('workspace-manager').onclick=()=>refresh(true);$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
 $('account-manager').onclick=()=>refresh(true);
 $('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
-$('register-form').onsubmit=async e=>{e.preventDefault();if(!signupEnabled){failed('REGISTRATION_GATE_HOLD');return;}const email=$('re-email').value.trim(),password=$('re-password').value;
+$('register-form').onsubmit=async e=>{e.preventDefault();const email=$('re-email').value.trim(),password=$('re-password').value;
+ if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}
+ // This is a self-serve identity verification request only; it DOES NOT grant a company or manager permission.
  if(password!==$('re-repeat').value){failed('PASSWORD_MISMATCH');return;}if(password.length<12){failed('PASSWORD_TOO_SHORT');return;}
  const {data,error}=await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
  $('re-password').value='';$('re-repeat').value='';
@@ -77,7 +84,7 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   signupEnabled=c.signupEnabled===true;
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
   $('register-submit').disabled=!signupEnabled;
-  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Đăng ký người dùng bên ngoài đang tạm khóa để nghiệm thu bảo mật. Chỉ tài khoản thử nghiệm đã được ủy quyền mới đăng nhập.';$('register').append(w);}
+  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Chỉ tiếp nhận đăng ký tài khoản chủ sở hữu TUAN-OS 001 bằng email đã được duyệt L3; khách hàng khác chưa được đăng ký. Không có quyền quản lý hoặc dữ liệu doanh nghiệp nào được cấp chỉ nhờ đăng ký.';$('register').append(w);}
   await refresh();
   client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){$('portal-frame').removeAttribute('src');user=null;show('login');}});
  }catch{show('login');$('login-form').querySelector('button').disabled=true;$('show-register').disabled=true;failed('STAGING_CONFIG_NOT_READY');}

@@ -54,7 +54,8 @@ export function createFounderStagingAdapter({
       try { data = await response.json(); } catch {
         throw new FounderContextError('INVALID_CONTEXT_RESPONSE');
       }
-      if (!data || !data.tenant || data.tenant.id?.toLowerCase() !== tenantId.toLowerCase() ||
+      if (!data || !data.tenant || typeof data.tenant.id !== 'string' ||
+          data.tenant.id.toLowerCase() !== tenantId.toLowerCase() ||
           !ROLE.has(data.role) || !Array.isArray(data.businessUnits) ||
           !Array.isArray(data.properties) ||
           data.businessUnits.some(b => typeof b.id !== 'string' || typeof b.name !== 'string') ||

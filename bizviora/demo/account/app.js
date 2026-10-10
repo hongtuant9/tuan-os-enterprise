@@ -1,6 +1,13 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
 const APPROVED_OWNER_EMAIL='hongtuant9@gmail.com'; // L3 approval is recorded; this UI never grants a role.
+const QA_SCENARIOS=Object.freeze({
+ approve:{email:'hongtuant9+bizviora-qa-approve-20261011@gmail.com',name:'BIZVIORA QA Approval 001',contact:'Synthetic Tester A',plan:'TRIAL_7D'},
+ reject:{email:'hongtuant9+bizviora-qa-reject-20261011@gmail.com',name:'BIZVIORA QA Rejection 002',contact:'Synthetic Tester B',plan:'CUSTOM_QUOTE'}
+});
+const qaScenario=QA_SCENARIOS[new URLSearchParams(location.search).get('qa')]||null;
+const qaEmails=new Set(Object.values(QA_SCENARIOS).map(s=>s.email));
+const isQaUser=()=>qaEmails.has(user?.email?.toLowerCase());
 const $=id=>document.getElementById(id);
 const screens=['loading','login','register','owner-wait','application','pending','rejected','manager'];
 let client,user,signupEnabled=false,platformManager=false;
@@ -11,7 +18,7 @@ async function currentUser(){const {data,error}=await client.auth.getUser();retu
 async function refresh(preferManager=(new URLSearchParams(location.search).get('view')==='manager')){
  show('loading');$('portal-frame').removeAttribute('src');
  try{
-  user=await currentUser();if(!user){show('login');return;}
+  user=await currentUser();if(!user){if(qaScenario){show('register');prefillQaRegister();}else show('login');return;}
   const staff=await client.rpc('bv_is_platform_manager');if(staff.error)throw Error('MANAGER_ROLE_UNAVAILABLE');
   platformManager=staff.data===true;
   $('workspace-manager').hidden=!platformManager;
@@ -22,17 +29,24 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
   const r=applications?.[0];
   if(!r){if(platformManager&&preferManager){show('manager');$('manager-register').hidden=false;await reviews();return;}
    if(user.email?.toLowerCase()===APPROVED_OWNER_EMAIL){show('owner-wait');return;}
-   show('application');await plans();return;}
-  if(r.status==='PENDING'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('pending');$('pending-name').textContent=r.business_name+' · '+r.plan_code+' · Chờ quản lý BIZVIORA xét duyệt';return;}
-  if(r.status==='REJECTED'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('rejected');$('reject-note').textContent=r.review_note||'Hồ sơ chưa được duyệt. Chưa có quyền truy cập.';return;}
+   show('application');await plans();prefillQaApplication();return;}
+  if(r.status==='PENDING'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('pending');$('pending-name').textContent=r.business_name+' · '+r.plan_code+' · Chờ quản lý BIZVIORA xét duyệt';if(isQaUser())setQaRlsPanel('qa-pending-tests','PENDING');return;}
+  if(r.status==='REJECTED'){if(platformManager&&preferManager){show('manager');await reviews();return;}show('rejected');$('reject-note').textContent=r.review_note||'Hồ sơ chưa được duyệt. Chưa có quyền truy cập.';if(isQaUser())setQaRlsPanel('qa-rejected-tests','REJECTED');return;}
   if(r.status!=='APPROVED'||!r.tenant_id)throw Error('ACCOUNT_NOT_APPROVED');
   const {data:member,error:me}=await client.from('bv_memberships').select('tenant_id,user_id,role').eq('tenant_id',r.tenant_id).eq('user_id',user.id).single();
-  const {data:tenant,error:te}=await client.from('bv_tenants').select('id,name').eq('id',r.tenant_id).single();
+  const {data:tenant,error:te}=await client.from('bv_tenants').select('id,name,slug').eq('id',r.tenant_id).single();
   if(me||te||!member||!tenant||member.user_id!==user.id||member.tenant_id!==tenant.id||!['staff','manager','admin','owner'].includes(member.role))throw Error('TENANT_ACCESS_DENIED');
   $('tenant-name').textContent=tenant.name+' · '+member.role;
   if(platformManager&&preferManager){show('manager');$('manager-company').hidden=false;await reviews();return;}
   show('workspace');
-  $('portal-frame').src='./customer-v176/template.html';
+  if(isQaUser()){
+    $('portal-frame').removeAttribute('src');$('portal-frame').hidden=true;
+    $('qa-approved-view').hidden=false;
+    setQaApprovedPanel(tenant);
+  }else{
+    $('qa-approved-view').hidden=true;$('portal-frame').hidden=false;
+    $('portal-frame').src='./customer-v176/template.html';
+  }
  }catch(e){show('login');failed(e?.message||'STAGING_UNAVAILABLE');}
 }
 async function plans(){const {data,error}=await client.from('bv_service_plans').select('code,label').eq('enabled',true);if(error){failed('PLANS_UNAVAILABLE');return;}const opts=(data||[]).map(p=>new Option(p.label,p.code));$('plan').replaceChildren(new Option('Chọn gói dịch vụ',''),...opts);}
@@ -83,13 +97,13 @@ async function signout(){
 }
 $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show('login');
 $('owner-refresh').onclick=()=>refresh(false);
-$('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
+$('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&!qaEmails.has($('re-email').value.trim().toLowerCase())&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
 $('workspace-manager').onclick=()=>location.assign('/founder-v2/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
 $('account-manager').onclick=()=>location.assign('/founder-v2/');
 $('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();const email=$('re-email').value.trim(),password=$('re-password').value;
- if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}
+ if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL&&!qaEmails.has(email.toLowerCase())){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}
  // This is a self-serve identity verification request only; it DOES NOT grant a company or manager permission.
  if(password!==$('re-repeat').value){failed('PASSWORD_MISMATCH');return;}if(password.length<12){failed('PASSWORD_TOO_SHORT');return;}
  const {data,error}=await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
@@ -107,8 +121,8 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   if(c?.supabaseUrl!==base||typeof c?.publishableKey!=='string'||c.publishableKey.length<25)throw Error('CONFIG_INVALID');
   signupEnabled=c.signupEnabled===true;
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
-  $('register-submit').disabled=!signupEnabled;
-  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Chỉ tiếp nhận đăng ký tài khoản chủ sở hữu TUAN-OS 001 bằng email đã được duyệt L3; khách hàng khác chưa được đăng ký. Không có quyền quản lý hoặc dữ liệu doanh nghiệp nào được cấp chỉ nhờ đăng ký.';$('register').append(w);}
+  $('register-submit').disabled=!signupEnabled&&!qaScenario;
+  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Staging chỉ cho phép email chủ sở hữu và 2 email QA giả lập được chỉ định qua biểu mẫu này. Đăng ký công khai chưa mở. Đăng ký tài khoản không cấp quyền tenant hoặc quyền Platform Manager.';$('register').append(w);}
   await refresh();
   client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){$('portal-frame').removeAttribute('src');user=null;show('login');}});
  }catch{show('login');$('login-form').querySelector('button').disabled=true;$('show-register').disabled=true;failed('STAGING_CONFIG_NOT_READY');}

@@ -3,7 +3,7 @@ const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
 const $=id=>document.getElementById(id);
 const screens=['loading','login','register','application','pending','rejected','manager'];
 let client,user,signupEnabled=false,platformManager=false;
-function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('error-box').replaceChildren();}
+function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('account-manager').hidden=!(user&&platformManager&&!['manager','workspace','login','register','loading'].includes(id));$('error-box').replaceChildren();}
 function feedback(t,error=false){const e=document.createElement('div');e.className='notice'+(error?' error':'');e.textContent=t;$('error-box').replaceChildren(e);}
 function failed(code){feedback('Chưa thể xử lý yêu cầu. Vui lòng thử lại hoặc liên hệ BIZVIORA. ('+code+')',true);}
 async function currentUser(){const {data,error}=await client.auth.getUser();return error?null:data?.user||null;}
@@ -57,6 +57,7 @@ async function signout(){
 $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show('login');
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
 $('workspace-manager').onclick=()=>refresh(true);$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
+$('account-manager').onclick=()=>refresh(true);
 $('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();if(!signupEnabled){failed('REGISTRATION_GATE_HOLD');return;}const email=$('re-email').value.trim(),password=$('re-password').value;
  if(password!==$('re-repeat').value){failed('PASSWORD_MISMATCH');return;}if(password.length<12){failed('PASSWORD_TOO_SHORT');return;}

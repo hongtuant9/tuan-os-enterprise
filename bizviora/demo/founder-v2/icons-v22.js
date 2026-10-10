@@ -79,7 +79,7 @@ function mount(){
 return {mount:mount};
 })();
 export function installFounderIcons(){
-  if(document.documentElement.classList.contains('bv-founderauth-ok') || window.__BV_FOUNDER_ROLE_VERIFIED === true){
+  if(document.documentElement.classList.contains('bv-founderauth-ok')){
     BV_FOUNDER_V22.mount();
     return true;
   }

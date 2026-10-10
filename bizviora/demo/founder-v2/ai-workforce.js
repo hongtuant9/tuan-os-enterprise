@@ -33,13 +33,46 @@ function people(ico){
  '<div class="aiw-fact"><b>Mục tiêu</b><span>'+escapeHtml(a.mission)+'</span></div><div class="aiw-fact"><b>Phạm vi L0/L1</b><span>'+escapeHtml(a.allow)+'</span></div><div class="aiw-fact"><b>Cấm mặc định</b><span>'+escapeHtml(a.deny)+'</span></div>'+
  '<div class="aiw-controls"><span class="aiw-tag">Chưa có agent runtime</span><button type="button" class="aiw-btn primary" data-aiw-copy="'+a.id+'">Sao chép lệnh ChatGPT Work</button></div></section>';
 }
+function policyPreview(t){
+ const risk=/(production|prod\b|khách thật|dữ liệu thật|password|mật khẩu|api key|token|private key|service role|access key|secret|xóa dữ liệu|xoá dữ liệu|xóa backup|restore thật|cấp quyền|đổi quyền|thanh toán|mua gói|migrate live|gửi khách|email thật|deploy thật|ssh key)/i;
+ if(risk.test(t.title))return {ok:false,code:'RISK_WORDS_FOUND · HUMAN_REVIEW_REQUIRED'};
+ if(!agents.some(a=>a.id===t.agent)||!['P1','P2','P3'].includes(t.priority)||!/^DEMO-AI-\d+$/.test(t.id))return {ok:false,code:'INVALID_DEMO_TASK'};
+ return {ok:true,code:'READY_FOR_MANUAL_WORK · SYNTHETIC_ONLY'};
+}
+const fixtureReports={
+ 'ENG-001':'MOCK: Kịch bản code review & negative-test RLS đã được tạo mẫu. Chưa đọc GitHub, chưa chạy test thực.',
+ 'SRE-001':'MOCK: Checklist monitoring và backup/restore giả lập. Chưa đọc VPS, chưa chạy backup hay restore.',
+ 'IMP-001':'MOCK: Checklist onboarding synthetic, không tạo tenant thật hoặc kết nối OTA.',
+ 'SUP-001':'MOCK: Kịch bản FAQ và escalation mẫu, không đọc ticket khách thật hoặc gửi phản hồi.'
+};
+function handoffText(t){
+ const p=find(t.agent);
+ return 'BIZVIORA AI WORKFORCE — GIAO VIỆC THỦ CÔNG (KHÔNG PHẢI LỆNH TỰ CHẠY)\n'+
+ 'Task: '+t.id+' | Vai trò: '+p.id+' | Ưu tiên: '+t.priority+'\n'+
+ 'Nội dung synthetic: '+t.title+'\n'+
+ 'Hồ sơ: '+base+p.file+'\n'+
+ 'Môi trường: STAGING / SYNTHETIC; L0 read-only, L1 draft; KHÔNG production, khách hàng thật, API secret, quyền truy cập, chi tiền, ghi database, deploy hoặc gửi tin.\n'+
+ 'Vui lòng xác minh nguồn hiện hành, báo bằng chứng, điều chưa chạy, rủi ro, rollback, trạng thái và checkpoint. Mọi thao tác ngoài phạm vi: HOLD, xin phê duyệt riêng.';
+}
 function tasks(){
- const form=state.showForm?'<form class="aiw-form" id="aiw-form"><b>Tạo nhiệm vụ DEMO — không gửi cho Agent thật</b><div class="aiw-formgrid">'+
- '<label>Nội dung<input required name="title" maxlength="120" minlength="3" placeholder="Lỗi đăng nhập synthetic"/></label><label>Agent<select name="agent">'+agents.map(a=>'<option value="'+a.id+'">'+a.id+'</option>').join('')+'</select></label>'+
+ const selected=state.tasks.find(t=>t.id===state.previewId)||state.tasks[0];
+ const result=selected?policyPreview(selected):null;
+ const form=state.showForm?'<form class="aiw-form" id="aiw-form"><b>Tạo nhiệm vụ synthetic — RAM-only, không gửi AI</b><div class="aiw-formgrid">'+
+ '<label>Nội dung (không nhập dữ liệu khách thật)<input required name="title" maxlength="120" minlength="3" placeholder="Kiểm thử đăng nhập synthetic"/></label><label>Agent<select name="agent">'+agents.map(a=>'<option value="'+a.id+'">'+a.id+'</option>').join('')+'</select></label>'+
  '<label>Ưu tiên<select name="priority"><option>P2</option><option>P1</option><option>P3</option></select></label></div><button class="aiw-btn primary" type="submit">Lưu nháp trong RAM</button> <button type="button" class="aiw-btn" data-aiw-form="close">Hủy</button></form>':'';
- return '<section class="aiw-box"><div class="aiw-controls"><div><h2>Công việc giả lập</h2><div class="aiw-muted">Không kết nối TASK-001; tải lại trang sẽ mất các nhiệm vụ tự tạo.</div></div><button type="button" class="aiw-btn primary" data-aiw-form="open">+ Tạo việc mẫu</button></div>'+form+
- '<div class="aiw-table-wrap"><table class="aiw-table"><thead><tr><th>Mã</th><th>Công việc</th><th>Agent</th><th>Ưu tiên</th><th>Trạng thái</th></tr></thead><tbody>'+
- state.tasks.map(t=>'<tr><td>'+escapeHtml(t.id)+'</td><td>'+escapeHtml(t.title)+'</td><td>'+escapeHtml(t.agent)+'</td><td>'+escapeHtml(t.priority)+'</td><td><span class="aiw-tag">CHƯA CHẠY · DEMO</span></td></tr>').join('')+'</tbody></table></div></section>';
+ const table='<div class="aiw-table-wrap"><table class="aiw-table"><thead><tr><th>Mã</th><th>Công việc</th><th>Agent</th><th>Ưu tiên</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>'+
+ state.tasks.map(t=>'<tr><td>'+escapeHtml(t.id)+'</td><td>'+escapeHtml(t.title)+'</td><td>'+escapeHtml(t.agent)+'</td><td>'+escapeHtml(t.priority)+'</td><td><span class="aiw-tag">'+escapeHtml(t.status||'DRAFT · DEMO')+'</span></td><td><button type="button" class="aiw-btn" data-aiw-preflight="'+escapeHtml(t.id)+'">Kiểm tra →</button></td></tr>').join('')+'</tbody></table></div>';
+ const detail=selected?'<section class="aiw-box"><div class="aiw-controls"><div><h2>Hồ sơ giao việc — '+escapeHtml(selected.id)+'</h2><div class="aiw-muted">Không có AI model đang chạy; đây là bước chuẩn bị và mô phỏng kiểm tra chính sách.</div></div><span class="aiw-tag">'+escapeHtml(selected.status||'DRAFT · DEMO')+'</span></div>'+
+ '<div class="aiw-fact"><b>Nội dung và Agent được chọn</b><span>'+escapeHtml(selected.title)+' · '+escapeHtml(selected.agent)+'</span></div>'+
+ '<div class="aiw-fact"><b>Kiểm tra rủi ro từ nội dung mẫu (chỉ là bộ lọc minh họa)</b><span>'+escapeHtml(result.code)+'</span></div>'+
+ '<div class="aiw-alert">Đây KHÔNG phải authorization backend. Khi chuyển sang tác vụ thật phải kiểm tra signed Auth, policy, tenant boundary, approvals và audit ở server.</div>'+
+ '<div class="aiw-controls" style="margin-top:10px"><button type="button" class="aiw-btn" data-aiw-preflight="'+escapeHtml(selected.id)+'">Kiểm tra phạm vi</button>'+
+ '<button type="button" class="aiw-btn" data-aiw-fixture="'+escapeHtml(selected.id)+'" '+(!result.ok?'disabled':'')+'>Chạy mô phỏng fixture</button>'+
+ '<button type="button" class="aiw-btn primary" data-aiw-handoff="'+escapeHtml(selected.id)+'" '+(!result.ok?'disabled':'')+'>Sao chép giao việc ChatGPT Work</button></div>'+
+ (selected.mockReport?'<div class="aiw-fact"><b>Kết quả giả lập (KHÔNG phải output AI)</b><span>'+escapeHtml(selected.mockReport)+'</span></div>':'')+
+ (selected.manualPrompt?'<div class="aiw-fact"><b>Nội dung cần sao chép thủ công</b><textarea readonly style="width:100%;min-height:140px;margin-top:5px">'+escapeHtml(selected.manualPrompt)+'</textarea></div>':'')+
+ '</section>':'';
+ return '<section class="aiw-box"><div class="aiw-controls"><div><h2>Điều phối công việc — Shadow V1.1</h2><div class="aiw-muted">DRAFT → kiểm tra rủi ro → mô phỏng fixture hoặc sao chép lệnh Work. 0 model calls, 0 API writes, không persistence.</div></div><button type="button" class="aiw-btn primary" data-aiw-form="open">+ Tạo việc mẫu</button></div>'+form+table+'</section>'+detail;
 }
 function rights(){
  return '<div class="aiw-cols"><section class="aiw-box"><h2>Giới hạn quyền AI Agent</h2><div class="aiw-table-wrap"><table class="aiw-table"><thead><tr><th>Agent</th><th>L0: đọc</th><th>L1: nháp</th><th>Production</th></tr></thead><tbody>'+
@@ -49,12 +82,12 @@ function rights(){
  '<p class="aiw-muted">Muốn hoạt động thật: API backend, authentication, task queue, metering, logging, rollback và phê duyệt riêng.</p></section></div>';
 }
 function page(ctx){
- const nav=[['all','Tổng quan'],['people','4 nhân viên AI'],['tasks','Công việc mẫu'],['rights','Quyền & nhật ký']];
+ const nav=[['all','Tổng quan'],['people','4 nhân viên AI'],['tasks','Điều phối thử nghiệm'],['rights','Quyền & nhật ký']];
  const body=css+'<div class="aiw"><div class="aiw-note"><b>FOUNDER ONLY · STAGING SYNTHETIC</b><div>Hiển thị cấu hình của bốn nhân viên AI. Không có agent đang chạy, không có dữ liệu hoặc hành động khách hàng thực.</div></div>'+
  '<div class="aiw-tabs" role="group" aria-label="Các mục Đội ngũ AI">'+nav.map(n=>'<button type="button" class="aiw-btn '+(state.tab===n[0]?'on':'')+'" data-aiw-tab="'+n[0]+'" aria-pressed="'+(state.tab===n[0])+'">'+n[1]+'</button>').join('')+'</div>'+
  (state.tab==='people'?people(ctx.ico):state.tab==='tasks'?tasks():state.tab==='rights'?rights():overview(ctx.ico))+
  '<div id="aiw-status" class="aiw-status" role="status" aria-live="polite"></div></div>';
- return ctx.page('Đội ngũ AI — Founder','Quản lý 4 hồ sơ nhân viên kỹ thuật · bản synthetic V1.0',
+ return ctx.page('Đội ngũ AI — Founder','Quản lý 4 hồ sơ AI và điều phối nhiệm vụ thử nghiệm · Shadow V1.1',
  [['users','Hồ sơ AI','4','','','Đã cấu hình GitHub'],
  ['bolt','Agent đang chạy','0','','','Runtime chưa kích hoạt'],
  ['tasks','Lượt thực thi','0','','','Không có execution thực'],
@@ -74,14 +107,41 @@ document.addEventListener('click',async event=>{
   note('Đã sao chép lệnh; mở ChatGPT Work để sử dụng. Không Agent nào được kích hoạt.');
  }catch(_){note('Không thể sao chép tự động. Hãy mở hồ sơ GitHub và sao chép thủ công.');}}
 });
+document.addEventListener('click',async event=>{
+ const el=event.target.closest('[data-aiw-preflight],[data-aiw-fixture],[data-aiw-handoff]');
+ if(!el)return;
+ const id=el.dataset.aiwPreflight||el.dataset.aiwFixture||el.dataset.aiwHandoff;
+ const task=state.tasks.find(x=>x.id===id);if(!task)return;
+ state.previewId=task.id;
+ const gate=policyPreview(task);
+ if(!gate.ok){task.status='HOLD · MANUAL_REVIEW';state.log.unshift(task.id+' · HOLD · '+gate.code);refresh();note('HOLD: phạm vi mẫu cần được xem xét, không có hành động nào đã chạy.');return;}
+ if(el.dataset.aiwPreflight){task.status='READY_FOR_MANUAL_WORK';state.log.unshift(task.id+' · local policy preview PASS (not server authorization)');refresh();note('Chỉ đạt kiểm tra fixture; không có lệnh nào được thực thi.');return;}
+ if(el.dataset.aiwFixture){
+  task.mockReport=fixtureReports[task.agent];task.status='MOCK_REPORT_READY';
+  state.log.unshift(task.id+' · MOCK only · no model, no server');
+  refresh();note('Đã tạo kết quả giả lập. Không có AI model nào được gọi.');return;
+ }
+ if(el.dataset.aiwHandoff){
+  const prompt=handoffText(task);
+  try{
+   if(!navigator.clipboard||!navigator.clipboard.writeText)throw Error('clipboard_disabled');
+   await navigator.clipboard.writeText(prompt);
+   task.status='HANDOFF_PREPARED';state.log.unshift(task.id+' · copied manual prompt (not executed)');
+   refresh();note('Đã sao chép. Mở ChatGPT Work và dán lệnh để chủ động giao việc; chưa có Agent nào chạy.');
+  }catch(_){
+   task.manualPrompt=prompt;task.status='READY_FOR_MANUAL_WORK';state.log.unshift(task.id+' · clipboard blocked, manual prompt shown');
+   refresh();note('Không có quyền clipboard. Lệnh đã hiển thị để sao chép thủ công.');
+  }
+ }
+});
 document.addEventListener('submit',event=>{
  if(event.target.id!=='aiw-form')return;event.preventDefault();
  const form=event.target,title=String(form.elements.namedItem('title').value||'').trim(),
  agent=String(form.elements.namedItem('agent').value||''),priority=String(form.elements.namedItem('priority').value||'');
  if(title.length<3||title.length>120||!agents.some(a=>a.id===agent)||!['P1','P2','P3'].includes(priority)){note('Thông tin mẫu không hợp lệ.');return;}
  const id='DEMO-AI-'+String(state.seq++).padStart(3,'0');
- state.tasks.unshift({id,title,agent,priority});state.log.unshift('Đã tạo '+id+' · chỉ lưu RAM');state.showForm=false;refresh();
+ state.tasks.unshift({id,title,agent,priority,status:'DRAFT'});state.previewId=id;state.log.unshift('Đã tạo '+id+' · chỉ lưu RAM');state.showForm=false;refresh();
  note('Đã tạo '+id+' trong RAM · KHÔNG giao việc cho AI thật.');
 });
-window.BV_AI_WORKFORCE=Object.freeze({page,version:'V1.0-synthetic',getSummary:()=>({profiles:4,runtime:0,tasksDemo:state.tasks.length})});
+window.BV_AI_WORKFORCE=Object.freeze({page,version:'V1.1-shadow-synthetic',getSummary:()=>({profiles:4,runtime:0,tasksDemo:state.tasks.length,modelCalls:0,backendWrites:0,ready:state.tasks.filter(t=>t.status==='READY_FOR_MANUAL_WORK').length})});
 })();

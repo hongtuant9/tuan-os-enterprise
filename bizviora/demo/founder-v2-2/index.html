@@ -13,6 +13,87 @@ html,body{margin:0;width:100%;height:100%;background:#f4f7fc;overflow:hidden}
 </head>
 <body>
 <iframe id="founder-frame" src="../founder-v2/" title="BIZVIORA Founder seven-tab V2.2 icon review" referrerpolicy="same-origin"></iframe>
-<script src="./iconography.js"></script>
+<script>
+(function(){
+"use strict";
+var src=document.getElementById("founder-frame");
+var paths={
+ building:'<path d="M4 21V4h16v17M8 8h3m3 0h3M8 12h3m3 0h3M8 16h3m3 0h3M3 21h18"/>',
+ users:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 5"/>',
+ calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 10h18M8 15h3m3 0h3"/>',
+ chart:'<path d="M3 20h18M5 17V9h3v8m3 0V4h3v13m3 0v-5h3v5"/>',
+ target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+ package:'<path d="m12 2 9 5-9 5-9-5 9-5Zm-9 5v10l9 5 9-5V7M12 12v10"/>',
+ clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9zm-1 9h8m-8 4h8"/>',
+ magic:'<path d="m12 2 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4L12 2Z"/>',
+ warning:'<path d="M12 3 22 21H2L12 3Zm0 6v5m0 3h.1"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+ check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+ shield:'<path d="m12 2 9 4v6c0 6-4 9-9 10-5-1-9-4-9-10V6l9-4Z"/><path d="m8 12 3 3 5-6"/>',
+ finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M5 9c2 0 3-1 3-2m11 8c-2 0-3 1-3 2"/>',
+ link:'<path d="M10 13a5 5 0 0 0 7.5 0l2-2a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7.5 0l-2 2a5 5 0 0 0 7 7l2-2"/>',
+ settings:'<circle cx="12" cy="12" r="3"/><path d="M10 2h4l.8 2.2 2.2.9 2.2-1 2.7 2.8-1.1 2.2.9 2.2 2.3.7v4l-2.3.8-.9 2.2 1.1 2.2-2.7 2.8-2.2-1-2.2.9L14 24h-4l-.8-2.2-2.2-.9-2.2 1-2.7-2.8 1.1-2.2-.9-2.2L0 14v-4l2.3-.8.9-2.2L2.1 4.8 4.8 2l2.2 1 2.2-.9L10 2Z"/>',
+ rocket:'<path d="M4 15c3-7 8-11 17-12-.8 9-5 14-12 17l-5-5ZM10 14l-3-3M14 10l-3-3M3 16l-1 5 5-1"/><circle cx="15" cy="9" r="2"/>',
+ globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-4 4-4 14 0 18m0-18c4 4 4 14 0 18"/>',
+ filter:'<path d="M4 5h16l-6.5 7v6l-3 2v-8Z"/>',
+ mail:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="m2 7 10 7 10-7"/>',
+ lightbulb:'<path d="M9 18h6m-5 4h4m-2-20a7 7 0 0 0-4 13c1.5 1.2 2 2.2 2 3h4c0-.8.5-1.8 2-3a7 7 0 0 0-4-13Z"/>'
+};
+var kpis={
+ marketing:['users','target','clipboard','chart','users','finance'],
+ sales:['target','calendar','finance','chart','clock','clipboard'],
+ onboarding:['rocket','check','package','globe','clock','warning'],
+ tasks:['clipboard','clock','mail','check','users','warning'],
+ approvals:['clipboard','clock','shield','warning','check','users'],
+ finance:['finance','chart','users','chart','settings','finance'],
+ audit:['shield','warning','package','link','users','shield']
+};
+var titles={
+ "Nguồn lead":"chart","Phễu chuyển đổi":"filter","Lead theo ngành":"chart","Hiệu quả chiến dịch":"target",
+ "Marketing Insight":"magic","Pipeline nội dung":"clipboard","Nguồn khách":"users",
+ "Pipeline bán hàng":"chart","Gói dịch vụ":"finance","Danh sách cơ hội":"target","Lịch demo":"calendar",
+ "Lý do thắng/thua":"chart","Sales Coach":"magic",
+ "Tổng quan tiến độ":"rocket","Lịch trình triển khai":"calendar","Chi tiết triển khai":"clipboard","AI gợi ý":"magic",
+ "Bảng công việc":"clipboard","Checklist":"check","Việc chờ duyệt":"clock","Lịch họp":"calendar","Chief of Staff":"magic",
+ "Hộp thư phê duyệt":"mail","Mức rủi ro":"warning","Quy tắc phê duyệt":"shield","Lưu ý bảo mật":"shield",
+ "Doanh thu":"chart","Top khách hàng":"users","Chi phí hạ tầng":"settings","Cơ cấu doanh thu":"chart","Việc cần xử lý":"warning",
+ "AI đề xuất":"magic","Audit log":"clipboard","Kiểm toán":"shield","Cổng bảo mật":"shield",
+ "Quy tắc AI":"shield","Kịch bản kiểm thử":"check","Kết nối hệ thống":"link","Quyền API":"shield",
+ "Hành động kỹ thuật":"settings","Ma trận quyền":"users","Nguyên tắc quyền":"shield",
+ "Thông tin hệ thống":"package","Chính sách":"settings","Cảnh báo":"warning"
+};
+function svg(name,size){var path=paths[name]||paths.package;return '<svg width="'+(size||17)+'" height="'+(size||17)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+path+'</svg>';}
+function getGlyph(phrase){for(var key in titles){if(phrase.indexOf(key)>=0)return titles[key];}return 'package';}
+function decorate(){
+ var d;try{d=src.contentDocument;}catch(e){return;}if(!d||!d.body)return;
+ var active=d.querySelector('.navbtn.on');var route=active&&active.getAttribute('data-nav');
+ if(!kpis[route]){d.body.classList.remove('fv22');return;}
+ d.body.classList.add('fv22');
+ var nodes=d.querySelectorAll('.kpi .kicon');
+ for(var i=0;i<nodes.length;i++){if(nodes[i].dataset.fv22==='yes')continue;nodes[i].innerHTML=svg(kpis[route][i]||'package',24);nodes[i].dataset.fv22='yes';}
+ var heads=d.querySelectorAll('.boxhead h2');
+ for(i=0;i<heads.length;i++){var h=heads[i];if(h.dataset.fv22==='yes')continue;var icon=d.createElement('span');icon.className='fv22-hicon';icon.innerHTML=svg(getGlyph(h.textContent),17);h.insertBefore(icon,h.firstChild);h.dataset.fv22='yes';}
+ var insights=d.querySelectorAll('.insight-line');
+ for(i=0;i<insights.length;i++){if(insights[i].dataset.fv22==='yes')continue;var el=d.createElement('span');el.className='fv22-insight';el.innerHTML=svg(['chart','lightbulb','target','warning'][i%4],17);var n=insights[i].querySelector('.insight-num');n&&n.after(el);insights[i].dataset.fv22='yes';}
+ if(route==='marketing'){var cols=d.querySelectorAll('.mk-col strong');for(i=0;i<cols.length;i++){if(cols[i].dataset.fv22)continue;cols[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(['lightbulb','clipboard','clock','check'][i%4],13)+'</span>');cols[i].dataset.fv22='yes';}}
+ if(route==='sales'){var stages=d.querySelectorAll('.stage strong');for(i=0;i<stages.length;i++){if(stages[i].dataset.fv22)continue;stages[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(['users','lightbulb','calendar','clipboard','target','check'][i%6],14)+'</span>');stages[i].dataset.fv22='yes';}var plans=d.querySelectorAll('.plan b');for(i=0;i<plans.length;i++){if(plans[i].dataset.fv22)continue;plans[i].insertAdjacentHTML('beforebegin','<span class="fv22-plan">'+svg(['package','finance','shield'][i%3],18)+'</span>');plans[i].dataset.fv22='yes';}}
+ if(route==='onboarding'){var lanes=d.querySelectorAll('.lanehead > span:first-child');for(i=0;i<lanes.length;i++){if(lanes[i].dataset.fv22)continue;lanes[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(['clipboard','rocket','settings','check','shield'][i%5],14)+'</span>');lanes[i].dataset.fv22='yes';}}
+ if(route==='tasks'){var taskheads=d.querySelectorAll('.lanehead > span:first-child');for(i=0;i<taskheads.length;i++){if(taskheads[i].dataset.fv22)continue;taskheads[i].textContent=taskheads[i].textContent.replace(/^[🔴🔵🟣🟢]\s*/u,'');taskheads[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(['warning','clock','shield','check'][i%4],15)+'</span>');taskheads[i].dataset.fv22='yes';}}
+ if(route==='finance'){var lg=d.querySelectorAll('.legendbar span');for(i=0;i<lg.length;i++){if(lg[i].dataset.fv22)continue;lg[i].textContent=lg[i].textContent.replace(/^🔵\s*/, '');lg[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(i?'chart':'finance',14)+'</span>');lg[i].dataset.fv22='yes';}}
+ if(route==='audit'){var tabs=d.querySelectorAll('.auditnav button');for(i=0;i<tabs.length;i++){if(tabs[i].dataset.fv22)continue;tabs[i].insertAdjacentHTML('afterbegin','<span class="fv22-inline">'+svg(['clipboard','shield','link','users','settings'][i%5],14)+'</span>');tabs[i].dataset.fv22='yes';}var cards=d.querySelectorAll('.auditcard .small-icon');for(i=0;i<cards.length;i++){if(cards[i].dataset.fv22)continue;cards[i].innerHTML=svg(['package','package','rocket','clipboard','target','link'][i%6],16);cards[i].dataset.fv22='yes';}}
+}
+function mount(){
+ var d;try{d=src.contentDocument;}catch(e){return;}if(!d||!d.body)return;
+ if(!d.getElementById('fv22-icons-style')){
+ var style=d.createElement('style');style.id='fv22-icons-style';
+ style.textContent='.fv22 .boxhead h2{display:flex;align-items:center;gap:6px}.fv22-hicon{color:#196fe7;display:inline-flex;flex:none;width:19px;height:19px;justify-content:center;align-items:center}.fv22-insight{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#7342db;background:#eee8ff;flex:none}.fv22-inline{display:inline-flex;align-items:center;vertical-align:middle;margin-right:5px;color:#176ee8}.fv22-plan{display:inline-flex;color:#1869e3;background:#e8f3ff;border-radius:6px;padding:5px;margin-bottom:4px}';
+ d.head.appendChild(style);
+ }
+ decorate();
+ var app=d.getElementById('app');if(app&&app.dataset.fv22Watching!=='yes'){app.dataset.fv22Watching='yes';var observer=new MutationObserver(function(){queueMicrotask(decorate);});observer.observe(app,{childList:true,subtree:true});}
+}
+if(src){src.addEventListener('load',mount);if(src.contentDocument&&src.contentDocument.readyState==='complete')mount();}
+})();
+</script>
 </body>
 </html>

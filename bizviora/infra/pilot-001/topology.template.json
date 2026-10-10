@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "0.1-draft",
+  "status": "NOT_DEPLOYED",
+  "decision": "DEC-BIZ-20261011-014",
+  "environment": "pilot-001-staging",
+  "host": "OVH_VPS2_UNVERIFIED_CAPACITY",
+  "tenant": "TUAN_OS_ENTERPRISE_001",
+  "liveProviderConnections": false,
+  "outboundMessagingEnabled": false,
+  "sharedPhysicalHost": true,
+  "logicalServices": [
+    {
+      "name": "bizviora-core",
+      "role": "portal-api-orchestration",
+      "isolation": "dedicated-container-identity",
+      "publicAccess": "NOT_APPROVED",
+      "illustrativeRamMiB": 1536,
+      "resourceCapApplicableOnlyIfHostVerified": true
+    },
+    {
+      "name": "browser-worker",
+      "role": "authorized-readonly-ota-backfill-and-daily-reconcile",
+      "isolation": "dedicated-container-identity",
+      "externalListeningPort": false,
+      "illustrativeRamMiB": 2048,
+      "maxConcurrentBrowserJobs": 1,
+      "jobQueue": "AUTHENTICATED_EXTERNAL_JOB_INTERFACE_PREFERRED",
+      "noLocalhostCoupling": true,
+      "sessionSecrets": "ENCRYPTED_TENANT_SCOPED_VAULT_TBD",
+      "outboundCustomerActions": "DISABLED"
+    }
+  ],
+  "releaseGates": [
+    "VERIFY_OVH_ACTUAL_HARDWARE_AND_CURRENT_BILLING",
+    "CHECK_TUAN_OS_PRODUCTION_HEADROOM",
+    "TEST_CORE_WORKER_SYNTHETIC_LOAD",
+    "ISOLATE_WORKER_WITH_RESOURCE_LIMITS",
+    "PROVIDER_AUTHORIZATION_AND_PRIVACY",
+    "TENANT_RLS_NEGATIVE_TEST",
+    "BACKUP_RESTORE_PASS",
+    "OWNER_L3_DEPLOY_APPROVAL"
+  ],
+  "migrationToSeparateVps": {
+    "requiresAppRewrite": false,
+    "queueConsumerLeaseHandover": true,
+    "parallelMode": "READ_ONLY_SHADOW",
+    "rollbackRequired": true,
+    "requiresSeparatePurchaseApproval": true
+  },
+  "reminders": [
+    "No Docker/OS/container service is started by this document.",
+    "All caps are hypothetical until benchmark.",
+    "Render Hobby demo remains unchanged."
+  ]
+}

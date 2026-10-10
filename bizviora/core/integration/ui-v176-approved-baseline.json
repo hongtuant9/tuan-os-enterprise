@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "product": "BIZVIORA",
+  "baseline": "UI_V1.7.6_APPROVED_DESIGN",
+  "approvedDecisionId": "DEC-BIZ-20261010-006",
+  "approvalScope": "DESIGN_ONLY",
+  "zipName": "BIZVIORA_UI_V1_7_6_APPROVED_DESIGN_BASELINE_SYNTHETIC.zip",
+  "zipBytes": 33458101,
+  "zipSha256": "6b2512c8b0eed00902291e53452c462dafdc1b2cdee8ef5c640a3660437c732b",
+  "htmlPath": "BIZVIORA_UI_V1_7_6/index.html",
+  "htmlBytes": 331636,
+  "htmlSha256": "9d73b6a465cffead74d0c25fada723b9d11b2a5648aec58813636b42882c15ea",
+  "existingGitDemoHtmlSha256": "f959d62e7b96b491564f8d33dbe0a60300859c210de99a210dd32be131ff3a97",
+  "tabs": [
+    "overview",
+    "assistant",
+    "tasks",
+    "approvals",
+    "customers",
+    "customer",
+    "marketing",
+    "operations",
+    "finance",
+    "hr",
+    "analytics",
+    "data",
+    "reports",
+    "settings"
+  ],
+  "qaClaims": {
+    "interaction": [
+      33,
+      33
+    ],
+    "scenario": [
+      7,
+      7
+    ],
+    "renderTabs": [
+      14,
+      14
+    ],
+    "source": "ZIP embedded reports; NOT re-tested after live integration"
+  },
+  "realAuthTest": "NOT_RUN",
+  "liveOTASync": "NOT_RUN",
+  "autoSend": false,
+  "bookingWrite": false,
+  "productionApproved": false
+}

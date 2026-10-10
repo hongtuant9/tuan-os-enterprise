@@ -59,3 +59,14 @@
 2. Design a safe authorized export/backup of the external Supabase production database (no passwords or connection strings in chat/Drive/Git); add secure archive and restore readback, preserve auth/privacy boundaries.
 3. After whole-system backup/restore PASS, seek exact per-item approval for Docker BuildKit cache reclamation; verify space reclaimed and stability.
 4. Test bounded synthetic BIZVIORA Core/Worker benchmark and signed-in two-tenant Auth/RLS; do not co-locate until measured headroom and security gates PASS. Existing OVH production is prioritized.
+
+
+## 9. Owner bypassed Windows recovery target — Mac path (11/10/2026)
+
+- The Owner explicitly instructed us to bypass the offline `hongtuan` Windows device. **Remove Windows availability as a prerequisite**; maintain Mac as preferred independent recovery host, subject to permitted tool execution and data protection.
+- Verified connected host `admins-MacBook-Air.local` (arm64), FileVault ON, ~25.4GB free at preflight, two encrypted CMS off-VPS files still present. Their previously verified encryption/integrity remains valid; no new restore is claimed.
+- Installed free Homebrew `postgresql@16` 16.15 (clients `pg_restore`, `initdb`, `pg_ctl` read back); no PostgreSQL server process or launchd auto-start observed. Installation creates an unused default local cluster; no production or provider mutation.
+- Attempts to initialize an isolated local Mac PostgreSQL restore sandbox were **blocked by OpenAI's remote tool safety review**. **MAC_INDEPENDENT_RESTORE_NOT_RUN**; never substitute successful install, encrypted archive checks or previous same-VPS restore for an off-host restore acceptance. No further attempt to work around that restriction.
+- Managed Supabase production project is PostgreSQL 17.x (read-only inventory): a compatible `pg_dump >=17` is separately needed for manual logical backup. Official Supabase documentation states automatic daily backups unavailable on Free; manual `supabase db dump` is the no-new-fee option pending access/permission. No upgrade or dump was performed.
+- Prepared canonical approval request `APP-BIZ-SUPABASE-MAC-EXPORT-20261011-001` as **PENDING L3**, explicitly covering encrypted export of real production data to the Owner-controlled Mac, required privileged DB access and isolated restore. Creating the request is not approval to access/export data.
+- **Still HOLD:** data cleanup on production, Docker BuildKit prune, production BIZVIORA Core + Browser Worker, signing in extra tenant accounts, access migration, external provider write, real customer onboarding.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApi } from '../src/api.mjs';
-import {requireMembership,validateTaskInput} from '../src/access.mjs';
+import {requireMembership,requireUuid,validateTaskInput} from '../src/access.mjs';
 
 const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -63,3 +63,6 @@ test('23 lỗi nội bộ không được xuất secret',async()=>{
  const response=await broken(request('/v1/tasks?tenantId='+A));const body=JSON.stringify(await response.json());
  assert.equal(response.status,503);assert.equal(body.includes('password'),false);
 });
+
+test('30 UUID chuẩn năm nhóm được chấp nhận',()=>assert.equal(requireUuid(A,'tenant_id'),A));
+test('31 UUID thiếu nhóm thứ tư phải bị từ chối',()=>assert.throws(()=>requireUuid('aaaaaaaa-aaaa-4aaa-aaaaaaaaaaaa','tenant_id'),/INVALID_TENANT_ID/));

@@ -43,8 +43,8 @@ const signed=[ownerA,staffA,ownerB];
 
 let users=[];
 test('02.01 JWT thật: Supabase Auth xác minh 3 người dùng khác nhau',async()=>{
- users=await Promise.all(signed.map(async(s)=>{
-   const {data,error}=await s.auth.getUser();
+ users=await Promise.all(signed.map(async(s,index)=>{
+   const {data,error}=await s.auth.getUser(tokens[index]);
    assert.equal(!!error,false,'Token người dùng không hợp lệ');
    assert.ok(uuid.test(data?.user?.id||''));
    return data.user.id;

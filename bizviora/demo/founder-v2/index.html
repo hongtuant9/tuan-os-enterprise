@@ -501,6 +501,33 @@
 #viewport[data-route="sales"] .plan-cards{padding-top:17px}
 #viewport[data-route="sales"] .bv-plan-fidelity button{min-height:32px;margin-top:auto}
 @media(max-width:930px){#viewport[data-route="marketing"] .bv-geodist{grid-template-columns:1fr}#viewport[data-route="marketing"] .bv-geo-plot svg{max-height:160px}}
+
+/* Fidelity acceptance: first viewport panel heights and mobile x-axis integrity */
+#viewport[data-route="marketing"] .mktriple{height:258px}
+#viewport[data-route="marketing"] .mktriple>.box{height:258px;overflow:hidden;padding:10px}
+#viewport[data-route="marketing"] .mktriple .boxhead{margin-bottom:7px}
+#viewport[data-route="marketing"] .stackgraph{height:160px}
+#viewport[data-route="marketing"] .funnel-row{min-height:31px;padding:1px 0}
+#viewport[data-route="marketing"] .mktriple .ring{height:124px;width:124px}
+#viewport[data-route="marketing"] .mktriple .ring:before{height:79px;width:79px}
+#viewport[data-route="marketing"] .mktriple .ring strong{font-size:19px}
+#viewport[data-route="marketing"]>.layout.cols72{align-items:start}
+#viewport[data-route="marketing"]>.layout.cols72>.stack>.box{height:235px;overflow:hidden;padding:10px}
+#viewport[data-route="marketing"]>.layout.cols72 .boxhead{margin-bottom:7px}
+#viewport[data-route="marketing"]>.layout.cols72 .tablewrap{max-height:166px;overflow-y:auto}
+#viewport[data-route="marketing"]>.layout.cols72 .tbl th,#viewport[data-route="marketing"]>.layout.cols72 .tbl td{padding:5px}
+#viewport[data-route="marketing"]>.layout.cols72 .insight-line{padding:5px 0;line-height:1.25}
+#viewport[data-route="sales"] .bv-sales-top .boxhead{margin-bottom:6px}
+#viewport[data-route="sales"] .bv-sales-top .bv-meta-flow{margin-bottom:4px}
+#viewport[data-route="sales"] .bv-sales-top .stage{min-height:104px;padding:9px 2px}
+#viewport[data-route="sales"] .bv-sales-top .callout-safe{padding:5px;margin-top:6px;font-size:9px}
+#viewport[data-route="sales"] .bv-sales-top .plan-cards{padding-top:11px}
+#viewport[data-route="sales"] .bv-sales-top .bv-plan-fidelity{gap:3px;padding:5px}
+#viewport[data-route="sales"] .bv-sales-top .bv-plan-features{padding:2px 0}
+#viewport[data-route="sales"] .bv-sales-top .bv-plan-features>div{margin:2px 0;line-height:1.24}
+#viewport[data-route="sales"] .bv-sales-top .bv-plan-fidelity button{min-height:26px;padding:5px}
+#viewport[data-route="sales"] .bv-plan-ribbon{top:-11px}
+@media(max-width:650px){.topbar{padding-right:11px}.topright{gap:6px}.top-profile{gap:4px}.global-search{width:49vw}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}
@@ -939,8 +966,7 @@ function bvFidelityPolish(){
   ];
   plans.forEach((card,i)=>{
    card.classList.add('bv-plan-fidelity');
-   const head=document.createElement('div');head.className='bv-plan-icon';head.innerHTML=ico(['cube','finance','building'][i],22);
-   card.prepend(head);
+   // The existing icon renderer owns plan glyphs; avoid inserting a duplicate icon.
    if(i===1){const tag=document.createElement('span');tag.className='bv-plan-ribbon';tag.textContent='Gói nổi bật';card.prepend(tag);}
    const list=document.createElement('div');list.className='bv-plan-features';
    features[i].forEach(label=>{const div=document.createElement('div');div.innerHTML=ico('check',13);const text=document.createElement('span');text.textContent=label;div.appendChild(text);list.appendChild(div);});

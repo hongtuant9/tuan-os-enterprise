@@ -38,8 +38,8 @@ BEGIN
  THEN RAISE EXCEPTION 'SNAPSHOT_INCOMPLETE'; END IF;
 END $$;
 -- Giả lập mất dữ liệu chỉ trong transaction synthetic, sau đó khôi phục từ bản sao TEMP.
-DELETE FROM public.bv_audit_events;
 DELETE FROM public.bv_tasks;
+DELETE FROM public.bv_audit_events;
 DELETE FROM public.bv_properties;
 DELETE FROM public.bv_business_units;
 DELETE FROM public.bv_memberships;

@@ -2,7 +2,7 @@
 export class ApiError extends Error {
   constructor(status, code) { super(code); this.status = status; this.code = code; }
 }
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const ROLE_RANK = Object.freeze({ staff: 1, manager: 2, admin: 3, owner: 4 });
 export function requireUuid(value, field='id') {
   if (typeof value !== 'string' || !UUID.test(value))

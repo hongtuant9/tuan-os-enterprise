@@ -612,6 +612,32 @@
 #viewport[data-route="approvals"] .bv-brief-ring b{font-size:24px}
 #viewport[data-route="approvals"] .bv-brief-ring small{font-size:8px;text-align:center;color:#768aa6}
 #viewport[data-route="approvals"] .bv-brief-gauge p{font-size:10px;line-height:1.45;color:#7686a1}
+
+/* V2.5 global reference design system — visual only */
+#viewport .bv-v25-pagehead h1{font-size:27px;line-height:1.15;font-weight:850;letter-spacing:-.7px;color:#081c43}
+#viewport .bv-v25-pagehead p{font-size:12px;line-height:1.5;color:#355a94;margin-top:4px}
+#viewport .boxhead h2,#viewport .fv-heading h2{font-size:13px;font-weight:800;letter-spacing:-.18px}
+#viewport .box,#viewport .fv-panel{border-color:#e0e8f5;border-radius:9px}
+#viewport .kpi{border-color:#e3eaf5;border-radius:8px}
+#viewport .tablewrap{scrollbar-width:thin}
+#viewport[data-route="overview"] .bv-reference-name{display:flex;align-items:center;gap:7px}
+#viewport[data-route="overview"] .bv-reference-name svg{width:25px;height:25px;flex:0 0 25px}
+#viewport[data-route="overview"] .fv-over-top .fv-panel,#viewport[data-route="overview"] .fv-over-middle .fv-panel{min-width:0}
+#viewport[data-route="finance"] .bv-finance-triple .ring{max-width:130px}
+#viewport[data-route="finance"] .bv-finance-triple .ring strong{font-size:15px;line-height:1.1;letter-spacing:-.3px}
+#viewport[data-route="finance"] .bv-finance-insight{padding:6px 9px}
+#viewport[data-route="finance"] .bv-finance-insight .insight-num{flex-shrink:0}
+#viewport[data-route="audit"] .bv-audit-status{line-height:1.4}
+#viewport[data-route="audit"] .bv-audit-status span:first-child{font-size:10px;min-width:0}
+#viewport[data-route="audit"] .bv-audit-connect{padding:9px 4px;min-height:79px}
+#viewport[data-route="audit"] .bv-audit-connect small{line-height:1.4}
+@media(max-width:700px){
+ #viewport .bv-v25-pagehead h1{font-size:21px;letter-spacing:-.35px}
+ #viewport .bv-v25-pagehead p{font-size:10px}
+ #viewport[data-route="overview"] .fv-smalltbl{min-width:530px}
+ #viewport[data-route="products"] .fv-flags-table{min-width:720px}
+ #viewport[data-route="audit"] .bv-role-matrix{min-width:440px}
+}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}
@@ -652,7 +678,7 @@ function badge(s){const cls={'active':'green','trial':'blue','pilot':'purple','p
 const meter=n=>`<span class="meter"><i style="width:${Math.max(0,Math.min(100,n))}%"></i></span>`;
 const avatar=(s,i=0)=>`<span class="thumb alt${i%5}">${String(s).split(' ').slice(-2).map(x=>x[0]).join('').slice(0,2).toUpperCase()}</span>`;
 function kpis(a){return `<div class="kpis">${a.map(x=>`<div class="kpi"><div class="kicon ${x[4]||''}">${['overview','tenants','products'].includes(S.route)?fvKpiGlyph(x[0],x[1],a.indexOf(x)):ico(x[0],23)}</div><div class="kdesc"><small>${x[1]}</small><div class="big ${String(x[2]).length>9?'money':''}">${x[2]}${x[3]?`<span class="delta ${String(x[3]).startsWith('↓')?'bad':''}">${x[3]}</span>`:''}</div><span class="sub">${x[5]||'Số liệu minh họa · DEMO'}</span></div></div>`).join('')}</div>`}
-function page(title,sub,stats,content){return `<div class="pagehead"><div><h1>${title}</h1><p>${sub}</p></div><button class="datebtn" id="choose-period">${ico('calendar',16)} <span>10/10/2026 · ${S.period} ngày mẫu</span> ⌄</button></div>${stats?kpis(stats):''}${content}`}
+function page(title,sub,stats,content){const greeting=['overview','marketing','sales','onboarding','tasks','approvals','finance'].includes(S.route);const headline=greeting?'Xin chào, Founder! 👋':title;const descriptor=greeting?title+' — '+sub:sub;return `<div class="pagehead bv-v25-pagehead"><div><h1>${headline}</h1><p>${descriptor}</p></div><button class="datebtn" id="choose-period">${ico('calendar',16)} <span>10/10/2026 · ${S.period} ngày mẫu</span> ⌄</button></div>${stats?kpis(stats):''}${content}`}
 function box(title,content,link='',more=''){return `<section class="box"><div class="boxhead"><h2>${title}</h2>${more|| (link?`<button class="link" data-nav="${link}">Xem chi tiết →</button>`:'')}</div>${content}</section>`}
 function lineChart(values,variant='barline',labels=['T5','T6','T7','T8','T9','T10','T11','T12','T1','T2','T3','T4']){const v=Math.max(1,...values)*1.2;const W=810,H=207,l=38,t=15,b=30,r=35,xw=W-l-r,yh=H-t-b;let grid='';for(let i=0;i<=4;i++){let y=t+i*yh/4;grid+=`<line class="grid" x1="${l}" y1="${y}" x2="${W-r}" y2="${y}"/><text x="${l-9}" y="${y+3}" text-anchor="end">${Math.round(v*(4-i)/4)}</text>`}let bars='',pts=[];values.forEach((n,i)=>{const x=l+((i+.5)*xw/values.length),y=t+yh*(1-n/v),bw=xw/values.length*.54;bars+=`<rect class="bar" x="${x-bw/2}" y="${y}" width="${bw}" height="${t+yh-y}" rx="3"/>`;pts.push([x,t+yh*(1-(n*.83+15)/v)]);grid+=`<text x="${x}" y="${H-10}" text-anchor="middle">${labels[i%labels.length]}</text>`});const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');return `<svg class="chart" role="img" aria-label="Biểu đồ tăng trưởng dữ liệu DEMO" viewBox="0 0 ${W} ${H}">${grid}${variant.includes('bar')?bars:''}<path class="line" d="${path}"/>${pts.map(p=>`<circle class="point" cx="${p[0]}" cy="${p[1]}" r="3.4"/>`).join('')}<line class="axis" x1="${l}" y1="${t+yh}" x2="${W-r}" y2="${t+yh}"/></svg>`}
 function donut(segments,total='128'){const cols=['#1163e3','#3d94f4','#91c9ff','#cddff5'];let v=segments.map(x=>x[1]),all=v.reduce((x,y)=>x+y,0)||1;let acc=0;let str=v.map((n,i)=>{const start=acc/all*100;acc+=n;return `${cols[i%cols.length]} ${start}% ${acc/all*100}%`}).join(',');return `<div style="display:flex;gap:14px;align-items:center"><div class="ring" style="background:conic-gradient(${str})"><strong>${total}</strong><span>mẫu · DEMO</span></div><div class="legend">${segments.map((a,i)=>`<div class="legend-line"><span><i class="dot" style="--dot:${cols[i%cols.length]}"></i>${a[0]}</span><b>${a[1]} (${Math.round(a[1]/all*100)}%)</b></div>`).join('')}</div></div>`}
@@ -756,7 +782,7 @@ function fvOverviewChart(){
 function overview(){
  const t=[['The Mong Homestay','Homestay','Pro','Đang triển khai','12/10/2026','Mai'],['Xóm Cafe','Café','Standard','Hoàn thành','11/10/2026','Hùng'],['Minh Châu Hotel','Khách sạn','Pro','Đang cấu hình','10/10/2026','Tâm'],['Nhà hàng Bếp Việt','Nhà hàng','Pro','Cần hỗ trợ','09/10/2026','Minh'],['Sunrise Villa','Homestay','Business','Hoàn thành','08/10/2026','Vũ']];
  const table=(heads,rows)=>`<table class="fv-smalltbl"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(a=>`<tr>${a.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
- const deploy=table(['#','Doanh nghiệp','Ngành','Gói','Trạng thái','Ngày bắt đầu','Phụ trách',''],t.map((a,i)=>[i+1,`<b>${a[0]}</b>`,a[1],a[2],`<span class="fv-mini-tag ${a[3]==='Hoàn thành'?'green':a[3]==='Cần hỗ trợ'?'orange':''}">${a[3]}</span>`,a[4],a[5],`<button class="fv-smallbtn" data-demo-action="Xem triển khai ${a[0]}">•••</button>`]));
+ const deploy=table(['#','Doanh nghiệp','Ngành','Gói','Trạng thái','Ngày bắt đầu','Phụ trách',''],t.map((a,i)=>[i+1,`<span class="bv-reference-name">${bvDemoScenery(i)}<b>${a[0]}</b></span>`,a[1],a[2],`<span class="fv-mini-tag ${a[3]==='Hoàn thành'?'green':a[3]==='Cần hỗ trợ'?'orange':''}">${a[3]}</span>`,a[4],a[5],`<button class="fv-smallbtn" data-demo-action="Xem triển khai ${a[0]}">•••</button>`]));
  const news=[["MRR đang tăng trưởng tích cực","Dữ liệu tăng trưởng giả lập; cần nguồn hóa đơn thật.","Xem chi tiết"],["Tỷ lệ kích hoạt cải thiện","82 / 128 tài khoản thử nghiệm đã kích hoạt · DEMO.","Xem gợi ý"],["Cơ hội mở rộng Enterprise","Khách hàng có nhu cầu nâng gói là ví dụ minh họa.","Xem danh sách"],["6 cảnh báo mức cao cần xử lý","Tình trạng hệ thống thật đang ở security HOLD.","Xem ngay"]];
  const insight=news.map((n,i)=>`<div class="fv-insight"><span class="fv-ins-num">${i+1}</span>${fvInsightSymbol(['trending-up','users-plus','chart-column','warning'][i],['green','purple','orange','red'][i])}<div class="fv-ins-body"><b>${n[0]}</b><small>${n[1]}</small></div><button type="button" data-demo-action="${n[2]}">${n[2]}</button></div>`).join('');
  const opportunity=table(['Doanh nghiệp','Ngành','Cơ hội','Ước tính mẫu','Giai đoạn',''],[['An Yên Hotel','Khách sạn','Nâng lên Business','25.000.000đ','Đàm phán','▸'],['Coco Homestay','Homestay','Thêm module POS','10.000.000đ','Đề xuất','▸'],['Lá Café Đà Lạt','Café','Nâng cấp Pro','12.500.000đ','Quan tâm','▸'],['Sunrise Villa','Homestay','Mở rộng nhiều cơ sở','45.000.000đ','Đánh giá','▸']]);

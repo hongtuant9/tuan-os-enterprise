@@ -5,7 +5,8 @@ const QA_SCENARIOS=Object.freeze({
  approve:{email:'hongtuant9+bizviora-qa-approve-20261011@gmail.com',name:'BIZVIORA QA Approval 001',contact:'Synthetic Tester A',plan:'TRIAL_7D'},
  reject:{email:'hongtuant9+bizviora-qa-reject-20261011@gmail.com',name:'BIZVIORA QA Rejection 002',contact:'Synthetic Tester B',plan:'CUSTOM_QUOTE'}
 });
-const qaScenario=QA_SCENARIOS[new URLSearchParams(location.search).get('qa')]||null;
+const qaKey=new URLSearchParams(location.search).get('qa');
+const qaScenario=Object.prototype.hasOwnProperty.call(QA_SCENARIOS,qaKey)?QA_SCENARIOS[qaKey]:null;
 const qaEmails=new Set(Object.values(QA_SCENARIOS).map(s=>s.email));
 const isQaUser=()=>qaEmails.has(user?.email?.toLowerCase());
 const $=id=>document.getElementById(id);
@@ -203,7 +204,7 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   signupEnabled=c.signupEnabled===true;
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
   $('register-submit').disabled=!signupEnabled&&!qaScenario;
-  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Staging chỉ cho phép email chủ sở hữu và 2 email QA giả lập được chỉ định qua biểu mẫu này. Đăng ký công khai chưa mở. Đăng ký tài khoản không cấp quyền tenant hoặc quyền Platform Manager.';$('register').append(w);}
+  if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Biểu mẫu staging chỉ hỗ trợ email chủ sở hữu và 2 alias QA chỉ định. Đây là giới hạn giao diện, KHÔNG phải khóa API Auth ở backend. Đăng ký không cấp quyền tenant hoặc Platform Manager; chưa mở khách hàng thật.';$('register').append(w);}
   await refresh();
   client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){$('portal-frame').removeAttribute('src');user=null;show('login');}});
  }catch{show('login');$('login-form').querySelector('button').disabled=true;$('show-register').disabled=true;failed('STAGING_CONFIG_NOT_READY');}

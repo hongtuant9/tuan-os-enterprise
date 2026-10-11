@@ -834,6 +834,20 @@
 @media(max-width:1400px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:repeat(2,minmax(0,1fr))}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:1/-1}}
 @media(max-width:880px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:1fr}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:auto}#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:1fr}#viewport[data-route="audit"] .bv-audit-integ{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V2.5 reference-verified 2026-10-11: nested enterprise rows must not inherit 'last-child spans full row'. */
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel:last-child{grid-column:auto;grid-row:auto;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel:first-child{grid-column:auto;grid-row:auto;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel{margin:0;width:100%;max-width:100%;min-height:200px}
+#viewport[data-route="tenants"] .fv-module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#viewport[data-route="tenants"] .fv-module-grid .fv-svg{flex:0 0 auto}
+#viewport[data-route="tenants"] .fv-module-grid small,#viewport[data-route="tenants"] .fv-module-grid b{overflow-wrap:anywhere}
+#viewport[data-route="tenants"] .fv-upsell-table{table-layout:auto}
+#viewport[data-route="products"] .fv-feedback-row{grid-template-columns:auto minmax(0,1fr) auto;min-width:0}
+#viewport[data-route="products"] .fv-feedback-row b{min-width:0;overflow-wrap:anywhere;white-space:normal;word-break:normal}
+#viewport[data-route="products"] .fv-feedback-row small{min-width:0;overflow-wrap:anywhere}
+@media(max-width:720px){#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr}#viewport[data-route="products"] .fv-feedback-row{grid-template-columns:auto minmax(0,1fr)}#viewport[data-route="products"] .fv-feedback-row small{grid-column:2}}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

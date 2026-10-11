@@ -854,6 +854,11 @@
 #viewport[data-route="tenants"] .fv-mod-cell b{white-space:normal;text-overflow:clip;overflow:visible;word-break:normal;overflow-wrap:anywhere;line-height:1.28;min-height:23px;font-size:9px}
 #viewport[data-route="tenants"] .fv-mod-cell small{white-space:normal;word-break:normal;overflow-wrap:anywhere;line-height:1.25}
 #viewport[data-route="tenants"] .fv-mod-cell .fv-svg{margin-bottom:3px}
+
+/* Restore block layout inside narrow module tiles: flex intrinsic sizing caused horizontal overflow. */
+#viewport[data-route="tenants"] .fv-mod-cell{display:block;min-width:0;max-width:100%;overflow:hidden}
+#viewport[data-route="tenants"] .fv-mod-cell b,#viewport[data-route="tenants"] .fv-mod-cell small{display:block;min-width:0;max-width:100%;width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+#viewport[data-route="tenants"] .fv-mod-cell .fv-module-symbol{display:inline-flex;width:25px;height:25px;margin:0 0 3px}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

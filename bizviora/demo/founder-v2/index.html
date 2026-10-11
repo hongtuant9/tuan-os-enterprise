@@ -721,6 +721,144 @@
 #viewport[data-route="tasks"] .bv-work-top .tablefoot{padding:3px 0}
 #viewport[data-route="onboarding"] .bv-onb-kanban .lane{min-height:0}
 #viewport[data-route="onboarding"] .bv-onb-kanban .footnote{margin-top:2px}
+
+/* V2.5 owner-reference fidelity phase 1: Tenant → Product → Marketing.
+   Scoped, review-only; no Auth/RLS/provider/data mutations. */
+#viewport[data-route="tenants"] .fv-enterprise-split{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1.15fr);gap:10px;align-items:start}
+#viewport[data-route="tenants"] .fv-tenant-tbl th,#viewport[data-route="tenants"] .fv-tenant-tbl td{padding:8px 5px}
+#viewport[data-route="tenants"] .fv-tenant-tbl .tdname .thumb{width:30px;height:30px;border-radius:6px}
+#viewport[data-route="tenants"] .fv-tenant-toolbar{margin-bottom:11px}
+#viewport[data-route="tenants"] .fv-tenant-filterline{padding:6px 0 4px}
+#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero{display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:center;margin:6px 0 12px}
+#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero .thumb{width:88px;height:72px;border-radius:9px}
+#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero h3{font-size:17px;line-height:1.3;margin-bottom:5px}
+#viewport[data-route="tenants"] .fv-company-panel .tabs{border-top:1px solid #e8edf5;padding-top:8px}
+#viewport[data-route="tenants"] .fv-enterprise-right{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:9px;align-content:start}
+#viewport[data-route="tenants"] .fv-enterprise-right .fv-panel{min-height:175px}
+#viewport[data-route="tenants"] .fv-enterprise-right .fv-panel:last-child{grid-column:1/-1}
+#viewport[data-route="tenants"] .fv-business-overview{gap:11px}
+#viewport[data-route="tenants"] .fv-profile-matrix{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#viewport[data-route="tenants"] .fv-profile-item{background:#f6f9ff;border:1px solid #eaf0f9;border-radius:7px;padding:8px}
+#viewport[data-route="products"] .fv-products-top{grid-template-columns:minmax(0,1.07fr) minmax(0,1fr);min-height:305px;height:auto}
+#viewport[data-route="products"] .fv-products-mid{grid-template-columns:minmax(0,1.14fr) minmax(0,1fr);height:auto;min-height:210px}
+#viewport[data-route="products"] .fv-products-bottom{grid-template-columns:minmax(0,1.14fr) minmax(0,1fr);height:auto;min-height:168px}
+#viewport[data-route="products"] .fv-prod-cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#viewport[data-route="products"] .fv-prod-card{padding:9px;min-height:112px;transition:box-shadow .18s,border-color .18s}
+#viewport[data-route="products"] .fv-prod-card:hover{border-color:#9cbbef;box-shadow:0 3px 12px #2864a51b}
+#viewport[data-route="products"] .fv-prod-card b{font-size:10px}
+#viewport[data-route="products"] .fv-prod-card small{font-size:9px;min-height:23px}
+#viewport[data-route="products"] .fv-prod-road{row-gap:4px}
+#viewport[data-route="products"] .fv-prod-segment{min-height:21px}
+#viewport[data-route="products"] .fv-products-mid .fv-panel,#viewport[data-route="products"] .fv-products-bottom .fv-panel{padding:10px 12px}
+#viewport[data-route="marketing"]>.mktriple{grid-template-columns:minmax(0,1.55fr) minmax(0,.83fr) minmax(0,.95fr)}
+#viewport[data-route="marketing"] .mktriple .box{padding:12px;min-width:0}
+#viewport[data-route="marketing"]>.layout.cols72{grid-template-columns:minmax(0,1.42fr) minmax(0,1fr)}
+#viewport[data-route="marketing"] .mini-kanban{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+#viewport[data-route="marketing"] .mk-card{min-height:56px;padding:7px}
+#viewport[data-route="marketing"] .bv-geo-block{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+#viewport[data-route="marketing"] .bv-geo-row{padding:6px 0}
+#viewport[data-route="marketing"] .stackgraph{min-height:204px}
+@media(max-width:1320px){#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-enterprise-right .fv-panel:last-child{grid-column:auto}#viewport[data-route="products"] .fv-products-top,#viewport[data-route="marketing"]>.mktriple{grid-template-columns:1fr 1fr}#viewport[data-route="marketing"]>.mktriple>.box:first-child{grid-column:1/-1}}
+@media(max-width:920px){#viewport[data-route="tenants"] .fv-enterprise-split,#viewport[data-route="products"] .fv-products-top,#viewport[data-route="products"] .fv-products-mid,#viewport[data-route="products"] .fv-products-bottom,#viewport[data-route="marketing"]>.mktriple,#viewport[data-route="marketing"]>.layout.cols72{grid-template-columns:1fr}#viewport[data-route="marketing"]>.mktriple>.box:first-child{grid-column:auto}#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){#viewport[data-route="tenants"] .fv-enterprise-right{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero{grid-template-columns:65px 1fr}#viewport[data-route="tenants"] .fv-company-panel .bv-tenant-hero .thumb{width:65px;height:65px}#viewport[data-route="products"] .fv-prod-cards,#viewport[data-route="marketing"] .mini-kanban{grid-template-columns:repeat(2,minmax(0,1fr))}#viewport[data-route="tenants"] .fv-tenant-tbl{min-width:780px}}
+
+/* V2.5 critical structural correction: enterprise page must have TWO top-level columns.
+   The right panel itself is full width; only its two secondary rows are split 50/50. */
+#viewport[data-route="tenants"] .fv-enterprise-grid{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);gap:11px;align-items:start}
+#viewport[data-route="tenants"] .fv-enterprise-grid>.fv-panel,#viewport[data-route="tenants"] .fv-enterprise-grid>.fv-enterprise-right{min-width:0;width:100%}
+#viewport[data-route="tenants"] .fv-enterprise-right{display:flex;flex-direction:column;gap:9px;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-company-panel{width:100%;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel{width:100%;min-width:0;max-width:100%}
+#viewport[data-route="tenants"] .fv-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+#viewport[data-route="tenants"] .fv-module-grid>*{min-width:0;overflow-wrap:anywhere}
+@media(max-width:1120px){#viewport[data-route="tenants"] .fv-enterprise-grid{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr}#viewport[data-route="tenants"] .fv-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V2.5 owner infographic phase 2: reference proportions for Sales → Approvals. */
+#viewport[data-route="sales"]>.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-top{grid-template-columns:minmax(0,1.53fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"]>.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-mid{grid-template-columns:minmax(0,1.68fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"]>.bv-sales-bottom,#viewport[data-route="sales"]>.layout.bv-sales-bottom{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:10px}
+#viewport[data-route="sales"] .stage{min-height:124px}
+#viewport[data-route="sales"] .stage b{font-size:20px}
+#viewport[data-route="sales"] .bv-sales-conv span{font-size:10px;min-height:37px}
+#viewport[data-route="sales"] .plan{padding:11px 8px}
+#viewport[data-route="sales"] .plan .tag{margin-top:5px}
+#viewport[data-route="sales"] .bv-sales-mid .tablewrap{overflow-x:auto}
+#viewport[data-route="onboarding"] .bv-onb-full>.box{padding:12px}
+#viewport[data-route="onboarding"] .bv-onb-kanban{gap:7px}
+#viewport[data-route="onboarding"] .bv-onb-kanban .lane{padding:6px;min-width:0}
+#viewport[data-route="onboarding"] .bv-onb-kanban .lanehead{min-height:36px;align-items:center}
+#viewport[data-route="onboarding"] .bv-onb-kanban .workcard{min-height:104px;padding:7px 6px;margin-bottom:6px}
+#viewport[data-route="onboarding"] .bv-onb-kanban .workcard b{font-size:10px}
+#viewport[data-route="onboarding"] .bv-onb-triple{grid-template-columns:minmax(0,1.12fr) minmax(0,.98fr) minmax(0,1.13fr);gap:10px}
+#viewport[data-route="onboarding"] .bv-onb-bottom{grid-template-columns:minmax(0,1.58fr) minmax(0,1fr)}
+#viewport[data-route="tasks"] .bv-work-top{grid-template-columns:minmax(0,1.95fr) minmax(0,.98fr);gap:10px}
+#viewport[data-route="tasks"] .bv-work-bottom{grid-template-columns:minmax(0,1.95fr) minmax(0,.98fr);gap:10px}
+#viewport[data-route="tasks"] .bv-task-kanban{gap:7px}
+#viewport[data-route="tasks"] .bv-task-kanban .lane{padding:6px}
+#viewport[data-route="tasks"] .bv-task-kanban .workcard{min-height:126px;padding:9px 7px;margin-bottom:6px}
+#viewport[data-route="tasks"] .bv-task-kanban .workcard b{font-size:10px;line-height:1.35}
+#viewport[data-route="tasks"] .bv-work-side .bv-extra-panel{padding:13px}
+#viewport[data-route="tasks"] .bv-load-track{margin-bottom:11px}
+#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:11px}
+#viewport[data-route="approvals"] .bv-approve-bottom{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:11px}
+#viewport[data-route="approvals"] .bv-approve-inbox .tablewrap{min-width:0;overflow-x:auto}
+#viewport[data-route="approvals"] .bv-approve-inbox .tbl{font-size:10px}
+#viewport[data-route="approvals"] .bv-approve-inbox .tbl td{padding:10px 5px}
+#viewport[data-route="approvals"] .bv-approve-detail .bv-approval-fact{padding:9px 8px;min-height:50px}
+#viewport[data-route="approvals"] .bv-approval-tabs span{font-size:10px}
+#viewport[data-route="approvals"] .bv-approve-detail .bv-approval-actions{gap:6px}
+@media(max-width:1260px){#viewport[data-route="sales"]>.layout.bv-sales-top,#viewport[data-route="sales"]>.layout.bv-sales-mid,#viewport[data-route="sales"]>.layout.bv-sales-bottom,#viewport[data-route="approvals"] .bv-approve-top{grid-template-columns:1fr}#viewport[data-route="onboarding"] .bv-onb-kanban{grid-template-columns:repeat(7,minmax(172px,1fr));overflow-x:auto}}
+@media(max-width:920px){#viewport[data-route="onboarding"] .bv-onb-triple,#viewport[data-route="onboarding"] .bv-onb-bottom,#viewport[data-route="tasks"] .bv-work-top,#viewport[data-route="tasks"] .bv-work-bottom,#viewport[data-route="approvals"] .bv-approve-bottom{grid-template-columns:1fr}#viewport[data-route="tasks"] .bv-task-kanban{grid-template-columns:repeat(4,minmax(210px,1fr));overflow-x:auto}}
+
+/* V2.5 phase 3 visual contract: Overview, Finance, Audit — same panel rhythm as infographic, preserving DEMO/HOLD. */
+#viewport[data-route="overview"] .fv-overview-top{gap:11px}
+#viewport[data-route="overview"] .fv-panel{min-width:0}
+#viewport[data-route="overview"] .fv-panel .fv-heading{margin-bottom:9px}
+#viewport[data-route="overview"] .fv-panel .fv-grow{min-width:0}
+#viewport[data-route="finance"] .bv-finance-triple{grid-template-columns:minmax(0,1.58fr) minmax(0,.92fr) minmax(0,.97fr);gap:11px}
+#viewport[data-route="finance"] .bv-finance-second{grid-template-columns:minmax(0,1.58fr) minmax(0,.92fr) minmax(0,.97fr)}
+#viewport[data-route="finance"] .bv-finance-triple .box{padding:13px}
+#viewport[data-route="finance"] .bv-finance-triple .ring strong{font-size:14px;max-width:82px;line-height:1.12}
+#viewport[data-route="finance"] .bv-cash-chart{height:206px}
+#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+#viewport[data-route="audit"] .auditnav{padding:6px 11px}
+#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:minmax(0,1.52fr) minmax(0,.9fr) minmax(0,.98fr);gap:11px}
+#viewport[data-route="audit"] .bv-audit-bottom{grid-template-columns:minmax(0,1.43fr) minmax(0,1fr) minmax(0,.96fr)}
+#viewport[data-route="audit"] .bv-audit-triple .box{padding:13px}
+#viewport[data-route="audit"] .bv-audit-integ{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#viewport[data-route="audit"] .bv-audit-connect{min-height:83px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+#viewport[data-route="audit"] .bv-audit-status{padding:10px 0}
+#viewport[data-route="audit"] .bv-role-matrix th,#viewport[data-route="audit"] .bv-role-matrix td{padding:7px 4px}
+@media(max-width:1400px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:repeat(2,minmax(0,1fr))}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:1/-1}}
+@media(max-width:880px){#viewport[data-route="finance"] .bv-finance-triple,#viewport[data-route="audit"] .bv-audit-triple{grid-template-columns:1fr}#viewport[data-route="finance"] .bv-finance-triple>.box:first-child,#viewport[data-route="audit"] .bv-audit-triple>.box:first-child{grid-column:auto}#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){#viewport[data-route="finance"] .bv-finance-insights{grid-template-columns:1fr}#viewport[data-route="audit"] .bv-audit-integ{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V2.5 reference-verified 2026-10-11: nested enterprise rows must not inherit 'last-child spans full row'. */
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel:last-child{grid-column:auto;grid-row:auto;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel:first-child{grid-column:auto;grid-row:auto;min-width:0}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split>.fv-panel{margin:0;width:100%;max-width:100%;min-height:200px}
+#viewport[data-route="tenants"] .fv-module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#viewport[data-route="tenants"] .fv-module-grid .fv-svg{flex:0 0 auto}
+#viewport[data-route="tenants"] .fv-module-grid small,#viewport[data-route="tenants"] .fv-module-grid b{overflow-wrap:anywhere}
+#viewport[data-route="tenants"] .fv-upsell-table{table-layout:auto}
+#viewport[data-route="products"] .fv-feedback-row{grid-template-columns:auto minmax(0,1fr) auto;min-width:0}
+#viewport[data-route="products"] .fv-feedback-row b{min-width:0;overflow-wrap:anywhere;white-space:normal;word-break:normal}
+#viewport[data-route="products"] .fv-feedback-row small{min-width:0;overflow-wrap:anywhere}
+@media(max-width:720px){#viewport[data-route="tenants"] .fv-enterprise-right>.fv-enterprise-split{grid-template-columns:1fr}#viewport[data-route="products"] .fv-feedback-row{grid-template-columns:auto minmax(0,1fr)}#viewport[data-route="products"] .fv-feedback-row small{grid-column:2}}
+
+/* Infographic parity: never truncate module names within the selected tenant's 3x3 module grid. */
+#viewport[data-route="tenants"] .fv-mod-cell{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;min-height:69px;padding:7px 5px}
+#viewport[data-route="tenants"] .fv-mod-cell b{white-space:normal;text-overflow:clip;overflow:visible;word-break:normal;overflow-wrap:anywhere;line-height:1.28;min-height:23px;font-size:9px}
+#viewport[data-route="tenants"] .fv-mod-cell small{white-space:normal;word-break:normal;overflow-wrap:anywhere;line-height:1.25}
+#viewport[data-route="tenants"] .fv-mod-cell .fv-svg{margin-bottom:3px}
+
+/* Restore block layout inside narrow module tiles: flex intrinsic sizing caused horizontal overflow. */
+#viewport[data-route="tenants"] .fv-mod-cell{display:block;min-width:0;max-width:100%;overflow:hidden}
+#viewport[data-route="tenants"] .fv-mod-cell b,#viewport[data-route="tenants"] .fv-mod-cell small{display:block;min-width:0;max-width:100%;width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+#viewport[data-route="tenants"] .fv-mod-cell .fv-module-symbol{display:inline-flex;width:25px;height:25px;margin:0 0 3px}
 </style><style id="bv-founder-auth-css">
 html:not(.bv-founderauth-ok) #app{display:none!important}
 #bv-founder-gate[hidden],#bv-founder-login[hidden],#bv-founder-error[hidden]{display:none!important}

@@ -45,8 +45,12 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
     $('qa-approved-view').hidden=false;
     setQaApprovedPanel(tenant);
   }else{
-    $('qa-approved-view').hidden=true;$('portal-frame').hidden=false;
-    $('portal-frame').src='./customer-v176/template.html';
+    $('qa-approved-view').hidden=true;$('portal-frame').hidden=true;
+    $('portal-frame').removeAttribute('src');
+    let liveRoot=document.getElementById('bv-live-tenant-root');
+    if(!liveRoot){liveRoot=document.createElement('div');liveRoot.id='bv-live-tenant-root';document.getElementById('workspace').append(liveRoot);}
+    const {mountTenantWorkspace}=await import('./tenant-workspace.js');
+    await mountTenantWorkspace({client,tenant,user,role:member.role,root:liveRoot});
   }
  }catch(e){show('login');failed(e?.message||'STAGING_UNAVAILABLE');}
 }

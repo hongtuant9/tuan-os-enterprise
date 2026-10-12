@@ -6,13 +6,15 @@ const QA_SCENARIOS=Object.freeze({
  reject:{email:'hongtuant9+bizviora-qa-reject-20261011@gmail.com',name:'BIZVIORA QA Rejection 002',contact:'Synthetic Tester B',plan:'CUSTOM_QUOTE'}
 });
 const qaKey=new URLSearchParams(location.search).get('qa');
+let recoveryFlow=(new URLSearchParams(location.search).get('recovery')==='1'||location.hash.includes('type=recovery'));
+
 const qaScenario=Object.prototype.hasOwnProperty.call(QA_SCENARIOS,qaKey)?QA_SCENARIOS[qaKey]:null;
 const qaEmails=new Set(Object.values(QA_SCENARIOS).map(s=>s.email));
 const isQaUser=()=>qaEmails.has(user?.email?.toLowerCase());
 const $=id=>document.getElementById(id);
-const screens=['loading','login','register','owner-wait','application','pending','rejected','manager'];
+const screens=['loading','login','register','reset-request','reset-new','owner-wait','application','pending','rejected','manager'];
 let client,user,signupEnabled=false,platformManager=false;
-function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('account-manager').hidden=!(user&&platformManager&&!['manager','workspace','login','register','loading'].includes(id));$('error-box').replaceChildren();}
+function show(id){$('auth-area').style.display=id==='workspace'?'none':'grid';$('workspace').classList.toggle('active',id==='workspace');for(const s of screens)$(s).classList.toggle('active',id===s);$('logout').style.display=['login','register','reset-request','reset-new','loading'].includes(id)||id==='workspace'?'none':'inline-block';$('account-manager').hidden=!(user&&platformManager&&!['manager','workspace','login','register','loading'].includes(id));$('error-box').replaceChildren();}
 function feedback(t,error=false){const e=document.createElement('div');e.className='notice'+(error?' error':'');e.textContent=t;$('error-box').replaceChildren(e);}
 function failed(code){feedback('Chưa thể xử lý yêu cầu. Vui lòng thử lại hoặc liên hệ BIZVIORA. ('+code+')',true);}
 async function currentUser(){const {data,error}=await client.auth.getUser();return error?null:data?.user||null;}
@@ -181,6 +183,10 @@ async function reviews(){
 async function signout(){
  $('portal-frame').removeAttribute('src');if(client)await client.auth.signOut();user=null;platformManager=false;show('login');
 }
+$('show-reset').onclick=()=>{$('reset-email').value=$('li-email').value.trim();show('reset-request');};
+$('reset-back').onclick=()=>show('login');
+$('reset-request-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('reset-email').value.trim();const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account/?recovery=1'});if(error){failed('PASSWORD_RESET_UNAVAILABLE');return;}show('login');feedback('Nếu email có tài khoản hợp lệ, hệ thống sẽ gửi liên kết đặt lại mật khẩu. Kiểm tra Inbox/Spam.');};
+$('reset-new-form').onsubmit=async e=>{e.preventDefault();if(!client||!recoveryFlow){failed('RECOVERY_SESSION_REQUIRED');return;}const password=$('reset-password').value,verify=$('reset-confirm').value;if(password!==verify||password.length<12){failed('PASSWORD_INVALID');return;}const {error}=await client.auth.updateUser({password});$('reset-password').value='';$('reset-confirm').value='';if(error){failed('PASSWORD_UPDATE_DENIED');return;}recoveryFlow=false;history.replaceState({},'',location.pathname);await client.auth.signOut();show('login');feedback('Mật khẩu đã cập nhật. Vui lòng đăng nhập lại.');};
 $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show('login');
 $('owner-refresh').onclick=()=>refresh(false);
 $('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&!qaEmails.has($('re-email').value.trim().toLowerCase())&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
@@ -209,7 +215,7 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
   $('register-submit').disabled=!signupEnabled&&!qaScenario;
   if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Biểu mẫu staging chỉ hỗ trợ email chủ sở hữu và 2 alias QA chỉ định. Đây là giới hạn giao diện, KHÔNG phải khóa API Auth ở backend. Đăng ký không cấp quyền tenant hoặc Platform Manager; chưa mở khách hàng thật.';$('register').append(w);}
-  await refresh();
-  client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){$('portal-frame').removeAttribute('src');user=null;show('login');}});
+  if(recoveryFlow){const {data}=await client.auth.getSession();if(data?.session){show('reset-new');}else{show('reset-request');feedback('Liên kết khôi phục chưa được xác thực hoặc đã hết hạn.',true);}}else await refresh();
+  client.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY'){recoveryFlow=true;show('reset-new');}if(event==='SIGNED_OUT'){$('portal-frame').removeAttribute('src');user=null;show('login');}});
  }catch{show('login');$('login-form').querySelector('button').disabled=true;$('show-register').disabled=true;failed('STAGING_CONFIG_NOT_READY');}
 })();

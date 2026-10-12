@@ -1,0 +1,1 @@
+<?php if (!defined('ABSPATH')) exit; ?><footer class="bv-footer"><div class="bv-container">© <?php echo esc_html(date('Y')); ?> BIZVIORA · Đang thử nghiệm có kiểm soát</div></footer><?php wp_footer(); ?></body></html>

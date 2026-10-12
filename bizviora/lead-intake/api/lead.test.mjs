@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {validateLead,createLeadHandler} from './lead.mjs';
+
+const valid={business:'Synthetic Homestay A',contact:'Synthetic Tester',phone:'+84900000000',email:'synthetic@example.invalid',kind:'homestay',pain:'Guest messages at night',consent:true,consentVersion:'bizviora-lead-v1',source:'qa'};
+assert.equal(validateLead(valid).ok,true);
+assert.equal(validateLead({...valid,consent:false}).reason,'consent_required');
+assert.equal(validateLead({...valid,website:'bot'}).reason,'spam_detected');
+assert.equal(validateLead({...valid,phone:'',email:'invalid'}).reason,'valid_contact_required');
+assert.equal(validateLead({...valid,kind:'invalid'}).reason,'required_fields');
+assert.equal(validateLead({...valid,business:'=HYPERLINK("bad")'}).lead.business.startsWith("'="),true);
+let rows=[];
+const handler=createLeadHandler({appendLead:async l=>rows.push(l),rateLimit:key=>key!=='blocked',id:()=> 'SYNTHETIC-ID',now:()=>new Date('2026-10-12T00:00:00Z')});
+const request={method:'POST',isJson:true,bytes:500,rateKey:'qa',body:valid};
+assert.equal((await handler(request)).status,201);
+assert.equal(rows.length,1);
+assert.equal(rows[0].leadId,'SYNTHETIC-ID');
+assert.equal(rows[0].consentVersion,'bizviora-lead-v1');
+assert.equal((await handler({...request,rateKey:'blocked'})).status,429);
+assert.equal((await handler({...request,method:'GET'})).status,405);
+assert.equal((await handler({...request,bytes:9000})).status,413);
+const failed=createLeadHandler({appendLead:async()=>{throw Error('mock sheet offline')},rateLimit:()=>true});
+assert.equal((await failed(request)).status,503);
+console.log('PASS: 11 synthetic validation/handler assertions (mock adapter only; no Google Sheets write).');

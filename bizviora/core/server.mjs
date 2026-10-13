@@ -11,9 +11,8 @@ const { createSupabaseDependencies } = await import('./src/supabase-adapter.mjs'
 const dependencies=createSupabaseDependencies();
 const { createStagingFounderGate }=await import('./src/founder-adapter.mjs');
 const api=createApi({...dependencies,requireFounder:createStagingFounderGate()});
-const host = '127.0.0.1';
-const port = Number(process.env.BIZVIORA_LOCAL_PORT || 4317);
-if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('INVALID_LOCAL_PORT');
+const { resolveServerBinding }=await import('./src/hosting-config.mjs');
+const {host,port}=resolveServerBinding();
 
 createServer(async (incoming, outgoing) => {
   try {

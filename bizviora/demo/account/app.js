@@ -193,7 +193,17 @@ $('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signu
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
 $('workspace-manager').onclick=()=>location.assign('/founder-v2/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
 $('account-manager').onclick=()=>location.assign('/founder-v2/');
-$('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
+$('google-login').onclick=async()=>{
+ if(!client){failed('UNCONFIGURED');return;}
+ // OAuth authenticates identity only; every manager/tenant grant remains backend RLS/RPC controlled.
+ const button=$('google-login');button.disabled=true;
+ try{
+  const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/account/'}});
+  if(error)failed('GOOGLE_OAUTH_UNAVAILABLE');
+ }catch{failed('GOOGLE_OAUTH_UNAVAILABLE');}
+ finally{button.disabled=false;}
+};
+$('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed(error.code==='invalid_credentials'?'INVALID_LOGIN_CREDENTIALS':error.code==='email_not_confirmed'?'EMAIL_NOT_CONFIRMED':'AUTH_SIGNIN_UNAVAILABLE');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();const email=$('re-email').value.trim(),password=$('re-password').value;
  if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL&&!qaEmails.has(email.toLowerCase())){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}
  // This is a self-serve identity verification request only; it DOES NOT grant a company or manager permission.

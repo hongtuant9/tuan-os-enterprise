@@ -42,3 +42,16 @@ form.addEventListener('submit',async e=>{
 
 $('show-reset').onclick=e=>{e.preventDefault();form.hidden=true;google.hidden=true;resetForm.hidden=false;$('show-reset').hidden=true;$('reset-back').hidden=false;$('reset-email').value=$('email').value.trim();setStatus('')};
 $('reset-back').onclick=e=>{e.preventDefault();form.hidden=false;google.hidden=false;resetForm.hidden=true;$('show-reset').hidden=false;$('reset-back').hidden=true;setStatus('')};
+
+google.addEventListener('click', async () => {
+  if (!client) return;
+  google.disabled=true; setStatus('Đang chuyển tới Google để xác thực…',true);
+  try {
+    const {error}=await client.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo:location.origin+'/login/'}
+    });
+    if(error) setStatus('Không thể kết nối Google trên staging.');
+  } catch(_) {setStatus('Chưa thể đăng nhập Google. Vui lòng thử lại.');}
+  finally {google.disabled=false;}
+});

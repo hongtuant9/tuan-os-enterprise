@@ -223,6 +223,12 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   if(c?.supabaseUrl!==base||typeof c?.publishableKey!=='string'||c.publishableKey.length<25)throw Error('CONFIG_INVALID');
   signupEnabled=c.signupEnabled===true;
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
+  // Fail closed: do not offer OAuth while staging provider is unconfigured or settings cannot be verified.
+  const googleButton=$('google-login');googleButton.disabled=true;googleButton.hidden=true;
+  try{
+   const settingsResponse=await fetch(base+'/auth/v1/settings',{headers:{apikey:c.publishableKey},cache:'no-store'});
+   if(settingsResponse.ok){const settings=await settingsResponse.json();if(settings?.external?.google===true){googleButton.disabled=false;googleButton.hidden=false;}}
+  }catch{ /* Stay disabled; password login remains available. */ }
   $('register-submit').disabled=!signupEnabled&&!qaScenario;
   if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Biểu mẫu staging chỉ hỗ trợ email chủ sở hữu và 2 alias QA chỉ định. Đây là giới hạn giao diện, KHÔNG phải khóa API Auth ở backend. Đăng ký không cấp quyền tenant hoặc Platform Manager; chưa mở khách hàng thật.';$('register').append(w);}
   if(recoveryFlow){const {data}=await client.auth.getSession();if(data?.session){show('reset-new');}else{show('reset-request');feedback('Liên kết khôi phục chưa được xác thực hoặc đã hết hạn.',true);}}else await refresh();

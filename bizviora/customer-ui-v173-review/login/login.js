@@ -20,6 +20,7 @@ async function enterCustomer(){
  try{
   client=await customerClient();
   if(params.get('signed_out')==='1')setStatus('Đã đăng xuất khỏi doanh nghiệp.',true);
+  else if(params.get('reset_done')==='1')setStatus('Mật khẩu đã cập nhật. Hãy đăng nhập bằng mật khẩu mới.',true);
   else if(params.get('reason')==='tenant')setStatus('Tài khoản không được phép truy cập dashboard TUAN OS.');
   else if(params.get('reason')==='session')setStatus('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
   const {data}=await client.auth.getUser();

@@ -1,0 +1,35 @@
+name: BIZVIORA Core staging unit security
+on:
+  push:
+    branches:
+      - feature/bizviora-core-mvp-001-20261010
+    paths:
+      - 'bizviora/core/**'
+      - '.github/workflows/bizviora-core-staging-unit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: bizviora/core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'bizviora/core/package-lock.json'
+      - name: Static syntax validation
+        run: |
+          node --check src/access.mjs
+          node --check src/api.mjs
+          node --check tests/access-boundary.test.mjs
+          node --check tests/api-security-regression.test.mjs
+      - name: Synthetic-only security regression
+        run: node --test tests/access-boundary.test.mjs tests/api-security-regression.test.mjs

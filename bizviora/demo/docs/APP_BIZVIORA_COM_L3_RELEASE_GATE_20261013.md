@@ -43,3 +43,11 @@ No DNS changes, no custom domain activation, no production deploy, no migration 
 - Public staging RLS audit: all 8 reviewed bv_* tables have relrowsecurity=true. No authenticated two-tenant negative E2E evidence; RLS_GATE_HOLD.
 - Anonymous API read-only probes on bv_tenants, bv_memberships, bv_business_units and bv_tasks returned HTTP 401.
 - Status: DNS_BASELINE_PASS, RLS_SCHEMA_CHECK_PASS, AUTH_RLS_E2E_NOT_RUN, CUSTOM_DOMAIN_NOT_ADDED, HTTPS_APP_DOMAIN_NOT_ISSUED, ROLLBACK_DRILL_NOT_RUN, PRODUCTION_HOLD.
+
+## SQL RLS simulation — 2026-10-13 additional checks
+Read-only SQL transactions with SET LOCAL ROLE authenticated and simulated auth.uid claims for owner fixtures in core002-e2e-tenant-a and core002-e2e-tenant-b. No production users or data changed.
+- QA A sees A tenant:1; B tenant:0; TUAN OS tenant:0. QA B sees B tenant:1; A tenant:0; TUAN OS tenant:0.
+- QA A: own membership=1, foreign membership=0; own tasks=1, foreign tasks=0.
+- QA B: own membership=1, foreign membership=0; own tasks=0, foreign tasks=0. QA B tasks result is NOT a positive own-row test because there is no visible own task.
+- Tested SELECT and role-context simulation only. No live OAuth E2E, cross-tenant write denial, expired session/logout, signed JWT, platform-manager escalation or full tenant table suite tested. Do NOT mark AUTH_RLS_E2E_PASS.
+- Therefore custom domain addition and TenTen DNS remain HOLD per the CEO's conditional L3 authorization.

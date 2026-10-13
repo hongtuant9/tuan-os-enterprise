@@ -1,0 +1,38 @@
+# BIZVIORA app.bizviora.com — Conditional L3 Release Gate (2026-10-13)
+
+Status: DOMAIN_HOLD / PRODUCTION_HOLD / NOT ACTIVATED
+
+## Approved scope
+- app.bizviora.com = customer application gateway for BIZVIORA.
+- TUAN OS Enterprise (tuan-os-enterprise-001) is customer tenant 001.
+- Accepted customer UI: V1.7.3, synthetic until data integration security approval.
+- L3 conditional approval to configure domain ONLY AFTER Auth/RLS, HTTPS and rollback all PASS. No production TUAN OS or real business data changes.
+
+## Observed facts
+- Render review service: bizviora-tenant-v173-auth-review, service id srv-db6qgoff3r2c73c4kke0; branch review/bizviora-tenant-v173-integration-20261013; autoDeploy off.
+- Its HTTPS review origin responds HTTP 200.
+- DNS NS for bizviora.com: ns-a1.tenten.vn, ns-a2.tenten.vn, ns-a3.tenten.vn.
+- app.bizviora.com does not yet resolve publicly in the checked network.
+- Supabase staging project: oxakhhpyvvymujiwuvnm (not TUAN OS production).
+- Verified tenant 001 with 1 membership and 1 approved registration request in staging.
+- Existing policy expressions constrain tenant data by auth.uid and membership; live two-tenant authenticated E2E is NOT RUN.
+- Anonymous PostgREST access to bv_tenants, bv_memberships, bv_business_units and bv_tasks returned HTTP 401 in read-only tests.
+- The V1.7.3 UI displays synthetic business figures; treat it as demonstration only, never real reporting.
+
+## Required release gates (all must PASS)
+1. Two independently authenticated staging QA accounts: owner and unrelated tenant user; verify isolation, unauthorized reads/writes, role escalation denial, session expiry and logout.
+2. RLS permission checks for core tenant tables, including negative tests and immutable audit; no production data involved.
+3. Verified target service security posture; protect platform manager/admin routes on backend.
+4. Render custom domain ownership/verification, HTTPS certificate, redirect URLs, OAuth callback and cookies; staged smoke test on the actual domain before opening access.
+5. DNS backup (zone export/screenshot + existing TTL/records), exact change plan, monitored rollback and post-rollback verification.
+6. CEO final go/no-go based on evidence, even under this conditional preapproval.
+
+## Intended DNS rollout
+- Confirm who administers the TenTen DNS zone. Record current A/CNAME/CAA for app and ancestor, including TTL.
+- Validate Render's exact domain instructions, then create only the app subdomain record after gates 1-5 pass.
+- Do not modify apex bizviora.com, www, email MX/TXT or TUAN OS production.
+- Rollback: restore prior DNS record or remove newly created app record, detach custom domain if required, revert allowed callback additions only after traffic has drained; confirm DNS/TLS/login restoration.
+- Keep the existing onrender.com review service available.
+
+## Hold and source-of-truth
+No DNS changes, no custom domain activation, no production deploy, no migration or role grants conducted under this checkpoint. This branch is review only. Google Drive/TASK-001 update: NOT RECORDED.

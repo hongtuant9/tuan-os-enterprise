@@ -55,3 +55,17 @@ google.addEventListener('click', async () => {
   } catch(_) {setStatus('Chưa thể đăng nhập Google. Vui lòng thử lại.');}
   finally {google.disabled=false;}
 });
+
+resetForm.addEventListener('submit',async event=>{
+ event.preventDefault();
+ if(!client)return;
+ resetSend.disabled=true;setStatus('Đang gửi yêu cầu…',true);
+ try{
+  const {error}=await client.auth.resetPasswordForEmail($('reset-email').value.trim(),{
+   redirectTo:location.origin+'/reset-password/'
+  });
+  if(error){setStatus('Không gửi được liên kết. Vui lòng thử lại sau.');return}
+  setStatus('Nếu email có tài khoản, liên kết khôi phục đã được gửi. Kiểm tra Inbox và Spam.',true);
+ }catch(_){setStatus('Không thể gửi liên kết trên staging. Vui lòng thử lại.')}
+ finally{resetSend.disabled=false}
+});

@@ -51,3 +51,10 @@ Read-only SQL transactions with SET LOCAL ROLE authenticated and simulated auth.
 - QA B: own membership=1, foreign membership=0; own tasks=0, foreign tasks=0. QA B tasks result is NOT a positive own-row test because there is no visible own task.
 - Tested SELECT and role-context simulation only. No live OAuth E2E, cross-tenant write denial, expired session/logout, signed JWT, platform-manager escalation or full tenant table suite tested. Do NOT mark AUTH_RLS_E2E_PASS.
 - Therefore custom domain addition and TenTen DNS remain HOLD per the CEO's conditional L3 authorization.
+
+## Render Custom Domain registration — 2026-10-13
+- Registered app.bizviora.com in Render STATIC SITE srv-db6qgoff3r2c73c4kke0 via Render dashboard UI (NOT DNS activation).
+- Exact Render-provided CNAME: hostname `app`, target `bizviora-tenant-v173-auth-review.onrender.com`.
+- Render reports VERIFIED STATUS `Waiting for DNS`, CERTIFICATE STATUS `Waiting for Verification`. Render onrender.com fallback remains enabled.
+- TenTen DNS not edited: no app CNAME yet. No custom-domain HTTPS issued. App still does not resolve.
+- Conditional L3 release HOLD remains for live Auth/RLS E2E, denied writes, end-to-end session expiry/logout, HTTPS and rehearsed rollback. DO NOT add TenTen record until preconditions achieved. No production data enabled.

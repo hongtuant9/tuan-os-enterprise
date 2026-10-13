@@ -105,3 +105,13 @@ test('Founder endpoint cannot mutate permissions via POST',async()=>{
   body:{tenantId:tenant,platformManager:true}}));
  assert.equal(r.status,405);
 });
+
+test('Founder gate receives the server-verified user and does not verify the JWT twice',async()=>{
+ let verified=0; let received;
+ const api=createApi({verifyBearer:async()=>{verified++;return {id:user}},repository:()=>({}),
+  requireFounder:async(t,serverVerifiedUser)=>{received=serverVerifiedUser;return {userId:user,platformManager:true}}});
+ const r=await api(req('/v1/founder/access',{authorization:'Bearer '+token}));
+ assert.equal(r.status,200);
+ assert.equal(verified,1);
+ assert.deepEqual(received,{id:user});
+});

@@ -115,3 +115,39 @@ test('Founder gate receives the server-verified user and does not verify the JWT
  assert.equal(verified,1);
  assert.deepEqual(received,{id:user});
 });
+
+test('Founder CORS allows only the synthetic Founder staging origin and GET',async()=>{
+ const api=makeApi();
+ const origin='https://bizviora-synthetic-demo.onrender.com';
+ const preflight=new Request(url('/v1/founder/access'),{method:'OPTIONS',headers:{
+   Origin:origin,'Access-Control-Request-Method':'GET',
+   'Access-Control-Request-Headers':'authorization'
+ }});
+ const ok=await api(preflight);
+ assert.equal(ok.status,204);
+ assert.equal(ok.headers.get('Access-Control-Allow-Origin'),origin);
+ assert.equal(ok.headers.get('Access-Control-Allow-Methods'),'GET');
+ const unauthorized=await api(new Request(url('/v1/founder/access'),{
+   headers:{Origin:origin}
+ }));
+ assert.equal(unauthorized.status,401);
+ assert.equal(unauthorized.headers.get('Access-Control-Allow-Origin'),origin);
+});
+test('Founder CORS blocks untrusted origins and non-Founder routes',async()=>{
+ const api=makeApi();
+ const foreign='https://attacker.example';
+ const blocked=await api(new Request(url('/v1/founder/access'),{
+   method:'OPTIONS',headers:{Origin:foreign,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'}
+ }));
+ assert.equal(blocked.status,403);
+ assert.equal(blocked.headers.get('Access-Control-Allow-Origin'),null);
+ const noPreflight=await api(new Request(url('/v1/tasks?tenantId='+tenant),{
+   method:'OPTIONS',headers:{Origin:'https://bizviora-synthetic-demo.onrender.com','Access-Control-Request-Method':'GET'}
+ }));
+ assert.equal(noPreflight.status,403);
+ assert.equal(noPreflight.headers.get('Access-Control-Allow-Origin'),null);
+ const disallowed=await api(new Request(url('/v1/founder/access'),{
+   method:'OPTIONS',headers:{Origin:'https://bizviora-synthetic-demo.onrender.com','Access-Control-Request-Method':'POST'}
+ }));
+ assert.equal(disallowed.status,403);
+});

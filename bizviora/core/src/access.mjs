@@ -16,6 +16,8 @@ export function requireMembership({userId, tenantId, membership, minRole='staff'
     String(membership.tenant_id).toLowerCase() !== tid ||
     !Object.hasOwn(ROLE_RANK,membership.role))
     throw new ApiError(403,'TENANT_ACCESS_DENIED');
+  if (!Object.hasOwn(ROLE_RANK,minRole))
+    throw new ApiError(403,'INVALID_REQUIRED_ROLE');
   if (ROLE_RANK[membership.role] < ROLE_RANK[minRole])
     throw new ApiError(403,'INSUFFICIENT_ROLE');
   return Object.freeze({userId:uid,tenantId:tid,role:membership.role});

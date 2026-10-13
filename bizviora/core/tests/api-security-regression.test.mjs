@@ -71,3 +71,37 @@ test('unrecognized API route does not expose tenant data',async()=>{
  const r=await api(req('/v1/private-finance?tenantId='+tenant,{authorization:'Bearer '+token}));
  assert.equal(r.status,405);assert.equal(calls.read,0);
 });
+
+test('Founder endpoint rejects absent gate, even for authenticated tenant owner',async()=>{
+ const api=makeApi('owner');
+ const r=await api(req('/v1/founder/access',{authorization:'Bearer '+token}));
+ assert.equal(r.status,503);assert.equal(calls.read,0);
+});
+test('Founder endpoint cannot be opened without verified bearer',async()=>{
+ const api=createApi({verifyBearer:async()=>null,repository:()=>({}),
+  requireFounder:async()=>({userId:user,platformManager:true})});
+ const r=await api(req('/v1/founder/access',{authorization:'Bearer '+token}));
+ assert.equal(r.status,401);
+});
+test('Founder endpoint denies different user or unverified RPC',async()=>{
+ for(const actor of [{userId:other,platformManager:true},{userId:user,platformManager:false},null]){
+   const api=createApi({verifyBearer:async()=>({id:user}),repository:()=>({}),requireFounder:async()=>actor});
+   const r=await api(req('/v1/founder/access',{authorization:'Bearer '+token}));
+   assert.equal(r.status,403);
+ }
+});
+test('Founder access response contains only staging scope and permission flag',async()=>{
+ const api=createApi({verifyBearer:async()=>({id:user}),repository:()=>({}),
+  requireFounder:async()=>({userId:user,platformManager:true})});
+ const r=await api(req('/v1/founder/access',{authorization:'Bearer '+token}));
+ assert.equal(r.status,200);
+ assert.deepEqual(await r.json(),{platformManager:true,scope:'STAGING_ONLY'});
+ assert.equal(r.headers.get('cache-control'),'no-store');
+});
+test('Founder endpoint cannot mutate permissions via POST',async()=>{
+ const api=createApi({verifyBearer:async()=>({id:user}),repository:()=>({}),
+  requireFounder:async()=>({userId:user,platformManager:true})});
+ const r=await api(req('/v1/founder/access',{method:'POST',authorization:'Bearer '+token,
+  body:{tenantId:tenant,platformManager:true}}));
+ assert.equal(r.status,405);
+});

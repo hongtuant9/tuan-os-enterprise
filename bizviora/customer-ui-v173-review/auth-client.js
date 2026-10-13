@@ -34,3 +34,16 @@ export async function authorizedCustomer(client){
     return {ok:false,reason:'TENANT_DENIED'};
   return {ok:true,user,tenant,role:member.role};
 }
+
+export async function isolatedRecoveryClient(){
+  // Recovery must never treat an existing business login as proof of a valid reset link.
+  const response=await fetch(BASE+'/functions/v1/bv-public-config',{cache:'no-store'});
+  if(!response.ok)throw Error('STAGING_CONFIG_UNAVAILABLE');
+  const config=await response.json();
+  if(config.supabaseUrl!==BASE||typeof config.publishableKey!=='string')
+    throw Error('STAGING_CONFIG_INVALID');
+  return createClient(BASE,config.publishableKey,{
+    auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,
+      storageKey:'bv-staging-recovery-only'}
+  });
+}

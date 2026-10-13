@@ -16,7 +16,7 @@ export function createFounderGate({ verifyBearer, platformManagerRpc }) {
     try { user = verifiedUser ?? await verifyBearer(token); }
     catch { throw new ApiError(401,'AUTH_INVALID'); }
     if (!user || typeof user.id !== 'string' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))
       throw new ApiError(401,'AUTH_INVALID');
     let permitted;
     try { permitted = await platformManagerRpc(token, user.id); }

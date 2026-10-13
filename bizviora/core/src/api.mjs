@@ -20,7 +20,7 @@ async function readBody(request) {
   catch {throw new ApiError(400,'INVALID_JSON');}
 }
 /** Chỉ chấp nhận actor từ xác minh token phía máy chủ và membership do DB/RLS trả về. */
-export function createApi({verifyBearer,repository}) {
+export function createApi({verifyBearer,repository,requireFounder}) {
   if(typeof verifyBearer!=='function'||typeof repository!=='function')
     throw new Error('AUTH_AND_REPOSITORY_REQUIRED');
   return async function handle(request) {
@@ -34,6 +34,15 @@ export function createApi({verifyBearer,repository}) {
       if(!token)throw new ApiError(401,'AUTH_REQUIRED');
       const user=await verifyBearer(token);
       if(!user?.id)throw new ApiError(401,'AUTH_INVALID');
+      // Read-only Founder identity endpoint; no tenant context and no privilege mutation.
+      if(pathname==='/v1/founder/access') {
+        if(request.method!=='GET')throw new ApiError(405,'ACTION_NOT_ENABLED');
+        if(typeof requireFounder!=='function')throw new ApiError(503,'FOUNDER_GATE_NOT_CONFIGURED');
+        const founder=await requireFounder(token);
+        if(founder?.userId!==user.id.toLowerCase() || founder.platformManager!==true)
+          throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
+        return respond(200,{platformManager:true,scope:'STAGING_ONLY'});
+      }
       const payload=request.method==='POST'?await readBody(request):null;
       const tenantId=requireUuid(request.method==='GET'?searchParams.get('tenantId'):payload?.tenantId,'tenant_id');
       const repo=repository(token);

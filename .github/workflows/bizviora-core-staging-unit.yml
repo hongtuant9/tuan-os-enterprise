@@ -27,7 +27,9 @@ jobs:
         run: |
           node --check src/access.mjs
           node --check src/api.mjs
+          node --check src/founder-auth.mjs
           node --check tests/access-boundary.test.mjs
           node --check tests/api-security-regression.test.mjs
+          node --check tests/founder-auth.test.mjs
       - name: Synthetic-only security regression
-        run: node --test tests/access-boundary.test.mjs tests/api-security-regression.test.mjs
+        run: node --test tests/access-boundary.test.mjs tests/api-security-regression.test.mjs tests/founder-auth.test.mjs

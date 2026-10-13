@@ -9,11 +9,11 @@ import { ApiError } from './access.mjs';
 export function createFounderGate({ verifyBearer, platformManagerRpc }) {
   if (typeof verifyBearer !== 'function' || typeof platformManagerRpc !== 'function')
     throw Error('FOUNDER_AUTH_DEPENDENCIES_REQUIRED');
-  return async function requireFounder(token) {
+  return async function requireFounder(token, verifiedUser=null) {
     if (typeof token !== 'string' || token.length < 12 || token.length > 4096)
       throw new ApiError(401,'AUTH_REQUIRED');
     let user;
-    try { user = await verifyBearer(token); }
+    try { user = verifiedUser ?? await verifyBearer(token); }
     catch { throw new ApiError(401,'AUTH_INVALID'); }
     if (!user || typeof user.id !== 'string' ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))

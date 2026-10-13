@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 const code=(await readFile(new URL('../auth-client.js',import.meta.url),'utf8')).replace(/^import .+?;\n/,'');
 const {authorizedCustomer}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
-const tenantId='308e6d09-9410-492e-8468-4c978226da41',userId='05fdabaf-f2e0-4037-95f5-15bcafb4609c';
+const tenantId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',userId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const mock=(opts={})=>{
  const user=opts.user===false?null:{id:userId,email:'owner@example.test'};
  const tenant=opts.tenant===false?null:{id:tenantId,slug:opts.slug||'tuan-os-enterprise-001',name:'TUAN OS'};

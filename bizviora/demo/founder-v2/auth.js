@@ -24,7 +24,7 @@ gate.innerHTML = `
   <button id="bv-founder-google" type="button" class="bv-auth-google">Tiếp tục với Google (staging)</button>
   <div class="bv-auth-links"><a href="/account/">Doanh nghiệp của tôi</a>
   <button id="bv-founder-logout-gate" type="button">Đổi tài khoản</button></div>
-  <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Dashboard dùng dữ liệu DEMO; không có quyền ghi dữ liệu kinh doanh thật.</p>
+  <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Đăng nhập Google sẽ trở lại trang tài khoản cùng miền, sau đó chọn «Quản trị BIZVIORA». Dashboard chỉ dùng dữ liệu DEMO, không ghi dữ liệu kinh doanh thật.</p>
 </section>`;
 const form = $('bv-founder-login');
 const status = $('bv-founder-status');
@@ -127,10 +127,10 @@ async function verify() {
 
 $('bv-founder-google').addEventListener('click', async () => {
   if (!client) return;
-  setMessage('Đang chuyển tới Google để xác thực trên staging…');
+  setMessage('Đang đăng nhập Google. Sau khi quay lại trang tài khoản, chọn «Quản trị BIZVIORA» để mở Founder.');
   try {
     const {error}=await client.auth.signInWithOAuth({
-      provider:'google', options:{redirectTo:location.origin + '/founder-v2/'}
+      provider:'google', options:{redirectTo:location.origin + '/account/'}
     });
     if(error) lock('Không thể khởi động Google OAuth trên staging.', true);
   } catch (_) {

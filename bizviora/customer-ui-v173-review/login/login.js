@@ -2,6 +2,7 @@ import {customerClient,authorizedCustomer} from '../auth-client.js';
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 const form=$('login-form'),button=$('submit'),status=$('status');
+const google=$('google-login'),resetForm=$('reset-request-form'),resetSend=$('reset-send');
 const setStatus=(m,ok=false)=>{status.textContent=m;status.classList.toggle('ok',ok)};
 let client;
 async function enterCustomer(){
@@ -38,3 +39,6 @@ form.addEventListener('submit',async e=>{
  }catch(_){$('password').value='';setStatus('Không thể hoàn tất đăng nhập staging. Vui lòng thử lại sau.')}
  finally{button.disabled=false}
 });
+
+$('show-reset').onclick=e=>{e.preventDefault();form.hidden=true;google.hidden=true;resetForm.hidden=false;$('show-reset').hidden=true;$('reset-back').hidden=false;$('reset-email').value=$('email').value.trim();setStatus('')};
+$('reset-back').onclick=e=>{e.preventDefault();form.hidden=false;google.hidden=false;resetForm.hidden=true;$('show-reset').hidden=false;$('reset-back').hidden=true;setStatus('')};

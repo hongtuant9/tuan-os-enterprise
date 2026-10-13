@@ -1,5 +1,6 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
+const FOUNDER_CONTROL_CENTER='https://bizviora-synthetic-demo.onrender.com/founder-v2/';
 const APPROVED_OWNER_EMAIL='hongtuant9@gmail.com'; // L3 approval is recorded; this UI never grants a role.
 const QA_SCENARIOS=Object.freeze({
  approve:{email:'hongtuant9+bizviora-qa-approve-20261011@gmail.com',name:'BIZVIORA QA Approval 001',contact:'Synthetic Tester A',plan:'TRIAL_7D'},
@@ -42,6 +43,24 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
   $('tenant-name').textContent=tenant.name+' · '+member.role;
   if(platformManager&&preferManager){show('manager');$('manager-company').hidden=false;await reviews();return;}
   show('workspace');
+  // TUAN OS 001: visually accepted V1.7.3 is an isolated synthetic UI artifact.
+  // Only the server-validated APPROVED registration + matching RLS membership above
+  // can reach this branch. The artifact itself has no Auth or live business data.
+  if(!isQaUser() && tenant.slug==='tuan-os-enterprise-001'){
+    $('qa-approved-view').hidden=true;
+    const frame=$('portal-frame');
+    frame.hidden=false;
+    frame.setAttribute('sandbox','allow-scripts');
+    frame.src='./customer-v173.html';
+    let note=document.getElementById('bv-v173-preview-note');
+    if(!note){note=document.createElement('div');note.id='bv-v173-preview-note';note.className='notice warn';
+      note.textContent='BẢN XEM TRƯỚC V1.7.3 — Giao diện đã được nghiệm thu, chỉ hiển thị dữ liệu synthetic. Không sử dụng số liệu minh họa để điều hành. Chưa kết nối dữ liệu thực.';
+      $('workspace').insertBefore(note,frame);
+    }
+    note.hidden=false;
+    return;
+  }
+  const previewNote=document.getElementById('bv-v173-preview-note');if(previewNote)previewNote.hidden=true;
   if(isQaUser()){
     $('portal-frame').removeAttribute('src');$('portal-frame').hidden=true;
     $('qa-approved-view').hidden=false;
@@ -191,9 +210,19 @@ $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show
 $('owner-refresh').onclick=()=>refresh(false);
 $('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&!qaEmails.has($('re-email').value.trim().toLowerCase())&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
-$('workspace-manager').onclick=()=>location.assign('/founder-v2/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
-$('account-manager').onclick=()=>location.assign('/founder-v2/');
-$('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
+$('workspace-manager').onclick=()=>location.assign(FOUNDER_CONTROL_CENTER);$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
+$('account-manager').onclick=()=>location.assign(FOUNDER_CONTROL_CENTER);
+$('google-login').onclick=async()=>{
+ if(!client){failed('UNCONFIGURED');return;}
+ // OAuth authenticates identity only; every manager/tenant grant remains backend RLS/RPC controlled.
+ const button=$('google-login');button.disabled=true;
+ try{
+  const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/account/'}});
+  if(error)failed('GOOGLE_OAUTH_UNAVAILABLE');
+ }catch{failed('GOOGLE_OAUTH_UNAVAILABLE');}
+ finally{button.disabled=false;}
+};
+$('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed(error.code==='invalid_credentials'?'INVALID_LOGIN_CREDENTIALS':error.code==='email_not_confirmed'?'EMAIL_NOT_CONFIRMED':'AUTH_SIGNIN_UNAVAILABLE');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();const email=$('re-email').value.trim(),password=$('re-password').value;
  if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL&&!qaEmails.has(email.toLowerCase())){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}
  // This is a self-serve identity verification request only; it DOES NOT grant a company or manager permission.
@@ -213,6 +242,12 @@ $('app-form').onsubmit=async e=>{e.preventDefault();if(!user){failed('AUTH_REQUI
   if(c?.supabaseUrl!==base||typeof c?.publishableKey!=='string'||c.publishableKey.length<25)throw Error('CONFIG_INVALID');
   signupEnabled=c.signupEnabled===true;
   client=createClient(c.supabaseUrl,c.publishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
+  // Fail closed: do not offer OAuth while staging provider is unconfigured or settings cannot be verified.
+  const googleButton=$('google-login');googleButton.disabled=true;googleButton.hidden=true;
+  try{
+   const settingsResponse=await fetch(base+'/auth/v1/settings',{headers:{apikey:c.publishableKey},cache:'no-store'});
+   if(settingsResponse.ok){const settings=await settingsResponse.json();if(settings?.external?.google===true){googleButton.disabled=false;googleButton.hidden=false;}}
+  }catch{ /* Stay disabled; password login remains available. */ }
   $('register-submit').disabled=!signupEnabled&&!qaScenario;
   if(!signupEnabled){const w=document.createElement('div');w.className='notice warn';w.textContent='Biểu mẫu staging chỉ hỗ trợ email chủ sở hữu và 2 alias QA chỉ định. Đây là giới hạn giao diện, KHÔNG phải khóa API Auth ở backend. Đăng ký không cấp quyền tenant hoặc Platform Manager; chưa mở khách hàng thật.';$('register').append(w);}
   if(recoveryFlow){const {data}=await client.auth.getSession();if(data?.session){show('reset-new');}else{show('reset-request');feedback('Liên kết khôi phục chưa được xác thực hoặc đã hết hạn.',true);}}else await refresh();

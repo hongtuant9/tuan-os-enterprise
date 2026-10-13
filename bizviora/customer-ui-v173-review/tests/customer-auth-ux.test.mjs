@@ -48,3 +48,10 @@ test('password recovery client does not reuse existing logged-in user session',a
  assert.ok(shared.includes('persistSession:false'));
  assert.ok(shared.includes('detectSessionInUrl:false'));
 });
+
+test('recovery revokes refresh sessions and clears the original customer session',async()=>{
+ const code=await read('reset-password/reset.js');
+ assert.ok(code.includes("client.auth.signOut({scope:'global'})"));
+ assert.ok(code.includes("customer.auth.signOut({scope:'local'})"));
+ assert.ok(code.includes('revoked.error||!localCleared'));
+});

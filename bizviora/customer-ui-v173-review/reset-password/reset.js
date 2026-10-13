@@ -54,7 +54,7 @@ form.addEventListener('submit',async event=>{
   if(error)throw Error('PASSWORD_UPDATE_DENIED');
   verifiedRecovery=false;form.hidden=true;
   $('new-password').value='';$('confirm-password').value='';
-  await client.auth.signOut({scope:'local'});
+  await client.auth.signOut({scope:'global'});
   location.replace('/login/?reset_done=1');
  }catch(_){
   show('Chưa cập nhật được mật khẩu. Vui lòng yêu cầu một liên kết mới.');

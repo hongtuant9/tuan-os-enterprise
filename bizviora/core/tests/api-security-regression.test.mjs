@@ -47,3 +47,27 @@ test('authorized task read is tenant scoped',async()=>{
  const api=makeApi();const r=await api(req('/v1/tasks?tenantId='+tenant,{authorization:'Bearer '+token}));
  assert.equal(r.status,200);assert.equal((await r.json()).tenantId,tenant);assert.equal(calls.read,1);
 });
+
+test('malformed tenant UUID is rejected before membership query',async()=>{
+ const api=makeApi();const r=await api(req('/v1/tasks?tenantId=invalid',{authorization:'Bearer '+token}));
+ assert.equal(r.status,400);assert.equal(calls.membership,0);assert.equal(calls.read,0);
+});
+test('malformed POST JSON never writes a task',async()=>{
+ const api=makeApi();
+ const r=await api(new Request(url('/v1/tasks'),{
+  method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{"tenantId":'
+ }));
+ assert.equal(r.status,400);assert.equal(calls.create,0);
+});
+test('oversized POST payload cannot create a task',async()=>{
+ const api=makeApi();
+ const r=await api(req('/v1/tasks',{method:'POST',authorization:'Bearer '+token,
+  body:{tenantId:tenant,title:'x'.repeat(17000)}
+ }));
+ assert.equal(r.status,413);assert.equal(calls.create,0);
+});
+test('unrecognized API route does not expose tenant data',async()=>{
+ const api=makeApi();
+ const r=await api(req('/v1/private-finance?tenantId='+tenant,{authorization:'Bearer '+token}));
+ assert.equal(r.status,405);assert.equal(calls.read,0);
+});

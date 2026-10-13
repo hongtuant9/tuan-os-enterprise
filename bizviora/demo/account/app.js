@@ -1,5 +1,6 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const STAGING='oxakhhpyvvymujiwuvnm', base='https://'+STAGING+'.supabase.co';
+const FOUNDER_CONTROL_CENTER='https://bizviora-synthetic-demo.onrender.com/founder-v2/';
 const APPROVED_OWNER_EMAIL='hongtuant9@gmail.com'; // L3 approval is recorded; this UI never grants a role.
 const QA_SCENARIOS=Object.freeze({
  approve:{email:'hongtuant9+bizviora-qa-approve-20261011@gmail.com',name:'BIZVIORA QA Approval 001',contact:'Synthetic Tester A',plan:'TRIAL_7D'},
@@ -209,8 +210,8 @@ $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show
 $('owner-refresh').onclick=()=>refresh(false);
 $('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&!qaEmails.has($('re-email').value.trim().toLowerCase())&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
-$('workspace-manager').onclick=()=>location.assign('/founder-v2/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
-$('account-manager').onclick=()=>location.assign('/founder-v2/');
+$('workspace-manager').onclick=()=>location.assign(FOUNDER_CONTROL_CENTER);$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
+$('account-manager').onclick=()=>location.assign(FOUNDER_CONTROL_CENTER);
 $('google-login').onclick=async()=>{
  if(!client){failed('UNCONFIGURED');return;}
  // OAuth authenticates identity only; every manager/tenant grant remains backend RLS/RPC controlled.

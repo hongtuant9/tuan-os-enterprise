@@ -36,3 +36,7 @@ test('task defaults to TODO and enforces title length',()=>{
   });
   denied(()=>validateTaskInput({title:'x'.repeat(181)}),400);
 });
+
+test('unknown minimum role fails closed even for an owner',()=>{
+  denied(()=>requireMembership({userId:USER,tenantId:A,membership:member(A,'owner'),minRole:'platform_owner'}),403);
+});

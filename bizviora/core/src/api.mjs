@@ -38,7 +38,7 @@ export function createApi({verifyBearer,repository,requireFounder}) {
       if(pathname==='/v1/founder/access') {
         if(request.method!=='GET')throw new ApiError(405,'ACTION_NOT_ENABLED');
         if(typeof requireFounder!=='function')throw new ApiError(503,'FOUNDER_GATE_NOT_CONFIGURED');
-        const founder=await requireFounder(token);
+        const founder=await requireFounder(token,user);
         if(founder?.userId!==user.id.toLowerCase() || founder.platformManager!==true)
           throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
         return respond(200,{platformManager:true,scope:'STAGING_ONLY'});

@@ -23,7 +23,7 @@ async function readBody(request) {
 export function createApi({verifyBearer,repository,requireFounder}) {
   if(typeof verifyBearer!=='function'||typeof repository!=='function')
     throw new Error('AUTH_AND_REPOSITORY_REQUIRED');
-  return async function handle(request) {
+  const handleInternal = async function handle(request) {
     try{
       const {pathname,searchParams}=new URL(request.url);
       if(pathname==='/health' && request.method==='GET')
@@ -66,5 +66,35 @@ export function createApi({verifyBearer,repository,requireFounder}) {
       // Không đưa chuỗi SQL, thông tin cá nhân hoặc khóa vào phản hồi.
       return respond(503,{error:'SERVICE_UNAVAILABLE'});
     }
+  };
+  // Public synthetic Founder preview may query only this read-only access check.
+  // No cookies, wildcard origin, service-role key or cross-origin business endpoints.
+  return async function handleWithFounderCors(request) {
+    const origin = request.headers.get('origin');
+    const path = new URL(request.url).pathname;
+    const permitted = path === '/v1/founder/access' &&
+      origin === 'https://bizviora-synthetic-demo.onrender.com';
+    if (request.method === 'OPTIONS') {
+      const preflightMethod = request.headers.get('access-control-request-method');
+      const preflightHeaders = (request.headers.get('access-control-request-headers') || '')
+        .toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      if (!permitted || preflightMethod !== 'GET' ||
+        preflightHeaders.some(h => !['authorization','content-type'].includes(h)))
+        return respond(403,{error:'CORS_ORIGIN_DENIED'});
+      return new Response(null,{status:204,headers:{
+        'Access-Control-Allow-Origin':origin,
+        'Access-Control-Allow-Methods':'GET',
+        'Access-Control-Allow-Headers':'authorization, content-type',
+        'Access-Control-Max-Age':'300',
+        'Vary':'Origin',
+        'Cache-Control':'no-store'
+      }});
+    }
+    const response = await handleInternal(request);
+    if (!permitted || request.method !== 'GET') return response;
+    const headers = new Headers(response.headers);
+    headers.set('Access-Control-Allow-Origin',origin);
+    headers.set('Vary','Origin');
+    return new Response(response.body,{status:response.status,headers});
   };
 }

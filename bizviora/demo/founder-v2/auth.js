@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 // NOT a server-side content-privacy boundary for real customer data.
 const PROJECT = 'oxakhhpyvvymujiwuvnm';
 const API = 'https://' + PROJECT + '.supabase.co';
+const CORE_API = 'https://bizviora-core-api-staging-20261013.onrender.com';
 const $ = id => document.getElementById(id);
 const gate = $('bv-founder-gate');
 gate.innerHTML = `
@@ -20,6 +21,7 @@ gate.innerHTML = `
     <input id="bv-founder-password" type="password" autocomplete="current-password" required/>
     <button id="bv-founder-submit" type="submit">Đăng nhập quản trị</button>
   </form>
+  <button id="bv-founder-google" type="button" class="bv-auth-google">Tiếp tục với Google (staging)</button>
   <div class="bv-auth-links"><a href="/account/">Doanh nghiệp của tôi</a>
   <button id="bv-founder-logout-gate" type="button">Đổi tài khoản</button></div>
   <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Dashboard dùng dữ liệu DEMO; không có quyền ghi dữ liệu kinh doanh thật.</p>
@@ -67,9 +69,32 @@ async function verify() {
       lock('Email chưa được xác minh trong Supabase Auth. Không cấp quyền.', false);
       return;
     }
+    // Defense in depth: the backend validates a real signed user JWT and the
+    // platform-manager RPC. A browser-only role check cannot authorize Founder.
     const role = await client.rpc('bv_is_platform_manager');
     if (role.error || role.data !== true) {
       lock('Tài khoản đã đăng nhập nhưng không có quyền BIZVIORA Platform Manager. Truy cập bị từ chối.', false);
+      return;
+    }
+    const {data:sessionData,error:sessionError} = await client.auth.getSession();
+    const session=sessionData?.session;
+    if (sessionError || !session?.access_token || session.user?.id !== data.user.id) {
+      lock('Không tìm thấy phiên xác thực Founder hợp lệ. Vui lòng đăng nhập lại.', false);
+      return;
+    }
+    const accessResponse=await fetch(CORE_API + '/v1/founder/access',{
+      method:'GET',
+      headers:{Authorization:'Bearer ' + session.access_token},
+      cache:'no-store',
+      credentials:'omit'
+    });
+    if (!accessResponse.ok) {
+      lock('Core API từ chối quyền Founder hoặc chưa sẵn sàng. Vui lòng thử lại sau.', false);
+      return;
+    }
+    const coreAccess=await accessResponse.json();
+    if (coreAccess?.platformManager !== true || coreAccess?.scope !== 'STAGING_ONLY') {
+      lock('Core API không xác nhận quyền Founder. Truy cập bị từ chối.', false);
       return;
     }
     // Only after a server-authoritative verified user and manager-role check do we execute
@@ -99,6 +124,19 @@ async function verify() {
     checking = false;
   }
 }
+
+$('bv-founder-google').addEventListener('click', async () => {
+  if (!client) return;
+  setMessage('Đang chuyển tới Google để xác thực trên staging…');
+  try {
+    const {error}=await client.auth.signInWithOAuth({
+      provider:'google', options:{redirectTo:location.origin + '/founder-v2/'}
+    });
+    if(error) lock('Không thể khởi động Google OAuth trên staging.', true);
+  } catch (_) {
+    lock('Google OAuth trên staging chưa được cấu hình đúng.', true);
+  }
+});
 
 form.addEventListener('submit', async event => {
   event.preventDefault();

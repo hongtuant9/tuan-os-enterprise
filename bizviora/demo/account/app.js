@@ -42,6 +42,24 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
   $('tenant-name').textContent=tenant.name+' · '+member.role;
   if(platformManager&&preferManager){show('manager');$('manager-company').hidden=false;await reviews();return;}
   show('workspace');
+  // TUAN OS 001: visually accepted V1.7.3 is an isolated synthetic UI artifact.
+  // Only the server-validated APPROVED registration + matching RLS membership above
+  // can reach this branch. The artifact itself has no Auth or live business data.
+  if(!isQaUser() && tenant.slug==='tuan-os-enterprise-001'){
+    $('qa-approved-view').hidden=true;
+    const frame=$('portal-frame');
+    frame.hidden=false;
+    frame.setAttribute('sandbox','allow-scripts');
+    frame.src='./customer-v173.html';
+    let note=document.getElementById('bv-v173-preview-note');
+    if(!note){note=document.createElement('div');note.id='bv-v173-preview-note';note.className='notice warn';
+      note.textContent='BẢN XEM TRƯỚC V1.7.3 — Giao diện đã được nghiệm thu, chỉ hiển thị dữ liệu synthetic. Không sử dụng số liệu minh họa để điều hành. Chưa kết nối dữ liệu thực.';
+      $('workspace').insertBefore(note,frame);
+    }
+    note.hidden=false;
+    return;
+  }
+  const previewNote=document.getElementById('bv-v173-preview-note');if(previewNote)previewNote.hidden=true;
   if(isQaUser()){
     $('portal-frame').removeAttribute('src');$('portal-frame').hidden=true;
     $('qa-approved-view').hidden=false;

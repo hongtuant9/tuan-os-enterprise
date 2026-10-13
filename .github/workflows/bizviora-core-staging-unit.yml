@@ -25,6 +25,7 @@ jobs:
           node-version: '22'
       - name: Static syntax validation
         run: |
+          node --check server.mjs
           node --check src/access.mjs
           node --check src/api.mjs
           node --check src/founder-auth.mjs

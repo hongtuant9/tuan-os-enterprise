@@ -1,4 +1,4 @@
-import {isolatedRecoveryClient} from '../auth-client.js';
+import {customerClient,isolatedRecoveryClient} from '../auth-client.js';
 const $=id=>document.getElementById(id);
 const form=$('reset-form'),send=$('reset-submit'),status=$('status');
 let client,verifiedRecovery=false;
@@ -54,7 +54,18 @@ form.addEventListener('submit',async event=>{
   if(error)throw Error('PASSWORD_UPDATE_DENIED');
   verifiedRecovery=false;form.hidden=true;
   $('new-password').value='';$('confirm-password').value='';
-  await client.auth.signOut({scope:'global'});
+  const revoked=await client.auth.signOut({scope:'global'});
+  // Do not reuse an older dashboard session in this browser after recovery.
+  let localCleared=false;
+  try{
+    const customer=await customerClient();
+    const result=await customer.auth.signOut({scope:'local'});
+    localCleared=!result.error;
+  }catch(_){}
+  if(revoked.error||!localCleared){
+    show('Mật khẩu đã thay đổi, nhưng chưa xác nhận được việc kết thúc tất cả phiên đăng nhập. Vui lòng đăng xuất khỏi các thiết bị và liên hệ hỗ trợ.');
+    return;
+  }
   location.replace('/login/?reset_done=1');
  }catch(_){
   show('Chưa cập nhật được mật khẩu. Vui lòng yêu cầu một liên kết mới.');

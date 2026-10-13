@@ -23,8 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'bizviora/core/package-lock.json'
       - name: Static syntax validation
         run: |
           node --check src/access.mjs

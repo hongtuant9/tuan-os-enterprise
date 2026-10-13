@@ -36,3 +36,10 @@ Status: DOMAIN_HOLD / PRODUCTION_HOLD / NOT ACTIVATED
 
 ## Hold and source-of-truth
 No DNS changes, no custom domain activation, no production deploy, no migration or role grants conducted under this checkpoint. This branch is review only. Google Drive/TASK-001 update: NOT RECORDED.
+
+## Checkpoint 2026-10-13: Read-only release readiness
+- Render Settings for service srv-db6qgoff3r2c73c4kke0: Custom Domains supports Add Custom Domain; service onrender.com subdomain is enabled. app.bizviora.com was NOT submitted to Render.
+- Direct TenTen UI DNS inventory: @ A 216.24.57.1, www CNAME bizviora-synthetic-demo.onrender.com, no app entry. Local baseline file: /Users/admin/bizviora-domain-checkpoints/bizviora-dns-baseline-20261013.txt. TTL not yet established. No DNS changes performed.
+- Public staging RLS audit: all 8 reviewed bv_* tables have relrowsecurity=true. No authenticated two-tenant negative E2E evidence; RLS_GATE_HOLD.
+- Anonymous API read-only probes on bv_tenants, bv_memberships, bv_business_units and bv_tasks returned HTTP 401.
+- Status: DNS_BASELINE_PASS, RLS_SCHEMA_CHECK_PASS, AUTH_RLS_E2E_NOT_RUN, CUSTOM_DOMAIN_NOT_ADDED, HTTPS_APP_DOMAIN_NOT_ISSUED, ROLLBACK_DRILL_NOT_RUN, PRODUCTION_HOLD.

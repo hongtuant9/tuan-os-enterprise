@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>BIZVIORA — Đăng nhập doanh nghiệp (staging)</title>
+<style>
+:root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#183153;background:#f3f6fc}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}
+.page{min-height:100vh;display:grid;grid-template-columns:41% 59%}
+.brand{padding:clamp(32px,6vw,95px);background:linear-gradient(155deg,#0b203e,#174d83);color:#fff;display:flex;flex-direction:column;justify-content:center}
+.brand .logo{font-size:27px;font-weight:900;letter-spacing:.02em;color:#75caff}
+.brand h1{font-size:clamp(34px,4.1vw,65px);line-height:1.15;letter-spacing:-.03em;margin:36px 0 20px}
+.brand p{font-size:18px;line-height:1.6;color:#cce0f8}
+.stage{padding:16px;background:#fff3cf;color:#774e00;font-size:13px}
+.right{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:32px 20px}
+.card{width:min(100%,480px);background:white;border-radius:18px;padding:34px;box-shadow:0 12px 45px #0a2e4b12;border:1px solid #e0e9f8}
+.card h2{font-size:32px;margin:0 0 12px}
+.card p{color:#7285a0;line-height:1.5;margin:0 0 24px}
+label{display:block;font-weight:700;font-size:13px;margin:18px 0 8px}
+input{width:100%;height:48px;border:1px solid #d6e1f5;border-radius:9px;background:#f2f5fd;font:inherit;padding:12px;outline-offset:3px}
+button{display:block;width:100%;margin-top:24px;padding:15px;background:#1769dc;color:#fff;font-weight:800;border:0;border-radius:9px;font:inherit;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+.linkrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+a{color:#1769dc;text-decoration:none;font-weight:650}
+.status{font-size:13px;line-height:1.6;margin-top:16px;min-height:22px;color:#b13c48}
+.status.ok{color:#0b765a}
+.sub{margin-top:24px;color:#73849e;font-size:12px;text-align:center;max-width:500px}
+@media(max-width:850px){.page{grid-template-columns:1fr}.brand{padding:30px}.brand h1{font-size:29px;margin:16px 0}.brand p{font-size:14px}.right{padding:24px 14px}.card{padding:24px}}
+</style></head><body>
+<div class="page">
+<section class="brand"><div class="logo">BIZVIORA</div><h1>Hệ điều hành kinh doanh cho doanh nghiệp của bạn.</h1>
+<p>Đăng nhập để vào đúng không gian doanh nghiệp đã được BIZVIORA phê duyệt. Mỗi doanh nghiệp có dữ liệu và quyền truy cập riêng.</p></section>
+<section class="right"><div class="card"><h2>Đăng nhập</h2>
+<p>Sử dụng tài khoản quản lý doanh nghiệp đã đăng ký.</p>
+<form id="login-form"><label for="email">Email</label><input id="email" type="email" name="email" required autocomplete="username" maxlength="254" placeholder="email@doanhnghiep.com">
+<label for="password">Mật khẩu</label><input id="password" type="password" name="password" required autocomplete="current-password" placeholder="Mật khẩu">
+<button id="submit" type="submit">Đăng nhập</button></form><div id="status" class="status" role="status" aria-live="polite"></div>
+<div class="linkrow"><a href="https://bizviora-synthetic-demo.onrender.com/account/">Đăng ký tài khoản mới →</a><a href="https://bizviora-synthetic-demo.onrender.com/account/">Quên mật khẩu?</a></div>
+</div><div class="sub">MÔI TRƯỜNG THỬ NGHIỆM KỸ THUẬT · Dữ liệu dashboard hiện là DEMO và không dùng để vận hành thực tế.<p><a href="https://bizviora.com/">← Về trang chủ BIZVIORA</a></p></div></section>
+</div><script type="module" src="./login.js"></script></body></html>

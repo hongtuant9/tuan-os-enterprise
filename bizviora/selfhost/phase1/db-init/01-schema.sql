@@ -105,10 +105,10 @@ CREATE POLICY biz_finance_read ON bv_qa_business_finance FOR SELECT TO bv_api_me
 -- Personal finance is strictly owned by tenant owner; explicit delegation is disabled
 -- until a separately reviewed, revocable authorisation flow exists.
 CREATE FUNCTION bv_owner(t uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path=public,pg_temp AS $
+SET search_path=public,pg_temp AS $$
  SELECT EXISTS(SELECT 1 FROM bv_memberships m
  WHERE m.tenant_id=t AND m.user_id=bv_actor() AND m.role='owner')
-$;
+$$;
 REVOKE ALL ON FUNCTION bv_owner(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION bv_owner(uuid) TO bv_api_member;
 CREATE POLICY private_finance_read ON bv_qa_private_finance FOR SELECT TO bv_api_member

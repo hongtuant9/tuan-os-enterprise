@@ -24,6 +24,12 @@ async function refresh(preferManager=(new URLSearchParams(location.search).get('
   user=await currentUser();if(!user){if(qaScenario){show('register');prefillQaRegister();}else show('login');return;}
   const staff=await client.rpc('bv_is_platform_manager');if(staff.error)throw Error('MANAGER_ROLE_UNAVAILABLE');
   platformManager=staff.data===true;
+  // Founder users must land in Founder Control Center, not a customer's tenant workspace.
+  // Keep the tenant workspace available to customer accounts and staging QA users.
+  if(platformManager && user.email?.toLowerCase()===APPROVED_OWNER_EMAIL && !qaScenario){
+    location.replace('/founder/');
+    return;
+  }
   $('workspace-manager').hidden=!platformManager;
   $('manager-company').hidden=true;
   $('manager-register').hidden=true;

@@ -118,4 +118,70 @@ for(const [tenant,user,task,approval] of [[a,users.A,taskA.id,approvalA.id],[b,u
  THEN 'PASS' ELSE 'FAIL' END;`);
  assert.equal(result,'PASS','PostgreSQL Audit correlation failure');
 }
+
+// Functional concurrency: 50 distinct authenticated synthetic business tenants.
+// Only on ephemeral CI runner; does not claim sustained OVH server capacity.
+const concurrentCount=50;
+const concurrentTenants=Array.from({length:concurrentCount},(_,i)=>({
+ tenantId:'cccccccc-cccc-4ccc-8ccc-'+(i+1).toString(16).padStart(12,'0'),
+ login:'qa-concurrent-'+suffix+'-'+String(i+1)
+}));
+const activeUsers=[];
+for(let i=0;i<concurrentTenants.length;i+=10){
+ const batch=concurrentTenants.slice(i,i+10);
+ const ids=await Promise.all(batch.map(t=>createSyntheticUser(t.login)));
+ for(let k=0;k<batch.length;k++)activeUsers.push({...batch[k],userId:ids[k]});
+}
+db(`INSERT INTO bv_tenants(id,slug,name) VALUES
+${activeUsers.map((u,i)=>"('"+u.tenantId+"','qa-load-"+suffix+"-"+(i+1)+"','Synthetic Load Tenant')").join(',')}
+ON CONFLICT(id) DO NOTHING;
+INSERT INTO bv_memberships(tenant_id,user_id,role) VALUES
+${activeUsers.map(u=>"('"+u.tenantId+"','"+u.userId+"','owner')").join(',')}
+ON CONFLICT DO NOTHING;`);
+const authenticated=[];
+for(let i=0;i<activeUsers.length;i+=10){
+ const batch=activeUsers.slice(i,i+10);
+ const access=await Promise.all(batch.map(u=>getToken(u.login)));
+ authenticated.push(...batch.map((u,k)=>({...u,token:access[k]})));
+}
+async function parallelCheck(label,fn){
+ const started=performance.now();
+ const results=await Promise.all(authenticated.map(async (u,i)=>{
+  const t=performance.now();
+  const res=await fn(u,i);
+  return {res,latency:performance.now()-t};
+ }));
+ const ms=results.map(x=>x.latency).sort((a,b)=>a-b);
+ const p95=ms[Math.ceil(ms.length*0.95)-1];
+ console.log('QA_50_BUSINESS_SESSIONS',JSON.stringify({
+  test:label,concurrency:authenticated.length,
+  ok:results.filter(x=>x.res).length,errors:results.filter(x=>!x.res).length,
+  p95_ci_ms:Math.round(p95),elapsed_ci_ms:Math.round(performance.now()-started)
+ }));
+ assert.ok(results.every(x=>x.res),'50-business '+label+' failed or leaked across tenants');
+}
+await parallelCheck('context_READ',async u=>{
+ const res=await request('/v1/context?tenantId='+u.tenantId,{token:u.token});
+ return res.status===200&&res.data?.tenant?.id===u.tenantId;
+});
+await parallelCheck('task_CREATE',async u=>{
+ const res=await request('/v1/tasks',{
+  method:'POST',token:u.token,body:{tenantId:u.tenantId,title:'Synthetic 50 business load QA'}
+ });
+ return res.status===201&&res.data?.data?.tenant_id===u.tenantId;
+});
+await parallelCheck('task_LIST',async u=>{
+ const res=await request('/v1/tasks?tenantId='+u.tenantId,{token:u.token});
+ return res.status===200&&Array.isArray(res.data?.data)&&res.data.data.length>=1&&
+   res.data.data.every(x=>x.tenant_id===u.tenantId);
+});
+for(let i=0;i<10;i++){
+ const source=authenticated[i],foreign=authenticated[(i+1)%authenticated.length];
+ const res=await request('/v1/context?tenantId='+foreign.tenantId,{token:source.token});
+ assert.equal(res.status,403,'cross-tenant access admitted during 50-business QA');
+}
+const totalAudit=db("SELECT count(*) FROM bv_audit_events WHERE entity_type='task' AND operation='INSERT'");
+assert.equal(Number(totalAudit),concurrentCount+2,'expected 50 concurrent task Audit records and two base QA tasks');
+console.log('PASS: 50 unique authenticated tenant sessions, 150 real Core HTTP requests, ten cross-tenant denials, persisted Audit counts');
+
 console.log('PASS: Local Keycloak synthetic JWT, Core API own/cross/staff, approve/reject, duplicate denial and PostgreSQL Audit (zero external data)');

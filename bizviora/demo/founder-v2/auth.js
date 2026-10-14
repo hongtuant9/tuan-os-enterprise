@@ -21,12 +21,24 @@ gate.innerHTML = `
     <input id="bv-founder-password" type="password" autocomplete="current-password" required/>
     <button id="bv-founder-submit" type="submit">Đăng nhập quản trị</button>
   </form>
-  <button id="bv-founder-google" type="button" class="bv-auth-google">Tiếp tục với Google (staging)</button>
+  <button id="bv-founder-google" type="button" class="bv-auth-google" disabled>Đăng nhập bằng Google</button>
+  <div class="bv-auth-links"><button type="button" id="bv-founder-forgot">Quên mật khẩu?</button></div>
+  <form id="bv-founder-recovery" hidden>
+    <label for="bv-founder-recovery-email">Email nhận liên kết khôi phục</label>
+    <input id="bv-founder-recovery-email" type="email" autocomplete="email" maxlength="254" required placeholder="email@doanhnghiep.com"/>
+    <button type="submit" id="bv-founder-recovery-submit">Gửi liên kết đặt lại mật khẩu</button>
+    <button type="button" id="bv-founder-recovery-back">← Quay lại đăng nhập</button>
+  </form>
   <div class="bv-auth-links"><a href="/account/">Doanh nghiệp của tôi</a>
   <button id="bv-founder-logout-gate" type="button">Đổi tài khoản</button></div>
-  <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Đăng nhập Google sẽ trở lại trang tài khoản cùng miền, sau đó chọn «Quản trị BIZVIORA». Dashboard chỉ dùng dữ liệu DEMO, không ghi dữ liệu kinh doanh thật.</p>
+  <p class="bv-auth-hint">Chỉ dành cho Platform Manager trên staging. Đăng nhập bằng Google hoặc yêu cầu khôi phục mật khẩu. Founder chỉ mở sau khi xác minh Platform Manager và Core API. Một số tab còn dùng DEMO, bốn tab Doanh nghiệp / Triển khai / Phê duyệt / Audit đọc staging.</p>
 </section>`;
+const GOOGLE_CALLBACK='https://bizviora.com/founder/';
+const RECOVERY_CALLBACK='https://bizviora.com/founder/reset-password/';
 const form = $('bv-founder-login');
+const recoveryForm=$('bv-founder-recovery');
+const googleButton=$('bv-founder-google');
+const recoveryButton=$('bv-founder-forgot');
 const status = $('bv-founder-status');
 const errorText = $('bv-founder-error');
 const app = $('app');
@@ -129,17 +141,44 @@ async function verify() {
   }
 }
 
-$('bv-founder-google').addEventListener('click', async () => {
-  if (!client) return;
-  setMessage('Đang đăng nhập Google. Sau khi quay lại trang tài khoản, chọn «Quản trị BIZVIORA» để mở Founder.');
+googleButton.addEventListener('click', async () => {
+  if (!client) {setMessage('Đang kết nối hệ thống xác thực staging, vui lòng đợi.');return;}
+  googleButton.disabled=true;
+  setMessage('Đang chuyển đến Google để xác thực…');
   try {
+    const redirectTo=location.hostname==='bizviora.com'
+      ?GOOGLE_CALLBACK
+      :location.origin + '/account/'; // Keep the legacy staging URL working.
     const {error}=await client.auth.signInWithOAuth({
-      provider:'google', options:{redirectTo:location.origin + '/account/'}
+      provider:'google', options:{redirectTo}
     });
-    if(error) lock('Không thể khởi động Google OAuth trên staging.', true);
+    if(error)throw error;
   } catch (_) {
-    lock('Google OAuth trên staging chưa được cấu hình đúng.', true);
-  }
+    setMessage('Google chưa thể hoàn tất đăng nhập. Hãy thử lại sau hoặc liên hệ quản trị.',true);
+  } finally {googleButton.disabled=false;}
+});
+recoveryButton.addEventListener('click',()=>{
+  form.hidden=true;googleButton.hidden=true;recoveryButton.hidden=true;
+  recoveryForm.hidden=false;
+  $('bv-founder-recovery-email').value=$('bv-founder-email').value.trim();
+  setMessage('Nhập email đã đăng ký để nhận liên kết khôi phục.');
+});
+$('bv-founder-recovery-back').addEventListener('click',()=>{
+  recoveryForm.hidden=true;form.hidden=false;googleButton.hidden=false;recoveryButton.hidden=false;
+  setMessage('Đăng nhập Founder bằng Google hoặc mật khẩu.');
+});
+recoveryForm.addEventListener('submit',async event=>{
+  event.preventDefault();if(!client)return;
+  const email=$('bv-founder-recovery-email').value.trim();
+  const button=$('bv-founder-recovery-submit');button.disabled=true;
+  setMessage('Đang xử lý yêu cầu gửi email khôi phục…');
+  try {
+    const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:RECOVERY_CALLBACK});
+    if(error)throw error;
+    setMessage('Nếu email đã đăng ký, hệ thống sẽ gửi liên kết khôi phục. Kiểm tra Inbox và Spam. Không dùng lại email cũ.');
+  } catch (_){
+    setMessage('Chưa gửi được liên kết khôi phục trên staging. Vui lòng thử lại hoặc liên hệ hỗ trợ.',true);
+  } finally{button.disabled=false;}
 });
 
 form.addEventListener('submit', async event => {
@@ -167,7 +206,7 @@ form.addEventListener('submit', async event => {
 
 $('bv-founder-logout-gate').addEventListener('click', async () => {
   if (client) await client.auth.signOut();
-  location.replace('/founder-v2/');
+  location.replace(location.hostname==='bizviora.com'?'/founder/':'/founder-v2/');
 });
 document.addEventListener('click', async event => {
   const logout = event.target.closest('#bv-founder-signout');
@@ -176,7 +215,7 @@ document.addEventListener('click', async event => {
   document.documentElement.classList.remove('bv-founderauth-ok');
   app.hidden = true;
   if (client) await client.auth.signOut();
-  location.replace('/founder-v2/');
+  location.replace(location.hostname==='bizviora.com'?'/founder/':'/founder-v2/');
 });
 window.addEventListener('focus', () => { if (client) void verify(); });
 document.addEventListener('visibilitychange', () => {
@@ -193,6 +232,10 @@ document.addEventListener('visibilitychange', () => {
     client = createClient(config.supabaseUrl,config.publishableKey,{
       auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}
     });
+    googleButton.disabled=false;
+    if(new URLSearchParams(location.search).get('reset_done')==='1'){
+      setMessage('Mật khẩu đã thay đổi. Vui lòng đăng nhập lại bằng Google hoặc mật khẩu mới.');
+    }
     client.auth.onAuthStateChange(event => {
       if (event === 'SIGNED_OUT') lock('Phiên đăng nhập đã kết thúc.', true);
     });

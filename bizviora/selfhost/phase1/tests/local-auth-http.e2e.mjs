@@ -14,7 +14,12 @@ const password='qa-synthetic-'+randomBytes(24).toString('hex');
 async function postForm(url,params){
  const response=await fetch(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(params)});
  const result=await response.json().catch(()=>({}));
- assert.equal(response.status,200,'Keycloak login/token exchange rejected HTTP '+response.status);
+ if(response.status!==200){
+  // Only expose Keycloak's classified error; never credentials, JWT or raw response.
+  const reason=String(result.error||'unknown').replace(/[^a-z_]/gi,'').slice(0,36);
+  const detail=String(result.error_description||'').replace(/[^a-zA-Z .]/g,'').slice(0,70);
+  throw Error('KEYCLOAK_LOGIN_DENIED_HTTP_'+response.status+'_'+reason+'_'+detail);
+ }
  assert.ok(result.access_token&&typeof result.access_token==='string');
  return result.access_token;
 }
@@ -25,7 +30,8 @@ const admin=await postForm(authBase+'/realms/master/protocol/openid-connect/toke
 async function createSyntheticUser(name){
  const url=authBase+'/admin/realms/'+realm+'/users';
  const result=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+admin,'content-type':'application/json'},body:JSON.stringify({
-  username:name,enabled:true,emailVerified:false,
+  username:name,enabled:true,email:name+'@qa.invalid',emailVerified:true,
+  firstName:'Synthetic',lastName:'QATester',requiredActions:[],
   credentials:[{type:'password',value:password,temporary:false}]
  })});
  assert.equal(result.status,201,'Synthetic Keycloak user creation failed HTTP '+result.status);

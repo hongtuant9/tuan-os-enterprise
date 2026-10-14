@@ -25,7 +25,13 @@ async function verifyBearer(token){
      payload.exp<=payload.iat || payload.exp-payload.iat>900)
     throw Error('JWT_TIME_CLAIMS_INVALID');
   return {id:requireUuid(payload.sub,'user_id')};
- }catch{throw new ApiError(401,'AUTH_INVALID')}
+ }catch(error){
+  // Synthetic QA only: classify validation failures without logging tokens,
+  // usernames, credentials, claims, or raw exception messages.
+  const code=String(error?.code||error?.name||'UNKNOWN').replace(/[^A-Z_0-9]/gi,'').slice(0,48);
+  console.warn('QA_AUTH_VALIDATION_DENIED_CODE',code);
+  throw new ApiError(401,'AUTH_INVALID');
+ }
 }
 const api=createApi({verifyBearer,repository:localRepository});
 const server=http.createServer(async(incoming,outgoing)=>{

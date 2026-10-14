@@ -38,7 +38,7 @@ jobs:
       - name: Start isolated DB and run rollback-only RLS, finance and audit regression
         shell: bash
         run: |
-          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d --wait db
+          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d db
           # pg_isready may report healthy while docker-entrypoint-initdb.d is
           # still initializing grants and policies. Wait for final RLS privileges.
           schema_ready="f"

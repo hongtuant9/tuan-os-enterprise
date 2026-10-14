@@ -83,6 +83,12 @@ jobs:
           exit 1
       - name: JWT HTTP E2E with synthetic tenant A, B and staff; verify PostgreSQL Audit
         run: node bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs
+      - name: Classify synthetic Core Auth errors if HTTP E2E fails
+        if: failure()
+        shell: bash
+        run: |
+          docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=100 api \
+            | grep -E 'QA_AUTH_VALIDATION_DENIED_CODE|SELFHOST_QUERY_FAILED' || true
       - name: Cleanup ephemeral QA containers and volumes
         if: always()
         run: docker compose -f bizviora/selfhost/phase1/compose.yaml down --volumes --remove-orphans || true

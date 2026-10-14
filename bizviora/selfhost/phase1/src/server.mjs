@@ -17,6 +17,13 @@ async function verifyBearer(token){
   const {payload}=await jwtVerify(token,keySet,{issuer,algorithms:['RS256'],clockTolerance:'10s'});
   if(payload.azp!=='bizviora-phase1-qa'||payload.typ!=='Bearer')
     throw Error('UNEXPECTED_TOKEN_CLIENT');
+  // jwtVerify checks expiration when present; require exp/iat to reject
+  // incorrectly minted or long-lived tokens, even when signed by our realm.
+  const now=Math.floor(Date.now()/1000);
+  if(!Number.isInteger(payload.exp) || !Number.isInteger(payload.iat) ||
+     payload.iat>now+10 || payload.exp<=now ||
+     payload.exp<=payload.iat || payload.exp-payload.iat>900)
+    throw Error('JWT_TIME_CLAIMS_INVALID');
   return {id:requireUuid(payload.sub,'user_id')};
  }catch{throw new ApiError(401,'AUTH_INVALID')}
 }

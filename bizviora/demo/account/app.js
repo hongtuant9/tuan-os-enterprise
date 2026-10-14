@@ -191,8 +191,8 @@ $('show-register').onclick=()=>show('register');$('show-login').onclick=()=>show
 $('owner-refresh').onclick=()=>refresh(false);
 $('re-email').addEventListener('input',()=>{$('register-submit').disabled=!signupEnabled&&!qaEmails.has($('re-email').value.trim().toLowerCase())&&$('re-email').value.trim().toLowerCase()!==APPROVED_OWNER_EMAIL;});
 $('logout').onclick=signout;$('workspace-logout').onclick=signout;$('refresh').onclick=()=>refresh();$('manager-refresh').onclick=reviews;
-$('workspace-manager').onclick=()=>location.assign('/founder-v2/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
-$('account-manager').onclick=()=>location.assign('/founder-v2/');
+$('workspace-manager').onclick=()=>location.assign('/founder/');$('manager-company').onclick=()=>refresh(false);$('manager-register').onclick=async()=>{if(!platformManager)return;show('application');await plans();};
+$('account-manager').onclick=()=>location.assign('/founder/');
 $('login-form').onsubmit=async e=>{e.preventDefault();if(!client){failed('UNCONFIGURED');return;}const email=$('li-email').value.trim(),password=$('li-password').value;const {error}=await client.auth.signInWithPassword({email,password});$('li-password').value='';if(error){failed('LOGIN_FAILED_OR_EMAIL_NOT_VERIFIED');return;}await refresh();};
 $('register-form').onsubmit=async e=>{e.preventDefault();const email=$('re-email').value.trim(),password=$('re-password').value;
  if(!signupEnabled&&email.toLowerCase()!==APPROVED_OWNER_EMAIL&&!qaEmails.has(email.toLowerCase())){failed('PUBLIC_REGISTRATION_GATE_HOLD');return;}

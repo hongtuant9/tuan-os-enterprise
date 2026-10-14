@@ -12,6 +12,8 @@ def public_key():
             p=token.split('.')[1]; claims=json.loads(base64.urlsafe_b64decode(p+'='*(-len(p)%4)))
             if claims.get('role')=='anon' and claims.get('ref')=='oxakhhpyvvymujiwuvnm': return token
         except Exception: pass
+    keys=re.findall(r'sb_publishable_[A-Za-z0-9_-]+',source)
+    if 'oxakhhpyvvymujiwuvnm' in source and len(set(keys))==1: return keys[0]
     raise RuntimeError('STAGING_PUBLIC_KEY_NOT_FOUND_IN_EXISTING_QA_SCRIPT')
 def http(url,method='GET',body=None,token=None,key=None):
     headers={'Content-Type':'application/json'}

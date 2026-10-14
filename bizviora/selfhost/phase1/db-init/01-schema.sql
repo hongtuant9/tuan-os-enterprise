@@ -139,3 +139,28 @@ BEGIN
 END $$;
 CREATE TRIGGER bv_approval_guard_audit BEFORE INSERT OR UPDATE ON bv_approvals
  FOR EACH ROW EXECUTE FUNCTION bv_approval_guard();
+
+-- Defense-in-depth: linked business unit/property/approval task must belong to actor tenant.
+CREATE FUNCTION bv_validate_task_tenant() RETURNS trigger LANGUAGE plpgsql
+SECURITY DEFINER SET search_path=public,pg_temp AS $$
+BEGIN
+ IF NEW.business_unit_id IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM bv_business_units WHERE id=NEW.business_unit_id AND tenant_id=NEW.tenant_id)
+ THEN RAISE EXCEPTION 'CROSS_TENANT_BUSINESS_UNIT' USING ERRCODE='42501'; END IF;
+ IF NEW.property_id IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM bv_properties WHERE id=NEW.property_id AND tenant_id=NEW.tenant_id)
+ THEN RAISE EXCEPTION 'CROSS_TENANT_PROPERTY' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER bv_task_tenant_refs BEFORE INSERT OR UPDATE ON bv_tasks
+ FOR EACH ROW EXECUTE FUNCTION bv_validate_task_tenant();
+CREATE FUNCTION bv_validate_approval_task_tenant() RETURNS trigger LANGUAGE plpgsql
+SECURITY DEFINER SET search_path=public,pg_temp AS $$
+BEGIN
+ IF NEW.task_id IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM bv_tasks WHERE id=NEW.task_id AND tenant_id=NEW.tenant_id)
+ THEN RAISE EXCEPTION 'CROSS_TENANT_APPROVAL_TASK' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER bv_approval_tenant_refs BEFORE INSERT ON bv_approvals
+ FOR EACH ROW EXECUTE FUNCTION bv_validate_approval_task_tenant();

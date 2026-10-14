@@ -249,13 +249,13 @@ document.addEventListener('visibilitychange', () => {
       auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}
     });
     googleButton.disabled=false;
-    if(new URLSearchParams(location.search).get('reset_done')==='1'){
-      setMessage('Mật khẩu đã thay đổi. Vui lòng đăng nhập lại bằng Google hoặc mật khẩu mới.');
-    }
     client.auth.onAuthStateChange(event => {
       if (event === 'SIGNED_OUT') lock('Phiên đăng nhập đã kết thúc.', true);
     });
     await verify();
+    if(new URLSearchParams(location.search).get('reset_done')==='1' && !gate.hidden){
+      setMessage('Mật khẩu đã thay đổi. Vui lòng đăng nhập lại bằng Google hoặc mật khẩu mới.');
+    }
   } catch (_) {
     lock('Không thể kết nối xác thực Supabase staging. Trang quản trị đang khóa an toàn.', false);
   }

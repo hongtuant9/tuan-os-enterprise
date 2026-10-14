@@ -67,7 +67,10 @@ console.log('QA_JWT_CLAIM_SHAPE',JSON.stringify({
  expInteger:Number.isInteger(meta.exp),
  iatInteger:Number.isInteger(meta.iat),
  lifetimeSeconds:Number.isInteger(meta.exp)&&Number.isInteger(meta.iat)?meta.exp-meta.iat:null,
- subjectUuid:idFormat.test(meta.sub||'')
+ subjectUuid:idFormat.test(meta.sub||''),
+ tokenLength:tokens.A.length,
+ tokenParts:tokens.A.split('.').length,
+ apiBearerPatternMatch:/^[A-Za-z0-9._~-]{12,4096}$/.test(tokens.A)
 }));
 async function request(path,{method='GET',token,body}={}){
  const headers={};
@@ -79,7 +82,7 @@ async function request(path,{method='GET',token,body}={}){
 }
 async function expect(path,options,status){
  const result=await request(path,options);
- assert.equal(result.status,status,methodLabel(path,options,status)+' returned HTTP '+result.status);
+ assert.equal(result.status,status,methodLabel(path,options,status)+' returned HTTP '+result.status+' classified_error='+String(result.data?.error||'none').replace(/[^A-Z_]/gi,'').slice(0,48));
  return result.data;
 }
 function methodLabel(path,opts,s){return (opts?.method||'GET')+' '+path+' expected '+s}

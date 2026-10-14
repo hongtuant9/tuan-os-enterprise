@@ -5,7 +5,7 @@ const t=(tag,value,cls)=>{const e=document.createElement(tag);if(value!=null)e.t
 const add=(parent,...children)=>{for(const child of children)if(child)parent.appendChild(child);return parent};
 const status=(box,message)=>{box.replaceChildren(t('p',message,'bv-live-status'))};
 const shortDate=value=>value?String(value).slice(0,19).replace('T',' '):'—';
-let client,observer,viewNonce=0,operationBusy=false;
+let client,observer,viewNonce=0,operationBusy=false,lastNavRoute=null;
 const stillAuthorized=()=>document.documentElement.classList.contains('bv-founderauth-ok');
 const manager=async()=>{const x=await client.rpc('bv_is_platform_manager');return !x.error&&x.data===true};
 async function loadRequests(){
@@ -133,13 +133,16 @@ async function paint(force=false){
  if(!client||!stillAuthorized())return;
  const viewport=document.getElementById('viewport');
  const route=document.querySelector('.navbtn.on')?.dataset.nav;
- if(!viewport||!LIVE_ROUTES.includes(route)){if(route)navState(route);return}
+ if(!viewport||!LIVE_ROUTES.includes(route)){
+  if(route && route!==lastNavRoute){lastNavRoute=route;navState(route)}
+  return;
+ }
  if(!force&&viewport.dataset.liveOps===route)return;
  const seq=++viewNonce;viewport.dataset.liveOps=route;
  viewport.replaceChildren();
  const content=t('div',null,'bv-live-root');
  viewport.append(content);heading(route,content);status(content,'Đang xác minh vai trò và tải dữ liệu staging…');
- navState(route);
+ if(route!==lastNavRoute){lastNavRoute=route;navState(route)}
  try{
   if(!await manager())throw Error('PLATFORM_MANAGER_DENIED');
   const records=route==='audit'?await loadReviews():await loadRequests();

@@ -88,8 +88,8 @@ async function expect(path,options,status){
 function methodLabel(path,opts,s){return (opts?.method||'GET')+' '+path+' expected '+s}
 assert.equal((await expect('/health',{},200)).scope,'SELF_HOSTED_PHASE1_SYNTHETIC');
 await expect('/v1/context?tenantId='+a,{},401);
-await expect('/v1/context?tenantId='+a,{token:'invalid-token'},401);
 await expect('/v1/context?tenantId='+a,{token:tokens.A},200);
+await expect('/v1/context?tenantId='+a,{token:'invalid-token'},401);
 await expect('/v1/context?tenantId='+b,{token:tokens.A},403);
 await expect('/v1/context?tenantId='+a,{token:tokens.B},403);
 await expect('/v1/context?tenantId='+b,{token:tokens.B},200);

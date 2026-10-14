@@ -1,5 +1,10 @@
 name: BIZVIORA Phase1 standalone isolated validation
 on:
+  pull_request:
+    paths:
+      - 'bizviora/selfhost/phase1/**'
+      - 'bizviora/core/src/**'
+      - '.github/workflows/bizviora-phase1-standalone-review.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,6 +22,7 @@ jobs:
           node --check bizviora/core/src/api.mjs
           node --check bizviora/selfhost/phase1/src/server.mjs
           node --check bizviora/selfhost/phase1/src/pg-adapter.mjs
+          node --check bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs
       - name: Run existing Core API role validation tests
         run: node --test bizviora/core/tests/api.test.mjs
       - name: Generate ephemeral synthetic DB credentials
@@ -27,13 +33,29 @@ jobs:
           done
       - name: Validate isolated docker compose config
         run: docker compose -f bizviora/selfhost/phase1/compose.yaml config --quiet
-      - name: Start only isolated PostgreSQL and run RLS finance audit regression
+      - name: Start isolated DB and run rollback-only RLS, finance and audit regression
         shell: bash
         run: |
-          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d db
+          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d --wait db
           docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
             psql -U postgres -d bizviora_phase1 -v ON_ERROR_STOP=1 \
             < bizviora/selfhost/phase1/tests/rls-finance-audit.sql
-      - name: Clean up ephemeral volumes
+      - name: Start only isolated auth and Core API synthetic QA
+        shell: bash
+        run: |
+          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d --build auth api
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18093/realms/bizviora-phase1/.well-known/openid-configuration >/dev/null \
+              && curl -fsS --max-time 2 http://127.0.0.1:18094/health >/dev/null; then
+              echo 'Isolated Auth and Core health endpoints reachable'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'FAILED: Isolated Auth/Core readiness'
+          exit 1
+      - name: JWT HTTP E2E with synthetic tenant A, B and staff; verify PostgreSQL Audit
+        run: node bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs
+      - name: Cleanup ephemeral QA containers and volumes
         if: always()
         run: docker compose -f bizviora/selfhost/phase1/compose.yaml down --volumes --remove-orphans || true

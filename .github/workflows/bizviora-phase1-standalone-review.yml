@@ -1,0 +1,44 @@
+name: BIZVIORA Phase1 standalone isolated validation
+on:
+  pull_request:
+    paths:
+      - 'bizviora/selfhost/phase1/**'
+      - 'bizviora/core/src/**'
+      - '.github/workflows/bizviora-phase1-standalone-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  selfhost-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated Core and database adapters syntax
+        run: |
+          node --check bizviora/core/src/api.mjs
+          node --check bizviora/selfhost/phase1/src/server.mjs
+          node --check bizviora/selfhost/phase1/src/pg-adapter.mjs
+      - name: Run existing Core API role validation tests
+        run: node --test bizviora/core/tests/api.test.mjs
+      - name: Generate ephemeral synthetic DB credentials
+        shell: bash
+        run: |
+          for name in LAB_DB_ROOT_PASSWORD LAB_APP_DB_PASSWORD LAB_AUTH_DB_PASSWORD LAB_AUTH_ADMIN_PASSWORD; do
+            echo "${name}=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          done
+      - name: Validate isolated docker compose config
+        run: docker compose -f bizviora/selfhost/phase1/compose.yaml config --quiet
+      - name: Start only isolated PostgreSQL and run RLS finance audit regression
+        shell: bash
+        run: |
+          docker compose -f bizviora/selfhost/phase1/compose.yaml up -d db
+          docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
+            psql -U postgres -d bizviora_phase1 -v ON_ERROR_STOP=1 \
+            < bizviora/selfhost/phase1/tests/rls-finance-audit.sql
+      - name: Clean up ephemeral volumes
+        if: always()
+        run: docker compose -f bizviora/selfhost/phase1/compose.yaml down --volumes --remove-orphans || true

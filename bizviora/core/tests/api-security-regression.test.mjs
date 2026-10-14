@@ -151,3 +151,28 @@ test('Founder CORS blocks untrusted origins and non-Founder routes',async()=>{
  }));
  assert.equal(disallowed.status,403);
 });
+
+test('Founder CORS accepts the exact branded Founder origin on the read-only access gate',async()=>{
+ const api=makeApi();
+ const origin='https://bizviora.com';
+ const preflight=await api(new Request(url('/v1/founder/access'),{
+  method:'OPTIONS',
+  headers:{Origin:origin,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'}
+ }));
+ assert.equal(preflight.status,204);
+ assert.equal(preflight.headers.get('Access-Control-Allow-Origin'),origin);
+ const anonymous=await api(new Request(url('/v1/founder/access'),{headers:{Origin:origin}}));
+ assert.equal(anonymous.status,401);
+ assert.equal(anonymous.headers.get('Access-Control-Allow-Origin'),origin);
+ for(const foreign of ['https://www.bizviora.com','https://app.bizviora.com','https://attacker.example']){
+  const denied=await api(new Request(url('/v1/founder/access'),{
+   method:'OPTIONS',headers:{Origin:foreign,'Access-Control-Request-Method':'GET',
+    'Access-Control-Request-Headers':'authorization'}
+  }));
+  assert.equal(denied.status,403);
+ }
+ const crossRoute=await api(new Request(url('/v1/tasks'),{
+  method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'GET'}
+ }));
+ assert.equal(crossRoute.status,403);
+});

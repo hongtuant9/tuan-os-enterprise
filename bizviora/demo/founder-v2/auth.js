@@ -100,6 +100,10 @@ async function verify() {
     // Only after a server-authoritative verified user and manager-role check do we execute
     // the synthetic Founder demo. No service-role key or external-business data is exposed.
     renderFounderOnce();
+    // Founder operational modules are mounted only AFTER real signed-JWT Core API
+    // and platform-manager RPC both grant staging access.
+    const {mountFounderOps}=await import('./ops.js');
+    mountFounderOps(client);
     app.hidden = false;
     document.documentElement.classList.add('bv-founderauth-ok');
     gate.hidden = true;
@@ -113,7 +117,7 @@ async function verify() {
           version:'v2.2-icon-fidelity-10-tabs',
           icons:{scope:'all-10-tabs',status:'active-after-auth'}
         };
-        document.title = 'BIZVIORA — Founder Control Center V2.2 · Icon Fidelity · DEMO';
+        document.title = 'BIZVIORA — Founder Control Center V2.5 · STAGING + DEMO';
       }
     } catch (_) {
       // Icon module is noncritical; never bypass or weaken the authenticated gate.

@@ -42,7 +42,7 @@ jobs:
           # pg_isready may report healthy while docker-entrypoint-initdb.d is
           # still initializing grants and policies. Wait for final RLS privileges.
           schema_ready="f"
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 20); do
             schema_ready=$(docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
               psql -U postgres -d bizviora_phase1 -Atc "SELECT CASE WHEN
                 to_regrole('bv_api_member') IS NOT NULL
@@ -54,6 +54,11 @@ jobs:
           done
           if [ "$schema_ready" != "t" ]; then
             echo "DB schema/grants readiness failed; stop before accessing QA data"
+            echo "=== DB initialization last 75 log lines (ephemeral synthetic only) ==="
+            docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=75 db || true
+            echo "=== Isolated schema/role privileges ==="
+            docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
+              psql -U postgres -d bizviora_phase1 -Atc "SELECT 'member_role',to_regrole('bv_api_member'); SELECT 'tenants',to_regclass('public.bv_tenants'); SELECT 'finance',to_regclass('public.bv_qa_private_finance');" || true
             exit 1
           fi
           docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \

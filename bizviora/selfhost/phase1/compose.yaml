@@ -1,0 +1,77 @@
+name: bizviora-phase1-standalone-qa
+# PHASE1 SYNTHETIC STAGING ONLY. No Render, Supabase, external customer data or production routes.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: bizviora_phase1
+      POSTGRES_PASSWORD: ${LAB_DB_ROOT_PASSWORD:?set-in-local-env}
+      BV_APP_PASSWORD: ${LAB_APP_DB_PASSWORD:?set-in-local-env}
+      BV_AUTH_DB_PASSWORD: ${LAB_AUTH_DB_PASSWORD:?set-in-local-env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    networks: [isolated]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U postgres -d bizviora_phase1"]
+      interval: 5s
+      timeout: 3s
+      start_period: 45s
+      retries: 30
+    restart: unless-stopped
+  auth:
+    image: quay.io/keycloak/keycloak:26.4.0
+    command: ["start-dev","--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/bizviora_auth
+      KC_DB_USERNAME: bv_auth_login
+      KC_DB_PASSWORD: ${LAB_AUTH_DB_PASSWORD:?set-in-local-env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: lab-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${LAB_AUTH_ADMIN_PASSWORD:?set-in-local-env}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "http://127.0.0.1:18093"
+      KC_HEALTH_ENABLED: "true"
+    ports: ["127.0.0.1:18093:8080"]
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [isolated, hostaccess]
+    mem_limit: 1600m
+    restart: unless-stopped
+  api:
+    build:
+      context: ../../..
+      dockerfile: bizviora/selfhost/phase1/Dockerfile
+    environment:
+      BV_PHASE1_ACK: "ISOLATED_SYNTHETIC_ONLY"
+      BV_PG_HOST: db
+      BV_PG_DB: bizviora_phase1
+      BV_PG_USER: bv_api_login
+      BV_PG_PASSWORD: ${LAB_APP_DB_PASSWORD:?set-in-local-env}
+      BV_JWKS_URL: "http://auth:8080/realms/bizviora-phase1/protocol/openid-connect/certs"
+      BV_JWT_ISSUER: "http://127.0.0.1:18093/realms/bizviora-phase1"
+      BV_JWT_CLIENT_ID: bizviora-phase1-qa
+      PORT: "8080"
+    ports: ["127.0.0.1:18094:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+      auth: {condition: service_started}
+    networks: [isolated, hostaccess]
+    mem_limit: 512m
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+networks:
+  isolated:
+    internal: true
+  # Host-access bridge solely for loopback-published QA Auth and Core API ports.
+  # PostgreSQL remains attached only to the fully internal isolated network.
+  hostaccess:
+    driver: bridge
+volumes:
+  pgdata:

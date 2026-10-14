@@ -88,7 +88,7 @@ jobs:
         shell: bash
         run: |
           docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=100 api \
-            | grep -E 'QA_AUTH_VALIDATION_DENIED_CODE|SELFHOST_QUERY_FAILED' || true
+            | grep -E 'QA_AUTH_VALIDATION_DENIED_CODE|QA_VERIFY_BEARER_SHAPE|SELFHOST_QUERY_FAILED' || true
       - name: Cleanup ephemeral QA containers and volumes
         if: always()
         run: docker compose -f bizviora/selfhost/phase1/compose.yaml down --volumes --remove-orphans || true

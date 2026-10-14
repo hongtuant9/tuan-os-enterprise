@@ -83,6 +83,9 @@ jobs:
           exit 1
       - name: JWT HTTP E2E with synthetic tenant A, B and staff; verify PostgreSQL Audit
         run: node bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs
+      - name: Verify business + Auth backup restore in a separate ephemeral PostgreSQL container
+        shell: bash
+        run: bash bizviora/selfhost/phase1/tests/backup-restore-ci.sh
       - name: Classify synthetic Core Auth errors if HTTP E2E fails
         if: failure()
         shell: bash

@@ -27,7 +27,9 @@ async function verifyBearer(token){
      payload.iat>now+10 || payload.exp<=now ||
      payload.exp<=payload.iat || payload.exp-payload.iat>900)
     throw Error('JWT_TIME_CLAIMS_INVALID');
-  return {id:requireUuid(payload.sub,'user_id')};
+  const validatedUserId=requireUuid(payload.sub,'user_id');
+  console.info('QA_JWT_VERIFY_ACCEPTED');
+  return {id:validatedUserId};
  }catch(error){
   // Synthetic QA only: classify validation failures without logging tokens,
   // usernames, credentials, claims, or raw exception messages.

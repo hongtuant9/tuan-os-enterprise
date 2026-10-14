@@ -59,6 +59,16 @@ async function getToken(user){
  });
 }
 const tokens={A:await getToken(accountA),B:await getToken(accountB),S:await getToken(accountStaff)};
+const meta=JSON.parse(Buffer.from(tokens.A.split('.')[1],'base64url').toString());
+console.log('QA_JWT_CLAIM_SHAPE',JSON.stringify({
+ issuerMatches:meta.iss===authBase+'/realms/'+realm,
+ clientMatches:meta.azp==='bizviora-phase1-qa',
+ typeMatches:meta.typ==='Bearer',
+ expInteger:Number.isInteger(meta.exp),
+ iatInteger:Number.isInteger(meta.iat),
+ lifetimeSeconds:Number.isInteger(meta.exp)&&Number.isInteger(meta.iat)?meta.exp-meta.iat:null,
+ subjectUuid:idFormat.test(meta.sub||'')
+}));
 async function request(path,{method='GET',token,body}={}){
  const headers={};
  if(token)headers.authorization='Bearer '+token;

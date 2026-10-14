@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { ApiError } from '../core/src/access.mjs';
+import { ApiError, UUID } from '../core/src/access.mjs';
 
 // Independent PostgreSQL inside the isolated Docker network. Never connect to Supabase.
 if(process.env.BV_PHASE1_ACK!=='ISOLATED_SYNTHETIC_ONLY' ||
@@ -12,9 +12,9 @@ const pool=new pg.Pool({
  connectionTimeoutMillis:5000,idleTimeoutMillis:30000,
  statement_timeout:9000,query_timeout:10000
 });
-const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Reuse Core's canonical five-group UUID rule; never maintain a second regex.
 async function withActor(userId,callback){
- if(!uuid.test(userId||''))throw new ApiError(401,'AUTH_INVALID');
+ if(!UUID.test(userId||''))throw new ApiError(401,'AUTH_INVALID');
  const client=await pool.connect();
  try{
   await client.query('BEGIN');

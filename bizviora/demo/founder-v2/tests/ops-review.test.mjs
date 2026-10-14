@@ -4,11 +4,12 @@ import {LIVE_ROUTES,businessRows,reviewWithEvidence} from '../ops-review.mjs';
 const ID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TENANT='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 function gate(overrides={}){
+ let count=0;
  const before={id:ID,status:'PENDING',tenant_id:null};
  const after={id:ID,status:'APPROVED',tenant_id:TENANT};
  return {
   isManager:async()=>true,
-  getRequest:async()=>gate.calls++===0?before:after,
+  getRequest:async()=>count++===0?before:after,
   commit:async()=>({request_id:ID,status:'APPROVED',tenant_id:TENANT}),
   getReview:async()=>({request_id:ID,result:'APPROVED'}),
   ...overrides

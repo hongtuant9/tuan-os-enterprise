@@ -49,8 +49,8 @@ test('10 owner B không ghi được A',async()=>assert.equal((await run('/v1/ta
 test('11 không nhận trạng thái DONE lúc tạo',async()=>assert.equal((await run('/v1/tasks',{method:'POST',body:{tenantId:A,title:'Tác vụ',status:'DONE'}})).status,400));
 test('12 cấm tiêu đề trống',()=>assert.throws(()=>validateTaskInput({title:' '}),/INVALID_TITLE/));
 test('13 cấm mã phân công không phải UUID',()=>assert.throws(()=>validateTaskInput({title:'Tác vụ',assignedTo:'abc'}),/INVALID_ASSIGNED_TO/));
-test('14 phê duyệt chỉ đọc',async()=>{const r=await run('/v1/approvals?tenantId='+A);assert.equal(r.status,200);assert.equal(r.body.writesEnabled,false);});
-test('15 không cho ghi duyệt',async()=>assert.equal((await run('/v1/approvals',{method:'POST',body:{tenantId:A,status:'APPROVED'}})).status,405));
+test('14 phê duyệt mở ghi có phân quyền',async()=>{const r=await run('/v1/approvals?tenantId='+A);assert.equal(r.status,200);assert.equal(r.body.writesEnabled,true);});
+test('15 staff không được quyết định duyệt',async()=>assert.equal((await run('/v1/approvals/decision',{method:'POST',token:'staff-A-token-12345',body:{tenantId:A,approvalId:B,decision:'APPROVED'}})).status,403));
 test('16 không mở tài chính cá nhân',async()=>assert.equal((await run('/v1/private-finance?tenantId='+A)).status,405));
 test('17 URL tự khai userId không nâng quyền staff',async()=>{const r=await run('/v1/tasks?tenantId='+A+'&userId='+UA,{token:'staff-A-token-12345'});assert.equal(r.status,200);assert.equal(calls[0][1].role,'staff');});
 test('18 không cho tráo tenant membership',()=>assert.throws(()=>requireMembership({userId:UA,tenantId:B,membership:members[0]}),/TENANT_ACCESS_DENIED/));

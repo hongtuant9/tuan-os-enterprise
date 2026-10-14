@@ -35,9 +35,9 @@ test('staff cannot POST task',async()=>{
  const api=makeApi('staff');const r=await api(req('/v1/tasks',{method:'POST',authorization:'Bearer '+token,body:{tenantId:tenant,title:'Synthetic'}}));
  assert.equal(r.status,403);assert.equal(calls.create,0);
 });
-test('approval mutation remains disabled',async()=>{
- const api=makeApi();const r=await api(req('/v1/approvals',{method:'POST',authorization:'Bearer '+token,body:{tenantId:tenant,status:'APPROVED'}}));
- assert.equal(r.status,405);assert.equal(calls.create,0);
+test('staff approval decision denied before repository write',async()=>{
+ const api=makeApi('staff');const r=await api(req('/v1/approvals/decision',{method:'POST',authorization:'Bearer '+token,body:{tenantId:tenant,approvalId:other,decision:'APPROVED'}}));
+ assert.equal(r.status,403);assert.equal(calls.create,0);
 });
 test('health response never enables outbound or booking writes',async()=>{
  const api=makeApi();const r=await api(req('/health'));const body=await r.json();

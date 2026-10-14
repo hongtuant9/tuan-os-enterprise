@@ -61,6 +61,23 @@ export function createSupabaseDependencies(env=process.env) {
           return checked(await db.from('bv_approvals')
             .select('id,tenant_id,task_id,status,requested_by,created_at')
             .eq('tenant_id',actor.tenantId).order('created_at',{ascending:false}).limit(50));
+        },
+        async requestApproval(actor,{taskId}) {
+          if(taskId){
+            const task=checked(await db.from('bv_tasks').select('id').eq('id',taskId).eq('tenant_id',actor.tenantId).maybeSingle());
+            if(!task)throw new ApiError(404,'TASK_NOT_FOUND');
+          }
+          return checked(await db.from('bv_approvals')
+            .insert({tenant_id:actor.tenantId,task_id:taskId,requested_by:actor.userId,status:'PENDING'})
+            .select('id,tenant_id,task_id,status,requested_by,created_at').single());
+        },
+        async decideApproval(actor,{approvalId,decision}) {
+          const {data,error}=await db.from('bv_approvals')
+            .update({status:decision}).eq('id',approvalId).eq('tenant_id',actor.tenantId).eq('status','PENDING')
+            .select('id,tenant_id,task_id,status,requested_by,created_at').maybeSingle();
+          if(error)throw new ApiError(403,'APPROVAL_DECISION_DENIED');
+          if(!data)throw new ApiError(409,'APPROVAL_NOT_PENDING');
+          return data;
         }
       };
     }

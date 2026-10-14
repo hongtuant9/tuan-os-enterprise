@@ -84,11 +84,15 @@ function renderFounderOnce() {
   if (!window.BIZVIORA_FOUNDER_V2) throw new Error('FOUNDER_RENDER_FAILED');
   launched = true;
 }
+function bounded(promise, step, milliseconds=25000) {
+  return Promise.race([promise, new Promise((_,reject)=>setTimeout(()=>reject(new Error(step+'_TIMEOUT')), milliseconds))]);
+}
 async function verify() {
   if (checking || !client) return;
   checking = true;
   try {
-    const { data, error } = await client.auth.getUser();
+    setMessage('Bước 1/4: Đang kiểm tra phiên Supabase…');
+    const { data, error } = await bounded(client.auth.getUser(),'GET_USER');
     if (error || !data?.user) {
       lock('Đăng nhập để mở Founder Control Center.', true);
       return;
@@ -99,22 +103,25 @@ async function verify() {
     }
     // Defense in depth: the backend validates a real signed user JWT and the
     // platform-manager RPC. A browser-only role check cannot authorize Founder.
-    const role = await client.rpc('bv_is_platform_manager');
+    setMessage('Bước 2/4: Đang kiểm tra quyền Platform Manager…');
+    const role = await bounded(client.rpc('bv_is_platform_manager'),'MANAGER_ROLE');
     if (role.error || role.data !== true) {
       lock('Tài khoản đã đăng nhập nhưng không có quyền BIZVIORA Platform Manager. Truy cập bị từ chối.', false);
       return;
     }
-    const {data:sessionData,error:sessionError} = await client.auth.getSession();
+    setMessage('Bước 3/4: Đang kiểm tra JWT…');
+    const {data:sessionData,error:sessionError} = await bounded(client.auth.getSession(),'GET_SESSION');
     const session=sessionData?.session;
     if (sessionError || !session?.access_token || session.user?.id !== data.user.id) {
       lock('Không tìm thấy phiên xác thực Founder hợp lệ. Vui lòng đăng nhập lại.', false);
       return;
     }
+    setMessage('Bước 4/4: Đang xác minh quyền qua Core API…');
     const accessResponse=await fetch(CORE_API + '/v1/founder/access',{
       method:'GET',
       headers:{Authorization:'Bearer ' + session.access_token},
       cache:'no-store',
-      credentials:'omit'
+      credentials:'omit', signal:AbortSignal.timeout(25000)
     });
     if (!accessResponse.ok) {
       lock('Core API từ chối quyền Founder hoặc chưa sẵn sàng. Vui lòng thử lại sau.', false);
@@ -150,8 +157,9 @@ async function verify() {
     } catch (_) {
       // Icon module is noncritical; never bypass or weaken the authenticated gate.
     }
-  } catch (_) {
-    lock('Không thể xác minh phiên đăng nhập hoặc quyền truy cập. Vui lòng thử lại.', false);
+  } catch (failure) {
+    const diagnostic = String(failure?.message || 'UNKNOWN').replace(/[^A-Z0-9_]/gi,'_').slice(0,55);
+    lock('Xác thực Founder chưa hoàn tất ('+diagnostic+'). Vui lòng thử lại hoặc báo mã lỗi này.', true);
   } finally {
     checking = false;
   }
@@ -206,7 +214,7 @@ form.addEventListener('submit', async event => {
   try {
     const email = $('bv-founder-email').value.trim();
     const password = $('bv-founder-password').value;
-    const { error } = await client.auth.signInWithPassword({email,password});
+    const { error } = await bounded(client.auth.signInWithPassword({email,password}),'PASSWORD_LOGIN');
     $('bv-founder-password').value = '';
     if (error) {
       lock('Email hoặc mật khẩu không hợp lệ, hoặc tài khoản chưa được kích hoạt.', true);

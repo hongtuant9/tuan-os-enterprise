@@ -47,8 +47,9 @@ export function createApi({verifyBearer,repository,requireFounder}) {
       const tenantId=requireUuid(request.method==='GET'?searchParams.get('tenantId'):payload?.tenantId,'tenant_id');
       const repo=repository(token);
       const membership=await repo.membership({tenantId,userId:user.id});
+      const requestApproval=pathname==='/v1/approvals' && request.method==='POST';
       const actor=requireMembership({userId:user.id,tenantId,membership,
-        minRole:request.method==='POST'?'manager':'staff'});
+        minRole:request.method==='POST' && !requestApproval?'manager':'staff'});
       if(pathname==='/v1/context'&&request.method==='GET') {
         const data=await repo.context(actor);
         return respond(200,{tenant:data.tenant,businessUnits:data.businessUnits,properties:data.properties,role:actor.role});
@@ -58,7 +59,16 @@ export function createApi({verifyBearer,repository,requireFounder}) {
       if(pathname==='/v1/tasks'&&request.method==='POST')
         return respond(201,{data:await repo.createTask(actor,validateTaskInput(payload))});
       if(pathname==='/v1/approvals'&&request.method==='GET')
-        return respond(200,{tenantId,data:await repo.approvals(actor),writesEnabled:false});
+        return respond(200,{tenantId,data:await repo.approvals(actor),writesEnabled:true});
+      if(pathname==='/v1/approvals' && request.method==='POST') {
+        const taskId=payload.taskId==null?null:requireUuid(payload.taskId,'task_id');
+        return respond(201,{data:await repo.requestApproval(actor,{taskId})});
+      }
+      if(pathname==='/v1/approvals/decision' && request.method==='POST') {
+        const approvalId=requireUuid(payload.approvalId,'approval_id');
+        if(!['APPROVED','REJECTED'].includes(payload.decision))throw new ApiError(400,'INVALID_DECISION');
+        return respond(200,{data:await repo.decideApproval(actor,{approvalId,decision:payload.decision})});
+      }
       // Chưa mở thay đổi phê duyệt, tự gửi tin, tài chính chủ sở hữu, thanh toán.
       throw new ApiError(405,'ACTION_NOT_ENABLED');
     }catch(error){

@@ -117,27 +117,29 @@ async function verify() {
       return;
     }
     setMessage('Bước 4/4: Đang xác minh quyền qua Core API…');
-    const accessResponse=await fetch(CORE_API + '/v1/founder/access',{
+    const accessResponse=await bounded(fetch(CORE_API + '/v1/founder/access',{
       method:'GET',
       headers:{Authorization:'Bearer ' + session.access_token},
       cache:'no-store',
-      credentials:'omit', signal:AbortSignal.timeout(25000)
-    });
+      credentials:'omit', signal:AbortSignal.timeout(20000)
+    }),'CORE_FETCH',22000);
     if (!accessResponse.ok) {
-      lock('Core API từ chối quyền Founder hoặc chưa sẵn sàng. Vui lòng thử lại sau.', false);
+      lock('Core API phản hồi HTTP '+accessResponse.status+'. Quyền truy cập Founder chưa được xác nhận.', true);
       return;
     }
-    const coreAccess=await accessResponse.json();
+    setMessage('Core API HTTP 200. Đang đọc kết quả phân quyền…');
+    const coreAccess=await bounded(accessResponse.json(),'CORE_RESPONSE',10000);
     if (coreAccess?.platformManager !== true || coreAccess?.scope !== 'STAGING_ONLY') {
       lock('Core API không xác nhận quyền Founder. Truy cập bị từ chối.', false);
       return;
     }
     // Only after a server-authoritative verified user and manager-role check do we execute
     // the synthetic Founder demo. No service-role key or external-business data is exposed.
+    setMessage('Core API đã xác nhận quyền. Đang khởi tạo dashboard…');
     renderFounderOnce();
     // Founder operational modules are mounted only AFTER real signed-JWT Core API
     // and platform-manager RPC both grant staging access.
-    const {mountFounderOps}=await import('./ops.js');
+    const {mountFounderOps}=await bounded(import('./ops.js'),'FOUNDER_OPS_IMPORT',12000);
     mountFounderOps(client);
     app.hidden = false;
     document.documentElement.classList.add('bv-founderauth-ok');

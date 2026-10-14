@@ -26,7 +26,7 @@ function navState(route){
  const banner=document.querySelector('.demo-banner');
  if(banner)banner.textContent=route in LABEL?'● STAGING · DỮ LIỆU NGHIỆP VỤ THẬT · GIỚI HẠN RLS':'● DEMO · DỮ LIỆU GIẢ LẬP · KHÔNG GHI HỆ THỐNG THẬT';
  const note=document.querySelector('.founder-note');
- if(note){const e=[...note.querySelectorAll('div')].find(n=>n.textContent.includes('DỮ LIỆU GIẢ LẬP'));
+ if(note){const e=[...note.querySelectorAll('div')].find(n=>n.textContent.includes('DỮ LIỆU GIẢ LẬP')||n.textContent.includes('MỤC ĐANG XEM:'));
   if(e)e.textContent=route in LABEL?'MỤC ĐANG XEM: DỮ LIỆU STAGING CÓ PHÂN QUYỀN':'DỮ LIỆU GIẢ LẬP • QUYỀN XEM ĐÃ XÁC THỰC'}
  const profile=document.querySelector('.top-profile b');
  if(profile)profile.textContent=route in LABEL?'Founder — STAGING':'Founder — DEMO';

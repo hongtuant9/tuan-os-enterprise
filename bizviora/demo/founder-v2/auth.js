@@ -162,9 +162,9 @@ googleButton.addEventListener('click', async () => {
   googleButton.disabled=true;
   setMessage('Đang chuyển đến Google để xác thực…');
   try {
-    const redirectTo=location.hostname==='bizviora.com'
-      ?GOOGLE_CALLBACK
-      :location.origin + '/account/'; // Keep the legacy staging URL working.
+    // Always return Google OAuth to the approved canonical Founder callback.
+    // Returning to /account/ opens the tenant portal and breaks Founder sign-in.
+    const redirectTo=GOOGLE_CALLBACK;
     const {error}=await client.auth.signInWithOAuth({
       provider:'google', options:{redirectTo}
     });

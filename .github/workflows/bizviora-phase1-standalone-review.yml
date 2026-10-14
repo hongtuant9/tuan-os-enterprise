@@ -29,7 +29,9 @@ jobs:
         shell: bash
         run: |
           for name in LAB_DB_ROOT_PASSWORD LAB_APP_DB_PASSWORD LAB_AUTH_DB_PASSWORD LAB_AUTH_ADMIN_PASSWORD; do
-            echo "${name}=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+            value="$(openssl rand -hex 32)"
+            echo "::add-mask::${value}"
+            echo "${name}=${value}" >> "$GITHUB_ENV"
           done
       - name: Validate isolated docker compose config
         run: docker compose -f bizviora/selfhost/phase1/compose.yaml config --quiet
@@ -37,6 +39,23 @@ jobs:
         shell: bash
         run: |
           docker compose -f bizviora/selfhost/phase1/compose.yaml up -d --wait db
+          # pg_isready may report healthy while docker-entrypoint-initdb.d is
+          # still initializing grants and policies. Wait for final RLS privileges.
+          schema_ready="f"
+          for attempt in $(seq 1 90); do
+            schema_ready=$(docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
+              psql -U postgres -d bizviora_phase1 -Atc "SELECT CASE WHEN
+                to_regrole('bv_api_member') IS NOT NULL
+                AND to_regclass('public.bv_qa_private_finance') IS NOT NULL
+                THEN has_table_privilege('bv_api_member','public.bv_tenants','SELECT')
+                ELSE false END" 2>/dev/null || true)
+            if [ "$schema_ready" = "t" ]; then break; fi
+            sleep 1
+          done
+          if [ "$schema_ready" != "t" ]; then
+            echo "DB schema/grants readiness failed; stop before accessing QA data"
+            exit 1
+          fi
           docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
             psql -U postgres -d bizviora_phase1 -v ON_ERROR_STOP=1 \
             < bizviora/selfhost/phase1/tests/rls-finance-audit.sql

@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/bizviora-core-mvp-001-20261010
+      - review/bizviora-phase1-approval-e2e-20261014
     paths:
       - 'bizviora/core/**'
       - '.github/workflows/bizviora-core-staging-unit.yml'

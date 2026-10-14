@@ -13,6 +13,9 @@ if(process.env.BV_PHASE1_ACK!=='ISOLATED_SYNTHETIC_ONLY' ||
  throw Error('SELFHOST_IDENTITY_CONFIGURATION_DENIED');
 const keySet=createRemoteJWKSet(new URL(jwks));
 async function verifyBearer(token){
+ // Synthetic QA diagnostics reveal only token shape, never JWT contents.
+ console.info('QA_VERIFY_BEARER_SHAPE',typeof token,typeof token==='string'?token.length:0,
+   typeof token==='string'?token.split('.').length:0);
  try{
   const {payload}=await jwtVerify(token,keySet,{issuer,algorithms:['RS256'],clockTolerance:'10s'});
   if(payload.azp!=='bizviora-phase1-qa'||payload.typ!=='Bearer')

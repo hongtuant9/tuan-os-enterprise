@@ -39,7 +39,7 @@ services:
       - ./keycloak:/opt/keycloak/data/import:ro
     depends_on:
       db: {condition: service_healthy}
-    networks: [isolated]
+    networks: [isolated, hostaccess]
     mem_limit: 1600m
     restart: unless-stopped
   api:
@@ -60,7 +60,7 @@ services:
     depends_on:
       db: {condition: service_healthy}
       auth: {condition: service_started}
-    networks: [isolated]
+    networks: [isolated, hostaccess]
     mem_limit: 512m
     read_only: true
     tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
@@ -69,5 +69,9 @@ services:
 networks:
   isolated:
     internal: true
+  # Host-access bridge solely for loopback-published QA Auth and Core API ports.
+  # PostgreSQL remains attached only to the fully internal isolated network.
+  hostaccess:
+    driver: bridge
 volumes:
   pgdata:

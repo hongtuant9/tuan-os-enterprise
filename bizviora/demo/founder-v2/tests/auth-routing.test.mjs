@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const base=new URL('../',import.meta.url);
 const read=rel=>readFile(new URL(rel,base),'utf8');
-const root=new URL('../../founder/',base);
+const root=new URL('../founder/',base);
 const canonical=rel=>readFile(new URL(rel,root),'utf8');
 test('branded founder is complete V2.5 shell and has no redirect to onrender',async()=>{
  const s=await canonical('index.html');

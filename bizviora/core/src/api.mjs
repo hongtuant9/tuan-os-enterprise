@@ -73,7 +73,8 @@ export function createApi({verifyBearer,repository,requireFounder}) {
     const origin = request.headers.get('origin');
     const path = new URL(request.url).pathname;
     const permitted = path === '/v1/founder/access' &&
-      origin === 'https://bizviora-synthetic-demo.onrender.com';
+      (origin === 'https://bizviora-synthetic-demo.onrender.com' ||
+       origin === 'https://bizviora.com');
     if (request.method === 'OPTIONS') {
       const preflightMethod = request.headers.get('access-control-request-method');
       const preflightHeaders = (request.headers.get('access-control-request-headers') || '')

@@ -1,0 +1,11 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>BIZVIORA — Founder — Đặt lại mật khẩu (staging)</title>
+<style>:root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#183153;background:#f3f6fc}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px}.card{background:white;border:1px solid #e0e8f5;border-radius:18px;width:min(100%,490px);padding:34px;box-shadow:0 12px 45px #0a2e4b12}h1{font-size:28px}label{display:block;font-weight:700;margin:18px 0 7px}input{width:100%;padding:14px;border:1px solid #d5e0f3;border-radius:9px;background:#f4f7fd;font:inherit}button{display:block;width:100%;border:0;border-radius:9px;background:#1769dc;color:white;font-weight:800;padding:15px;margin-top:22px;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}a{color:#1769dc;text-decoration:none;font-weight:650}.hint{color:#617690;line-height:1.5}.status{min-height:24px;margin-top:15px;color:#a53b48}.status.ok{color:#087c61}form[hidden]{display:none!important}</style></head>
+<body><main class="card"><div style="color:#174493;font-size:24px;font-weight:900">BIZVIORA</div><h1>Đặt lại mật khẩu</h1><p class="hint">Liên kết khôi phục tài khoản Founder trên môi trường BIZVIORA staging.</p>
+<div id="status" class="status" role="status" aria-live="polite">Đang xác minh liên kết khôi phục…</div>
+<form id="reset-form" hidden>
+ <label for="new-password">Mật khẩu mới (tối thiểu 12 ký tự)</label>
+ <input type="password" id="new-password" required minlength="12" autocomplete="new-password">
+ <label for="confirm-password">Nhập lại mật khẩu mới</label>
+ <input type="password" id="confirm-password" required minlength="12" autocomplete="new-password">
+ <button id="reset-submit" type="submit">Đổi mật khẩu</button>
+</form><p><a href="/founder/">← Về đăng nhập Founder</a></p><p class="hint" style="font-size:12px">Không chia sẻ liên kết khôi phục với người khác. Liên kết hết hạn cần yêu cầu gửi lại từ trang đăng nhập.</p></main><script type="module" src="./reset.js"></script></body></html>

@@ -1,10 +1,5 @@
 name: BIZVIORA Phase1 standalone isolated validation
 on:
-  pull_request:
-    paths:
-      - 'bizviora/selfhost/phase1/**'
-      - 'bizviora/core/src/**'
-      - '.github/workflows/bizviora-phase1-standalone-review.yml'
   workflow_dispatch:
 permissions:
   contents: read

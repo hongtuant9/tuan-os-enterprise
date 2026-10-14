@@ -8,6 +8,22 @@ const API = 'https://' + PROJECT + '.supabase.co';
 const CORE_API = 'https://bizviora-core-api-staging-20261013.onrender.com';
 const $ = id => document.getElementById(id);
 const gate = $('bv-founder-gate');
+const authUiStyle=document.createElement('style');
+authUiStyle.textContent=`
+#bv-founder-google{display:block;width:100%;margin:14px 0 4px;padding:13px;
+ border-radius:9px;border:1px solid #b8cbe5;background:#f6faff;color:#1357a5;
+ font-weight:750;cursor:pointer}
+#bv-founder-google:disabled{opacity:.55;cursor:wait}
+#bv-founder-forgot{background:transparent;border:0;color:#1769dc;font-weight:700;
+ text-decoration:underline;cursor:pointer;padding:6px 0}
+#bv-founder-recovery{display:grid;gap:9px;margin-top:12px}
+#bv-founder-recovery[hidden],#bv-founder-google[hidden],
+#bv-founder-forgot[hidden]{display:none!important}
+#bv-founder-recovery button{padding:10px;border-radius:8px;cursor:pointer}
+#bv-founder-recovery-submit{background:#1769dc;color:#fff;border:0}
+#bv-founder-recovery-back{background:#e9eef7;color:#164884;border:0}
+`;
+document.head.append(authUiStyle);
 gate.innerHTML = `
 <section class="bv-auth-card">
   <div class="bv-auth-logo">BIZVIORA · FOUNDER</div>

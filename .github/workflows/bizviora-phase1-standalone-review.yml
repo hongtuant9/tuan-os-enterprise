@@ -77,6 +77,9 @@ jobs:
             sleep 2
           done
           echo 'FAILED: Isolated Auth/Core readiness'
+          docker compose -f bizviora/selfhost/phase1/compose.yaml ps -a || true
+          # Only synthetic ephemeral services; no private user environment.
+          docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=75 auth api || true
           exit 1
       - name: JWT HTTP E2E with synthetic tenant A, B and staff; verify PostgreSQL Audit
         run: node bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs

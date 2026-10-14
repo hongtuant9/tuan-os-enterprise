@@ -99,9 +99,20 @@ CREATE POLICY approval_insert ON bv_approvals FOR INSERT TO bv_api_member
 CREATE POLICY approval_update ON bv_approvals FOR UPDATE TO bv_api_member
  USING (bv_manager(tenant_id)) WITH CHECK (bv_manager(tenant_id));
 CREATE POLICY audit_read ON bv_audit_events FOR SELECT TO bv_api_member USING (bv_manager(tenant_id));
-CREATE POLICY biz_finance_read ON bv_qa_business_finance FOR SELECT TO bv_api_member USING (bv_member(tenant_id));
+-- Business finance requires a finance-authorized management role. Staff cannot read it.
+CREATE POLICY biz_finance_read ON bv_qa_business_finance FOR SELECT TO bv_api_member
+ USING (bv_manager(tenant_id));
+-- Personal finance is strictly owned by tenant owner; explicit delegation is disabled
+-- until a separately reviewed, revocable authorisation flow exists.
+CREATE FUNCTION bv_owner(t uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path=public,pg_temp AS $
+ SELECT EXISTS(SELECT 1 FROM bv_memberships m
+ WHERE m.tenant_id=t AND m.user_id=bv_actor() AND m.role='owner')
+$;
+REVOKE ALL ON FUNCTION bv_owner(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION bv_owner(uuid) TO bv_api_member;
 CREATE POLICY private_finance_read ON bv_qa_private_finance FOR SELECT TO bv_api_member
- USING (owner_user_id=bv_actor() AND bv_member(tenant_id));
+ USING (owner_user_id=bv_actor() AND bv_owner(tenant_id));
 GRANT USAGE ON SCHEMA public TO bv_api_member;
 GRANT SELECT ON bv_tenants,bv_memberships,bv_business_units,bv_properties,bv_tasks,bv_approvals,bv_audit_events,
  bv_qa_business_finance,bv_qa_private_finance TO bv_api_member;

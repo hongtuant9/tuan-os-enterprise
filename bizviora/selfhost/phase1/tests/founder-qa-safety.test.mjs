@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 
 const dir = new URL('.', import.meta.url);
-const runner = new URL('founder-ovh-jwt.e2e.mjs', dir).pathname;
-const watchdog = new URL('founder-qa-watchdog.sh', dir).pathname;
+const runner = fileURLToPath(new URL('founder-ovh-jwt.e2e.mjs', dir));
+const watchdog = fileURLToPath(new URL('founder-qa-watchdog.sh', dir));
 function run(base) {
   return spawnSync(process.execPath,[runner,'preflight'],{
     env:{PATH:process.env.PATH,BIZV_QA_API_BASE:base,
@@ -17,7 +18,9 @@ test('remote HTTP targets fail closed before any fetch',()=>{
   for (const target of ['http://example.com:18104','http://127.0.0.1:8080',
     'https://127.0.0.1:18104','http://192.0.2.5:18104']) {
     const r=run(target);
-    assert.notEqual(r.status,0,target);
+    assert.equal(r.status,1,target);
+    assert.match(r.stderr,/FAIL FOUNDER_QA_RUNNER_ABORTED/);
+    assert.doesNotMatch(r.stderr,/MODULE_NOT_FOUND/);
     assert.doesNotMatch(r.stdout,/QA_RUN_ID|SYNTHETIC_APPLICATIONS_ONLY/);
   }
 });

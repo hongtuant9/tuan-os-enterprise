@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     await container.syncSources.markRunning(source.id).catch(() => undefined);
     const run = await container.syncRuns.create({
       source_id: source.id,
-      trigger: "schedule",
+      trigger: "scheduled",
       triggered_by: "systemd:tce-reception-ota",
     }).catch(() => null);
     runId = run?.id ?? null;

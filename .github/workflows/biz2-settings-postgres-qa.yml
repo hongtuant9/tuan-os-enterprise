@@ -1,0 +1,61 @@
+name: Biz2 tenant settings isolated PostgreSQL QA
+on:
+  pull_request:
+    paths:
+      - 'bizviora/core/sql/005_STAGING_ONLY_TENANT_SETTINGS_ATOMIC_DRAFT.sql'
+      - 'bizviora/core/tests/tenant-settings-ci-*.sql'
+      - '.github/workflows/biz2-settings-postgres-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic-ci-only-password
+          POSTGRES_DB: biz2_synthetic
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d biz2_synthetic"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: biz2_synthetic
+      PGUSER: postgres
+      PGPASSWORD: synthetic-ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Apply synthetic schema and migration
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f bizviora/core/tests/tenant-settings-ci-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f bizviora/core/sql/005_STAGING_ONLY_TENANT_SETTINGS_ATOMIC_DRAFT.sql
+      - name: Verify audited writes, cross-tenant deny, role deny, stale version and rollback
+        run: psql -X -v ON_ERROR_STOP=1 -f bizviora/core/tests/tenant-settings-ci-assert.sql
+      - name: Verify concurrent optimistic lock from independent connections
+        shell: bash
+        run: |
+          set -u
+          query="SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111'; SELECT * FROM public.bv_update_tenant_profile_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',2,'Concurrent update');"
+          psql -X -v ON_ERROR_STOP=1 -c "$query" > /tmp/biz2-concurrent-1.log 2>&1 &
+          p1=$!
+          psql -X -v ON_ERROR_STOP=1 -c "$query" > /tmp/biz2-concurrent-2.log 2>&1 &
+          p2=$!
+          wait "$p1"; a=$?
+          wait "$p2"; b=$?
+          if ! { [ "$a" -eq 0 ] && [ "$b" -ne 0 ]; } && ! { [ "$b" -eq 0 ] && [ "$a" -ne 0 ]; }; then
+            echo "Expected exactly one success and one conflict; actual exit codes: $a,$b"
+            exit 1
+          fi
+          psql -X -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN
+            (SELECT settings_version FROM public.bv_tenants WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=3
+            AND (SELECT count(*) FROM public.bv_tenant_profile_audit WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=2
+            THEN 'CONCURRENCY_PASS' ELSE 'CONCURRENCY_FAIL' END" | grep -Fx CONCURRENCY_PASS

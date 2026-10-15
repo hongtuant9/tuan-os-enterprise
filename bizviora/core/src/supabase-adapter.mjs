@@ -47,6 +47,22 @@ export function createSupabaseDependencies(env=process.env) {
           ]);
           return {tenant:checked(t),businessUnits:checked(u),properties:checked(p)};
         },
+        async updateTenantProfileAtomic(actor,{name,expectedVersion}) {
+          // Single Postgres RPC transaction; no split UPDATE followed by audit INSERT.
+          const result=await db.rpc('bv_update_tenant_profile_atomic',{
+            p_tenant_id:actor.tenantId,p_expected_version:expectedVersion,p_name:name
+          });
+          if(result.error){
+            if(result.error.code==='40001')throw new ApiError(409,'SETTINGS_VERSION_CONFLICT');
+            if(result.error.code==='42501')throw new ApiError(403,'SETTINGS_WRITE_DENIED');
+            throw new ApiError(503,'SETTINGS_WRITE_UNAVAILABLE');
+          }
+          const row=Array.isArray(result.data)?result.data[0]:result.data;
+          if(!row?.audit_event_id || row.tenant_id!==actor.tenantId)
+            throw new ApiError(503,'SETTINGS_WRITE_UNVERIFIED');
+          return {tenantId:row.tenant_id,name:row.name,
+            version:Number(row.version),auditEventId:row.audit_event_id};
+        },
         async tasks(actor) {
           return checked(await db.from('bv_tasks')
             .select('id,tenant_id,business_unit_id,property_id,title,status,assigned_to,created_at')

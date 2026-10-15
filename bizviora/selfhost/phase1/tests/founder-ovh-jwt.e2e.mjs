@@ -3,6 +3,7 @@
 // No credential retrieval, admin login, Docker socket access, or implicit privilege grants.
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 const base=process.env.BIZV_QA_API_BASE||'http://127.0.0.1:18104';
 const tokens={
  founder:process.env.BIZV_QA_FOUNDER_JWT||'',
@@ -12,7 +13,7 @@ const tokens={
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 function check(condition,label){assert.ok(condition,label);console.log('PASS '+label)}
 async function request(path,token,method='GET',body){
- const r=await fetch(base+path,{method,headers:{
+ const r=await fetch(base+path,{method,redirect:'error',signal:AbortSignal.timeout(10000),headers:{
    ...(token?{authorization:'Bearer '+token}:{}),
    ...(body?{'content-type':'application/json'}:{})
  },...(body?{body:JSON.stringify(body)}:{})});
@@ -29,11 +30,15 @@ export async function main(overrideTokens){
  assert.equal(url.protocol,'http:','Only loopback HTTP staging');
  assert.ok(['127.0.0.1','localhost'].includes(url.hostname),'Non-loopback target prohibited');
  assert.equal(url.port,'18104','Only isolated Founder staging API');
- const health=await request('/health');
- status(health,200,'CORE_HEALTH');
- status(await request('/v1/founder/access'),401,'ANONYMOUS_DENIED');
+ assert.ok(!url.username&&!url.password&&url.pathname==='/'&&!url.search&&!url.hash,'Only bare staging origin');
  const mode=process.argv[2]||'preflight';
  assert.ok(['preflight','execute'].includes(mode),'Mode must be preflight or execute');
+ if(mode==='preflight')assert.ok(!Object.values(tokens).some(Boolean),'Preflight requires no tokens');
+ else for(const value of Object.values(tokens))assert.ok(value.length>=40&&!/\s/.test(value),'Missing locally-provided JWT');
+ const health=await request('/health');
+ status(health,200,'CORE_HEALTH');
+ check(health.data.scope==='SELF_HOSTED_PHASE1_SYNTHETIC'&&health.data.production===false,'SYNTHETIC_HEALTH_IDENTITY');
+ status(await request('/v1/founder/access'),401,'ANONYMOUS_DENIED');
  if(mode==='preflight'){
   check(!Object.values(tokens).some(Boolean),'PREFLIGHT_NO_SECRETS_REQUIRED');
   console.log('READY_FOR_OWNER_TOKEN_PROVISIONING; NO_WRITES_PERFORMED');
@@ -72,6 +77,6 @@ export async function main(overrideTokens){
  status(await request('/v1/context?tenantId='+tenantId,tokens.b),403,'APPLICANT_B_CROSS_TENANT_DENIED');
  console.log('E2E_HTTP_AND_TENANT_RLS_PASS; AUDIT_DB_READBACK_REQUIRED; REVOKE_FOUNDER_GRANT_IMMEDIATELY');
 }
-if(process.argv[1] && new URL(import.meta.url).pathname===process.argv[1]){
- main().catch(e=>{console.error('FAIL '+String(e?.message||'UNKNOWN').replace(/[A-Za-z0-9_-]{45,}/g,'[REDACTED]'));process.exitCode=1});
+if(process.argv[1] && fileURLToPath(import.meta.url)===process.argv[1]){
+ main().catch(e=>{console.error('FAIL FOUNDER_QA_RUNNER_ABORTED');process.exitCode=1});
 }

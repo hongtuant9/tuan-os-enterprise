@@ -1,0 +1,706 @@
+TAP version 13
+# Subtest: normalizes valid UUID and rejects malformed IDs
+ok 1 - normalizes valid UUID and rejects malformed IDs
+  ---
+  duration_ms: 2.103917
+  type: 'test'
+  ...
+# Subtest: denies absent, foreign-tenant and unknown-role membership
+ok 2 - denies absent, foreign-tenant and unknown-role membership
+  ---
+  duration_ms: 0.206375
+  type: 'test'
+  ...
+# Subtest: staff cannot pass manager-level authorization
+ok 3 - staff cannot pass manager-level authorization
+  ---
+  duration_ms: 0.070791
+  type: 'test'
+  ...
+# Subtest: owner keeps verified tenant identity and immutable actor context
+ok 4 - owner keeps verified tenant identity and immutable actor context
+  ---
+  duration_ms: 0.767792
+  type: 'test'
+  ...
+# Subtest: task rejects status escalation and malformed property identifiers
+ok 5 - task rejects status escalation and malformed property identifiers
+  ---
+  duration_ms: 0.170875
+  type: 'test'
+  ...
+# Subtest: task defaults to TODO and enforces title length
+ok 6 - task defaults to TODO and enforces title length
+  ---
+  duration_ms: 0.168042
+  type: 'test'
+  ...
+# Subtest: unknown minimum role fails closed even for an owner
+ok 7 - unknown minimum role fails closed even for an owner
+  ---
+  duration_ms: 0.231542
+  type: 'test'
+  ...
+# Subtest: anonymous request denied without repository call
+ok 8 - anonymous request denied without repository call
+  ---
+  duration_ms: 35.372917
+  type: 'test'
+  ...
+# Subtest: invalid bearer denied
+ok 9 - invalid bearer denied
+  ---
+  duration_ms: 0.268208
+  type: 'test'
+  ...
+# Subtest: foreign tenant denied before read
+ok 10 - foreign tenant denied before read
+  ---
+  duration_ms: 0.466834
+  type: 'test'
+  ...
+# Subtest: staff cannot POST task
+ok 11 - staff cannot POST task
+  ---
+  duration_ms: 0.842375
+  type: 'test'
+  ...
+# Subtest: staff approval decision denied before repository write
+ok 12 - staff approval decision denied before repository write
+  ---
+  duration_ms: 0.480458
+  type: 'test'
+  ...
+# Subtest: health response never enables outbound or booking writes
+ok 13 - health response never enables outbound or booking writes
+  ---
+  duration_ms: 0.345083
+  type: 'test'
+  ...
+# Subtest: authorized task read is tenant scoped
+ok 14 - authorized task read is tenant scoped
+  ---
+  duration_ms: 0.43525
+  type: 'test'
+  ...
+# Subtest: malformed tenant UUID is rejected before membership query
+ok 15 - malformed tenant UUID is rejected before membership query
+  ---
+  duration_ms: 0.163208
+  type: 'test'
+  ...
+# Subtest: malformed POST JSON never writes a task
+ok 16 - malformed POST JSON never writes a task
+  ---
+  duration_ms: 0.865291
+  type: 'test'
+  ...
+# Subtest: oversized POST payload cannot create a task
+ok 17 - oversized POST payload cannot create a task
+  ---
+  duration_ms: 0.780625
+  type: 'test'
+  ...
+# Subtest: unrecognized API route does not expose tenant data
+ok 18 - unrecognized API route does not expose tenant data
+  ---
+  duration_ms: 0.2965
+  type: 'test'
+  ...
+# Subtest: Founder endpoint rejects absent gate, even for authenticated tenant owner
+ok 19 - Founder endpoint rejects absent gate, even for authenticated tenant owner
+  ---
+  duration_ms: 0.222334
+  type: 'test'
+  ...
+# Subtest: Founder endpoint cannot be opened without verified bearer
+ok 20 - Founder endpoint cannot be opened without verified bearer
+  ---
+  duration_ms: 0.1325
+  type: 'test'
+  ...
+# Subtest: Founder endpoint denies different user or unverified RPC
+ok 21 - Founder endpoint denies different user or unverified RPC
+  ---
+  duration_ms: 1.984916
+  type: 'test'
+  ...
+# Subtest: Founder access response contains only staging scope and permission flag
+ok 22 - Founder access response contains only staging scope and permission flag
+  ---
+  duration_ms: 2.580708
+  type: 'test'
+  ...
+# Subtest: Founder endpoint cannot mutate permissions via POST
+ok 23 - Founder endpoint cannot mutate permissions via POST
+  ---
+  duration_ms: 0.518125
+  type: 'test'
+  ...
+# Subtest: Founder gate receives the server-verified user and does not verify the JWT twice
+ok 24 - Founder gate receives the server-verified user and does not verify the JWT twice
+  ---
+  duration_ms: 0.353583
+  type: 'test'
+  ...
+# Subtest: Founder CORS allows only the synthetic Founder staging origin and GET
+ok 25 - Founder CORS allows only the synthetic Founder staging origin and GET
+  ---
+  duration_ms: 1.253458
+  type: 'test'
+  ...
+# Subtest: Founder CORS blocks untrusted origins and non-Founder routes
+ok 26 - Founder CORS blocks untrusted origins and non-Founder routes
+  ---
+  duration_ms: 0.660791
+  type: 'test'
+  ...
+# Subtest: Founder CORS accepts the exact branded Founder origin on the read-only access gate
+ok 27 - Founder CORS accepts the exact branded Founder origin on the read-only access gate
+  ---
+  duration_ms: 0.41625
+  type: 'test'
+  ...
+# Subtest: 01 health nêu rõ staging và không được gửi OTA
+ok 28 - 01 health nêu rõ staging và không được gửi OTA
+  ---
+  duration_ms: 37.48625
+  type: 'test'
+  ...
+# Subtest: 02 thiếu Bearer thì 401
+ok 29 - 02 thiếu Bearer thì 401
+  ---
+  duration_ms: 0.435875
+  type: 'test'
+  ...
+# Subtest: 03 token không xác thực thì 401
+ok 30 - 03 token không xác thực thì 401
+  ---
+  duration_ms: 0.357042
+  type: 'test'
+  ...
+# Subtest: 04 ID tenant không hợp lệ thì 400
+ok 31 - 04 ID tenant không hợp lệ thì 400
+  ---
+  duration_ms: 0.40625
+  type: 'test'
+  ...
+# Subtest: 05 không cho chủ A đọc B
+ok 32 - 05 không cho chủ A đọc B
+  ---
+  duration_ms: 0.559458
+  type: 'test'
+  ...
+# Subtest: 06 chủ A được nhận đúng context
+ok 33 - 06 chủ A được nhận đúng context
+  ---
+  duration_ms: 0.318541
+  type: 'test'
+  ...
+# Subtest: 07 staff A được đọc nhiệm vụ A
+ok 34 - 07 staff A được đọc nhiệm vụ A
+  ---
+  duration_ms: 0.257334
+  type: 'test'
+  ...
+# Subtest: 08 staff A không được tạo nhiệm vụ
+ok 35 - 08 staff A không được tạo nhiệm vụ
+  ---
+  duration_ms: 0.827917
+  type: 'test'
+  ...
+# Subtest: 09 owner A được tạo nhiệm vụ A
+ok 36 - 09 owner A được tạo nhiệm vụ A
+  ---
+  duration_ms: 1.477666
+  type: 'test'
+  ...
+# Subtest: 10 owner B không ghi được A
+ok 37 - 10 owner B không ghi được A
+  ---
+  duration_ms: 0.6805
+  type: 'test'
+  ...
+# Subtest: 11 không nhận trạng thái DONE lúc tạo
+ok 38 - 11 không nhận trạng thái DONE lúc tạo
+  ---
+  duration_ms: 2.239334
+  type: 'test'
+  ...
+# Subtest: 12 cấm tiêu đề trống
+ok 39 - 12 cấm tiêu đề trống
+  ---
+  duration_ms: 0.52475
+  type: 'test'
+  ...
+# Subtest: 13 cấm mã phân công không phải UUID
+ok 40 - 13 cấm mã phân công không phải UUID
+  ---
+  duration_ms: 0.088042
+  type: 'test'
+  ...
+# Subtest: 14 phê duyệt mở ghi có phân quyền
+ok 41 - 14 phê duyệt mở ghi có phân quyền
+  ---
+  duration_ms: 0.354292
+  type: 'test'
+  ...
+# Subtest: 15 staff không được quyết định duyệt
+ok 42 - 15 staff không được quyết định duyệt
+  ---
+  duration_ms: 0.220291
+  type: 'test'
+  ...
+# Subtest: 16 không mở tài chính cá nhân
+ok 43 - 16 không mở tài chính cá nhân
+  ---
+  duration_ms: 0.192375
+  type: 'test'
+  ...
+# Subtest: 17 URL tự khai userId không nâng quyền staff
+ok 44 - 17 URL tự khai userId không nâng quyền staff
+  ---
+  duration_ms: 0.14625
+  type: 'test'
+  ...
+# Subtest: 18 không cho tráo tenant membership
+ok 45 - 18 không cho tráo tenant membership
+  ---
+  duration_ms: 0.058333
+  type: 'test'
+  ...
+# Subtest: 19 không cho dùng membership người khác
+ok 46 - 19 không cho dùng membership người khác
+  ---
+  duration_ms: 0.047291
+  type: 'test'
+  ...
+# Subtest: 20 tiêu đề quá dài bị chặn
+ok 47 - 20 tiêu đề quá dài bị chặn
+  ---
+  duration_ms: 0.183125
+  type: 'test'
+  ...
+# Subtest: 21 body >16KB bị chặn
+ok 48 - 21 body >16KB bị chặn
+  ---
+  duration_ms: 1.240292
+  type: 'test'
+  ...
+# Subtest: 22 không mở HTTP PUT
+ok 49 - 22 không mở HTTP PUT
+  ---
+  duration_ms: 0.495333
+  type: 'test'
+  ...
+# Subtest: 23 lỗi nội bộ không được xuất secret
+ok 50 - 23 lỗi nội bộ không được xuất secret
+  ---
+  duration_ms: 0.788834
+  type: 'test'
+  ...
+# Subtest: 30 UUID chuẩn năm nhóm được chấp nhận
+ok 51 - 30 UUID chuẩn năm nhóm được chấp nhận
+  ---
+  duration_ms: 0.101041
+  type: 'test'
+  ...
+# Subtest: 31 UUID thiếu nhóm thứ tư phải bị từ chối
+ok 52 - 31 UUID thiếu nhóm thứ tư phải bị từ chối
+  ---
+  duration_ms: 0.131542
+  type: 'test'
+  ...
+# Subtest: adapter rejects task outside visible tenant before inserting approval
+ok 53 - adapter rejects task outside visible tenant before inserting approval
+  ---
+  duration_ms: 3.490875
+  type: 'test'
+  ...
+# Subtest: adapter sets requester and pending status from trusted actor
+ok 54 - adapter sets requester and pending status from trusted actor
+  ---
+  duration_ms: 0.839417
+  type: 'test'
+  ...
+# Subtest: adapter decision APPROVED constrains id tenant and pending
+ok 55 - adapter decision APPROVED constrains id tenant and pending
+  ---
+  duration_ms: 0.770958
+  type: 'test'
+  ...
+# Subtest: adapter decision REJECTED constrains id tenant and pending
+ok 56 - adapter decision REJECTED constrains id tenant and pending
+  ---
+  duration_ms: 0.748708
+  type: 'test'
+  ...
+# Subtest: empty conditional update returns 409 for repeated or hidden decision
+ok 57 - empty conditional update returns 409 for repeated or hidden decision
+  ---
+  duration_ms: 1.691042
+  type: 'test'
+  ...
+# Subtest: database denial returns safe 403 without SQL details
+ok 58 - database denial returns safe 403 without SQL details
+  ---
+  duration_ms: 1.244958
+  type: 'test'
+  ...
+# Subtest: owner requests pending approval
+ok 59 - owner requests pending approval
+  ---
+  duration_ms: 37.196125
+  type: 'test'
+  ...
+# Subtest: staff requests pending approval
+ok 60 - staff requests pending approval
+  ---
+  duration_ms: 0.533166
+  type: 'test'
+  ...
+# Subtest: owner decides APPROVED
+ok 61 - owner decides APPROVED
+  ---
+  duration_ms: 0.494208
+  type: 'test'
+  ...
+# Subtest: owner decides REJECTED
+ok 62 - owner decides REJECTED
+  ---
+  duration_ms: 0.349333
+  type: 'test'
+  ...
+# Subtest: foreign tenant denied /v1/approvals
+ok 63 - foreign tenant denied /v1/approvals
+  ---
+  duration_ms: 0.8925
+  type: 'test'
+  ...
+# Subtest: foreign tenant denied /v1/approvals/decision
+ok 64 - foreign tenant denied /v1/approvals/decision
+  ---
+  duration_ms: 0.301208
+  type: 'test'
+  ...
+# Subtest: staff decision denied without write
+ok 65 - staff decision denied without write
+  ---
+  duration_ms: 0.292125
+  type: 'test'
+  ...
+# Subtest: invalid decision input denied {"approvalId":"invalid","decision":"APPROVED"}
+ok 66 - invalid decision input denied {"approvalId":"invalid","decision":"APPROVED"}
+  ---
+  duration_ms: 0.222542
+  type: 'test'
+  ...
+# Subtest: invalid decision input denied {"approvalId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","decision":"PENDING"}
+ok 67 - invalid decision input denied {"approvalId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","decision":"PENDING"}
+  ---
+  duration_ms: 1.916125
+  type: 'test'
+  ...
+# Subtest: valid signed-user mock and explicit true RPC allows Founder
+ok 68 - valid signed-user mock and explicit true RPC allows Founder
+  ---
+  duration_ms: 1.535667
+  type: 'test'
+  ...
+# Subtest: missing token fails closed before verify and RPC
+ok 69 - missing token fails closed before verify and RPC
+  ---
+  duration_ms: 0.385375
+  type: 'test'
+  ...
+# Subtest: auth verification exception is denied without RPC
+ok 70 - auth verification exception is denied without RPC
+  ---
+  duration_ms: 0.090791
+  type: 'test'
+  ...
+# Subtest: unverified user identity cannot reach RPC
+ok 71 - unverified user identity cannot reach RPC
+  ---
+  duration_ms: 0.117334
+  type: 'test'
+  ...
+# Subtest: false, null, and non-boolean RPC responses cannot assign Founder
+ok 72 - false, null, and non-boolean RPC responses cannot assign Founder
+  ---
+  duration_ms: 0.660458
+  type: 'test'
+  ...
+# Subtest: RPC failure fails closed without exposing internals
+ok 73 - RPC failure fails closed without exposing internals
+  ---
+  duration_ms: 0.384167
+  type: 'test'
+  ...
+# Subtest: registered applicant creates pending only
+ok 74 - registered applicant creates pending only
+  ---
+  duration_ms: 40.395375
+  type: 'test'
+  ...
+# Subtest: invalid company input returns 400 before insert
+ok 75 - invalid company input returns 400 before insert
+  ---
+  duration_ms: 0.432875
+  type: 'test'
+  ...
+# Subtest: non-founder decision fails closed 403
+ok 76 - non-founder decision fails closed 403
+  ---
+  duration_ms: 0.38125
+  type: 'test'
+  ...
+# Subtest: founder decision invokes repository only on approved decision enum
+ok 77 - founder decision invokes repository only on approved decision enum
+  ---
+  duration_ms: 0.958458
+  type: 'test'
+  ...
+# Subtest: anonymous registration rejected and no data changes
+ok 78 - anonymous registration rejected and no data changes
+  ---
+  duration_ms: 0.23325
+  type: 'test'
+  ...
+# Subtest: unsupported application verbs reject before touching repository
+ok 79 - unsupported application verbs reject before touching repository
+  ---
+  duration_ms: 0.13775
+  type: 'test'
+  ...
+# Subtest: unsupported decision verbs never reach Founder or DB mutation
+ok 80 - unsupported decision verbs never reach Founder or DB mutation
+  ---
+  duration_ms: 0.176459
+  type: 'test'
+  ...
+# Subtest: Founder identity mismatch refuses action independently of platformManager flag
+ok 81 - Founder identity mismatch refuses action independently of platformManager flag
+  ---
+  duration_ms: 0.598458
+  type: 'test'
+  ...
+# Subtest: defaults to loopback staging and port 4317
+ok 82 - defaults to loopback staging and port 4317
+  ---
+  duration_ms: 1.362625
+  type: 'test'
+  ...
+# Subtest: no staging acknowledgement must fail
+ok 83 - no staging acknowledgement must fail
+  ---
+  duration_ms: 0.1965
+  type: 'test'
+  ...
+# Subtest: Render ingress requires explicit acknowledgement
+ok 84 - Render ingress requires explicit acknowledgement
+  ---
+  duration_ms: 0.065833
+  type: 'test'
+  ...
+# Subtest: approved Render staging binds all interfaces with assigned port
+ok 85 - approved Render staging binds all interfaces with assigned port
+  ---
+  duration_ms: 0.059792
+  type: 'test'
+  ...
+# Subtest: unknown hosting mode and invalid ports rejected
+ok 86 - unknown hosting mode and invalid ports rejected
+  ---
+  duration_ms: 0.086167
+  type: 'test'
+  ...
+# Subtest: 24 chỉ tạo bảng BIZVIORA
+ok 87 - 24 chỉ tạo bảng BIZVIORA
+  ---
+  duration_ms: 1.385792
+  type: 'test'
+  ...
+# Subtest: 25 RLS được bật trên tất cả 7 bảng
+ok 88 - 25 RLS được bật trên tất cả 7 bảng
+  ---
+  duration_ms: 0.103458
+  type: 'test'
+  ...
+# Subtest: 26 thành viên không tự thêm quyền hoặc phê duyệt
+ok 89 - 26 thành viên không tự thêm quyền hoặc phê duyệt
+  ---
+  duration_ms: 0.164417
+  type: 'test'
+  ...
+# Subtest: 27 ràng buộc ghép tenant và đơn vị/cơ sở/công việc
+ok 90 - 27 ràng buộc ghép tenant và đơn vị/cơ sở/công việc
+  ---
+  duration_ms: 0.061916
+  type: 'test'
+  ...
+# Subtest: 28 ghi nhật ký cùng giao dịch, không lưu payload
+ok 91 - 28 ghi nhật ký cùng giao dịch, không lưu payload
+  ---
+  duration_ms: 0.166041
+  type: 'test'
+  ...
+# Subtest: 29 cấm sửa tenant, người tạo và định danh tác vụ
+ok 92 - 29 cấm sửa tenant, người tạo và định danh tác vụ
+  ---
+  duration_ms: 0.059875
+  type: 'test'
+  ...
+# Subtest: remote HTTP targets fail closed before any fetch
+ok 93 - remote HTTP targets fail closed before any fetch
+  ---
+  duration_ms: 271.804166
+  type: 'test'
+  ...
+# Subtest: watchdog source requires explicit arm and never creates Founder privileges
+ok 94 - watchdog source requires explicit arm and never creates Founder privileges
+  ---
+  duration_ms: 1.002417
+  type: 'test'
+  ...
+# PASS CORE_HEALTH_HTTP_200_ACTUAL_200
+# PASS SYNTHETIC_HEALTH_IDENTITY
+# PASS ANONYMOUS_DENIED_HTTP_401_ACTUAL_401
+# PASS PREFLIGHT_NO_SECRETS_REQUIRED
+# READY_FOR_OWNER_TOKEN_PROVISIONING; NO_WRITES_PERFORMED
+# PASS CORE_HEALTH_HTTP_200_ACTUAL_200
+# PASS CORE_HEALTH_HTTP_200_ACTUAL_200
+# PASS CORE_HEALTH_HTTP_200_ACTUAL_200
+# Subtest: invalid origins and modes perform zero requests
+ok 95 - invalid origins and modes perform zero requests
+  ---
+  duration_ms: 11.3325
+  type: 'test'
+  ...
+# Subtest: preflight rejects supplied tokens and execute rejects missing tokens before I/O
+ok 96 - preflight rejects supplied tokens and execute rejects missing tokens before I/O
+  ---
+  duration_ms: 1.950833
+  type: 'test'
+  ...
+# Subtest: preflight only requests health and anonymous access
+ok 97 - preflight only requests health and anonymous access
+  ---
+  duration_ms: 24.708875
+  type: 'test'
+  ...
+# Subtest: wrong health identity prevents authenticated traffic
+ok 98 - wrong health identity prevents authenticated traffic
+  ---
+  duration_ms: 3.023083
+  type: 'test'
+  ...
+# Subtest: redirect rejection stops runner immediately
+ok 99 - redirect rejection stops runner immediately
+  ---
+  duration_ms: 0.539583
+  type: 'test'
+  ...
+# Subtest: signed founder Founder access
+ok 100 - signed founder Founder access
+  ---
+  duration_ms: 6.398625
+  type: 'test'
+  ...
+# Subtest: signed a Founder access
+ok 101 - signed a Founder access
+  ---
+  duration_ms: 1.714292
+  type: 'test'
+  ...
+# Subtest: signed b Founder access
+ok 102 - signed b Founder access
+  ---
+  duration_ms: 1.200459
+  type: 'test'
+  ...
+# Subtest: signed staff Founder access
+ok 103 - signed staff Founder access
+  ---
+  duration_ms: 1.494917
+  type: 'test'
+  ...
+# Subtest: reject wrong issuer before authorization
+ok 104 - reject wrong issuer before authorization
+  ---
+  duration_ms: 2.765084
+  type: 'test'
+  ...
+# Subtest: reject expired before authorization
+ok 105 - reject expired before authorization
+  ---
+  duration_ms: 2.338791
+  type: 'test'
+  ...
+# Subtest: reject wrong client before authorization
+ok 106 - reject wrong client before authorization
+  ---
+  duration_ms: 1.015708
+  type: 'test'
+  ...
+# Subtest: reject missing expiry before authorization
+ok 107 - reject missing expiry before authorization
+  ---
+  duration_ms: 1.051916
+  type: 'test'
+  ...
+# Subtest: reject long lifetime before authorization
+ok 108 - reject long lifetime before authorization
+  ---
+  duration_ms: 2.364958
+  type: 'test'
+  ...
+# Subtest: reject bad signature before authorization
+ok 109 - reject bad signature before authorization
+  ---
+  duration_ms: 1.577041
+  type: 'test'
+  ...
+# Subtest: missing token rejected before authorization
+ok 110 - missing token rejected before authorization
+  ---
+  duration_ms: 0.205708
+  type: 'test'
+  ...
+# Subtest: same signed token denied immediately after synthetic grant revocation
+ok 111 - same signed token denied immediately after synthetic grant revocation
+  ---
+  duration_ms: 1.09925
+  type: 'test'
+  ...
+# Subtest: wrong audience must be denied
+not ok 112 - wrong audience must be denied
+  ---
+  duration_ms: 1.764834
+  type: 'test'
+  location: '/Users/admin/Claude/Projects/TUAN OS - Chief of Staff & Governance/bizviora-task001-review/bizviora/selfhost/phase1/tests/signed-jwt-contract.test.mjs:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    200 !== 401
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 401
+  actual: 200
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/admin/Claude/Projects/TUAN%20OS%20-%20Chief%20of%20Staff%20&%20Governance/bizviora-task001-review/bizviora/selfhost/phase1/tests/signed-jwt-contract.test.mjs:50:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..112
+# tests 112
+# suites 0
+# pass 111
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 540.423583

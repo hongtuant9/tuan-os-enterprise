@@ -27,8 +27,13 @@ jobs:
         run: node --test bizviora/core/tests/api.test.mjs
       - name: Verify Founder QA runner fail-closed safeguards (synthetic only)
         run: |
-          node --test bizviora/selfhost/phase1/tests/founder-qa-safety.test.mjs
+          node --test bizviora/selfhost/phase1/tests/founder-qa-safety.test.mjs bizviora/selfhost/phase1/tests/founder-runner-behavior.test.mjs
           bash -n bizviora/selfhost/phase1/tests/founder-qa-watchdog.sh
+      - name: Install isolated signed JWT test dependencies without scripts
+        working-directory: bizviora/selfhost/phase1
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Signed JWT contract gate (known audience defect must fail)
+        run: node --test bizviora/selfhost/phase1/tests/signed-jwt-contract.test.mjs
       - name: Generate ephemeral synthetic DB credentials
         shell: bash
         run: |

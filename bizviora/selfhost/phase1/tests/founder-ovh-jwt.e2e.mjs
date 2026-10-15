@@ -46,6 +46,7 @@ async function main(){
  status(await request('/v1/founder/access',tokens.founder),200,'FOUNDER_ALLOWED');
  const suffix=randomBytes(6).toString('hex');
  const slugA='bvqa-a-'+suffix,slugB='bvqa-b-'+suffix;
+ console.log('QA_RUN_ID '+suffix+'; SYNTHETIC_APPLICATIONS_ONLY');
  const createA=status(await request('/v1/company-applications',tokens.a,'POST',{companyName:'Synthetic QA A '+suffix,requestedSlug:slugA}),201,'APPLICANT_A_SUBMIT');
  const createB=status(await request('/v1/company-applications',tokens.b,'POST',{companyName:'Synthetic QA B '+suffix,requestedSlug:slugB}),201,'APPLICANT_B_SUBMIT');
  const idA=createA.data?.id||createA.data?.application_id;

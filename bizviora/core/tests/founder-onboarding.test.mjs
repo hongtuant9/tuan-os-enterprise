@@ -49,3 +49,20 @@ test('anonymous registration rejected and no data changes',async()=>{
  const r=await api(new Request('http://localhost/v1/company-applications',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyName:'T',requestedSlug:'test-tenant'})}));
  assert.equal(r.status,401);assert.equal(calls.length,0);
 });
+
+test('unsupported application verbs reject before touching repository',async()=>{
+ const {api,calls}=setup();
+ const r=await api(req('/v1/company-applications',tokenOf(applicant),undefined,'DELETE'));
+ assert.equal(r.status,405);assert.equal(calls.length,0);
+});
+test('unsupported decision verbs never reach Founder or DB mutation',async()=>{
+ const {api,calls}=setup();
+ const r=await api(req('/v1/company-applications/decision',tokenOf(founder),undefined,'GET'));
+ assert.equal(r.status,405);assert.equal(calls.length,0);
+});
+test('Founder identity mismatch refuses action independently of platformManager flag',async()=>{
+ const calls=[];
+ const api=createApi({verifyBearer:async()=>({id:founder}),requireFounder:async()=>({userId:applicant,platformManager:true}),repository:()=>({decideCompany:async()=>{calls.push('write')}})});
+ const r=await api(req('/v1/company-applications/decision',tokenOf(founder),{applicationId:application,decision:'APPROVED'}));
+ assert.equal(r.status,403);assert.equal(calls.length,0);
+});

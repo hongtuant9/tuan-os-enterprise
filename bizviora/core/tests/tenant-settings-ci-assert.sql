@@ -25,7 +25,7 @@ EXCEPTION WHEN serialization_failure THEN RAISE NOTICE 'STALE_VERSION_DENIED_PAS
 DO $$
 BEGIN
  BEGIN
-  ALTER TABLE public.bv_tenant_profile_audit ADD CONSTRAINT force_audit_error CHECK (false);
+  ALTER TABLE public.bv_tenant_profile_audit ADD CONSTRAINT force_audit_error CHECK (new_name <> 'Must rollback') NOT VALID;
   PERFORM public.bv_update_tenant_profile_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',2,'Must rollback');
   RAISE EXCEPTION 'AUDIT_FAILURE_WAS_IGNORED';
  EXCEPTION WHEN check_violation THEN

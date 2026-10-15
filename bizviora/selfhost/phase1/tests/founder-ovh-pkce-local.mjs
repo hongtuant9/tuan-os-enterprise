@@ -51,7 +51,9 @@ async function acquire(username){
   const payload=JSON.parse(Buffer.from(result.access_token.split('.')[1],'base64url').toString('utf8'));
   if(payload.iss!==auth+'/realms/bizviora-phase1'||typeof payload.sub!=='string')fail('OIDC_ISSUER_OR_SUBJECT_MISMATCH');
   const expectedIds={'bv-founder-qa-20261015':'b8ce8b92-31a5-49aa-9264-0d08abd5fc4e','bv-applicant-a-qa-20261015':'0c6e0568-2aa0-4283-8c64-50f7d4c462d7','bv-applicant-b-qa-20261015':'15b42f7e-95ea-4b6e-aa83-6cdc6aac0f3a'};
-  if(payload.sub!==expectedIds[username]||payload.azp!==client||payload.exp<=Date.now()/1000+60)fail('OIDC_CLAIMS_VALIDATION_FAILED');
+  if(payload.sub!==expectedIds[username])fail('OIDC_SUBJECT_MISMATCH');
+  if(payload.azp!==client)fail('OIDC_AUTHORIZED_PARTY_MISMATCH');
+  if(typeof payload.exp!=='number'||payload.exp<=Date.now()/1000+60)fail('OIDC_TOKEN_EXPIRED_OR_SHORT_LIVED');
   console.log('PASS OIDC_IDENTITY '+username);
   return result.access_token;
  }finally{close?.()}

@@ -46,6 +46,7 @@ export function createApi({verifyBearer,repository,requireFounder}) {
 
       const payload=request.method==='POST'?await readBody(request):null;
       if(pathname==='/v1/company-applications'){
+        if(request.method!=='GET'&&request.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED');
         const repo=repository(token);
         if(request.method==='GET')
           return respond(200,{data:await repo.listCompanies(user.id)});

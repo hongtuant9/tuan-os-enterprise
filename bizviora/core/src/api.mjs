@@ -95,7 +95,7 @@ export function createApi({verifyBearer,repository,requireFounder}) {
         return respond(200,{
           tenantId:actor.tenantId,
           profile:{id:data.tenant.id,name:data.tenant.name??null,
-            slug:data.tenant.slug??null,contactStatus:'NOT_VERIFIED'},
+            slug:data.tenant.slug??null,version:data.tenant.settings_version??null,contactStatus:'NOT_VERIFIED'},
           businessUnits:data.businessUnits.map(u=>({id:u.id,name:u.name})),
           properties:data.properties.map(v=>({id:v.id,businessUnitId:v.business_unit_id,name:v.name})),
           capabilities:{profileWrite:false,propertyWrite:false,integrationsRead:false},

@@ -24,7 +24,7 @@ let grant=true,gateCalls=0;
 const api=createApi({verifyBearer:verifier,repository:()=>{throw Error('Repository not expected')},requireFounder:async(_t,u)=>{gateCalls++;return {userId:u.id,platformManager:grant&&u.id===ids.founder}}});
 async function token(sub=ids.founder,claims={},key=privateKey){
  const now=Math.floor(Date.now()/1000);
- return new SignJWT({iss:issuer,sub,aud:'bizviora-phase1-qa',azp:'bizviora-phase1-qa',typ:'Bearer',iat:now,exp:now+300,...claims}).setProtectedHeader({alg:'RS256'}).sign(key);
+ return new SignJWT({iss:issuer,sub,aud:'bizviora-core-api',azp:'bizviora-phase1-qa',typ:'Bearer',iat:now,exp:now+300,...claims}).setProtectedHeader({alg:'RS256'}).sign(key);
 }
 async function access(t){return api(new Request('http://synthetic.invalid/v1/founder/access',{headers:t?{authorization:'Bearer '+t}:{}}))}
 for(const [role,id] of Object.entries(ids))test('signed '+role+' Founder access',async()=>{
@@ -45,7 +45,25 @@ test('same signed token denied immediately after synthetic grant revocation',asy
  const t=await token();grant=true;assert.equal((await access(t)).status,200);
  grant=false;assert.equal((await access(t)).status,403);grant=true;
 });
-// Intentionally red until verifier + agreed Keycloak API audience are corrected.
+// API audience is independent of the authorized OAuth client (azp).
 test('wrong audience must be denied',async()=>{
  assert.equal((await access(await token(ids.founder,{aud:'unrelated-service'}))).status,401);
+});
+
+for(const [name,aud] of [['missing',undefined],['empty',[]],['wrong array',['account','other-api']],['wrong type',42]])test('reject '+name+' audience before authorization',async()=>{
+ const before=gateCalls;assert.equal((await access(await token(ids.founder,{aud}))).status,401);assert.equal(gateCalls,before);
+});
+test('audience array containing exact API audience accepted',async()=>{
+ assert.equal((await access(await token(ids.founder,{aud:['account','bizviora-core-api']}))).status,200);
+});
+test('PKCE client requires the same API audience',async()=>{
+ assert.equal((await access(await token(ids.founder,{azp:'bizviora-founder-qa-pkce'}))).status,200);
+ assert.equal((await access(await token(ids.founder,{azp:'bizviora-founder-qa-pkce',aud:'bizviora-founder-qa-pkce'}))).status,401);
+});
+test('fresh synthetic realm includes Core API access-token audience mapper',()=>{
+ const realm=JSON.parse(readFileSync(new URL('../keycloak/bizviora-phase1-realm.json',import.meta.url),'utf8'));
+ const mapper=realm.clients.find(c=>c.clientId==='bizviora-phase1-qa').protocolMappers.find(m=>m.protocolMapper==='oidc-audience-mapper');
+ assert.equal(mapper.config['included.custom.audience'],'bizviora-core-api');
+ assert.equal(mapper.config['access.token.claim'],'true');
+ assert.equal(mapper.config['id.token.claim'],'false');
 });

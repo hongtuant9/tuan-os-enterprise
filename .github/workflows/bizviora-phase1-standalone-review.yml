@@ -32,7 +32,7 @@ jobs:
       - name: Install isolated signed JWT test dependencies without scripts
         working-directory: bizviora/selfhost/phase1
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
-      - name: Signed JWT contract gate (known audience defect must fail)
+      - name: Signed JWT issuer / audience / expiry / role contract gate
         run: node --test bizviora/selfhost/phase1/tests/signed-jwt-contract.test.mjs
       - name: Generate ephemeral synthetic DB credentials
         shell: bash

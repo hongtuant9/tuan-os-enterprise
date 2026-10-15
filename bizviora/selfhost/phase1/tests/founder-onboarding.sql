@@ -27,10 +27,12 @@ BEGIN
  SELECT id INTO b FROM bv_company_applications WHERE requested_slug='onboard-qa-b';
  PERFORM * FROM bv_review_application(a,'APPROVED');
  PERFORM * FROM bv_review_application(b,'REJECTED');
- IF (SELECT count(*) FROM bv_tenants WHERE slug='onboard-qa-a')<>1 OR
-    EXISTS(SELECT 1 FROM bv_tenants WHERE slug='onboard-qa-b') OR
-    (SELECT count(*) FROM bv_memberships m JOIN bv_tenants t ON m.tenant_id=t.id WHERE t.slug='onboard-qa-a' AND m.role='owner')<>1
- THEN RAISE EXCEPTION 'ACTIVATION_STATE_FAILED';END IF;
+ IF (SELECT status FROM bv_company_applications WHERE id=a)<>'APPROVED' OR
+    (SELECT tenant_id FROM bv_company_applications WHERE id=a) IS NULL OR
+    (SELECT status FROM bv_company_applications WHERE id=b)<>'REJECTED' OR
+    (SELECT tenant_id FROM bv_company_applications WHERE id=b) IS NOT NULL OR
+    EXISTS(SELECT 1 FROM bv_tenants WHERE slug='onboard-qa-a')
+ THEN RAISE EXCEPTION 'FOUNDER_DECISION_OR_TENANT_VISIBILITY_FAILED'; END IF;
  BEGIN
    PERFORM * FROM bv_review_application(a,'APPROVED');
    RAISE EXCEPTION 'REPLAY_ACCEPTED';
@@ -47,5 +49,14 @@ BEGIN
  IF (SELECT count(*) FROM bv_company_audit)<>4 THEN
   RAISE EXCEPTION 'APPLICANT_AUDIT_READ_FAILED';END IF;
  RAISE NOTICE 'APPLICANT_READ_ISOLATION_PASS';
+END $$;
+RESET ROLE;
+DO $$
+BEGIN
+ IF (SELECT count(*) FROM bv_tenants WHERE slug='onboard-qa-a')<>1 OR
+    EXISTS(SELECT 1 FROM bv_tenants WHERE slug='onboard-qa-b') OR
+    (SELECT count(*) FROM bv_memberships m JOIN bv_tenants t ON m.tenant_id=t.id WHERE t.slug='onboard-qa-a' AND m.role='owner')<>1
+ THEN RAISE EXCEPTION 'DBA_ACTIVATION_VALIDATION_FAILED'; END IF;
+ RAISE NOTICE 'DBA_TENANT_MEMBERSHIP_ATOMIC_ACTIVATION_PASS';
 END $$;
 ROLLBACK;

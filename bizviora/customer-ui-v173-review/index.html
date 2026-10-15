@@ -394,6 +394,20 @@ const views={overview:v172Overview,assistant:v17Assistant,tasks:v17Tasks,approva
 function render(){if(!visible().some(x=>x[0]===S.page))S.page='overview';document.body.dataset.screen=S.page;document.getElementById('nav').innerHTML=visible().map(x=>`<button class="link ${S.page===x[0]?'active':''}" data-page="${x[0]}"><span class="navicon">${navSvg(x[0])}</span><span>${x[1]}</span>${['tasks','approvals'].includes(x[0])?`<span class="count">${x[0]==='tasks'?6:3}</span>`:''}</button>`).join('');let cur=NAV.find(x=>x[0]===S.page);document.getElementById('head').innerHTML=`<div class="heading"><div><h1><span style="color:#1977e8">${navSvg(cur[0])}</span> ${cur[1]==='Tổng quan'?'Xin chào, Nguyễn Tuấn!':cur[1]}</h1><p>${descriptions[S.page]}</p></div><div class="filters"><select id="scope" aria-label="Dịch vụ"><option value="all">Tất cả dịch vụ</option><option value="lodging" ${S.scope==='lodging'?'selected':''}>Lưu trú</option><option value="fnb" ${S.scope==='fnb'?'selected':''}>Café & Nhà hàng</option><option value="tour" ${S.scope==='tour'?'selected':''}>Tour</option></select><select aria-label="Khoảng thời gian"><option>Hôm nay</option><option>7 ngày gần đây</option><option>30 ngày qua</option></select><button class="action phone-btn" data-action="mobileMenu">☰ Menu</button></div></div>`;document.getElementById('body').innerHTML=views[S.page]();document.getElementById('mobile').innerHTML=[['overview','Tổng quan','⌂'],['assistant','AI','🤖'],['tasks','Công việc','☑'],['more','Thêm','☰']].map(x=>`<button data-page="${x[0]}"><b>${x[2]}</b>${x[1]}</button>`).join('')}
 
 function notify(text){S.audit.unshift(text);let el=document.getElementById('v15-toast');if(!el){el=document.createElement('div');el.id='v15-toast';el.className='toast';el.setAttribute('role','status');el.setAttribute('aria-live','polite');document.body.appendChild(el)}el.textContent=text;el.hidden=false;clearTimeout(window.__notifyTimeout);window.__notifyTimeout=setTimeout(()=>el.hidden=true,4600)}
+// Preview-only section checklist; no live backend URL or access tokens in static assets.
+const BIZ2_SETTINGS_RELEASE_GATES=Object.freeze({
+ backendAuthRls:'HOLD',coreDbRestore:'HOLD',authDbRestore:'HOLD',
+ apiRollback:'HOLD',tenantUiBinding:'HOLD'
+});
+function biz2SettingsEvidence(title){
+ const statuses={
+  'Thông tin doanh nghiệp':'Core API read-only contract ready; browser authentication binding NOT VERIFIED',
+  'Địa điểm & dịch vụ':'Core tenant business units and properties read-only contract ready; live UI NOT WIRED',
+  'Người dùng & phân quyền':'SELF MEMBERSHIP ONLY; tenant user inventory NOT CONFIGURED',
+  'Nguồn tri thức doanh nghiệp':'NOT CONFIGURED; document count and policies NOT VERIFIED'
+ };
+ return statuses[title]||'Configuration is QA DEMO until security and recovery gate acceptance';
+}
 function biz2SettingsPanel(title){
   // Preview is intentionally read-only. No assumption of API connectivity, owner rights or approved spend.
   const descriptions={
@@ -413,7 +427,7 @@ function biz2SettingsPanel(title){
   d.replaceChildren();
   const h=document.createElement('h2');h.textContent=title;h.style.cssText='font-weight:800;font-size:20px;margin:0 0 12px';
   const p=document.createElement('p');p.textContent=descriptions[title]||'Chi tiết cấu hình sẽ được nối tới Biz2 Core sau nghiệm thu Auth/RLS.';p.style.cssText='font-size:14px;line-height:1.6;margin:0 0 12px';
-  const status=document.createElement('p');status.textContent='CHẾ ĐỘ QA / DEMO — Chưa ghi cấu hình. Không mở kết nối, không phát sinh phí, không cấp quyền.';status.style.cssText='font-size:12px;color:#a46a00;background:#fff8e7;padding:12px;border-radius:8px;margin:0 0 16px';
+  const status=document.createElement('p');status.textContent='CHẾ ĐỘ QA / DEMO — '+biz2SettingsEvidence(title)+' — Chưa ghi cấu hình, không mở kết nối, không phát sinh phí, không cấp quyền.';status.style.cssText='font-size:12px;color:#a46a00;background:#fff8e7;padding:12px;border-radius:8px;margin:0 0 16px';
   const close=document.createElement('button');close.type='button';close.textContent='Đóng';close.style.cssText='padding:10px 20px;border:0;border-radius:8px;background:#1768df;color:white;font-weight:700;cursor:pointer';close.addEventListener('click',()=>d.close());
   // Local review form: no server write, no localStorage and no policy activation.
   if(title==='Thông tin doanh nghiệp'||title==='Địa điểm & dịch vụ'){

@@ -98,7 +98,14 @@ export function createApi({verifyBearer,repository,requireFounder}) {
             slug:data.tenant.slug??null,version:data.tenant.settings_version??null,contactStatus:'NOT_VERIFIED'},
           businessUnits:data.businessUnits.map(u=>({id:u.id,name:u.name})),
           properties:data.properties.map(v=>({id:v.id,businessUnitId:v.business_unit_id,name:v.name})),
-          capabilities:{profileWrite:false,propertyWrite:false,integrationsRead:false},
+          membership:{role:actor.role,verified:true},
+          sections:{
+            company:{status:'VERIFIED_READ_ONLY',source:'bv_tenants'},
+            locations:{status:'VERIFIED_READ_ONLY',source:'bv_business_units,bv_properties'},
+            usersPermissions:{status:'SELF_MEMBERSHIP_ONLY',source:'bv_memberships',usersListAvailable:false},
+            knowledge:{status:'NOT_CONFIGURED',documentCount:null,categoryCount:null,updateCount:null}
+          },
+          capabilities:{profileWrite:false,propertyWrite:false,integrationsRead:false,usersListRead:false,knowledgeRead:false},
           source:'BIZVIORA_CORE_VERIFIED_CONTEXT',status:'READ_ONLY_QA'
         });
       }

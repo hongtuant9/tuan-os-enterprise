@@ -212,6 +212,13 @@ const submittedB=(await expect('/v1/company-applications',{method:'POST',token:r
  body:{companyName:'Synthetic Founder E2E B',requestedSlug:nameB}},201)).data;
 assert.equal(submittedA.status,'PENDING');safeInput(submittedA.id);
 assert.equal(submittedB.status,'PENDING');safeInput(submittedB.id);
+// Duplicate submission must not create another application or CREATED audit event.
+await expect('/v1/company-applications',{method:'POST',token:at,
+ body:{companyName:'Synthetic Founder E2E A',requestedSlug:nameA}},409);
+assert.equal(db("SELECT count(*) FROM bv_company_applications WHERE applicant_user_id='"+companyIds.applicant+"' AND requested_slug='"+nameA+"'"),'1');
+assert.equal(db("SELECT count(*) FROM bv_company_audit WHERE application_id='"+submittedA.id+"' AND operation='CREATED'"),'1');
+console.log('PASS CI_DUPLICATE_APPLICATION_409_SINGLE_ROW_SINGLE_AUDIT');
+
 await expect('/v1/company-applications/decision',{method:'POST',token:at,
  body:{applicationId:submittedA.id,decision:'APPROVED'}},403);
 await expect('/v1/context?tenantId='+a,{token:at},403);

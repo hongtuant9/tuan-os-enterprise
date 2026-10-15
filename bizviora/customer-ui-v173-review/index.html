@@ -442,7 +442,8 @@ function biz2SettingsPanel(title){
     });
     form.append(save,note);d.append(form);
   }
-  d.append(h,p,status,close);
+  d.prepend(h,p,status);
+  d.append(close);
   if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
 }
 function action(type,id){

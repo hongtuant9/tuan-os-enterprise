@@ -66,3 +66,30 @@ test('Founder identity mismatch refuses action independently of platformManager 
  const r=await api(req('/v1/company-applications/decision',tokenOf(founder),{applicationId:application,decision:'APPROVED'}));
  assert.equal(r.status,403);assert.equal(calls.length,0);
 });
+
+for(const [label,body] of [
+ ['blank name',{companyName:'   ',requestedSlug:'valid-slug'}],
+ ['oversize name',{companyName:'x'.repeat(121),requestedSlug:'valid-slug'}],
+ ['non-string name',{companyName:{value:'Test'},requestedSlug:'valid-slug'}],
+ ['short slug',{companyName:'Test',requestedSlug:'ab'}],
+ ['uppercase slug',{companyName:'Test',requestedSlug:'Valid-slug'}],
+ ['oversize slug',{companyName:'Test',requestedSlug:'a'.repeat(49)}],
+ ['non-string slug',{companyName:'Test',requestedSlug:123}],
+ ['null body',null]
+])test('registration rejects '+label+' without inserting',async()=>{
+ const {api,calls}=setup();const r=await api(req('/v1/company-applications',tokenOf(applicant),body));
+ assert.equal(r.status,400);assert.equal(calls.length,0);
+});
+test('registration ignores forged actor, approval, tenant and audit fields',async()=>{
+ const {api,calls}=setup();
+ const r=await api(req('/v1/company-applications',tokenOf(applicant),{
+  companyName:'  Synthetic Company  ',requestedSlug:'safe-company',userId:founder,
+  applicant_user_id:founder,status:'APPROVED',tenant_id:application,reviewed_by:founder,role:'owner'
+ }));
+ assert.equal(r.status,201);assert.deepEqual(calls,[['submit',{userId:applicant,companyName:'Synthetic Company',requestedSlug:'safe-company'}]]);
+});
+test('application list uses verified identity, ignoring query subject',async()=>{
+ const {api,calls}=setup();
+ const r=await api(req('/v1/company-applications?userId='+founder,tokenOf(applicant),undefined,'GET'));
+ assert.equal(r.status,200);assert.deepEqual(calls,[['list',applicant]]);
+});

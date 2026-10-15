@@ -1,0 +1,43 @@
+name: bizviora-wp-staging
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bizviora_wp
+      MARIADB_USER: bizviora_wp
+      MARIADB_PASSWORD_FILE: /run/secrets/db_app_password
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+    secrets: [db_app_password, db_root_password]
+    volumes: [db_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL","healthcheck.sh --connect --innodb_initialized"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+    mem_limit: 768m
+  wordpress:
+    image: wordpress:php8.3-apache
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["127.0.0.1:8088:80"]
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: bizviora_wp
+      WORDPRESS_DB_NAME: bizviora_wp
+      WORDPRESS_DB_PASSWORD_FILE: /run/secrets/db_app_password
+    secrets: [db_app_password]
+    volumes:
+      - wp_data:/var/www/html
+      - ./wp-content/themes/bizviora-marketing:/var/www/html/wp-content/themes/bizviora-marketing:ro
+    mem_limit: 768m
+secrets:
+  db_app_password:
+    file: ./secrets/db_app_password
+  db_root_password:
+    file: ./secrets/db_root_password
+volumes:
+  db_data:
+  wp_data:

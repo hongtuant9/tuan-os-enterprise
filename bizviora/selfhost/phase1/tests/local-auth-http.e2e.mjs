@@ -17,8 +17,7 @@ async function postForm(url,params){
  if(response.status!==200){
   // Only expose Keycloak's classified error; never credentials, JWT or raw response.
   const reason=String(result.error||'unknown').replace(/[^a-z_]/gi,'').slice(0,36);
-  const detail=String(result.error_description||'').replace(/[^a-zA-Z .]/g,'').slice(0,70);
-  throw Error('KEYCLOAK_LOGIN_DENIED_HTTP_'+response.status+'_'+reason+'_'+detail);
+  throw Error('KEYCLOAK_LOGIN_DENIED_HTTP_'+response.status+'_'+reason);
  }
  assert.ok(result.access_token&&typeof result.access_token==='string');
  return result.access_token;
@@ -198,6 +197,7 @@ const companyIds={
  rejected:await createSyntheticUser(companyRejectName),
  staff:await createSyntheticUser(companyStaffName)
 };
+try {
 db("INSERT INTO bv_platform_managers(user_id) VALUES ('"+companyIds.founder+"')");
 const ft=await getToken(companyFounderName),at=await getToken(companyApplicantName),
  rt=await getToken(companyRejectName),st=await getToken(companyStaffName);
@@ -237,3 +237,13 @@ assert.equal(db("SELECT count(*) FROM bv_company_audit WHERE application_id IN (
 assert.equal(db("SELECT count(*) FROM bv_memberships WHERE tenant_id='"+reviewedA.activated_tenant+"' AND user_id='"+companyIds.applicant+"' AND role='owner'"),'1');
 assert.equal(db("SELECT count(*) FROM bv_tenants WHERE slug='"+nameB+"'"),'0');
 console.log('PASS: Signed Founder JWT HTTP application create/approve/reject/activate/new tenant task/cross denial/DB audit');
+
+} finally {
+ // Only this CI-created synthetic identity; never delete another grant.
+ db("DELETE FROM bv_platform_managers WHERE user_id='"+companyIds.founder+"'");
+ assert.equal(db("SELECT count(*) FROM bv_platform_managers WHERE user_id='"+companyIds.founder+"'"),'0');
+ console.log('PASS CI_SYNTHETIC_FOUNDER_GRANT_REVOKED');
+}
+const revokedToken=await getToken(companyFounderName);
+await expect('/v1/founder/access',{token:revokedToken},403);
+console.log('PASS CI_REVOKED_FOUNDER_SIGNED_JWT_DENIED');

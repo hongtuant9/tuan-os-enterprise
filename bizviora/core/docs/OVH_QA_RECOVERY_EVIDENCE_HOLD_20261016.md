@@ -9,6 +9,11 @@ Status: PARTIAL_INVENTORY_ONLY / HOLD. Read-only inventory captured 2026-10-16 l
 
 All three containers were running when inspected; Core DB container reported healthy. Image hash alone does not prove the deployed application source revision.
 
+## Container storage mapping (read-only inspected)
+- PostgreSQL QA container: persistent Docker volume mounted at `/var/lib/postgresql/data`; init scripts mounted read-only evidence as bind at `/docker-entrypoint-initdb.d` (mount options not inspected).
+- Keycloak container: import data bind mount at `/opt/keycloak/data/import`; verify Keycloak backing DB separately before asserting Auth storage location.
+- API configured image tag: `bizv20-founder-staging-qa-api`; the immutable image ID above is required for rollback pinning.
+
 ## Existing recovery artifacts (metadata only)
 - `recovery-backups/keycloak-auth-pre-recovery-20261015.dump`, about 212 KiB, restricted file permissions
 - `recovery-backups/founder-api-pre-azp-f81960ab-20261015.mjs`, about 3.5 KiB

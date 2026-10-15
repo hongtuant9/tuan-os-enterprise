@@ -11,11 +11,20 @@ STATE="$HOME_STATE/deadline"
 LOCK="$HOME_STATE/lock"
 mkdir -p "$HOME_STATE"; chmod 700 "$HOME_STATE"
 exec 9>"$LOCK"; flock -w 5 9
-count(){ docker exec "$DB" psql -X -At -v ON_ERROR_STOP=1 -U postgres -d bizviora_phase1 -c 'SELECT count(*) FROM bv_platform_managers;'; }
+db_exec(){
+  docker exec "$DB" psql -X -At -v ON_ERROR_STOP=1 -U postgres -d bizviora_phase1 "$@" 2>/dev/null || {
+    echo 'FAIL QA_DATABASE_COMMAND' >&2; return 1;
+  }
+}
+count(){
+  local result
+  result="$(db_exec -c 'SELECT count(*) FROM bv_platform_managers;')" || return 1
+  [[ "$result" =~ ^[0-9]+$ ]] || { echo 'FAIL QA_DATABASE_COUNT' >&2; return 1; }
+  printf '%s\n' "$result"
+}
 revoke(){
   # Never delete other users; fail closed if someone else has a grant.
-  docker exec "$DB" psql -X -At -v ON_ERROR_STOP=1 -U postgres -d bizviora_phase1 \
-    -c "DELETE FROM bv_platform_managers WHERE user_id='$FOUNDER';" >/dev/null
+  db_exec -c "DELETE FROM bv_platform_managers WHERE user_id='$FOUNDER';" >/dev/null
   [[ "$(count)" == '0' ]] || { echo 'FAIL OTHER_PLATFORM_GRANTS_PRESENT'; exit 1; }
   rm -f "$STATE"
   echo 'PASS FOUNDER_PRIVILEGES_ZERO'
@@ -31,15 +40,22 @@ case "${1:-}" in
    echo 'ARMED_EIGHT_MINUTES; NO_PRIVILEGES_GRANTED'
    ;;
  tick)
-   [[ -f "$STATE" ]] || exit 0
-   read -r deadline <"$STATE"
+   if [[ ! -f "$STATE" ]]; then
+     # A lost marker must not leave an unexpected grant indefinitely active.
+     [[ "$(count)" == '0' ]] && exit 0
+     echo 'FAIL_MISSING_DEADLINE_REVOKING'
+     revoke
+     exit 1
+   fi
+   deadline=''
+   read -r deadline <"$STATE" || true
    if [[ ! "$deadline" =~ ^[0-9]{10,11}$ ]]; then echo 'FAIL_INVALID_DEADLINE_REVOKING'; revoke; exit 1; fi
-   if (( $(date -u +%s) >= deadline )); then revoke; fi
+   if (( $(date -u +%s) >= 10#$deadline )); then revoke; fi
    ;;
  revoke) revoke;;
  status)
    if [[ -f "$STATE" ]]; then echo 'ARMED'; else echo 'DISARMED'; fi
-   [[ "$(count)" == '0' ]] && echo 'GRANTS_ZERO' || echo 'GRANT_ACTIVE_OR_UNEXPECTED'
+   [[ "$(count)" == '0' ]] && echo 'GRANTS_ZERO' || { echo 'GRANT_ACTIVE_OR_UNEXPECTED'; exit 1; }
    ;;
  *) echo 'Usage: founder-qa-watchdog.sh arm|tick|revoke|status';exit 2;;
 esac

@@ -27,7 +27,7 @@ jobs:
         run: node --test bizviora/core/tests/api.test.mjs
       - name: Verify Founder QA runner fail-closed safeguards (synthetic only)
         run: |
-          node --test bizviora/selfhost/phase1/tests/founder-qa-safety.test.mjs bizviora/selfhost/phase1/tests/founder-runner-behavior.test.mjs
+          node --test bizviora/selfhost/phase1/tests/founder-qa-safety.test.mjs bizviora/selfhost/phase1/tests/founder-runner-behavior.test.mjs bizviora/selfhost/phase1/tests/founder-watchdog-behavior.test.mjs
           bash -n bizviora/selfhost/phase1/tests/founder-qa-watchdog.sh
       - name: Install isolated signed JWT test dependencies without scripts
         working-directory: bizviora/selfhost/phase1
@@ -63,8 +63,7 @@ jobs:
           done
           if [ "$schema_ready" != "t" ]; then
             echo "DB schema/grants readiness failed; stop before accessing QA data"
-            echo "=== DB initialization last 75 log lines (ephemeral synthetic only) ==="
-            docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=75 db || true
+            # Do not publish raw database logs: SQL diagnostics can contain credentials.
             echo "=== Isolated schema/role privileges ==="
             docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
               psql -U postgres -d bizviora_phase1 -Atc "SELECT 'member_role',to_regrole('bv_api_member'); SELECT 'tenants',to_regclass('public.bv_tenants'); SELECT 'finance',to_regclass('public.bv_qa_private_finance');" || true
@@ -96,7 +95,7 @@ jobs:
           echo 'FAILED: Isolated Auth/Core readiness'
           docker compose -f bizviora/selfhost/phase1/compose.yaml ps -a || true
           # Only synthetic ephemeral services; no private user environment.
-          docker compose -f bizviora/selfhost/phase1/compose.yaml logs --no-color --tail=75 auth api || true
+          # No raw auth/API logs; classified diagnostics only below.
           exit 1
       - name: JWT HTTP E2E with synthetic tenant A, B and staff; verify PostgreSQL Audit
         run: node bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs

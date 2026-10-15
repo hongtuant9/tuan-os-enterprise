@@ -72,3 +72,21 @@ test("Agoda browser DOM parser handles Today label and property bubble without R
   assert.equal(messages[1]?.participant, "property");
   assert.equal(messages[1]?.createdAt, "2026-10-07T11:26:00+07:00");
 });
+
+
+test("Agoda browser DOM parser accepts Vietnamese and numeric historical date labels", () => {
+  const messages = parseAgodaDomHistory({
+    propertyId: "7206992",
+    reservationReference: "2056603669",
+    items: [
+      { index: 0, text: "3 thg 10 2026" },
+      { index: 1, text: "AG\n\n09:15\nIs breakfast included?", className: "a1f74-pr-32 a1f74-pl-16" },
+      { index: 2, text: "04/10/2026" },
+      { index: 3, text: "Đọc\n\n18:20\nBreakfast is available.", className: "a1f74-pr-16 a1f74-pl-32" },
+    ],
+  });
+
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0]?.createdAt, "2026-10-03T09:15:00+07:00");
+  assert.equal(messages[1]?.createdAt, "2026-10-04T18:20:00+07:00");
+});

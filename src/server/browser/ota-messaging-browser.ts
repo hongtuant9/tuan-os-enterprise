@@ -228,7 +228,14 @@ async function collectAgodaSnapshots(
       await card.evaluate((node) => {
         node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
       });
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await page.waitForFunction(
+        () => {
+          const root = document.querySelector<HTMLElement>('[data-testid="inbox-message-cards-container"]');
+          return Boolean(root && root.children.length > 0);
+        },
+        { timeout: 8000 },
+      ).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 350));
 
       await scrollUntilStable(
         page,

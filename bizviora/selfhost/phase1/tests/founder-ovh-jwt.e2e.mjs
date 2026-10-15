@@ -65,7 +65,12 @@ export async function main(overrideTokens){
  check(!listA.data.some(x=>x.id===idB||x.application_id===idB),'A_CANNOT_VIEW_B');
  check(listB.data.some(x=>x.id===idB||x.application_id===idB),'B_OWN_APPLICATION_VISIBLE');
  check(!listB.data.some(x=>x.id===idA||x.application_id===idA),'B_CANNOT_VIEW_A');
- console.log('E2E_HTTP_PASS; AUDIT_AND_TENANT_DB_READBACK_REQUIRED; REVOKE_FOUNDER_GRANT_IMMEDIATELY');
+ const approvedApplication=listA.data.find(x=>x.id===idA||x.application_id===idA);
+ const tenantId=approvedApplication?.tenant_id;
+ assert.match(tenantId||'',uuid,'Approved tenant ID from applicant list');
+ status(await request('/v1/context?tenantId='+tenantId,tokens.a),200,'APPLICANT_A_OWN_TENANT_CONTEXT');
+ status(await request('/v1/context?tenantId='+tenantId,tokens.b),403,'APPLICANT_B_CROSS_TENANT_DENIED');
+ console.log('E2E_HTTP_AND_TENANT_RLS_PASS; AUDIT_DB_READBACK_REQUIRED; REVOKE_FOUNDER_GRANT_IMMEDIATELY');
 }
 if(process.argv[1] && new URL(import.meta.url).pathname===process.argv[1]){
  main().catch(e=>{console.error('FAIL '+String(e?.message||'UNKNOWN').replace(/[A-Za-z0-9_-]{45,}/g,'[REDACTED]'));process.exitCode=1});

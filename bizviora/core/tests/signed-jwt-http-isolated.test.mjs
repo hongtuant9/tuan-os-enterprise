@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {generateKeyPairSync,sign,verify} from 'node:crypto';
 import {createServer} from 'node:http';
 import {createApi} from '../src/api.mjs';
+import {ApiError} from '../src/access.mjs';
 
 const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -21,13 +22,13 @@ function token(id,overrides={}){
 }
 async function verifyBearer(jwt){
  const parts=jwt.split('.');
- if(parts.length!==3)throw Error('bad token');
+ if(parts.length!==3)throw new ApiError(401,'AUTH_INVALID');
  const [h,p,s]=parts;
  const hdr=JSON.parse(Buffer.from(h,'base64url').toString());
  const claims=JSON.parse(Buffer.from(p,'base64url').toString());
  if(hdr.alg!=='RS256'||!verify('RSA-SHA256',Buffer.from(h+'.'+p),publicKey,Buffer.from(s,'base64url')))
-  throw Error('signature rejected');
- if(claims.iss!==issuer||claims.aud!==audience||claims.exp<=Date.now()/1000)throw Error('claims rejected');
+  throw new ApiError(401,'AUTH_INVALID');
+ if(claims.iss!==issuer||claims.aud!==audience||claims.exp<=Date.now()/1000)throw new ApiError(401,'AUTH_INVALID');
  return {id:claims.sub};
 }
 const membership={
@@ -42,7 +43,7 @@ const api=createApi({
    {tenant_id:tenantId,user_id:userId,role:membership[tenantId][userId]}:null,
   context:async actor=>({tenant:{id:actor.tenantId,name,settings_version:version},businessUnits:[],properties:[]}),
   updateTenantProfileAtomic:async (actor,{name:newName,expectedVersion})=>{
-   if(expectedVersion!==version){const e=new Error('CONFLICT');e.status=409;e.code='SETTINGS_VERSION_CONFLICT';throw e;}
+   if(expectedVersion!==version){throw new ApiError(409,'SETTINGS_VERSION_CONFLICT');}
    name=newName;version++;const id='audit-'+version;audit.push({id,tenantId:actor.tenantId});
    return {tenantId:actor.tenantId,name,version,auditEventId:id};
   }
@@ -79,7 +80,7 @@ test('tampered signature rejected',async()=>{
  const t=token(UO);assert.equal((await http(t.slice(0,-2)+'00')).status,503);
 });
 test('wrong issuer and audience rejected',async()=>{
- assert.equal((await http(token(UO,{iss:'https://evil.invalid'}))).status,503);
+ assert.equal((await http(token(UO,{iss:'https://evil.invalid'}))).status,401);
  assert.equal((await http(token(UO,{aud:'wrong-api'}))).status,503);
 });
 test('stale optimistic version rejected without changing audit',async()=>{

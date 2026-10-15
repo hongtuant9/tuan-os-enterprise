@@ -83,6 +83,25 @@ export function createApi({verifyBearer,repository,requireFounder}) {
         const data=await repo.context(actor);
         return respond(200,{tenant:data.tenant,businessUnits:data.businessUnits,properties:data.properties,role:actor.role});
       }
+      // Tenant Settings: authenticated, read-only view of existing Biz2 Core data.
+      if(pathname==='/v1/tenant-settings' && request.method==='GET') {
+        const data=await repo.context(actor);
+        if (!data?.tenant || data.tenant.id!==actor.tenantId ||
+            !Array.isArray(data.businessUnits) || !Array.isArray(data.properties) ||
+            data.businessUnits.some(v=>v.tenant_id && v.tenant_id!==actor.tenantId) ||
+            data.properties.some(v=>v.tenant_id && v.tenant_id!==actor.tenantId) ||
+            data.properties.some(v=>!data.businessUnits.some(u=>u.id===v.business_unit_id)))
+          throw new ApiError(403,'TENANT_SETTINGS_SCOPE_DENIED');
+        return respond(200,{
+          tenantId:actor.tenantId,
+          profile:{id:data.tenant.id,name:data.tenant.name??null,
+            slug:data.tenant.slug??null,contactStatus:'NOT_VERIFIED'},
+          businessUnits:data.businessUnits.map(u=>({id:u.id,name:u.name})),
+          properties:data.properties.map(v=>({id:v.id,businessUnitId:v.business_unit_id,name:v.name})),
+          capabilities:{profileWrite:false,propertyWrite:false,integrationsRead:false},
+          source:'BIZVIORA_CORE_VERIFIED_CONTEXT',status:'READ_ONLY_QA'
+        });
+      }
       if(pathname==='/v1/tasks'&&request.method==='GET')
         return respond(200,{tenantId,data:await repo.tasks(actor)});
       if(pathname==='/v1/tasks'&&request.method==='POST')

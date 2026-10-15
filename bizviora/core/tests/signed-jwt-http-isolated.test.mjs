@@ -77,11 +77,11 @@ test('signed RS256 Staff A rejected',async()=>assert.equal((await http(token(US)
 test('signed RS256 Owner B cannot update tenant A',async()=>assert.equal((await http(token(UB))).status,403));
 test('signed RS256 Owner B cannot masquerade as A',async()=>assert.equal((await http(token(UB),A)).status,403));
 test('tampered signature rejected',async()=>{
- const t=token(UO);assert.equal((await http(t.slice(0,-2)+'00')).status,503);
+ const t=token(UO);assert.equal((await http(t.slice(0,-2)+'00')).status,401);
 });
 test('wrong issuer and audience rejected',async()=>{
  assert.equal((await http(token(UO,{iss:'https://evil.invalid'}))).status,401);
- assert.equal((await http(token(UO,{aud:'wrong-api'}))).status,503);
+ assert.equal((await http(token(UO,{aud:'wrong-api'}))).status,401);
 });
 test('stale optimistic version rejected without changing audit',async()=>{
  const r=await http(token(UO),A,{displayName:'Overwrite',expectedVersion:1});

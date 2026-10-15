@@ -57,11 +57,22 @@ async function acquire(username){
  }finally{close?.()}
 }
 async function main(){
- if(process.argv[2]!=='execute')fail('Use execute explicitly; do not run until PKCE client and grant gates PASS');
+ const mode=process.argv[2];
+ if(!['auth-only','execute'].includes(mode))fail('Use auth-only first; execute only after separate Founder grant approval');
  const cfg=await json(auth+'/realms/bizviora-phase1/.well-known/openid-configuration');
  if(!cfg.code_challenge_methods_supported?.includes('S256'))fail('PKCE_S256_UNAVAILABLE');
  const tokens={};
  for(let i=0;i<3;i++)tokens[targets[i]]=await acquire(expected[i]);
+ if(mode==='auth-only'){
+  const api='http://127.0.0.1:18104/v1/founder/access';
+  for(const key of ['founder','a','b']){
+   const result=await fetch(api,{headers:{authorization:'Bearer '+tokens[key]}});
+   if(result.status!==403)fail('AUTH_ONLY_EXPECTED_DENIAL_'+key+'_HTTP_'+result.status);
+   console.log('PASS JWT_SIGNATURE_ACCEPTED_FOUNDERSHIP_DENIED '+key);
+  }
+  console.log('PASS ALL_THREE_PKCE_USERS_AUTHENTICATED_AND_DENIED_WITH_ZERO_FOUNDER_GRANTS');
+  return;
+ }
  await runE2E(tokens);
 }
 main().catch(e=>{console.error('FAIL '+String(e.message).replace(/[A-Za-z0-9_-]{45,}/g,'[REDACTED]'));process.exitCode=1});

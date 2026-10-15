@@ -60,10 +60,18 @@ async function acquire(username){
 }
 async function main(){
  const mode=process.argv[2];
- if(!['auth-only','execute'].includes(mode))fail('Use auth-only first; execute only after separate Founder grant approval');
+ if(!['auth-only','execute','auth-applicant-a','auth-applicant-b'].includes(mode))fail('Use auth-only first; execute only after separate Founder grant approval');
  const cfg=await json(auth+'/realms/bizviora-phase1/.well-known/openid-configuration');
  if(!cfg.code_challenge_methods_supported?.includes('S256'))fail('PKCE_S256_UNAVAILABLE');
  const tokens={};
+ if(mode==='auth-applicant-a'||mode==='auth-applicant-b'){
+  const i=mode==='auth-applicant-a'?1:2;
+  const token=await acquire(expected[i]);
+  const response=await fetch('http://127.0.0.1:18104/v1/founder/access',{headers:{authorization:'Bearer '+token}});
+  if(response.status!==403)fail('EXPECTED_NONFOUNDER_403_ACTUAL_'+response.status);
+  console.log('PASS '+mode.toUpperCase().replaceAll('-','_')+'_JWT_DENIED_403');
+  return;
+ }
  for(let i=0;i<3;i++)tokens[targets[i]]=await acquire(expected[i]);
  if(mode==='auth-only'){
   const api='http://127.0.0.1:18104/v1/founder/access';

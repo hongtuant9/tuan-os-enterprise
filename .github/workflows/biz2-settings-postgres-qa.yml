@@ -49,8 +49,10 @@ jobs:
           p1=$!
           psql -X -v ON_ERROR_STOP=1 -c "$query" > /tmp/biz2-concurrent-2.log 2>&1 &
           p2=$!
+          set +e
           wait "$p1"; a=$?
           wait "$p2"; b=$?
+          set -e
           if ! { [ "$a" -eq 0 ] && [ "$b" -ne 0 ]; } && ! { [ "$b" -eq 0 ] && [ "$a" -ne 0 ]; }; then
             echo "Expected exactly one success and one conflict; actual exit codes: $a,$b"
             exit 1

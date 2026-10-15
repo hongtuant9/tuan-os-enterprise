@@ -41,7 +41,7 @@ export function createSupabaseDependencies(env=process.env) {
         },
         async context(actor) {
           const [t,u,p]=await Promise.all([
-            db.from('bv_tenants').select('id,name,slug').eq('id',actor.tenantId).single(),
+            db.from('bv_tenants').select('id,name,slug,settings_version').eq('id',actor.tenantId).single(),
             db.from('bv_business_units').select('id,name').eq('tenant_id',actor.tenantId).limit(100),
             db.from('bv_properties').select('id,business_unit_id,name').eq('tenant_id',actor.tenantId).limit(100)
           ]);

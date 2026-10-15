@@ -185,3 +185,55 @@ assert.equal(Number(totalAudit),concurrentCount+2,'expected 50 concurrent task A
 console.log('PASS: 50 unique authenticated tenant sessions, 150 real Core HTTP requests, ten cross-tenant denials, persisted Audit counts');
 
 console.log('PASS: Local Keycloak synthetic JWT, Core API own/cross/staff, approve/reject, duplicate denial and PostgreSQL Audit (zero external data)');
+
+// Founder onboarding E2E — real short-lived Keycloak JWT, HTTP API, DB Audit.
+// Only the ephemeral GitHub CI environment runs this script.
+const companyFounderName='qa-founder-'+suffix;
+const companyApplicantName='qa-company-applicant-'+suffix;
+const companyRejectName='qa-company-reject-'+suffix;
+const companyStaffName='qa-company-staff-'+suffix;
+const companyIds={
+ founder:await createSyntheticUser(companyFounderName),
+ applicant:await createSyntheticUser(companyApplicantName),
+ rejected:await createSyntheticUser(companyRejectName),
+ staff:await createSyntheticUser(companyStaffName)
+};
+db("INSERT INTO bv_platform_managers(user_id) VALUES ('"+companyIds.founder+"')");
+const ft=await getToken(companyFounderName),at=await getToken(companyApplicantName),
+ rt=await getToken(companyRejectName),st=await getToken(companyStaffName);
+await expect('/v1/founder/access',{token:ft},200);
+await expect('/v1/founder/access',{token:at},403);
+await expect('/v1/company-applications/decision',{method:'POST',token:st,
+ body:{applicationId:'33333333-3333-4333-8333-333333333333',decision:'APPROVED'}},403);
+const nameA='founder-e2e-a-'+suffix,nameB='founder-e2e-b-'+suffix;
+const submittedA=(await expect('/v1/company-applications',{method:'POST',token:at,
+ body:{companyName:'Synthetic Founder E2E A',requestedSlug:nameA}},201)).data;
+const submittedB=(await expect('/v1/company-applications',{method:'POST',token:rt,
+ body:{companyName:'Synthetic Founder E2E B',requestedSlug:nameB}},201)).data;
+assert.equal(submittedA.status,'PENDING');safeInput(submittedA.id);
+assert.equal(submittedB.status,'PENDING');safeInput(submittedB.id);
+await expect('/v1/company-applications/decision',{method:'POST',token:at,
+ body:{applicationId:submittedA.id,decision:'APPROVED'}},403);
+await expect('/v1/context?tenantId='+a,{token:at},403);
+const reviewedA=(await expect('/v1/company-applications/decision',{method:'POST',token:ft,
+ body:{applicationId:submittedA.id,decision:'APPROVED'}},200)).data;
+const reviewedB=(await expect('/v1/company-applications/decision',{method:'POST',token:ft,
+ body:{applicationId:submittedB.id,decision:'REJECTED'}},200)).data;
+assert.equal(reviewedA.decision_status,'APPROVED');
+assert.equal(reviewedB.decision_status,'REJECTED');
+safeInput(reviewedA.activated_tenant);
+assert.equal(reviewedB.activated_tenant,null);
+await expect('/v1/company-applications/decision',{method:'POST',token:ft,
+ body:{applicationId:submittedA.id,decision:'REJECTED'}},409);
+const contextNew=(await expect('/v1/context?tenantId='+reviewedA.activated_tenant,
+ {token:at},200));
+assert.equal(contextNew.tenant.id,reviewedA.activated_tenant);
+await expect('/v1/context?tenantId='+reviewedA.activated_tenant,{token:rt},403);
+await expect('/v1/context?tenantId='+reviewedA.activated_tenant,{token:ft},403);
+const taskNew=(await expect('/v1/tasks',{method:'POST',token:at,
+ body:{tenantId:reviewedA.activated_tenant,title:'Newly activated tenant task'}},201)).data;
+assert.equal(taskNew.tenant_id,reviewedA.activated_tenant);
+assert.equal(db("SELECT count(*) FROM bv_company_audit WHERE application_id IN ('"+submittedA.id+"','"+submittedB.id+"')"),'4');
+assert.equal(db("SELECT count(*) FROM bv_memberships WHERE tenant_id='"+reviewedA.activated_tenant+"' AND user_id='"+companyIds.applicant+"' AND role='owner'"),'1');
+assert.equal(db("SELECT count(*) FROM bv_tenants WHERE slug='"+nameB+"'"),'0');
+console.log('PASS: Signed Founder JWT HTTP application create/approve/reject/activate/new tenant task/cross denial/DB audit');

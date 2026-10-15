@@ -18,7 +18,7 @@ async function verifyBearer(token){
    typeof token==='string'?token.split('.').length:0);
  try{
   const {payload}=await jwtVerify(token,keySet,{issuer,algorithms:['RS256'],clockTolerance:'10s'});
-  if(payload.azp!=='bizviora-phase1-qa'||payload.typ!=='Bearer')
+  if(!['bizviora-phase1-qa','bizviora-founder-qa-pkce'].includes(payload.azp)||payload.typ!=='Bearer')
     throw Error('UNEXPECTED_TOKEN_CLIENT');
   // jwtVerify checks expiration when present; require exp/iat to reject
   // incorrectly minted or long-lived tokens, even when signed by our realm.
@@ -38,7 +38,11 @@ async function verifyBearer(token){
   throw new ApiError(401,'AUTH_INVALID');
  }
 }
-const api=createApi({verifyBearer,repository:localRepository});
+const api=createApi({verifyBearer,repository:localRepository,
+ requireFounder:async(_token,user)=>{
+  const platformManager=await localRepository().isPlatformManager(user.id);
+  return {userId:user.id.toLowerCase(),platformManager};
+ }});
 const server=http.createServer(async(incoming,outgoing)=>{
  try{
   const method=incoming.method||'GET';

@@ -19,10 +19,15 @@ sha256sum "$tmpdir/business.dump" "$tmpdir/auth.dump" | sed "s|$tmpdir/||g"
 network="bizviora-phase1-standalone-qa_isolated"
 docker run -d --name "$target" --network "$network" \
   -e "POSTGRES_PASSWORD=$LAB_DB_ROOT_PASSWORD" postgres:16-alpine >/dev/null
+# pg_isready may succeed for Docker entrypoint's temporary initialization
+# server, which then shuts down before the final postmaster starts.
 ready=0
-for i in $(seq 1 60); do
- if docker exec "$target" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
-  ready=1;break
+for i in $(seq 1 90); do
+ if docker exec "$target" psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+  sleep 2
+  if docker exec "$target" psql -U postgres -d postgres -Atqc 'SELECT 1' >/dev/null 2>&1; then
+   ready=1;break
+  fi
  fi
  sleep 1
 done

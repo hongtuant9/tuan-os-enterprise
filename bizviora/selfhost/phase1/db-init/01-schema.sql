@@ -175,3 +175,82 @@ BEGIN
 END $$;
 CREATE TRIGGER bv_approval_tenant_refs BEFORE INSERT ON bv_approvals
  FOR EACH ROW EXECUTE FUNCTION bv_validate_approval_task_tenant();
+
+
+-- Founder onboarding QA: platform grants are DBA-provisioned only, never self-service.
+CREATE TABLE bv_platform_managers(user_id uuid PRIMARY KEY);
+CREATE FUNCTION bv_platform_manager() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+ SET search_path=public,pg_temp AS $$
+ SELECT EXISTS(SELECT 1 FROM bv_platform_managers WHERE user_id=bv_actor())
+$$;
+REVOKE ALL ON bv_platform_managers FROM PUBLIC;
+REVOKE ALL ON FUNCTION bv_platform_manager() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION bv_platform_manager() TO bv_api_member;
+
+CREATE TABLE bv_company_applications(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ applicant_user_id uuid NOT NULL,
+ company_name text NOT NULL CHECK(length(trim(company_name)) BETWEEN 2 AND 120),
+ requested_slug text NOT NULL CHECK(requested_slug ~ '^[a-z][a-z0-9-]{2,47}$'),
+ status text NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+ tenant_id uuid UNIQUE REFERENCES bv_tenants(id),
+ reviewed_by uuid, decision_reason text,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ reviewed_at timestamptz,
+ UNIQUE(applicant_user_id,requested_slug)
+);
+CREATE TABLE bv_company_audit(
+ id bigserial PRIMARY KEY,
+ application_id uuid NOT NULL REFERENCES bv_company_applications(id),
+ actor_user_id uuid NOT NULL,
+ operation text NOT NULL CHECK(operation IN ('CREATED','APPROVED','REJECTED')),
+ tenant_id uuid REFERENCES bv_tenants(id),
+ occurred_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE bv_company_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bv_company_audit ENABLE ROW LEVEL SECURITY;
+CREATE POLICY application_read ON bv_company_applications FOR SELECT TO bv_api_member
+ USING(applicant_user_id=bv_actor() OR bv_platform_manager());
+CREATE POLICY application_submit ON bv_company_applications FOR INSERT TO bv_api_member
+ WITH CHECK(applicant_user_id=bv_actor() AND status='PENDING' AND tenant_id IS NULL AND reviewed_by IS NULL);
+CREATE POLICY company_audit_read ON bv_company_audit FOR SELECT TO bv_api_member
+ USING(bv_platform_manager() OR EXISTS(
+ SELECT 1 FROM bv_company_applications a WHERE a.id=application_id AND a.applicant_user_id=bv_actor()));
+GRANT SELECT,INSERT ON bv_company_applications TO bv_api_member;
+GRANT SELECT ON bv_company_audit TO bv_api_member;
+
+CREATE FUNCTION bv_application_audit() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+ SET search_path=public,pg_temp AS $$
+BEGIN
+ INSERT INTO bv_company_audit(application_id,actor_user_id,operation)
+ VALUES(NEW.id,bv_actor(),'CREATED');
+ RETURN NEW;
+END $$;
+CREATE TRIGGER company_application_created AFTER INSERT ON bv_company_applications
+ FOR EACH ROW EXECUTE FUNCTION bv_application_audit();
+
+-- Only a platform manager can execute this atomic, row-locked decision.
+CREATE FUNCTION bv_review_application(p_application uuid,p_decision text)
+ RETURNS TABLE(application_id uuid,decision_status text,activated_tenant uuid)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE a bv_company_applications%ROWTYPE; t uuid;
+BEGIN
+ IF NOT bv_platform_manager() THEN RAISE EXCEPTION 'FOUNDER_DENIED' USING ERRCODE='42501'; END IF;
+ IF p_decision NOT IN ('APPROVED','REJECTED') THEN
+  RAISE EXCEPTION 'INVALID_DECISION' USING ERRCODE='22023';
+ END IF;
+ SELECT * INTO a FROM bv_company_applications WHERE id=p_application FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'APPLICATION_NOT_FOUND' USING ERRCODE='22023'; END IF;
+ IF a.status<>'PENDING' THEN RAISE EXCEPTION 'ALREADY_DECIDED' USING ERRCODE='23505'; END IF;
+ IF p_decision='APPROVED' THEN
+  INSERT INTO bv_tenants(slug,name) VALUES(a.requested_slug,a.company_name) RETURNING id INTO t;
+  INSERT INTO bv_memberships(tenant_id,user_id,role) VALUES(t,a.applicant_user_id,'owner');
+ END IF;
+ UPDATE bv_company_applications SET status=p_decision,tenant_id=t,
+  reviewed_by=bv_actor(),reviewed_at=now() WHERE id=a.id;
+ INSERT INTO bv_company_audit(application_id,actor_user_id,operation,tenant_id)
+ VALUES(a.id,bv_actor(),p_decision,t);
+ RETURN QUERY SELECT a.id,p_decision,t;
+END $$;
+REVOKE ALL ON FUNCTION bv_review_application(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION bv_review_application(uuid,text) TO bv_api_member;

@@ -23,7 +23,8 @@ function status(result,expected,name){
  check(result.status===expected,name+'_HTTP_'+expected+'_ACTUAL_'+result.status);
  return result.data;
 }
-async function main(){
+export async function main(overrideTokens){
+ if(overrideTokens)Object.assign(tokens,overrideTokens);
  const url=new URL(base);
  assert.equal(url.protocol,'http:','Only loopback HTTP staging');
  assert.ok(['127.0.0.1','localhost'].includes(url.hostname),'Non-loopback target prohibited');
@@ -66,4 +67,6 @@ async function main(){
  check(!listB.data.some(x=>x.id===idA||x.application_id===idA),'B_CANNOT_VIEW_A');
  console.log('E2E_HTTP_PASS; AUDIT_AND_TENANT_DB_READBACK_REQUIRED; REVOKE_FOUNDER_GRANT_IMMEDIATELY');
 }
-main().catch(e=>{console.error('FAIL '+String(e?.message||'UNKNOWN').replace(/[A-Za-z0-9_-]{45,}/g,'[REDACTED]'));process.exitCode=1});
+if(process.argv[1] && new URL(import.meta.url).pathname===process.argv[1]){
+ main().catch(e=>{console.error('FAIL '+String(e?.message||'UNKNOWN').replace(/[A-Za-z0-9_-]{45,}/g,'[REDACTED]'));process.exitCode=1});
+}

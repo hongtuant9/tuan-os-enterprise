@@ -17,7 +17,7 @@ async function verifyBearer(token){
  console.info('QA_VERIFY_BEARER_SHAPE',typeof token,typeof token==='string'?token.length:0,
    typeof token==='string'?token.split('.').length:0);
  try{
-  const {payload}=await jwtVerify(token,keySet,{issuer,algorithms:['RS256'],clockTolerance:'10s'});
+  const {payload}=await jwtVerify(token,keySet,{issuer,audience:'bizviora-core-api',algorithms:['RS256'],clockTolerance:'10s'});
   if(!['bizviora-phase1-qa','bizviora-founder-qa-pkce'].includes(payload.azp)||payload.typ!=='Bearer')
     throw Error('UNEXPECTED_TOKEN_CLIENT');
   // jwtVerify checks expiration when present; require exp/iat to reject

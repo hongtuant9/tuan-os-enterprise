@@ -62,6 +62,8 @@ jobs:
             AND (SELECT count(*) FROM public.bv_tenant_profile_audit WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=2
             THEN 'CONCURRENCY_PASS' ELSE 'CONCURRENCY_FAIL' END" | grep -Fx CONCURRENCY_PASS
 
+      - name: Verify RLS and RPC with authenticated PostgreSQL role (synthetic claims only)
+        run: psql -X -v ON_ERROR_STOP=1 -f bizviora/core/tests/tenant-settings-ci-rls.sql
       - name: Prove synthetic PostgreSQL backup and independent restore
         shell: bash
         run: |

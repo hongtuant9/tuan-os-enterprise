@@ -25,6 +25,10 @@ jobs:
           node --check bizviora/selfhost/phase1/tests/local-auth-http.e2e.mjs
       - name: Run existing Core API role validation tests
         run: node --test bizviora/core/tests/api.test.mjs
+      - name: Verify Founder QA runner fail-closed safeguards (synthetic only)
+        run: |
+          node --test bizviora/selfhost/phase1/tests/founder-qa-safety.test.mjs
+          bash -n bizviora/selfhost/phase1/tests/founder-qa-watchdog.sh
       - name: Generate ephemeral synthetic DB credentials
         shell: bash
         run: |

@@ -415,6 +415,33 @@ function biz2SettingsPanel(title){
   const p=document.createElement('p');p.textContent=descriptions[title]||'Chi tiết cấu hình sẽ được nối tới Biz2 Core sau nghiệm thu Auth/RLS.';p.style.cssText='font-size:14px;line-height:1.6;margin:0 0 12px';
   const status=document.createElement('p');status.textContent='CHẾ ĐỘ QA / DEMO — Chưa ghi cấu hình. Không mở kết nối, không phát sinh phí, không cấp quyền.';status.style.cssText='font-size:12px;color:#a46a00;background:#fff8e7;padding:12px;border-radius:8px;margin:0 0 16px';
   const close=document.createElement('button');close.type='button';close.textContent='Đóng';close.style.cssText='padding:10px 20px;border:0;border-radius:8px;background:#1768df;color:white;font-weight:700;cursor:pointer';close.addEventListener('click',()=>d.close());
+  // Local review form: no server write, no localStorage and no policy activation.
+  if(title==='Thông tin doanh nghiệp'||title==='Địa điểm & dịch vụ'){
+    const form=document.createElement('form');form.autocomplete='off';
+    form.style.cssText='display:grid;gap:9px;margin:14px 0';
+    const specs=title==='Thông tin doanh nghiệp'?
+      [['Tên hiển thị (bản nháp)','TUAN OS Enterprise'],['Mã tham chiếu (chưa xác minh)','TUANOS001']]:
+      [['Tên cơ sở (bản nháp)','Lavender Homestay'],['Nhóm nghiệp vụ','Hospitality']];
+    for(const [label,value] of specs){
+      const wrapper=document.createElement('label');wrapper.style.cssText='display:grid;gap:5px;font-size:12px;color:#315276';
+      const name=document.createElement('span');name.textContent=label;
+      const input=document.createElement('input');input.type='text';input.value=value;input.maxLength=120;
+      input.style.cssText='padding:10px;border:1px solid #bed0e8;border-radius:8px;color:#12325b';
+      wrapper.append(name,input);form.append(wrapper);
+    }
+    const note=document.createElement('output');note.style.cssText='font-size:12px;color:#a46a00';
+    note.textContent='Bản nháp chỉ nằm trong cửa sổ này; đóng cửa sổ sẽ hủy.';
+    const save=document.createElement('button');save.type='submit';save.textContent='Kiểm tra bản nháp (không lưu)';
+    save.style.cssText='padding:10px;border-radius:8px;background:#e8f2ff;color:#1558af;font-weight:700;border:1px solid #bbd5f8;cursor:pointer';
+    form.addEventListener('submit',e=>{
+      e.preventDefault();
+      const inputs=[...form.querySelectorAll('input')];
+      note.textContent=inputs.every(x=>x.value.trim().length>=2)
+       ?'Bản nháp hợp lệ về định dạng. Chưa lưu; cần Auth/RLS, duyệt và Audit để ghi thật.'
+       :'Vui lòng nhập tối thiểu 2 ký tự ở mỗi trường.';
+    });
+    form.append(save,note);d.append(form);
+  }
   d.append(h,p,status,close);
   if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
 }

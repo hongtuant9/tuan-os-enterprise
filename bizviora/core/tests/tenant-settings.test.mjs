@@ -32,6 +32,12 @@ test('returns scoped company and property without writing secrets',async()=>{
  assert.equal(r.body.profile.contactStatus,'NOT_VERIFIED');
  assert.deepEqual(r.body.properties.map(x=>x.name),['Lavender Homestay']);
  assert.equal(r.body.capabilities.profileWrite,false);
+ assert.equal(r.body.sections.company.status,'VERIFIED_READ_ONLY');
+ assert.equal(r.body.sections.locations.status,'VERIFIED_READ_ONLY');
+ assert.equal(r.body.sections.usersPermissions.status,'SELF_MEMBERSHIP_ONLY');
+ assert.equal(r.body.sections.knowledge.status,'NOT_CONFIGURED');
+ assert.equal(r.body.sections.knowledge.documentCount,null);
+ assert.equal(r.body.membership.role,'owner');
  assert.equal(JSON.stringify(r.body).includes('secret'),false);
 });
 test('missing bearer is 401',async()=>assert.equal((await query('/v1/tenant-settings?tenantId='+A,null)).status,401));

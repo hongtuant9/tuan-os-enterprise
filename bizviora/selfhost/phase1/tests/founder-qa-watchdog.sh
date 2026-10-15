@@ -33,7 +33,7 @@ case "${1:-}" in
  tick)
    [[ -f "$STATE" ]] || exit 0
    read -r deadline <"$STATE"
-   [[ "$deadline" =~ ^[0-9]{10,11}$ ]] || { echo 'FAIL_INVALID_DEADLINE'; exit 1; }
+   if [[ ! "$deadline" =~ ^[0-9]{10,11}$ ]]; then echo 'FAIL_INVALID_DEADLINE_REVOKING'; revoke; exit 1; fi
    if (( $(date -u +%s) >= deadline )); then revoke; fi
    ;;
  revoke) revoke;;

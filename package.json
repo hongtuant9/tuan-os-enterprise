@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:overdue": "node --experimental-strip-types --test src/server/tasks/overdue.test.ts",
-    "test:finance-foundation": "node --experimental-strip-types --test src/server/finance/foundation.test.ts src/server/finance/ap-candidate.test.ts src/server/finance/expense-actual-core.test.ts src/server/finance/personal-finance-core.test.ts src/server/finance/financial-freedom-core.test.ts src/server/finance/finance-cutover-core.test.ts",
+    "test:finance-foundation": "node --experimental-strip-types --test src/server/finance/foundation.test.ts src/server/finance/ap-candidate.test.ts src/server/finance/expense-actual-core.test.ts src/server/finance/personal-finance-core.test.ts src/server/finance/financial-freedom-core.test.ts src/server/finance/finance-cutover-core.test.ts src/server/finance/hospitality-debt-core.test.ts",
     "test:attribution-foundation": "node --experimental-strip-types --test src/server/marketing-command-center/attribution-foundation.test.ts src/server/marketing-command-center/kiotviet-booking-normalizer.test.ts src/server/marketing-command-center/lead-qualification.test.ts src/server/ai-receptionist/customer-identity.test.ts",
     "seed:users": "node scripts/seed-users.mjs",
     "test:content-automation": "node --experimental-strip-types --test src/server/marketing-command-center/content-automation.test.ts",

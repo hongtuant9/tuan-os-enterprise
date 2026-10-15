@@ -38,7 +38,11 @@ async function verifyBearer(token){
   throw new ApiError(401,'AUTH_INVALID');
  }
 }
-const api=createApi({verifyBearer,repository:localRepository});
+const api=createApi({verifyBearer,repository:localRepository,
+ requireFounder:async(_token,user)=>{
+  const platformManager=await localRepository().isPlatformManager(user.id);
+  return {userId:user.id.toLowerCase(),platformManager};
+ }});
 const server=http.createServer(async(incoming,outgoing)=>{
  try{
   const method=incoming.method||'GET';

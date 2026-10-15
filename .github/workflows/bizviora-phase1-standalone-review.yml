@@ -64,6 +64,14 @@ jobs:
           docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
             psql -U postgres -d bizviora_phase1 -v ON_ERROR_STOP=1 \
             < bizviora/selfhost/phase1/tests/rls-finance-audit.sql
+      - name: Verify Founder onboarding SQL atomics / RBAC / audit (transaction rollback)
+        shell: bash
+        run: |
+          docker compose -f bizviora/selfhost/phase1/compose.yaml exec -T db \
+            psql -U postgres -d bizviora_phase1 -v ON_ERROR_STOP=1 \
+            < bizviora/selfhost/phase1/tests/founder-onboarding.sql
+      - name: Run full Core API test suite including Founder onboarding
+        run: node --test bizviora/core/tests/*.test.mjs
       - name: Start only isolated auth and Core API synthetic QA
         shell: bash
         run: |

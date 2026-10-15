@@ -35,6 +35,23 @@ async function withActor(userId,callback){
 }
 const data=result=>result.rows;
 export const localRepository=()=>({
+ async isPlatformManager(userId){
+  return withActor(userId,async db=>(await db.query('SELECT bv_platform_manager() AS allowed')).rows[0]?.allowed===true);
+ },
+ async submitCompany({userId,companyName,requestedSlug}){
+  return withActor(userId,async db=>(await db.query(
+   'INSERT INTO bv_company_applications(applicant_user_id,company_name,requested_slug) VALUES($1,$2,$3) RETURNING id,status,company_name,requested_slug,created_at',
+   [userId,companyName,requestedSlug])).rows[0]);
+ },
+ async listCompanies(userId){
+  return withActor(userId,async db=>(await db.query(
+   'SELECT id,company_name,requested_slug,status,tenant_id,created_at,reviewed_at FROM bv_company_applications ORDER BY created_at DESC LIMIT 100')).rows);
+ },
+ async decideCompany({userId,applicationId,decision}){
+  return withActor(userId,async db=>(await db.query(
+   'SELECT * FROM bv_review_application($1,$2)',[applicationId,decision])).rows[0]);
+ },
+
  async membership({tenantId,userId}){
   return withActor(userId,async db=>(data(await db.query(
    'SELECT tenant_id,user_id,role FROM bv_memberships WHERE tenant_id=$1 AND user_id=$2 LIMIT 1',

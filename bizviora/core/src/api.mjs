@@ -43,7 +43,35 @@ export function createApi({verifyBearer,repository,requireFounder}) {
           throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
         return respond(200,{platformManager:true,scope:'STAGING_ONLY'});
       }
+
       const payload=request.method==='POST'?await readBody(request):null;
+      if(pathname==='/v1/company-applications'){
+        const repo=repository(token);
+        if(request.method==='GET')
+          return respond(200,{data:await repo.listCompanies(user.id)});
+        const companyName=payload?.companyName;
+        const requestedSlug=payload?.requestedSlug;
+        if(typeof companyName!=='string'||companyName.trim().length<2||
+           companyName.trim().length>120||typeof requestedSlug!=='string'||
+           !/^[a-z][a-z0-9-]{2,47}$/.test(requestedSlug))
+          throw new ApiError(400,'INVALID_COMPANY_APPLICATION');
+        return respond(201,{data:await repo.submitCompany({
+          userId:user.id,companyName:companyName.trim(),requestedSlug})});
+      }
+      if(pathname==='/v1/company-applications/decision'){
+        if(request.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED');
+        if(typeof requireFounder!=='function')throw new ApiError(503,'FOUNDER_GATE_NOT_CONFIGURED');
+        const founder=await requireFounder(token,user);
+        if(founder?.userId!==user.id.toLowerCase()||founder.platformManager!==true)
+          throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
+        const applicationId=requireUuid(payload?.applicationId,'application_id');
+        if(!['APPROVED','REJECTED'].includes(payload?.decision))
+          throw new ApiError(400,'INVALID_DECISION');
+        const repo=repository(token);
+        return respond(200,{data:await repo.decideCompany({
+          userId:user.id,applicationId,decision:payload.decision})});
+      }
+
       const tenantId=requireUuid(request.method==='GET'?searchParams.get('tenantId'):payload?.tenantId,'tenant_id');
       const repo=repository(token);
       const membership=await repo.membership({tenantId,userId:user.id});

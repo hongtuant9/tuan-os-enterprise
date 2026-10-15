@@ -61,3 +61,20 @@ jobs:
             (SELECT settings_version FROM public.bv_tenants WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=3
             AND (SELECT count(*) FROM public.bv_tenant_profile_audit WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=2
             THEN 'CONCURRENCY_PASS' ELSE 'CONCURRENCY_FAIL' END" | grep -Fx CONCURRENCY_PASS
+
+      - name: Prove synthetic PostgreSQL backup and independent restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_dump -Fc --no-owner --no-privileges -f /tmp/biz2-synthetic.backup
+          test -s /tmp/biz2-synthetic.backup
+          createdb biz2_restore_validation
+          pg_restore --no-owner --no-privileges -d biz2_restore_validation /tmp/biz2-synthetic.backup
+          original="$(psql -X -Atc "SELECT settings_version || ':' || name FROM public.bv_tenants WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'")"
+          restored="$(PGDATABASE=biz2_restore_validation psql -X -Atc "SELECT settings_version || ':' || name FROM public.bv_tenants WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'")"
+          test "$original" = "$restored"
+          original_audit="$(psql -X -Atc "SELECT count(*) FROM public.bv_tenant_profile_audit")"
+          restored_audit="$(PGDATABASE=biz2_restore_validation psql -X -Atc "SELECT count(*) FROM public.bv_tenant_profile_audit")"
+          test "$original_audit" = "$restored_audit"
+          PGDATABASE=biz2_restore_validation psql -X -v ON_ERROR_STOP=1 -c "SELECT public.bv_update_tenant_profile_atomic('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',3,'Restored update')" >/tmp/biz2-restore-check.log 2>&1 && exit 1 || true
+          echo "SYNTHETIC_RESTORE_PASS"

@@ -6,6 +6,8 @@ on:
       - 'bizviora/core/tests/tenant-settings-ci-*.sql'
       - 'bizviora/core/tests/signed-jwt-http-isolated.test.mjs'
       - 'bizviora/core/tests/tenant-settings.test.mjs'
+      - 'bizviora/core/tests/tenant-settings-pre-migration-read.test.mjs'
+      - 'bizviora/core/src/supabase-adapter.mjs'
       - 'bizviora/core/src/api.mjs'
       - '.github/workflows/biz2-settings-postgres-qa.yml'
   workflow_dispatch:
@@ -36,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Tenant Settings API source and section contract tests
-        run: node --test bizviora/core/tests/tenant-settings.test.mjs
+        run: node --test bizviora/core/tests/tenant-settings.test.mjs bizviora/core/tests/tenant-settings-pre-migration-read.test.mjs
       - name: Synthetic signed RS256 JWT and HTTP API tests (adapter mocked)
         run: node --test bizviora/core/tests/signed-jwt-http-isolated.test.mjs
       - name: Install PostgreSQL client

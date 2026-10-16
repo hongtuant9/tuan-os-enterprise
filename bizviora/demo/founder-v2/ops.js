@@ -1,6 +1,6 @@
 import {LIVE_ROUTES,businessRows,reviewWithEvidence,validUuid} from './ops-review.mjs';
 
-const LABEL={tenants:'Doanh nghiệp — Staging',onboarding:'Đăng ký và kích hoạt tenant',approvals:'Xét duyệt doanh nghiệp',audit:'Nhật ký xét duyệt'};
+const LABEL={tenants:'Quản lý doanh nghiệp',onboarding:'Đăng ký và kích hoạt tenant',approvals:'Xét duyệt doanh nghiệp',audit:'Nhật ký xét duyệt'};
 const t=(tag,value,cls)=>{const e=document.createElement(tag);if(value!=null)e.textContent=String(value);if(cls)e.className=cls;return e};
 const add=(parent,...children)=>{for(const child of children)if(child)parent.appendChild(child);return parent};
 const status=(box,message)=>{box.replaceChildren(t('p',message,'bv-live-status'))};
@@ -54,12 +54,77 @@ function row(parent,label,details,badge){
 async function showRequests(root,requests,route){
  const approved=businessRows(requests),pending=requests.filter(r=>r.status==='PENDING');
  if(route==='tenants'){
-  const s=section(root,'Doanh nghiệp được phê duyệt ('+approved.length+')',
-    'Danh sách suy ra từ hồ sơ đăng ký đã duyệt. Chưa có quyền liệt kê toàn bộ bv_tenants; doanh nghiệp có từ trước có thể không xuất hiện.');
-  if(!approved.length)add(s,t('p','Không có hồ sơ doanh nghiệp đã duyệt trong danh sách truy vấn.'));
-  for(const r of approved)row(s,r.name||'Doanh nghiệp', 'Gói: '+(r.plan||'—')+' · Tenant: '+r.tenant_id+' · '+shortDate(r.reviewed_at),'Tenant đã tạo');
-  const warning=section(root,'Giới hạn vận hành','Các tenant tạo qua RPC đã có membership owner. Customer App hiện mới hỗ trợ dashboard TUAN OS; chưa được công bố dashboard cho tenant mới.');
-  add(warning,t('p','Kích hoạt giao diện riêng, kết nối nghiệp vụ và gửi thông báo khách hàng cần quy trình QA và phê duyệt khác.'));
+  const shell=t('div',null,'bv-tenant-dashboard');
+  root.append(shell);
+  const active=approved.length;
+  const trial=approved.filter(r=>r.plan==='TRIAL_7D').length;
+  const cards=t('div',null,'bv-tenant-kpis');
+  const metrics=[
+   ['▥','Tenant đã phê duyệt',String(active),'Trong phạm vi hồ sơ được cấp quyền'],
+   ['♙','Dùng thử đã duyệt',String(trial),'Gói TRIAL_7D'],
+   ['▤','Khách trả phí','—','Chưa xác minh subscription'],
+   ['▥','Tỷ lệ giữ chân','—','Chưa có nguồn cohort'],
+   ['♧','Ticket hỗ trợ mở','—','Chưa kết nối nguồn ticket'],
+   ['▣','Gia hạn 30 ngày','—','Chưa xác minh kỳ gia hạn']
+  ];
+  for(const [symbol,label,value,note] of metrics){
+   const card=t('div',null,'bv-tenant-kpi');
+   add(card,t('span',symbol,'bv-tenant-kpi-icon'),t('div',null,'bv-tenant-kpi-content'));
+   const body=card.lastChild;
+   add(body,t('span',label,'bv-tenant-kpi-label'),t('b',value,'bv-tenant-kpi-number'),t('small',note));
+   cards.append(card);
+  }
+  shell.append(cards);
+  const main=t('div',null,'bv-tenant-columns');shell.append(main);
+  const list=section(main,'▣ Danh sách doanh nghiệp (Tenant)','Dữ liệu staging từ hồ sơ đăng ký được duyệt · không phải toàn bộ bv_tenants');
+  list.classList.add('bv-tenant-list');
+  const search=t('input');search.placeholder='⌕ Tìm tên doanh nghiệp, gói, mã tenant…';search.setAttribute('aria-label','Tìm kiếm doanh nghiệp');
+  const filter=t('select');filter.setAttribute('aria-label','Lọc gói dịch vụ');
+  const option=(value,label)=>{const o=t('option',label);o.value=value;return o};
+  filter.append(option('all','Tất cả gói'));
+  for(const plan of [...new Set(approved.map(r=>r.plan).filter(Boolean))])filter.append(option(plan,plan));
+  const controls=t('div',null,'bv-tenant-filters');add(controls,search,filter);list.append(controls);
+  const tableWrap=t('div',null,'bv-tenant-tablewrap');
+  const table=t('table',null,'bv-tenant-table');
+  table.innerHTML='<thead><tr><th>#</th><th>Doanh nghiệp</th><th>Ngành</th><th>Gói dịch vụ</th><th>Trạng thái</th><th>Sức khỏe</th><th>Ngày kích hoạt</th></tr></thead>';
+  const tbody=t('tbody');table.append(tbody);tableWrap.append(table);list.append(tableWrap);
+  const count=t('small',null,'bv-tenant-count');list.append(count);
+  const right=t('div',null,'bv-tenant-side');main.append(right);
+  const detail=section(right,'▣ Thông tin doanh nghiệp','Chọn một tenant trong bảng để xem chi tiết đã xác minh');
+  const modules=section(right,'▣ Module đang dùng','Chưa có nguồn module enablement được cấp quyền — không suy diễn từ tên doanh nghiệp');
+  const channels=section(right,'♧ Kênh đã kết nối','Chưa có kết quả xác minh kết nối provider');
+  const timeline=section(right,'◷ Dòng thời gian tài khoản','Chỉ hiển thị mốc phê duyệt từ hồ sơ đăng ký');
+  const upsell=section(right,'◎ Cơ hội mở rộng','Chưa có dữ liệu cơ hội hoặc giá trị doanh thu được duyệt');
+  [modules,channels,upsell].forEach(e=>add(e,t('span','CHƯA XÁC MINH','bv-tenant-unknown')));
+  let chosen=approved[0]?.tenant_id;
+  const draw=()=>{
+   const q=search.value.trim().toLocaleLowerCase('vi');
+   const rows=approved.filter(r=>(filter.value==='all'||r.plan===filter.value)&&[r.name,r.plan,r.tenant_id].join(' ').toLocaleLowerCase('vi').includes(q));
+   tbody.replaceChildren();
+   rows.forEach((r,i)=>{
+    const tr=t('tr');tr.tabIndex=0;tr.setAttribute('role','button');
+    if(chosen===r.tenant_id)tr.classList.add('bv-tenant-selected');
+    const values=[String(i+1),r.name||'—','Chưa xác minh',r.plan||'—','Đã tạo tenant','Chưa đánh giá',shortDate(r.reviewed_at)];
+    values.forEach((value,j)=>{const cell=t('td',value);if(j===1)cell.classList.add('bv-tenant-name');tr.append(cell)});
+    tr.addEventListener('click',()=>{chosen=r.tenant_id;draw()});
+    tr.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();chosen=r.tenant_id;draw()}});
+    tbody.append(tr);
+   });
+   count.textContent='Hiển thị '+rows.length+' / '+approved.length+' hồ sơ đã duyệt trong phạm vi quyền';
+   detail.querySelectorAll('.bv-tenant-detail').forEach(e=>e.remove());
+   timeline.querySelectorAll('.bv-tenant-detail').forEach(e=>e.remove());
+   const r=approved.find(r=>r.tenant_id===chosen);
+   if(r){
+    const d=t('div',null,'bv-tenant-detail');
+    add(d,t('h3',r.name||'Doanh nghiệp'),t('span','Mã tenant: '+r.tenant_id,'bv-tenant-id'),
+     t('p','Gói dịch vụ: '+(r.plan||'Chưa xác minh')),
+     t('p','Ngành: Chưa xác minh · Sức khỏe: Chưa đánh giá'),
+     t('p','Ngày phê duyệt: '+shortDate(r.reviewed_at)));
+    detail.append(d);
+    const ev=t('p','Hồ sơ được phê duyệt: '+shortDate(r.reviewed_at),'bv-tenant-detail');timeline.append(ev);
+   }else add(detail,t('p','Chưa có doanh nghiệp được chọn.','bv-tenant-detail'));
+  };
+  search.addEventListener('input',draw);filter.addEventListener('change',draw);draw();
  }else if(route==='onboarding'){
   const s=section(root,'Đăng ký mới ('+pending.length+')','Hồ sơ mới chưa được tạo tenant hoặc cấp quyền. Phê duyệt được thực hiện tại tab Phê duyệt.');
   if(!pending.length)add(s,t('p','Không có hồ sơ đang chờ trong phạm vi RLS.'));
@@ -170,6 +235,32 @@ export function mountFounderOps(authenticatedClient){
  .bv-live-review{width:100%;display:flex;gap:8px;flex-wrap:wrap}.bv-live-review textarea{min-width:240px;flex:1}
  .bv-live-review .bv-live-deny{background:#8f263a}.bv-live-review button:disabled{opacity:.5}
  .bv-live-status{color:#9b4c09;font-weight:650}
+ .bv-tenant-dashboard{display:grid;gap:12px}
+ .bv-tenant-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+ .bv-tenant-kpi{background:white;border:1px solid #e2eaf5;border-radius:9px;min-height:104px;padding:12px 9px;display:flex;gap:8px;align-items:flex-start}
+ .bv-tenant-kpi-icon{display:grid;place-items:center;min-width:28px;height:30px;border-radius:7px;color:#1664d8;background:#eaf3ff;font-size:19px}
+ .bv-tenant-kpi:nth-child(1) .bv-tenant-kpi-icon{color:#06a66b;background:#e8faf1}
+ .bv-tenant-kpi:nth-child(3) .bv-tenant-kpi-icon{color:#8d4cda;background:#f4eefd}
+ .bv-tenant-kpi:nth-child(5) .bv-tenant-kpi-icon{color:#db8524;background:#fff3e8}
+ .bv-tenant-kpi-content{display:flex;flex-direction:column;gap:3px;min-width:0}
+ .bv-tenant-kpi-label{font-weight:700;font-size:11px}.bv-tenant-kpi-number{font-size:22px;color:#112857}
+ .bv-tenant-kpi small{font-size:10px;color:#6780a2;line-height:1.4}
+ .bv-tenant-columns{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(300px,1fr);gap:12px;align-items:start}
+ .bv-tenant-side{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ .bv-tenant-side>.bv-live-panel:first-child{grid-column:1/-1}
+ .bv-tenant-filters{display:flex;gap:8px}.bv-tenant-filters input{flex:1;min-width:0}
+ .bv-tenant-filters input,.bv-tenant-filters select{border:1px solid #dbe5f3;border-radius:7px;padding:9px;background:white;color:#234166}
+ .bv-tenant-tablewrap{overflow-x:auto}.bv-tenant-table{width:100%;border-collapse:collapse;text-align:left;font-size:11px}
+ .bv-tenant-table th{background:#f1f6fd;color:#536c91;font-size:10px;white-space:nowrap}
+ .bv-tenant-table td,.bv-tenant-table th{padding:11px 7px;border-bottom:1px solid #e5ecf5}
+ .bv-tenant-table tr[role=button]{cursor:pointer}.bv-tenant-selected{background:#edf5ff}
+ .bv-tenant-name{font-weight:750;color:#163c78}.bv-tenant-count{color:#677d9c}
+ .bv-tenant-detail{display:grid;gap:8px;overflow-wrap:anywhere}.bv-tenant-detail h3{font-size:18px;margin:0}
+ .bv-tenant-id{color:#3970c2;font-size:11px}.bv-tenant-unknown{color:#865b19;background:#fff7e9;border-radius:7px;padding:6px;font-weight:700;font-size:10px;justify-self:start}
+ @media(max-width:1250px){.bv-tenant-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+ @media(max-width:850px){.bv-tenant-columns{grid-template-columns:1fr}.bv-tenant-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:520px){.bv-tenant-side{grid-template-columns:1fr}.bv-tenant-side>.bv-live-panel:first-child{grid-column:auto}.bv-tenant-kpis{grid-template-columns:1fr 1fr}.bv-live-root{padding:12px}}
+
  `;
  document.head.append(style);
  let pending=false;

@@ -1,4 +1,5 @@
 import { ApiError, requireUuid, requireMembership, validateTaskInput } from './access.mjs';
+import { validateRegistration } from './registration.mjs';
 
 const respond=(status,body)=>new Response(JSON.stringify(body),{
   status,headers:{'Content-Type':'application/json; charset=utf-8',
@@ -42,6 +43,35 @@ export function createApi({verifyBearer,repository,requireFounder}) {
         if(founder?.userId!==user.id.toLowerCase() || founder.platformManager!==true)
           throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
         return respond(200,{platformManager:true,scope:'STAGING_ONLY'});
+      }
+      if(pathname==='/v1/founder/registrations' || pathname==='/v1/founder/registrations/review') {
+        if(typeof requireFounder!=='function')throw new ApiError(503,'FOUNDER_GATE_NOT_CONFIGURED');
+        const founder=await requireFounder(token,user);
+        if(founder?.userId!==user.id.toLowerCase() || founder.platformManager!==true)
+          throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
+        const repo=repository(token);
+        if(pathname==='/v1/founder/registrations' && request.method==='GET')
+          return respond(200,{data:await repo.founderRegistrations()});
+        if(pathname==='/v1/founder/registrations/review' && request.method==='POST') {
+          const payload=await readBody(request);
+          if(!payload || typeof payload!=='object' || Array.isArray(payload) ||
+             Object.keys(payload).some(k=>!['requestId','approve','note'].includes(k)) ||
+             typeof payload.approve!=='boolean' ||
+             (payload.note!==undefined && (typeof payload.note!=='string' || payload.note.length>600)))
+            throw new ApiError(400,'INVALID_REVIEW');
+          return respond(200,{data:await repo.reviewRegistration({
+            requestId:requireUuid(payload.requestId,'request_id'),
+            approve:payload.approve,note:payload.note??null
+          })});
+        }
+        throw new ApiError(405,'ACTION_NOT_ENABLED');
+      }
+      if(pathname==='/v1/registration') {
+        const repo=repository(token);
+        if(request.method==='GET')
+          return respond(200,{data:await repo.myRegistration(user.id)});
+        const payload=await readBody(request);
+        return respond(201,{data:await repo.createRegistration(user.id,validateRegistration(payload))});
       }
       const payload=request.method==='POST'?await readBody(request):null;
       const tenantId=requireUuid(request.method==='GET'?searchParams.get('tenantId'):payload?.tenantId,'tenant_id');

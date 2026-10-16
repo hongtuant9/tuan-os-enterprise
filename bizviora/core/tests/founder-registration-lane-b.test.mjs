@@ -20,3 +20,31 @@ test('approve invokes guarded RPC adapter once',async()=>{const before=calls;con
 test('reject does not create tenant in returned result',async()=>{const r=await run('/v1/founder/registrations/review','POST',{requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',approve:false,note:'No'});assert.equal(r.status,200);assert.equal(r.body.data.tenant_id,null);});
 test('review rejects forced status, tenant_id, and invalid ID',async()=>{const before=calls;for(const body of [{requestId:'bad',approve:true},{requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',approve:true,status:'APPROVED'},{requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',approve:'yes'}])assert.equal((await run('/v1/founder/registrations/review','POST',body)).status,400);assert.equal(calls,before);});
 test('Founder read endpoint disallows POST',async()=>assert.equal((await run('/v1/founder/registrations','POST',{approve:true})).status,405));
+
+test('non-manager valid identity is denied before reading Founder data',async()=>{
+ const gate=createApi({
+  verifyBearer:async()=>({id:'22222222-2222-4222-8222-222222222222'}),
+  requireFounder:async()=>{throw new Error('FOUNDER_ACCESS_DENIED');},
+  repository:()=>({founderRegistrations:async()=>{throw Error('MUST_NOT_RUN');}})
+ });
+ const res=await gate(req('/v1/founder/registrations'));
+ assert.equal(res.status,503);
+ assert.equal((await res.json()).error,'SERVICE_UNAVAILABLE');
+});
+test('Founder gate identity mismatch denies request before repository',async()=>{
+ const before=calls;
+ const gate=createApi({
+  verifyBearer:async()=>({id:uid}),
+  requireFounder:async()=>({userId:'33333333-3333-4333-8333-333333333333',platformManager:true}),
+  repository:()=>({founderRegistrations:async()=>{calls++;return [];}})
+ });
+ const res=await gate(req('/v1/founder/registrations'));
+ assert.equal(res.status,403);assert.equal(calls,before);
+});
+test('Founder review write is blocked on cross-origin CORS preflight',async()=>{
+ const res=await api(new Request('https://qa.invalid/v1/founder/registrations/review',{
+ method:'OPTIONS',headers:{Origin:'https://bizviora-synthetic-demo.onrender.com',
+ 'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type'}
+ }));
+ assert.equal(res.status,403);
+});

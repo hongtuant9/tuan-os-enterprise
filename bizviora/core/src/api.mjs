@@ -1,4 +1,5 @@
 import { ApiError, requireUuid, requireMembership, validateTaskInput } from './access.mjs';
+import { validateRegistration } from './registration.mjs';
 
 const respond=(status,body)=>new Response(JSON.stringify(body),{
   status,headers:{'Content-Type':'application/json; charset=utf-8',
@@ -42,6 +43,13 @@ export function createApi({verifyBearer,repository,requireFounder}) {
         if(founder?.userId!==user.id.toLowerCase() || founder.platformManager!==true)
           throw new ApiError(403,'FOUNDER_ACCESS_DENIED');
         return respond(200,{platformManager:true,scope:'STAGING_ONLY'});
+      }
+      if(pathname==='/v1/registration') {
+        const repo=repository(token);
+        if(request.method==='GET')
+          return respond(200,{data:await repo.myRegistration(user.id)});
+        const payload=await readBody(request);
+        return respond(201,{data:await repo.createRegistration(user.id,validateRegistration(payload))});
       }
       const payload=request.method==='POST'?await readBody(request):null;
       const tenantId=requireUuid(request.method==='GET'?searchParams.get('tenantId'):payload?.tenantId,'tenant_id');

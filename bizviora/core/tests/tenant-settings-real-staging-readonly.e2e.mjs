@@ -6,6 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSupabaseDependencies} from '../src/supabase-adapter.mjs';
+import {createServer} from 'node:http';
+import {once} from 'node:events';
 import {createApi} from '../src/api.mjs';
 const e=process.env;
 if(e.BIZVIORA_STAGING_E2E_ACK!=='RUN_ON_ISOLATED_STAGING'||e.BIZVIORA_STAGING_ACK!=='STAGING_ONLY')throw Error('STAGING_ACK_REQUIRED');
@@ -19,12 +21,24 @@ if(tokens.some(t=>!t||t.length<50)||tokens[0]===tokens[1])throw Error('TWO_REAL_
 if(!e.BIZVIORA_SUPABASE_ANON_KEY)throw Error('STAGING_PUBLISHABLE_KEY_REQUIRED');
 const dependencies=createSupabaseDependencies(e);
 const api=createApi(dependencies);
+const server=createServer(async(req,res)=>{
+ try {
+  const request=new Request('http://127.0.0.1'+req.url,{method:req.method,headers:req.headers});
+  const response=await api(request);
+  res.writeHead(response.status,Object.fromEntries(response.headers.entries()));
+  res.end(await response.text());
+ }catch {res.writeHead(500);res.end('INTERNAL_ERROR');}
+});
+server.listen(0,'127.0.0.1');
+await once(server,'listening');
+const base='http://127.0.0.1:'+server.address().port;
 const call=async(token,tenantId)=>{
- const response=await api(new Request('https://qa.invalid/v1/tenant-settings?tenantId='+tenantId,{
-  headers:token?{Authorization:'Bearer '+token}:{}
- }));
+ const response=await fetch(base+'/v1/tenant-settings?tenantId='+tenantId,{
+  headers:token?{Authorization:'Bearer '+token}:{},redirect:'error'
+ });
  return {status:response.status,data:await response.json()};
 };
+process.on('exit',()=>server.close());
 test('real Supabase Auth owner A reads only own tenant',async()=>{
  const result=await call(tokens[0],a);
  assert.equal(result.status,200);
@@ -46,3 +60,5 @@ test('no token returns 401',async()=>{
 test('malformed token returns 401',async()=>{
  assert.equal((await call('not-a-real-jwt',a)).status,401);
 });
+
+test.after(()=>server.close());

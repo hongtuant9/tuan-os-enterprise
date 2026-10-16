@@ -17,7 +17,9 @@ create table if not exists public.bv_tenant_profiles (
 create table if not exists public.bv_property_services (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.bv_tenants(id) on delete cascade,
-  property_id uuid not null references public.bv_properties(id) on delete cascade,
+  property_id uuid not null,
+  constraint bv_property_services_tenant_property_fk foreign key (tenant_id, property_id)
+    references public.bv_properties(tenant_id, id) on delete cascade,
   service_name text not null,
   status text not null default 'NOT_VERIFIED'
     check (status in ('NOT_VERIFIED','ACTIVE','INACTIVE')),

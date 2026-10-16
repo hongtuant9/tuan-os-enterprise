@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {createSupabaseDependencies} from '../src/supabase-adapter.mjs';
 import {createApi} from '../src/api.mjs';
 const e=process.env;
-if(e.BIZVIORA_STAGING_E2E_ACK!=='RUN_ON_ISOLATED_STAGING')throw Error('STAGING_ACK_REQUIRED');
+if(e.BIZVIORA_STAGING_E2E_ACK!=='RUN_ON_ISOLATED_STAGING'||e.BIZVIORA_STAGING_ACK!=='STAGING_ONLY')throw Error('STAGING_ACK_REQUIRED');
 if(e.BIZVIORA_STAGING_PROJECT_REF!=='oxakhhpyvvymujiwuvnm')throw Error('STAGING_REF_REQUIRED');
 if(new URL(e.BIZVIORA_SUPABASE_URL||'https://invalid.local').hostname!=='oxakhhpyvvymujiwuvnm.supabase.co')throw Error('STAGING_URL_REQUIRED');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

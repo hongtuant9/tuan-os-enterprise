@@ -1,0 +1,17 @@
+﻿test_id,principal,action_or_target,expected,priority,status
+AUTH01,Tenant A JWT,A tenant data,200 within A,P0,NOT_RUN
+AUTH02,Tenant A JWT,B tenant data,403/0 rows,P0,NOT_RUN
+AUTH03,Tenant B JWT,A tenant data,403/0 rows,P0,NOT_RUN
+AUTH04,No/invalid JWT,Any tenant data,401,P0,NOT_RUN
+FK01,A tenant order,B customer_id,Composite FK reject,P0,NOT_RUN
+FK02,A agent,B knowledge source,Composite FK reject,P0,NOT_RUN
+SEC01,Staff,Owner finance PRIVATE,Denied,P0,NOT_RUN
+SEC02,Founder operator,Customer knowledge,Denied unless delegated,P0,NOT_RUN
+SEC03,Unreviewed agent template,Activate tenant agent,Denied,P0,NOT_RUN
+SEC04,Tenant agent,Cross tenant vector retrieval,0 results,P0,NOT_RUN
+SEC05,Tenant agent,External write without approval,Denied + audit,P0,NOT_RUN
+SEC06,Tenant A,B storage object,Denied,P0,NOT_RUN
+DATA01,Synthetic KPI,Real business dashboard,Excluded,P0,NOT_RUN
+DATA02,HTTP 403 or 500,Settings page,"Error, no DEMO fallback",P0,NOT_RUN
+OPS01,Restore clone,Core/Auth/audit/tenant counts,Match baseline,P0,NOT_RUN
+OPS02,"1,000 synthetic tenants",P95 latency/queue test,"Measured, no silent failure",P1,NOT_RUN

@@ -34,6 +34,20 @@ export function createSupabaseDependencies(env=process.env) {
     repository(token) {
       const db=clientFor(token); // Không dùng service role. RLS dùng chính JWT của người gửi.
       return {
+        async myRegistration(userId) {
+          const {data,error}=await db.from('bv_registration_requests')
+            .select('id,business_name,contact_name,plan_code,status,tenant_id,created_at,reviewed_at')
+            .eq('applicant_user_id',userId).maybeSingle();
+          if(error)throw new ApiError(503,'REGISTRATION_READ_UNAVAILABLE');
+          return data;
+        },
+        async createRegistration(userId,fields) {
+          const {data,error}=await db.from('bv_registration_requests')
+            .insert({...fields,applicant_user_id:userId,status:'PENDING'})
+            .select('id,business_name,contact_name,plan_code,status,created_at').single();
+          if(error)throw new ApiError(409,'REGISTRATION_NOT_ACCEPTED');
+          return data;
+        },
         async membership({tenantId,userId}) {
           const rows=checked(await db.from('bv_memberships')
             .select('tenant_id,user_id,role').eq('tenant_id',tenantId).eq('user_id',userId).limit(1));

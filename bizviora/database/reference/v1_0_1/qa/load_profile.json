@@ -1,0 +1,43 @@
+{
+  "status": "PROPOSED_NOT_EXECUTED",
+  "tenant_counts": [
+    10,
+    100,
+    1000
+  ],
+  "profiles": [
+    {
+      "name": "read_only_dashboard",
+      "mix_pct": 60
+    },
+    {
+      "name": "settings_and_workflow",
+      "mix_pct": 20
+    },
+    {
+      "name": "ai_run_enqueue",
+      "mix_pct": 15
+    },
+    {
+      "name": "agent_tool_approval",
+      "mix_pct": 5
+    }
+  ],
+  "measure": [
+    "p50_ms",
+    "p95_ms",
+    "p99_ms",
+    "db_cpu",
+    "locks",
+    "pool_wait",
+    "agent_queue_delay",
+    "tenant_isolation_failures",
+    "cost_per_tenant"
+  ],
+  "hard_fail": [
+    "any_cross_tenant_leak",
+    "unauthorized_outbound",
+    "audit_missing"
+  ],
+  "acceptance": "Owner/CTO to define target thresholds before load test."
+}

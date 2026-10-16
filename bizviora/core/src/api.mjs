@@ -83,6 +83,55 @@ export function createApi({verifyBearer,repository,requireFounder}) {
         const data=await repo.context(actor);
         return respond(200,{tenant:data.tenant,businessUnits:data.businessUnits,properties:data.properties,role:actor.role});
       }
+      // Tenant Settings: authenticated, read-only view of existing Biz2 Core data.
+      if(pathname==='/v1/tenant-settings' && request.method==='GET') {
+        const data=await repo.context(actor);
+        if (!data?.tenant || data.tenant.id!==actor.tenantId ||
+            !Array.isArray(data.businessUnits) || !Array.isArray(data.properties) ||
+            data.businessUnits.some(v=>v.tenant_id && v.tenant_id!==actor.tenantId) ||
+            data.properties.some(v=>v.tenant_id && v.tenant_id!==actor.tenantId) ||
+            data.properties.some(v=>!data.businessUnits.some(u=>u.id===v.business_unit_id)))
+          throw new ApiError(403,'TENANT_SETTINGS_SCOPE_DENIED');
+        return respond(200,{
+          tenantId:actor.tenantId,
+          profile:{id:data.tenant.id,name:data.tenant.name??null,
+            slug:data.tenant.slug??null,version:data.tenant.settings_version??null,contactStatus:'NOT_VERIFIED'},
+          businessUnits:data.businessUnits.map(u=>({id:u.id,name:u.name})),
+          properties:data.properties.map(v=>({id:v.id,businessUnitId:v.business_unit_id,name:v.name})),
+          membership:{role:actor.role,verified:true},
+          sections:{
+            company:{status:'VERIFIED_READ_ONLY',source:'bv_tenants'},
+            locations:{status:'VERIFIED_READ_ONLY',source:'bv_business_units,bv_properties'},
+            usersPermissions:{status:'SELF_MEMBERSHIP_ONLY',source:'bv_memberships',usersListAvailable:false},
+            knowledge:{status:'NOT_CONFIGURED',documentCount:null,categoryCount:null,updateCount:null}
+          },
+          capabilities:{profileWrite:false,propertyWrite:false,integrationsRead:false,usersListRead:false,knowledgeRead:false},
+          source:'BIZVIORA_CORE_VERIFIED_CONTEXT',status:'READ_ONLY_QA'
+        });
+      }
+      // QA contract-only write: adapter must implement atomic RLS+Audit+version check.
+      // No database adapter support means fail closed (503), never a partial write.
+      if(pathname==='/v1/tenant-settings/profile' && request.method==='POST') {
+        if(!['owner','admin'].includes(actor.role))
+          throw new ApiError(403,'SETTINGS_WRITE_DENIED');
+        if(typeof payload?.displayName!=='string' ||
+           payload.displayName.trim().length<2 ||
+           payload.displayName.trim().length>120 ||
+           !Number.isSafeInteger(payload?.expectedVersion) ||
+           payload.expectedVersion<1 ||
+           Object.keys(payload).some(k=>!['tenantId','displayName','expectedVersion'].includes(k)))
+          throw new ApiError(400,'INVALID_SETTINGS_UPDATE');
+        if(typeof repo.updateTenantProfileAtomic!=='function')
+          throw new ApiError(503,'SETTINGS_WRITE_NOT_ENABLED');
+        const data=await repo.updateTenantProfileAtomic(actor,{
+          name:payload.displayName.trim(),expectedVersion:payload.expectedVersion
+        });
+        if(!data?.auditEventId || data.tenantId!==actor.tenantId ||
+           !Number.isSafeInteger(data.version) || data.version<=payload.expectedVersion)
+          throw new ApiError(503,'SETTINGS_WRITE_UNVERIFIED');
+        return respond(200,{tenantId:actor.tenantId,name:data.name,
+          version:data.version,auditEventId:data.auditEventId});
+      }
       if(pathname==='/v1/tasks'&&request.method==='GET')
         return respond(200,{tenantId,data:await repo.tasks(actor)});
       if(pathname==='/v1/tasks'&&request.method==='POST')

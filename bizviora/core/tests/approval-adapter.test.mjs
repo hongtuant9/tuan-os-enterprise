@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../src/supabase-adapter.mjs',import.meta.url),'utf8');
 const access=new URL('../src/access.mjs',import.meta.url).href;
+const targetGuard=new URL('../src/database-target-guard.mjs',import.meta.url).href;
 const env={BIZVIORA_STAGING_ACK:'STAGING_ONLY',BIZVIORA_STAGING_PROJECT_REF:'oxakhhpyvvymujiwuvnm',BIZVIORA_SUPABASE_URL:'https://oxakhhpyvvymujiwuvnm.supabase.co',BIZVIORA_SUPABASE_ANON_KEY:'synthetic-publishable-key'};
 const actor={tenantId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',userId:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',role:'owner'};
 const approvalId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -12,7 +13,8 @@ let sequence=0;
 async function fixture(results){
  const traces=[];const key='bv-adapter-test-'+sequence++;
  globalThis[key]=()=>({from(table){const trace={table,steps:[]};traces.push(trace);const builder={};for(const name of ['select','eq','insert','update','order','limit'])builder[name]=(...args)=>{trace.steps.push([name,...args]);return builder};for(const name of ['single','maybeSingle'])builder[name]=async()=>{trace.steps.push([name]);return results.shift()};return builder}});
- const code=source.replace("import { createClient } from '@supabase/supabase-js';",'const createClient=globalThis['+JSON.stringify(key)+'];').replace("'./access.mjs'",JSON.stringify(access));
+ const code=source.replace("import { createClient } from '@supabase/supabase-js';",'const createClient=globalThis['+JSON.stringify(key)+'];').replace("'./access.mjs'",JSON.stringify(access))
+  .replace("'./database-target-guard.mjs'",JSON.stringify(targetGuard));
  const module=await import('data:text/javascript;base64,'+Buffer.from(code+'\n// '+key).toString('base64'));
  delete globalThis[key];return {repo:module.createSupabaseDependencies(env).repository('synthetic-token'),traces};
 }

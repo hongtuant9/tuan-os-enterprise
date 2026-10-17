@@ -10,7 +10,7 @@ if (process.env.BIZVIORA_STAGING_ACK !== 'STAGING_ONLY') {
 const { createSupabaseDependencies } = await import('./src/supabase-adapter.mjs');
 const dependencies=createSupabaseDependencies();
 const { createStagingFounderGate }=await import('./src/founder-adapter.mjs');
-const api=createApi({...dependencies,requireFounder:createStagingFounderGate()});
+const api=createApi({...dependencies,requireFounder:createStagingFounderGate(),qaReadOnly:dependencies.readOnly});
 const { resolveServerBinding }=await import('./src/hosting-config.mjs');
 const {host,port}=resolveServerBinding();
 

@@ -20,16 +20,17 @@ async function readBody(request) {
   catch {throw new ApiError(400,'INVALID_JSON');}
 }
 /** Chỉ chấp nhận actor từ xác minh token phía máy chủ và membership do DB/RLS trả về. */
-export function createApi({verifyBearer,repository,requireFounder}) {
+export function createApi({verifyBearer,repository,requireFounder,qaReadOnly=false}) {
   if(typeof verifyBearer!=='function'||typeof repository!=='function')
     throw new Error('AUTH_AND_REPOSITORY_REQUIRED');
   const handleInternal = async function handle(request) {
     try{
       const {pathname,searchParams}=new URL(request.url);
       if(pathname==='/health' && request.method==='GET')
-        return respond(200,{status:'UP',product:'BIZVIORA Core',scope:'STAGING_ONLY',autoSend:false,bookingWrite:false});
+        return respond(200,{status:'UP',product:'BIZVIORA Core',scope:qaReadOnly?'V2_SYNTHETIC_QA':'STAGING_ONLY',readyForCustomerData:false,autoSend:false,bookingWrite:false});
       if(!pathname.startsWith('/v1/'))throw new ApiError(404,'NOT_FOUND');
       if(!['GET','POST'].includes(request.method))throw new ApiError(405,'METHOD_NOT_ALLOWED');
+      if(qaReadOnly && request.method!=='GET')throw new ApiError(405,'V2_QA_WRITE_DISABLED');
       const token=/^Bearer ([A-Za-z0-9._~-]{12,4096})$/.exec(request.headers.get('authorization')||'')?.[1];
       if(!token)throw new ApiError(401,'AUTH_REQUIRED');
       const user=await verifyBearer(token);

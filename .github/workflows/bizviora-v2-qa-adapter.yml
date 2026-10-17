@@ -1,0 +1,36 @@
+name: BIZVIORA V2 isolated Supabase QA adapter
+on:
+  push:
+    branches:
+      - review/bizviora-v2-qa-supabase-connection-20261017
+    paths:
+      - 'bizviora/core/**'
+      - '.github/workflows/bizviora-v2-qa-adapter.yml'
+  pull_request:
+    paths:
+      - 'bizviora/core/**'
+      - '.github/workflows/bizviora-v2-qa-adapter.yml'
+permissions:
+  contents: read
+jobs:
+  v2-qa-connection-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out code without persistent credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax guard
+        run: |
+          node --check bizviora/core/src/database-target-guard.mjs
+          node --check bizviora/core/src/supabase-adapter.mjs
+          node --check bizviora/core/src/api.mjs
+          node --check bizviora/core/server.mjs
+          node --check bizviora/core/tests/v2-qa-connection.test.mjs
+      - name: Synthetic target and deny-write assertions (no network or secrets)
+        run: node --test bizviora/core/tests/v2-qa-connection.test.mjs

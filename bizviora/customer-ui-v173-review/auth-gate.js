@@ -1,4 +1,5 @@
 import {customerClient,authorizedCustomer} from './auth-client.js';
+import {mountVerifiedSettings} from './verified-settings-view.mjs';
 const wall=document.getElementById('bv-auth-verification');
 const logout=document.getElementById('bv-customer-logout');
 let verified=false;
@@ -22,6 +23,14 @@ const failClosed=(message,reason)=>{
     if(name)name.textContent=access.user.user_metadata?.full_name||access.user.email||'Nhân viên';
     if(role)role.textContent=access.role+' · '+access.tenant.name;
   }
+  // Settings is real-source-only. Every rerender starts a fresh RLS read.
+  // Staging is still the OLD Supabase source until the separately approved migration.
+  const loadSettings=()=>{
+    const container=document.getElementById('biz2-verified-settings');
+    if(container)void mountVerifiedSettings({container,client,access});
+  };
+  window.addEventListener('bizviora:settings-present',loadSettings);
+  if(document.body.dataset.screen==='settings')loadSettings();
   logout.disabled=false;
   logout.addEventListener('click',async()=>{
     logout.disabled=true;

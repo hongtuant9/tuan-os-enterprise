@@ -5,7 +5,7 @@
  */
 const TUAN_SLUG='tuan-os-enterprise-001';
 const EXPECTED_UNITS=new Set(['Cozy Garden','Lavender Homestay','Ruby Homestay']);
-const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const roles=new Set(['owner','admin','manager','staff']);
 
 export class LiveSettingsError extends Error {

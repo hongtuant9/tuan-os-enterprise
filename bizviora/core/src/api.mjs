@@ -27,7 +27,7 @@ export function createApi({verifyBearer,repository,requireFounder,qaReadOnly=fal
     try{
       const {pathname,searchParams}=new URL(request.url);
       if(pathname==='/health' && request.method==='GET')
-        return respond(200,{status:'UP',product:'BIZVIORA Core',scope:qaReadOnly?'V2_SYNTHETIC_QA':'STAGING_ONLY',readyForCustomerData:!qaReadOnly,autoSend:false,bookingWrite:false});
+        return respond(200,{status:'UP',product:'BIZVIORA Core',scope:qaReadOnly?'V2_SYNTHETIC_QA':'STAGING_ONLY',readyForCustomerData:false,autoSend:false,bookingWrite:false});
       if(!pathname.startsWith('/v1/'))throw new ApiError(404,'NOT_FOUND');
       if(!['GET','POST'].includes(request.method))throw new ApiError(405,'METHOD_NOT_ALLOWED');
       if(qaReadOnly && request.method!=='GET')throw new ApiError(405,'V2_QA_WRITE_DISABLED');

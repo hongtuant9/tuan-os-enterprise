@@ -1,0 +1,34 @@
+name: BIZVIORA TUAN OS verified Settings source QA
+on:
+  push:
+    branches: [review/biz2-tuan001-settings-live-source-qa-20261017]
+    paths:
+      - 'bizviora/customer-ui-v173-review/**'
+      - '.github/workflows/biz2-tuan001-settings-real-qa.yml'
+  pull_request:
+    paths:
+      - 'bizviora/customer-ui-v173-review/**'
+      - '.github/workflows/biz2-tuan001-settings-real-qa.yml'
+permissions:
+  contents: read
+jobs:
+  no-synthetic-settings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and static production-safety checks
+        run: |
+          node --check bizviora/customer-ui-v173-review/auth-gate.js
+          node --check bizviora/customer-ui-v173-review/verified-settings-data.mjs
+          node --check bizviora/customer-ui-v173-review/verified-settings-view.mjs
+          node --check bizviora/customer-ui-v173-review/verified-settings-data.test.mjs
+      - name: Real-source data contract tests with isolated fake HTTP (no secrets)
+        run: |
+          node --test bizviora/customer-ui-v173-review/verified-settings-data.test.mjs
+          node --test bizviora/customer-ui-v173-review/settings-live-gate.test.mjs

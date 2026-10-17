@@ -1,21 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { ApiError } from './access.mjs';
 
-// Dự án Supabase sản xuất TUAN OS: luôn bị chặn ở máy chủ BIZVIORA staging.
-const APPROVED_STAGING_PROJECT_REF='oxakhhpyvvymujiwuvnm';
-const FORBIDDEN_PROJECT_REFS=new Set(['mmxgthzafjoienokyplw','zydtetnvguvlhpkjlvqi']); // TUAN OS production và dự án cũ chưa được duyệt làm staging
+// Existing approved staging remains the default. V2 QA is a separate isolated target.
+// Keep the named legacy reference visible for old static contract tests.
+import { resolveDatabaseTarget, LEGACY_STAGING_REF as APPROVED_STAGING_PROJECT_REF } from './database-target-guard.mjs';
 export function createSupabaseDependencies(env=process.env) {
-  if(env.BIZVIORA_STAGING_ACK!=='STAGING_ONLY')throw Error('STAGING_ACK_REQUIRED');
-  const url=env.BIZVIORA_SUPABASE_URL;
+  const target=resolveDatabaseTarget(env);
+  const url=target.url;
   const anonKey=env.BIZVIORA_SUPABASE_ANON_KEY;
-  const stagingRef=env.BIZVIORA_STAGING_PROJECT_REF;
-  if(!url||!anonKey)throw Error('STAGING_AUTH_CONFIG_REQUIRED');
-  if(stagingRef!==APPROVED_STAGING_PROJECT_REF)throw Error('APPROVED_STAGING_REF_REQUIRED');
-  let host;
-  try{host=new URL(url).hostname.toLowerCase();}catch{throw Error('INVALID_STAGING_URL');}
-  if(!url.startsWith('https://'))throw Error('HTTPS_STAGING_REQUIRED');
-  if(FORBIDDEN_PROJECT_REFS.has(stagingRef)|| [...FORBIDDEN_PROJECT_REFS].some(ref=>host.includes(ref)))throw Error('NON_STAGING_PROJECT_FORBIDDEN');
-  if(host!==`${stagingRef}.supabase.co`)throw Error('STAGING_REF_MISMATCH');
+  if(target.mode==='LEGACY_STAGING' && target.projectRef!==APPROVED_STAGING_PROJECT_REF)
+    throw Error('STAGING_REF_MISMATCH');
 
   const clientFor=token=>createClient(url,anonKey,{
     auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
@@ -26,6 +20,8 @@ export function createSupabaseDependencies(env=process.env) {
     return result.data;
   };
   return {
+    targetMode:target.mode,
+    readOnly:target.readOnly,
     async verifyBearer(token) {
       const {data,error}=await clientFor(token).auth.getUser(token);
       if(error||!data?.user?.id)throw new ApiError(401,'AUTH_INVALID');
